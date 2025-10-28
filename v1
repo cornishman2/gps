@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live GPS Coordinates</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: #0f0;
+    text-align: center;
+    padding: 20px;
+  }
+  h1 { color: #0ff; }
+  .data {
+    font-size: 1.2em;
+    margin: 10px 0;
+  }
+  button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    font-size: 1em;
+    border: none;
+    border-radius: 8px;
+    background-color: #0ff;
+    color: #000;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>Live GPS Coordinates</h1>
+<div class="data" id="status">Waiting for location...</div>
+<div class="data">Latitude: <span id="lat">--</span></div>
+<div class="data">Longitude: <span id="lon">--</span></div>
+<div class="data">Accuracy: <span id="acc">--</span> m</div>
+<div class="data">Updated: <span id="time">--</span></div>
+
+<button onclick="getLocation()">Start Tracking</button>
+
+<script>
+let watchID;
+
+function getLocation() {
+  if (!navigator.geolocation) {
+    document.getElementById('status').textContent = 'Geolocation not supported on this device.';
+    return;
+  }
+
+  document.getElementById('status').textContent = 'Getting location...';
+
+  watchID = navigator.geolocation.watchPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lon = pos.coords.longitude.toFixed(6);
+      const acc = pos.coords.accuracy.toFixed(1);
+      const time = new Date(pos.timestamp).toLocaleTimeString();
+
+      document.getElementById('lat').textContent = lat;
+      document.getElementById('lon').textContent = lon;
+      document.getElementById('acc').textContent = acc;
+      document.getElementById('time').textContent = time;
+      document.getElementById('status').textContent = 'Location active.';
+    },
+    (err) => {
+      document.getElementById('status').textContent = 'Error: ' + err.message;
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 10000
+    }
+  );
+}
+</script>
+
+</body>
+</html>
