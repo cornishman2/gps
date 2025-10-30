@@ -1,79 +1,149 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live GPS Coordinates</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #111;
-    color: #0f0;
-    text-align: center;
-    padding: 20px;
-  }
-  h1 { color: #0ff; }
-  .data {
-    font-size: 1.2em;
-    margin: 10px 0;
-  }
-  button {
-    margin-top: 15px;
-    padding: 10px 20px;
-    font-size: 1em;
-    border: none;
-    border-radius: 8px;
-    background-color: #0ff;
-    color: #000;
-    cursor: pointer;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
+  <title>Field Survey — Metal Detecting</title>
+  <style>
+    :root{--bg:#0b1320;--card:#0f1724;--accent:#16a34a;--muted:#98a2b3;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#061019 0%,#0b1320 100%)}
+    .app{max-width:980px;margin:0 auto;padding:12px}
+    header{display:flex;gap:12px;align-items:center}
+    h1{font-size:18px;margin:6px 0}
+    small{color:var(--muted)}
+    .topbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    button{background:var(--accent);border:none;color:white;padding:8px 10px;border-radius:10px;font-weight:600}
+    .muted-btn{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    .container{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+    @media(min-width:900px){.container{grid-template-columns:360px 1fr}}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .list{max-height:56vh;overflow:auto;padding:6px;border-radius:8px}
+    .survey-item,.target-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,0.01)}
+    .survey-item strong{display:block}
+    .controls{display:flex;gap:6px}
+    .coords{font-family:monospace;font-size:13px;color:var(--muted)}
+    .big{font-size:20px;font-weight:700}
+    .nav-area{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}
+    .meter{font-size:22px;font-weight:800}
+    .arrow{font-size:48px;text-align:center;transform-origin:center;transition:transform 0.2s ease-out}
+    .found-note{width:100%;height:80px}
+    input,select,textarea{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:100%}
+    .row{display:flex;gap:8px}
+    .row > *{flex:1}
+    .file-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:6px 8px;border-radius:8px}
+    footer{margin-top:12px;color:var(--muted);font-size:13px}
+  </style>
 </head>
 <body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Field Survey — Metal Detecting</h1>
+        <small>Quick GPS recording, navigation to targets, notes & file management</small>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div id="gpsStatus" class="coords">GPS: <span id="gpsText">unknown</span></div>
+        <div class="coords">Accuracy: <span id="accText">—</span> m</div>
+      </div>
+    </header>
 
-<h1>Live GPS Coordinates</h1>
-<div class="data" id="status">Waiting for location...</div>
-<div class="data">Latitude: <span id="lat">--</span></div>
-<div class="data">Longitude: <span id="lon">--</span></div>
-<div class="data">Accuracy: <span id="acc">--</span> m</div>
-<div class="data">Updated: <span id="time">--</span></div>
+    <div class="topbar">
+      <button id="newSurveyBtn">+ New survey</button>
+      <button id="newSurveyAddTargetBtn" class="muted-btn">New Survey + Add Target</button>
+      <button id="exportAllBtn" class="muted-btn">Export all (JSON)</button>
+      <button id="importBtn" class="muted-btn">Import JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+      <div style="margin-left:auto" class="coords">Local storage surveys: <span id="surveyCount">0</span></div>
+    </div>
 
-<button onclick="getLocation()">Start Tracking</button>
+    <div class="container">
+      <div>
+        <div class="card">
+          <strong>Surveys</strong>
+          <div class="list" id="surveyList"></div>
+        </div>
+        <div style="height:10px"></div>
+        <div class="card">
+          <strong>Targets in selected survey</strong>
+          <div id="noSurveyMsg" class="coords" style="margin:8px 0">No survey selected</div>
+          <div class="list" id="targetList"></div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button id="addTargetBtn" class="muted-btn">+ Add target (save current GPS)</button>
+            <button id="batchAddBtn" class="muted-btn">Batch add (record while moving)</button>
+          </div>
+        </div>
+      </div>
 
-<script>
-let watchID;
+      <div>
+        <div class="card">
+          <strong>Live position & compass</strong>
+          <div style="margin-top:8px" id="posBlock">
+            <div class="coords">Latitude: <span id="lat">—</span></div>
+            <div class="coords">Longitude: <span id="lng">—</span></div>
+            <div class="coords">Speed: <span id="speed">—</span></div>
+            <div style="height:10px"></div>
+            <div class="nav-area">
+              <div>
+                <div class="meter">Distance: <span id="distance">—</span> m</div>
+                <div class="coords">Bearing: <span id="bearing">—</span>°</div>
+              </div>
+              <div>
+                <div class="arrow" id="arrow">↑</div>
+                <div class="coords">Next: <span id="nextTargetName">—</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="height:10px"></div>
+        <div class="card">
+          <strong>Survey navigation</strong>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="gotoNextBtn">Go to next target</button>
+            <button id="markFoundBtn" class="muted-btn">Mark found</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-function getLocation() {
-  if (!navigator.geolocation) {
-    document.getElementById('status').textContent = 'Geolocation not supported on this device.';
-    return;
-  }
+    <footer>
+      Step 3: Use "New Survey + Add Target" to start a survey and record your first GPS signal. Step 4: Use "Go to Next Target" to navigate, guided by compass and distance.
+    </footer>
+  </div>
 
-  document.getElementById('status').textContent = 'Getting location...';
+  <script>
+    const STORAGE_KEY='fd_surveys_v2';
+    function uid(p='id'){return p+Math.random().toString(36).slice(2,9)};
+    const gpsText=document.getElementById('gpsText'),accText=document.getElementById('accText'),latEl=document.getElementById('lat'),lngEl=document.getElementById('lng'),speedEl=document.getElementById('speed'),distanceEl=document.getElementById('distance'),bearingEl=document.getElementById('bearing'),arrowEl=document.getElementById('arrow'),nextTargetName=document.getElementById('nextTargetName');
+    const newSurveyBtn=document.getElementById('newSurveyBtn'),newSurveyAddTargetBtn=document.getElementById('newSurveyAddTargetBtn'),addTargetBtn=document.getElementById('addTargetBtn'),gotoNextBtn=document.getElementById('gotoNextBtn'),markFoundBtn=document.getElementById('markFoundBtn');
+    let surveys=load(),selectedSurveyId=null,selectedTargetId=null,lastPosition=null,deviceHeading=0;
 
-  watchID = navigator.geolocation.watchPosition(
-    (pos) => {
-      const lat = pos.coords.latitude.toFixed(6);
-      const lon = pos.coords.longitude.toFixed(6);
-      const acc = pos.coords.accuracy.toFixed(1);
-      const time = new Date(pos.timestamp).toLocaleTimeString();
+    function load(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch(e){return[]}}
+    function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(surveys))}
+    function toRad(v){return v*Math.PI/180}function toDeg(v){return v*180/Math.PI}
+    function hav(lat1,lon1,lat2,lon2){const R=6371000;const dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
+    function bearingTo(lat1,lon1,lat2,lon2){const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));return(toDeg(Math.atan2(y,x))+360)%360}
 
-      document.getElementById('lat').textContent = lat;
-      document.getElementById('lon').textContent = lon;
-      document.getElementById('acc').textContent = acc;
-      document.getElementById('time').textContent = time;
-      document.getElementById('status').textContent = 'Location active.';
-    },
-    (err) => {
-      document.getElementById('status').textContent = 'Error: ' + err.message;
-    },
-    {
-      enableHighAccuracy: true,
-      maximumAge: 1000,
-      timeout: 10000
-    }
-  );
-}
-</script>
+    function newSurvey(name){const s={id:uid('s_'),name:name||('Survey '+new Date().toLocaleString()),createdAt:Date.now(),targets:[]};surveys.push(s);save();selectedSurveyId=s.id;return s;}
 
+    newSurveyBtn.onclick=()=>{const name=prompt('Survey name?');if(!name)return;newSurvey(name);alert('Survey created. Use Add Target to begin.')}
+
+    newSurveyAddTargetBtn.onclick=()=>{if(!lastPosition){alert('No GPS fix yet');return;}const name=prompt('Survey name?');if(!name)return;const s=newSurvey(name);const t={id:uid('t_'),name:'Target 1',lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,found:false,createdAt:Date.now()};s.targets.push(t);save();alert('Survey and first target saved.')}
+
+    addTargetBtn.onclick=()=>{if(!lastPosition){alert('No GPS');return;}if(!selectedSurveyId){alert('Create a survey first');return;}const s=surveys.find(x=>x.id===selectedSurveyId);const t={id:uid('t_'),name:'Target '+(s.targets.length+1),lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,found:false,createdAt:Date.now()};s.targets.push(t);save();alert('Target saved.')}
+
+    gotoNextBtn.onclick=()=>{if(!selectedSurveyId){alert('No survey');return;}const s=surveys.find(x=>x.id===selectedSurveyId);if(!s.targets.length){alert('No targets');return;}let t=s.targets.find(x=>!x.found)||s.targets[0];selectedTargetId=t.id;nextTargetName.textContent=t.name;alert('Navigate to '+t.name)}
+
+    markFoundBtn.onclick=()=>{if(!selectedSurveyId||!selectedTargetId)return;const s=surveys.find(x=>x.id===selectedSurveyId);const t=s.targets.find(x=>x.id===selectedTargetId);t.found=true;save();alert(t.name+' marked found.')}
+
+    function updateCompass(){if(!lastPosition||!selectedSurveyId||!selectedTargetId)return;const s=surveys.find(x=>x.id===selectedSurveyId);const t=s.targets.find(x=>x.id===selectedTargetId);if(!t)return;const lat=lastPosition.coords.latitude,lon=lastPosition.coords.longitude;const dist=hav(lat,lon,t.lat,t.lng);const br=bearingTo(lat,lon,t.lat,t.lng);const rel=(br-deviceHeading+360)%360;arrowEl.style.transform='rotate('+rel+'deg)';distanceEl.textContent=Math.round(dist);bearingEl.textContent=Math.round(br)}
+
+    function startGPS(){if(!navigator.geolocation){gpsText.textContent='unsupported';return;}navigator.geolocation.watchPosition(p=>{lastPosition=p;gpsText.textContent='locked';accText.textContent=(p.coords.accuracy||0).toFixed(1);latEl.textContent=p.coords.latitude.toFixed(6);lngEl.textContent=p.coords.longitude.toFixed(6);speedEl.textContent=p.coords.speed? p.coords.speed.toFixed(1)+' m/s':'—';updateCompass();},e=>{gpsText.textContent='error'}, {enableHighAccuracy:true})}
+
+    if(window.DeviceOrientationEvent){window.addEventListener('deviceorientation',e=>{if(e.alpha!=null){deviceHeading=e.alpha;updateCompass();}})}
+
+    startGPS();setInterval(updateCompass,1000);
+  </script>
 </body>
 </html>
