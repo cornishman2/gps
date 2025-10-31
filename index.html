@@ -3,355 +3,342 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
-  <title>Metal Detecting Survey (v3)</title>
+  <title>Metal Finder v1</title>
   <style>
-    :root{--bg:#071018;--card:#0f1724;--accent:#16a34a;--muted:#98a2b3;--glass:rgba(255,255,255,0.03)}
+    :root{--bg:#071018;--card:#0f1724;--accent:#16a34a;--muted:#98a2b3;--glass:rgba(255,255,255,0.03);--danger:#ef4444}
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#061019 0%,#0b1320 100%)}
-    .app{max-width:980px;margin:0 auto;padding:12px}
-    header{display:flex;gap:12px;align-items:center}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#061019 0%,#0b1320 100%);-webkit-tap-highlight-color:transparent}
+    .app{max-width:980px;margin:0 auto;padding-bottom:80px}
+    header{display:flex;gap:12px;align-items:center;padding:12px}
     h1{font-size:18px;margin:6px 0}
     small{color:var(--muted)}
-    .topbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-    button{background:var(--accent);border:none;color:white;padding:8px 10px;border-radius:10px;font-weight:600}
-    .muted-btn{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:10px}
-    .container{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
-    @media(min-width:900px){.container{grid-template-columns:380px 1fr}}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
-    .list{max-height:56vh;overflow:auto;padding:6px;border-radius:8px}
-    .survey-item,.target-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,0.01)}
-    .survey-item strong{display:block}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);margin:12px}
+    .row{display:flex;gap:8px}
+    input,textarea,select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:100%}
+    input[type=file]{padding:6px}
+    button{background:var(--accent);border:none;color:white;padding:10px 12px;border-radius:10px;font-weight:600}
+    .muted{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:10px}
+    .small{font-size:12px;padding:6px}
+    .list{max-height:52vh;overflow:auto;padding:6px;border-radius:8px}
+    .survey-row,.target-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01)}
     .controls{display:flex;gap:6px}
     .coords{font-family:monospace;font-size:13px;color:var(--muted)}
-    .big{font-size:20px;font-weight:700}
-    .nav-area{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}
-    .meter{font-size:22px;font-weight:800}
-    .arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:auto}
+    .bottom-nav{position:fixed;left:0;right:0;bottom:0;height:64px;background:rgba(6,8,12,0.96);display:flex;align-items:center;justify-content:space-around;border-top:1px solid rgba(255,255,255,0.03)}
+    .nav-btn{flex:1;text-align:center;color:var(--muted);font-weight:700}
+    .nav-btn.active{color:var(--accent)}
+    .hidden{display:none}
+    .arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
     .arrow{font-size:48px;transform-origin:center;transition:transform 0.12s linear}
-    .found-note{width:100%;height:80px}
-    input,select,textarea{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:100%}
-    .row{display:flex;gap:8px}
-    .row > *{flex:1}
-    .file-actions{display:flex;gap:8px;flex-wrap:wrap}
-    .secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:6px 8px;border-radius:8px}
-    footer{margin-top:12px;color:var(--muted);font-size:13px}
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none}
-    .archived{opacity:0.5}
-    .small{font-size:12px;padding:6px}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:82px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none}
+    .status-badge{padding:6px 8px;border-radius:8px;font-size:12px}
+    .status-open{background:rgba(22,163,74,0.12);color:var(--accent);border:1px solid rgba(22,163,74,0.15)}
+    .status-closed{background:rgba(156,163,175,0.06);color:var(--muted)}
+    .status-archived{opacity:0.5}
+    .tooltip{position:relative}
+    .tooltip[data-tip]:hover::after, .tooltip[data-tip].touch-active::after{content:attr(data-tip);position:absolute;left:0;top:-44px;background:#0b1220;padding:8px;border-radius:8px;color:#e6eef8;white-space:nowrap;font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,0.6);}
+    @media(min-width:700px){ .bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)} }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
       <div>
-        <h1>Metal Detecting Survey — v3</h1>
-        <small>Surveys, targets, compass & smooth navigation</small>
+        <h1>Metal Finder</h1>
+        <small>v1 — single-file offline app</small>
       </div>
       <div style="margin-left:auto;text-align:right">
-        <div id="gpsStatus" class="coords">GPS: <span id="gpsText">unknown</span></div>
+        <div class="coords">GPS: <span id="gpsText">unknown</span></div>
         <div class="coords">Accuracy: <span id="accText">—</span> m</div>
       </div>
     </header>
 
-    <div class="topbar">
-      <button id="newSurveyBtn">+ New survey</button>
-      <button id="newSurveyAddTargetBtn" class="muted-btn">New survey + Add target</button>
-      <button id="exportAllBtn" class="muted-btn">Export all (JSON)</button>
-      <button id="importBtn" class="muted-btn">Import JSON</button>
-      <input id="importFile" type="file" accept="application/json" style="display:none" />
-      <label style="margin-left:auto;display:flex;align-items:center;gap:8px" class="coords"><input type="checkbox" id="showArchived" /> Show archived</label>
-    </div>
-
-    <div class="container">
-      <div>
-        <div class="card">
+    <!-- Screens -->
+    <main>
+      <!-- HOME -->
+      <section id="screen-home" class="card screen">
+        <h3>Home — Surveys</h3>
+        <div style="height:8px"></div>
+        <div class="row">
+          <input id="detectoristName" placeholder="Detectorist name" />
+          <input id="detectorUsed" placeholder="Detector used" />
+        </div>
+        <div style="height:10px"></div>
+        <div class="row">
+          <button id="btnNewSurvey">+ New survey</button>
+          <button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
+          <button id="btnCloseSurvey" class="muted small">Close survey</button>
+        </div>
+        <div style="height:12px"></div>
+        <div>
           <strong>Surveys</strong>
           <div class="list" id="surveyList"></div>
         </div>
+      </section>
 
-        <div style="height:10px"></div>
-
-        <div class="card">
-          <strong>Targets in selected survey</strong>
-          <div id="noSurveyMsg" class="coords" style="margin:8px 0">No survey selected</div>
-          <div class="list" id="targetList"></div>
-          <div style="margin-top:8px;display:flex;gap:8px">
-            <button id="addTargetBtn" class="muted-btn">+ Add target (save current GPS)</button>
-            <button id="batchAddBtn" class="muted-btn">Batch add (record while moving)</button>
-          </div>
+      <!-- TARGETS -->
+      <section id="screen-targets" class="card screen hidden">
+        <h3>Targets (Open survey)</h3>
+        <div style="height:8px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btnAddTarget">+ Add target (save current GPS)</button>
+          <button id="btnBatch" class="muted small">Batch add</button>
+          <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
         </div>
-      </div>
+        <div style="height:12px"></div>
+        <div class="list" id="targetsList"></div>
+      </section>
 
-      <div>
-        <div class="card">
-          <strong>Live position & compass</strong>
-          <div style="margin-top:8px" id="posBlock">
-            <div class="coords">Latitude: <span id="lat">—</span></div>
-            <div class="coords">Longitude: <span id="lng">—</span></div>
-            <div class="coords">Speed: <span id="speed">—</span></div>
-            <div style="height:10px"></div>
-            <div class="nav-area">
-              <div>
-                <div class="meter">Distance: <span id="distance">—</span> m</div>
-                <div class="coords">Target bearing: <span id="bearing">—</span>°</div>
-                <div class="coords">Device heading: <span id="heading">—</span>°</div>
-                <div style="height:8px"></div>
-                <div style="display:flex;gap:8px"><button id="gotoNextBtn">Go to next target</button><button id="markFoundBtn" class="muted-btn">Mark found</button></div>
-              </div>
-              <div style="text-align:center">
-                <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
-                <div class="coords" style="margin-top:8px">Next: <span id="nextTargetName">—</span></div>
-              </div>
-            </div>
-          </div>
+      <!-- COMPASS -->
+      <section id="screen-compass" class="card screen hidden">
+        <h3>Compass</h3>
+        <div style="height:8px"></div>
+        <div class="coords">Target: <strong id="compassTargetName">—</strong></div>
+        <div class="coords">Device heading: <span id="heading">—</span>°</div>
+        <div class="coords">Bearing to target: <span id="bearing">—</span>°</div>
+        <div style="height:8px"></div>
+        <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
+        <div style="text-align:center"><div class="meter">Distance: <span id="distance">—</span> m</div></div>
+        <div style="height:12px"></div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button id="btnNextTarget">Next target</button>
+          <button id="btnMarkFound" class="muted small">Mark found</button>
         </div>
+      </section>
 
-        <div style="height:10px"></div>
-
-        <div class="card" id="targetCard" style="display:none">
-          <strong>Target details</strong>
-          <div style="margin-top:8px">
-            <div class="row">
-              <input id="targetName" placeholder="Name (e.g. Target 01)" />
-              <input id="targetLat" placeholder="lat" />
-              <input id="targetLng" placeholder="lng" />
-            </div>
-            <div style="margin-top:8px">
-              <textarea id="targetNote" class="found-note" placeholder="Notes (e.g. tone, depth, soil)"></textarea>
-            </div>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-              <input id="targetImage" type="file" accept="image/*" />
-              <button id="saveTargetBtn">Save target</button>
-              <button id="deleteTargetBtn" class="secondary">Delete</button>
-            </div>
-            <div id="imgPreview" style="margin-top:8px"></div>
-          </div>
+      <!-- SETTINGS -->
+      <section id="screen-settings" class="card screen hidden">
+        <h3>Settings</h3>
+        <div style="height:8px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btnExport">Export all (JSON)</button>
+          <button id="btnImport" class="muted small">Import JSON</button>
+          <input id="importFile" type="file" accept="application/json" style="display:none" />
+          <label style="margin-left:auto;display:flex;align-items:center;gap:8px" class="coords"><input type="checkbox" id="showArchived" /> Show archived</label>
         </div>
+        <div style="height:12px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btnClear" class="small">Clear all data</button>
+          <div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v1</strong></div>
+        </div>
+      </section>
 
-      </div>
-    </div>
+    </main>
 
-    <div class="toast" id="toast">Saved</div>
+    <div id="toast" class="toast">Saved</div>
 
-    <footer>
-      Features: list & manage surveys (restart/archive/delete), edit targets, add notes & photos, smooth compass. Use export/import to move files between devices.
-    </footer>
+    <!-- Bottom nav -->
+    <nav class="bottom-nav">
+      <div class="nav-btn active" data-screen="home">Home</div>
+      <div class="nav-btn" data-screen="targets">Targets</div>
+      <div class="nav-btn" data-screen="compass">Compass</div>
+      <div class="nav-btn" data-screen="settings">Settings</div>
+    </nav>
   </div>
 
   <script>
-    // v3: full survey + target management, archived toggle, edit/delete targets, prompt note on add, smooth compass
-    const STORAGE_KEY = 'fd_surveys_v3'
-    function uid(pref='id'){return pref+Math.random().toString(36).slice(2,9)}
-    // UI refs
-    const surveyList = document.getElementById('surveyList')
-    const targetList = document.getElementById('targetList')
-    const gpsText = document.getElementById('gpsText')
-    const accText = document.getElementById('accText')
-    const latEl = document.getElementById('lat')
-    const lngEl = document.getElementById('lng')
-    const speedEl = document.getElementById('speed')
-    const distanceEl = document.getElementById('distance')
-    const bearingEl = document.getElementById('bearing')
-    const headingEl = document.getElementById('heading')
-    const arrowEl = document.getElementById('arrow')
-    const nextTargetName = document.getElementById('nextTargetName')
-    const selectedCard = document.getElementById('targetCard')
+    // Single-file SPA: metal_finder_v1
+    const STORAGE_KEY = 'metal_finder_v1_data'
+    function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 
-    const newSurveyBtn = document.getElementById('newSurveyBtn')
-    const newSurveyAddTargetBtn = document.getElementById('newSurveyAddTargetBtn')
-    const importBtn = document.getElementById('importBtn')
-    const importFile = document.getElementById('importFile')
-    const exportAllBtn = document.getElementById('exportAllBtn')
-    const addTargetBtn = document.getElementById('addTargetBtn')
-    const batchAddBtn = document.getElementById('batchAddBtn')
-    const gotoNextBtn = document.getElementById('gotoNextBtn')
-    const markFoundBtn = document.getElementById('markFoundBtn')
-    const saveTargetBtn = document.getElementById('saveTargetBtn')
-    const deleteTargetBtn = document.getElementById('deleteTargetBtn')
-    const targetName = document.getElementById('targetName')
-    const targetLat = document.getElementById('targetLat')
-    const targetLng = document.getElementById('targetLng')
-    const targetNote = document.getElementById('targetNote')
-    const targetImage = document.getElementById('targetImage')
-    const imgPreview = document.getElementById('imgPreview')
+    // Screens
+    const screens = { home: document.getElementById('screen-home'), targets: document.getElementById('screen-targets'), compass: document.getElementById('screen-compass'), settings: document.getElementById('screen-settings') }
+    const navBtns = [...document.querySelectorAll('.nav-btn')]
+    function showScreen(name){ Object.values(screens).forEach(s=>s.classList.add('hidden')); screens[name].classList.remove('hidden'); navBtns.forEach(b=>b.classList.toggle('active', b.dataset.screen===name)); if(name==='targets') renderTargets(); if(name==='home') renderSurveys(); }
+    navBtns.forEach(b=>b.addEventListener('click', ()=> showScreen(b.dataset.screen)))
+
+    // UI elements
+    const detectoristNameEl = document.getElementById('detectoristName')
+    const detectorUsedEl = document.getElementById('detectorUsed')
+    const btnNewSurvey = document.getElementById('btnNewSurvey')
+    const btnNewSurveyAdd = document.getElementById('btnNewSurveyAdd')
+    const btnCloseSurvey = document.getElementById('btnCloseSurvey')
+    const surveyListEl = document.getElementById('surveyList')
+    const btnAddTarget = document.getElementById('btnAddTarget')
+    const btnBatch = document.getElementById('btnBatch')
+    const targetsListEl = document.getElementById('targetsList')
+    const openSurveyNameEl = document.getElementById('openSurveyName')
+    const compassTargetName = document.getElementById('compassTargetName')
+    const headingEl = document.getElementById('heading')
+    const bearingEl = document.getElementById('bearing')
+    const distanceEl = document.getElementById('distance')
+    const arrowEl = document.getElementById('arrow')
+    const btnNextTarget = document.getElementById('btnNextTarget')
+    const btnMarkFound = document.getElementById('btnMarkFound')
+    const btnExport = document.getElementById('btnExport')
+    const btnImport = document.getElementById('btnImport')
+    const importFileEl = document.getElementById('importFile')
+    const btnClear = document.getElementById('btnClear')
     const showArchivedCheckbox = document.getElementById('showArchived')
     const toast = document.getElementById('toast')
 
-    let surveys = loadSurveys()
-    let selectedSurveyId = null
-    let selectedTargetId = null
+    // State
+    let data = load() // { detectoristName, detectorUsed, surveys: [...] }
+    data.detectoristName = data.detectoristName || ''
+    data.detectorUsed = data.detectorUsed || ''
+    data.surveys = data.surveys || []
     let lastPosition = null
     let watchId = null
     let batchInterval = null
+    let selectedTargetId = null
 
-    // Compass smoothing: low-pass filter for device heading
+    // Compass smoothing
     let headingSamples = []
-    const HEADING_SMOOTH = 5 // number of samples to average
+    const HEADING_SMOOTH = 6
+    let smoothedHeading = 0
 
-    function saveToast(msg='Saved'){ toast.textContent = msg; toast.style.display='block'; clearTimeout(toast._t); toast._t = setTimeout(()=>{ toast.style.display='none' },1200) }
+    // Helpers
+    function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); showToast('Saved') }
+    function load(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}') }catch(e){return {}} }
+    function showToast(msg='Saved'){ toast.textContent = msg; toast.style.display='block'; clearTimeout(toast._t); toast._t = setTimeout(()=> toast.style.display='none',1200) }
 
-    function loadSurveys(){ try{ const v = JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); return v }catch(e){console.error('load',e); return [] } }
-    function saveSurveys(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(surveys)) }
+    // Persist detectorist fields live
+    detectoristNameEl.value = data.detectoristName
+    detectorUsedEl.value = data.detectorUsed
+    detectoristNameEl.addEventListener('input', ()=>{ data.detectoristName = detectoristNameEl.value; save() })
+    detectorUsedEl.addEventListener('input', ()=>{ data.detectorUsed = detectorUsedEl.value; save() })
 
-    function renderSurveys(){ surveyList.innerHTML = ''
-      const showArchived = showArchivedCheckbox.checked
-      // sort: active first then archived, recent first
-      surveys.slice().sort((a,b)=> (a.archived - b.archived) || (b.createdAt - a.createdAt)).forEach(s=>{
-        if(s.archived && !showArchived) return
-        const el = document.createElement('div'); el.className = 'survey-item' + (s.archived? ' archived':'')
-        el.innerHTML = `<div style="min-width:0"><strong>${escapeHtml(s.name||'Untitled')}</strong>
-            <div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets ${s.archived? '• archived':''}</div></div>
-          <div class="controls">
-            <button class="muted-btn small" data-id="${s.id}" data-action="select">Open</button>
-            <button class="muted-btn small" data-id="${s.id}" data-action="restart">Restart</button>
-            <button class="muted-btn small" data-id="${s.id}" data-action="archive">${s.archived? 'Unarchive':'Archive'}</button>
-            <button class="secondary small" data-id="${s.id}" data-action="delete">Delete</button>
-          </div>`
-        surveyList.appendChild(el)
-      })
-      attachSurveyButtons()
+    // Survey helpers
+    function getOpenSurvey(){ return data.surveys.find(s=>s.status==='Open') }
+    function setOnlyOpen(id){ data.surveys.forEach(s=>{ if(s.id===id) s.status='Open'; else if(s.status==='Open') s.status='Closed' }) }
+    function createSurvey(name){ // close existing open
+      data.surveys.forEach(s=>{ if(s.status==='Open') s.status='Closed' })
+      const s = { id: uid('s_'), name: name||('Survey '+new Date().toLocaleString()), createdAt: Date.now(), status: 'Open', archived: false, targets: [] }
+      data.surveys.push(s); save(); renderSurveys(); return s
     }
 
-    function attachSurveyButtons(){ [...surveyList.querySelectorAll('button')].forEach(b=>{
-      b.onclick = ()=>{
-        const id = b.dataset.id; const action = b.dataset.action
-        if(action==='select'){ selectedSurveyId = id; selectedTargetId = null; renderTargets(); }
-        if(action==='restart'){ if(!confirm('Restart survey (clear found flags, keep targets)?')) return; const s = surveys.find(x=>x.id===id); if(!s) return; s.targets.forEach(t=>t.found=false); saveSurveys(); renderTargets(); saveToast('Survey restarted') }
-        if(action==='archive'){ const s = surveys.find(x=>x.id===id); if(!s) return; s.archived = !s.archived; saveSurveys(); renderSurveys(); saveToast(s.archived? 'Archived':'Unarchived') }
-        if(action==='delete'){ if(!confirm('Delete survey and all its targets?')) return; surveys = surveys.filter(x=>x.id!==id); if(selectedSurveyId===id){ selectedSurveyId=null; selectedTargetId=null } saveSurveys(); renderSurveys(); renderTargets(); saveToast('Deleted') }
-      }
-    }) }
-
-    function renderTargets(){ targetList.innerHTML = ''
-      const s = surveys.find(x=>x.id===selectedSurveyId)
-      if(!s){ document.getElementById('noSurveyMsg').style.display='block'; targetList.style.display='none'; nextTargetName.textContent='—'; return }
-      document.getElementById('noSurveyMsg').style.display='none'; targetList.style.display='block'
-      nextTargetName.textContent = ''
-      s.targets.slice().sort((a,b)=>a.createdAt-b.createdAt).forEach(t=>{
-        const el = document.createElement('div'); el.className = 'target-item'
-        el.innerHTML = `<div style="min-width:0"><strong>${escapeHtml(t.name||'Target')}</strong>
-            <div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)} ${t.found? '• Found':''}</div></div>
-          <div class="controls">
-            <button class="muted-btn small" data-id="${t.id}" data-action="open">Open</button>
-            <button class="muted-btn small" data-id="${t.id}" data-action="goto">Go</button>
-            <button class="secondary small" data-id="${t.id}" data-action="delete">Del</button>
-          </div>`
-        targetList.appendChild(el)
+    function renderSurveys(){ surveyListEl.innerHTML=''
+      const showArch = showArchivedCheckbox.checked
+      // sort by status (Open first), then recent
+      data.surveys.slice().sort((a,b)=>{
+        const sa = a.status==='Open'?0:(a.status==='Closed'?1:2)
+        const sb = b.status==='Open'?0:(b.status==='Closed'?1:2)
+        if(sa!==sb) return sa-sb
+        return b.createdAt - a.createdAt
+      }).forEach(s=>{
+        if(s.archived && !showArch) return
+        const row = document.createElement('div'); row.className = 'survey-row' + (s.archived? ' status-archived':'')
+        const badge = s.status==='Open'? '<span class="status-badge status-open">Open</span>' : '<span class="status-badge status-closed">'+s.status+'</span>'
+        row.innerHTML = `<div style="min-width:0"><strong>${escapeHtml(s.name)}</strong><div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets</div></div>
+          <div class="controls">`+
+          `<button class="muted small" data-action="select" data-id="${s.id}">Open</button>`+
+          (s.status!=='Open'? `<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>`: `<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`) +
+          `<button class="muted small" data-action="archive" data-id="${s.id}">${s.archived? 'Unarchive':'Archive'}</button>`+
+          `<button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>`+
+          `</div>`
+        surveyListEl.appendChild(row)
       })
-      attachTargetButtons()
+      // attach
+      [...surveyListEl.querySelectorAll('button')].forEach(b=> b.addEventListener('click', surveyAction))
+      // update open survey shown
+      const open = getOpenSurvey(); openSurveyNameEl.textContent = open? open.name : '—'
     }
 
-    function attachTargetButtons(){ [...targetList.querySelectorAll('button')].forEach(b=>{
-      b.onclick = ()=>{
-        const id = b.dataset.id; const action = b.dataset.action
-        if(action==='open') openTarget(id)
-        if(action==='goto'){ selectedTargetId = id; updateNavImmediate(); const s=surveys.find(x=>x.id===selectedSurveyId); const t=s.targets.find(tt=>tt.id===id); nextTargetName.textContent = t.name; saveToast('Selected target') }
-        if(action==='delete'){ if(!confirm('Delete target?')) return; const s=surveys.find(x=>x.id===selectedSurveyId); s.targets = s.targets.filter(tt=>tt.id!==id); if(selectedTargetId===id) selectedTargetId=null; saveSurveys(); renderTargets(); saveToast('Target deleted') }
+    function surveyAction(e){ const a = e.currentTarget.dataset.action; const id = e.currentTarget.dataset.id; const s = data.surveys.find(x=>x.id===id)
+      if(!s) return
+      if(a==='select'){ selectedTargetId = null; // open survey details -> switch to targets tab
+        showScreen('targets'); renderTargets(); }
+      if(a==='open'){ setOnlyOpen(id); save(); renderSurveys(); showToast('Set Open') }
+      if(a==='close'){ s.status = 'Closed'; save(); renderSurveys(); showToast('Closed') }
+      if(a==='archive'){ s.archived = !s.archived; save(); renderSurveys(); showToast(s.archived? 'Archived':'Unarchived') }
+      if(a==='delete'){ if(!confirm('Delete survey and all its targets?')) return; data.surveys = data.surveys.filter(x=>x.id!==id); if(selectedTargetId && !data.surveys.some(s=>s.targets.some(t=>t.id===selectedTargetId))) selectedTargetId=null; save(); renderSurveys(); renderTargets(); showToast('Deleted') }
+    }
+
+    // Targets
+    function renderTargets(){ targetsListEl.innerHTML=''
+      const open = getOpenSurvey(); if(!open){ targetsListEl.innerHTML='<div class="coords">No Open survey — create or set one Open on Home</div>'; openSurveyNameEl.textContent = '—'; return }
+      openSurveyNameEl.textContent = open.name
+      open.targets.forEach(t=>{
+        const row = document.createElement('div'); row.className='target-row'
+        // first column is descriptive text; include tooltip with detector details
+        const tip = `Detectorist: ${escapeHtml(data.detectoristName||'')} — Detector: ${escapeHtml(data.detectorUsed||'')}`
+        row.innerHTML = `<div style="min-width:0"><div class="tooltip" data-tip="${escapeHtml(tip)}"><strong>${escapeHtml(t.notes||t.name||'Target')}</strong></div><div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)} ${t.found? '• Found':''}</div></div>
+          <div class="controls">
+            <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
+            <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
+            <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
+          </div>`
+        targetsListEl.appendChild(row)
+      })
+      [...targetsListEl.querySelectorAll('button')].forEach(b=> b.addEventListener('click', targetAction))
+    }
+
+    function targetAction(e){ const a = e.currentTarget.dataset.action; const id = e.currentTarget.dataset.id; const open = getOpenSurvey(); if(!open) return; const t = open.targets.find(x=>x.id===id); if(!t) return;
+      if(a==='goto'){ selectedTargetId = id; compassTargetName.textContent = t.notes || t.name || 'Target'; showScreen('compass'); updateNavImmediate(); }
+      if(a==='edit'){ // show simple edit prompt for name/notes
+        const newNote = prompt('Edit descriptive text (first column):', t.notes||t.name||'')
+        if(newNote!==null){ t.notes = newNote; // also keep name
+          t.detectorist = t.detectorist || data.detectoristName; t.detector = t.detector || data.detectorUsed; save(); renderTargets(); showToast('Saved') }
       }
-    }) }
+      if(a==='delete'){ if(!confirm('Delete target?')) return; open.targets = open.targets.filter(x=>x.id!==id); if(selectedTargetId===id) selectedTargetId=null; save(); renderTargets(); showToast('Deleted') }
+    }
 
-    function openTarget(id){ const s = surveys.find(x=>x.id===selectedSurveyId); if(!s) return; const t = s.targets.find(x=>x.id===id); if(!t) return; selectedTargetId = id; selectedCard.style.display='block'; targetName.value = t.name; targetLat.value = t.lat; targetLng.value = t.lng; targetNote.value = t.notes||''; renderImagePreview(t.images||[]) }
+    // Add target
+    btnAddTarget.addEventListener('click', ()=>{
+      const open = getOpenSurvey(); if(!open){ alert('No Open survey — create one on Home'); return }
+      if(!lastPosition){ alert('No GPS fix'); return }
+      const desc = prompt('Descriptive text for this target (first column):','')
+      const t = { id: uid('t_'), name: 'Target '+(open.targets.length+1), lat: lastPosition.coords.latitude, lng: lastPosition.coords.longitude, notes: desc||'', detectorist: data.detectoristName||'', detector: data.detectorUsed||'', createdAt: Date.now(), found: false }
+      open.targets.push(t); save(); renderTargets(); showToast('Target added')
+    })
 
-    function renderImagePreview(images){ imgPreview.innerHTML=''; (images||[]).forEach((d,idx)=>{ const img=document.createElement('img'); img.src=d; img.style.maxWidth='120px'; img.style.marginRight='6px'; imgPreview.appendChild(img) }) }
+    // Batch add
+    btnBatch.addEventListener('click', ()=>{
+      const open = getOpenSurvey(); if(!open){ alert('No Open survey'); return }
+      if(!batchInterval){ btnBatch.textContent='Stop batch'; batchInterval = setInterval(()=>{ if(lastPosition){ const t={ id: uid('t_'), name: 'Target '+(open.targets.length+1), lat: lastPosition.coords.latitude, lng: lastPosition.coords.longitude, notes:'', detectorist: data.detectoristName||'', detector: data.detectorUsed||'', createdAt: Date.now(), found:false }; open.targets.push(t); save(); renderTargets(); } }, 3000) } else { clearInterval(batchInterval); batchInterval=null; btnBatch.textContent='Batch add'; saveToast('Batch stopped') } })
 
-    // create new survey
-    newSurveyBtn.onclick = ()=>{ const name = prompt('Survey name','Field survey '+(new Date()).toLocaleDateString()); if(!name) return; const s = {id:uid('s_'),name,createdAt:Date.now(),archived:false,targets:[]}; surveys.push(s); saveSurveys(); renderSurveys(); selectedSurveyId = s.id; renderTargets(); saveToast('Survey created') }
-
-    // new survey + add target (prompt note)
-    newSurveyAddTargetBtn.onclick = ()=>{ if(!lastPosition){ alert('No GPS fix yet'); return } const name = prompt('Survey name','Field survey '+(new Date()).toLocaleDateString()); if(!name) return; const s = {id:uid('s_'),name,createdAt:Date.now(),archived:false,targets:[]}; const note = prompt('Note for first target (optional)',''); const t = {id:uid('t_'),name:'Target 1',lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,notes:note||'',images:[],createdAt:Date.now(),found:false}; s.targets.push(t); surveys.push(s); saveSurveys(); renderSurveys(); selectedSurveyId = s.id; renderTargets(); saveToast('Survey + target saved') }
-
-    // import / export
-    exportAllBtn.onclick = ()=>{ const data = JSON.stringify(surveys,null,2); downloadText(data,`surveys_${(new Date()).toISOString().slice(0,19)}.json`) }
-    importBtn.onclick = ()=> importFile.click()
-    importFile.onchange = async e=>{ const f = e.target.files[0]; if(!f) return; try{ const txt = await f.text(); const obj = JSON.parse(txt); if(Array.isArray(obj)){ surveys = surveys.concat(obj.map(normalizeImported)) } else { surveys.push(normalizeImported(obj)) } saveSurveys(); renderSurveys(); alert('Imported'); }catch(err){ alert('Import failed: '+err) } }
-    function normalizeImported(s){ s.id = s.id||uid('s_'); s.archived = !!s.archived; s.createdAt = s.createdAt||Date.now(); s.targets = (s.targets||[]).map(t=>{ t.id = t.id||uid('t_'); t.images = t.images||[]; t.createdAt = t.createdAt||Date.now(); t.found = !!t.found; return t }); return s }
-
-    function downloadText(text,filename){ const blob = new Blob([text],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download = filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove() },3000) }
-
-    // add target (with note prompt)
-    addTargetBtn.onclick = ()=>{ if(!lastPosition){ alert('No GPS fix'); return } if(!selectedSurveyId){ alert('Select or create a survey first'); return } const s = surveys.find(x=>x.id===selectedSurveyId); const note = prompt('Note for target (optional)'); const t = {id:uid('t_'),name:'Target '+(s.targets.length+1),lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,notes:note||'',images:[],createdAt:Date.now(),found:false}; s.targets.push(t); saveSurveys(); renderTargets(); saveToast('Target saved') }
-
-    // batch add
-    batchAddBtn.onclick = ()=>{ if(!selectedSurveyId){ alert('Select a survey first'); return } if(!batchInterval){ batchAddBtn.textContent='Stop batch'; batchInterval = setInterval(()=>{ if(lastPosition){ const s = surveys.find(x=>x.id===selectedSurveyId); const t = {id:uid('t_'),name:'Target '+(s.targets.length+1),lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,notes:'',images:[],createdAt:Date.now(),found:false}; s.targets.push(t); saveSurveys(); renderTargets(); } },3000) } else { clearInterval(batchInterval); batchInterval=null; batchAddBtn.textContent='Batch add (record while moving)'; saveToast('Batch stopped') } }
-
-    // save target edits
-    saveTargetBtn.onclick = ()=>{ if(!selectedSurveyId||!selectedTargetId) return; const s = surveys.find(x=>x.id===selectedSurveyId); const t = s.targets.find(x=>x.id===selectedTargetId); t.name = targetName.value || t.name; t.lat = parseFloat(targetLat.value) || t.lat; t.lng = parseFloat(targetLng.value) || t.lng; t.notes = targetNote.value; if(targetImage.files && targetImage.files[0]){ const f = targetImage.files[0]; const reader = new FileReader(); reader.onload = ()=>{ t.images = t.images||[]; t.images.push(reader.result); saveSurveys(); renderImagePreview(t.images); renderTargets(); saveToast('Target saved with image') }; reader.readAsDataURL(f) } else { saveSurveys(); renderTargets(); saveToast('Target saved') } }
-
-    deleteTargetBtn.onclick = ()=>{ if(!selectedSurveyId||!selectedTargetId) return; if(!confirm('Delete this target?')) return; const s = surveys.find(x=>x.id===selectedSurveyId); s.targets = s.targets.filter(x=>x.id!==selectedTargetId); saveSurveys(); selectedTargetId=null; selectedCard.style.display='none'; renderTargets(); saveToast('Deleted') }
-
-    // goto next target (choose next not found)
-    gotoNextBtn.onclick = ()=>{ if(!selectedSurveyId){ alert('Choose a survey'); return } const s = surveys.find(x=>x.id===selectedSurveyId); if(!s.targets.length){ alert('No targets'); return } let t = s.targets.find(tt=>!tt.found) || s.targets[0]; selectedTargetId = t.id; nextTargetName.textContent = t.name; renderTargets(); saveToast('Navigating') }
-
-    markFoundBtn.onclick = ()=>{ if(!selectedSurveyId||!selectedTargetId){ alert('No target selected'); return } const s = surveys.find(x=>x.id===selectedSurveyId); const t = s.targets.find(x=>x.id===selectedTargetId); const note = prompt('Note for find (optional)', t.notes||''); if(note!==null){ t.notes = note; t.found = true; saveSurveys(); renderTargets(); saveToast('Marked found') } }
-
-    // Navigation math
+    // Compass & navigation
     function toRad(v){return v*Math.PI/180} function toDeg(v){return v*180/Math.PI}
     function haversineMeters(lat1,lon1,lat2,lon2){ const R=6371000; const dLat=toRad(lat2-lat1); const dLon=toRad(lon2-lon1); const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2; const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); return R*c }
     function bearingTo(lat1,lon1,lat2,lon2){ const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2)); const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1)); return (toDeg(Math.atan2(y,x))+360)%360 }
 
-    // GPS handling
-    function startGPS(){ if(!('geolocation' in navigator)){ gpsText.textContent='unsupported'; return } watchId = navigator.geolocation.watchPosition(onPos,onPosErr,{enableHighAccuracy:true,maximumAge:1000,timeout:10000}) }
-    function onPos(p){ lastPosition = p; gpsText.textContent='locked'; accText.textContent = (p.coords.accuracy||0).toFixed(1); latEl.textContent = p.coords.latitude.toFixed(6); lngEl.textContent = p.coords.longitude.toFixed(6); speedEl.textContent = p.coords.speed==null? '—' : (p.coords.speed.toFixed(1)+' m/s'); throttledUpdateNav(); }
-    function onPosErr(e){ gpsText.textContent='no fix' }
+    // device orientation
+    function handleOrientation(e){ let head = null; if(typeof e.webkitCompassHeading === 'number') head = e.webkitCompassHeading; else if(typeof e.alpha === 'number') head = (360 - e.alpha); if(head===null || isNaN(head)) return; headingSamples.push((head+360)%360); if(headingSamples.length>HEADING_SMOOTH) headingSamples.shift(); // average via vector sum
+      let x=0,y=0; headingSamples.forEach(h=>{ x+=Math.cos(toRad(h)); y+=Math.sin(toRad(h)) }); smoothedHeading = (toDeg(Math.atan2(y,x))+360)%360; headingEl.textContent = Math.round(smoothedHeading) }
+    if(window.DeviceOrientationEvent) window.addEventListener('deviceorientation', handleOrientation)
 
-    // Smooth compass & arrow: use deviceorientation but average samples, update arrow with rAF
-    let deviceHeading = 0, smoothedHeading = 0
-    let lastNavUpdate = 0
-    let rafId = null
+    // GPS
+    function startGPS(){ if(!navigator.geolocation){ document.getElementById('gpsText').textContent='unsupported'; return } watchId = navigator.geolocation.watchPosition(p=>{ lastPosition = p; document.getElementById('gpsText').textContent = 'locked'; document.getElementById('accText').textContent = (p.coords.accuracy||0).toFixed(1); document.getElementById('lat')?.textContent = p.coords.latitude.toFixed(6); document.getElementById('lng')?.textContent = p.coords.longitude.toFixed(6); throttledNavUpdate(); }, err=>{ document.getElementById('gpsText').textContent='no fix' }, { enableHighAccuracy:true, maximumAge:1000, timeout:10000 }) }
 
-    function handleOrientation(e){ // alpha is 0..360 (rotation around z axis). On some devices use webkitCompassHeading
-      let head = null
-      if(e.absolute && typeof e.alpha === 'number'){ head = 360 - e.alpha } // try to normalise
-      if(typeof e.webkitCompassHeading === 'number') head = e.webkitCompassHeading
-      if(head===null || isNaN(head)) return
-      deviceHeading = (head + 360) % 360
-      // maintain circular average using vector sum
-      headingSamples.push(deviceHeading)
-      if(headingSamples.length > HEADING_SMOOTH) headingSamples.shift()
-      // compute mean angle
-      let x=0,y=0
-      headingSamples.forEach(h=>{ x += Math.cos(toRad(h)); y += Math.sin(toRad(h)) })
-      smoothedHeading = (toDeg(Math.atan2(y,x))+360)%360
-      headingEl.textContent = Math.round(smoothedHeading)
-    }
+    function throttledNavUpdate(){ // update compass view at most 4Hz
+      if(Date.now() - (throttledNavUpdate._t||0) > 250){ throttledNavUpdate._t = Date.now(); updateNavImmediate() } }
 
-    if(window.DeviceOrientationEvent){ window.addEventListener('deviceorientation', handleOrientation) }
+    function updateNavImmediate(){ const open = getOpenSurvey(); if(!open || !selectedTargetId || !lastPosition) return; const t = open.targets.find(x=>x.id===selectedTargetId); if(!t) return; const lat = lastPosition.coords.latitude, lon = lastPosition.coords.longitude; const d = haversineMeters(lat,lon,t.lat,t.lng); const brg = bearingTo(lat,lon,t.lat,t.lng); distanceEl.textContent = Math.round(d); bearingEl.textContent = Math.round(brg); compassTargetName.textContent = t.notes || t.name || 'Target'; // relative rotation
+      const rel = ((brg - smoothedHeading) + 540) % 360 - 180; arrowEl.style.transform = `rotate(${rel}deg)`; // vibrate if very close
+      if(navigator.vibrate && d < 4) navigator.vibrate([80,30,80]) }
 
-    // Throttle nav updates to 4Hz or less
-    function throttledUpdateNav(){ const now = Date.now(); if(now - lastNavUpdate > 250){ lastNavUpdate = now; updateNavImmediate() } }
+    // loop update for smooth motion
+    function loop(){ updateNavImmediate(); requestAnimationFrame(loop) }
+    requestAnimationFrame(loop)
 
-    function updateNavImmediate(){ if(!lastPosition || !selectedSurveyId || !selectedTargetId) return; const s = surveys.find(x=>x.id===selectedSurveyId); if(!s) return; const t = s.targets.find(x=>x.id===selectedTargetId); if(!t) return; const lat = lastPosition.coords.latitude, lon = lastPosition.coords.longitude; const d = haversineMeters(lat,lon,t.lat,t.lng); const brg = bearingTo(lat,lon,t.lat,t.lng); distanceEl.textContent = Math.round(d); bearingEl.textContent = Math.round(brg);
-      // relative angle: target bearing minus device heading
-      const rel = ((brg - smoothedHeading) + 540) % 360 - 180 // -180..180
-      // rotate arrow to point to relative bearing (0 = up)
-      // We want 0 to mean up (arrow pointing to top), so rotate by rel degrees
-      arrowEl.style.transform = `rotate(${rel}deg)`
-      nextTargetName.textContent = t.name
-      // vibrate when very close
-      if(navigator.vibrate && d < 4) navigator.vibrate([80,30,80])
-    }
+    // Next target
+    btnNextTarget.addEventListener('click', ()=>{ const open = getOpenSurvey(); if(!open){ alert('No Open survey'); return } let t = open.targets.find(x=>!x.found); if(!t) t = open.targets[0]; if(!t){ alert('No targets'); return } selectedTargetId = t.id; showScreen('compass'); updateNavImmediate(); showToast('Next target: '+(t.notes||t.name||'Target')) })
 
-    // keep arrow moving smoothly using requestAnimationFrame even if heading updates at irregular intervals
-    function loop(){ updateNavImmediate(); rafId = requestAnimationFrame(loop) }
-    rafId = requestAnimationFrame(loop)
+    // Mark found
+    btnMarkFound.addEventListener('click', ()=>{ const open = getOpenSurvey(); if(!open||!selectedTargetId){ alert('Select a target first'); return } const t = open.targets.find(x=>x.id===selectedTargetId); if(!t) return; const note = prompt('Add find note (optional):', t.foundNote||''); if(note!==null){ t.found = true; t.foundNote = note; save(); renderTargets(); showToast('Marked found') } })
 
+    // Export/Import/Clear
+    btnExport.addEventListener('click', ()=>{ const txt = JSON.stringify(data, null, 2); const name = `metal_finder_v1_${new Date().toISOString().slice(0,19)}.json`; const blob = new Blob([txt], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove() },3000) })
+    btnImport.addEventListener('click', ()=> importFileEl.click())
+    importFileEl.addEventListener('change', async e=>{ const f = e.target.files[0]; if(!f) return; try{ const txt = await f.text(); const obj = JSON.parse(txt); if(obj && obj.surveys){ // whole dataset
+          data = obj; save(); showToast('Imported'); renderSurveys(); renderTargets(); } else if(Array.isArray(obj)){ // array of surveys
+          obj.forEach(s=>{ s.id = s.id || uid('s_'); s.targets = s.targets || []; data.surveys.push(s) }); save(); renderSurveys(); showToast('Imported') } else { alert('JSON format not recognised') } }catch(err){ alert('Import failed: '+err) } })
+    btnClear.addEventListener('click', ()=>{ if(!confirm('Clear all saved data? This cannot be undone.')) return; if(!confirm('Are you sure?')) return; data = { detectoristName:'', detectorUsed:'', surveys:[] }; save(); renderSurveys(); renderTargets(); showToast('Cleared') })
+
+    // Close survey button
+    btnCloseSurvey.addEventListener('click', ()=>{ const open = getOpenSurvey(); if(!open){ alert('No Open survey'); return } if(!confirm('Close the current Open survey?')) return; open.status = 'Closed'; save(); renderSurveys(); showToast('Survey closed') })
+
+    // small helpers
     function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}) }
 
-    // helper: download
-    function downloadText(text, filename){ const blob = new Blob([text], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove() },3000) }
-
-    // initial render
+    // start GPS and initial render
     renderSurveys(); renderTargets(); startGPS()
 
-    // helpers to update UI when archived toggle changes
-    showArchivedCheckbox.onchange = ()=> renderSurveys()
+    // touch-long-press tooltip support: add touchstart listener to targets list to toggle .touch-active
+    let touchTimer = null
+    targetsListEl.addEventListener('touchstart', e=>{ const el = e.target.closest('.tooltip'); if(!el) return; el.classList.add('touch-active'); clearTimeout(touchTimer); touchTimer = setTimeout(()=> el.classList.remove('touch-active'), 2500) })
 
-    // helper: update nav at least every second from GPS
-    setInterval(()=>{ if(lastPosition) throttledUpdateNav() },1000)
-
-    // cleanup on unload
-    window.addEventListener('beforeunload', ()=>{ saveSurveys(); if(watchId) navigator.geolocation.clearWatch(watchId); if(rafId) cancelAnimationFrame(rafId) })
-
+    // expose showScreen globally for quick dev debug
+    window.showScreen = showScreen
   </script>
 </body>
 </html>
