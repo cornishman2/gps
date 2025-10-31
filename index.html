@@ -16,7 +16,7 @@
     .row{display:flex;gap:8px}
     input,textarea,select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:100%}
     input[type=file]{padding:6px}
-    button{background:var(--accent);border:none;color:white;padding:10px 12px;border-radius:10px;font-weight:600}
+    button{background:var(--accent);border:none;color:white;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
     .muted{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:10px}
     .small{font-size:12px;padding:6px}
     .list{max-height:52vh;overflow:auto;padding:6px;border-radius:8px}
@@ -24,7 +24,7 @@
     .controls{display:flex;gap:6px}
     .coords{font-family:monospace;font-size:13px;color:var(--muted)}
     .bottom-nav{position:fixed;left:0;right:0;bottom:0;height:64px;background:rgba(6,8,12,0.96);display:flex;align-items:center;justify-content:space-around;border-top:1px solid rgba(255,255,255,0.03);z-index:50}
-    .nav-btn{flex:1;text-align:center;color:var(--muted);font-weight:700}
+    .nav-btn{flex:1;text-align:center;color:var(--muted);font-weight:700;cursor:pointer}
     .nav-btn.active{color:var(--accent)}
     .hidden{display:none}
     .arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
@@ -35,7 +35,7 @@
     .status-closed{background:rgba(156,163,175,0.06);color:var(--muted)}
     .status-archived{opacity:0.5}
     .tooltip{position:relative}
-    .tooltip[data-tip]:hover::after, .tooltip[data-tip].touch-active::after{content:attr(data-tip);position:absolute;left:0;top:-52px;background:#0b1220;padding:8px;border-radius:8px;color:#e6eef8;white-space:nowrap;font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,0.6);}
+    .tooltip[data-tip]:hover::after, .tooltip[data-tip].touch-active::after{content:attr(data-tip);position:absolute;left:0;top:-52px;background:#0b1220;padding:8px;border-radius:8px;color:#e6eef8;white-space:nowrap;font-size:12px;box-shadow:0 6px 18px rgba(0,0,0,0.6);z-index:70}
     @media(min-width:700px){ .bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)} }
   </style>
 </head>
@@ -52,9 +52,7 @@
       </div>
     </header>
 
-    <!-- Screens -->
     <main>
-      <!-- HOME -->
       <section id="screen-home" class="card screen">
         <h3>Home — Surveys</h3>
         <div style="height:8px"></div>
@@ -75,7 +73,6 @@
         </div>
       </section>
 
-      <!-- TARGETS -->
       <section id="screen-targets" class="card screen hidden">
         <h3>Targets (Open survey)</h3>
         <div style="height:8px"></div>
@@ -88,7 +85,6 @@
         <div class="list" id="targetsList"></div>
       </section>
 
-      <!-- COMPASS -->
       <section id="screen-compass" class="card screen hidden">
         <h3>Compass</h3>
         <div style="height:8px"></div>
@@ -105,7 +101,6 @@
         </div>
       </section>
 
-      <!-- SETTINGS -->
       <section id="screen-settings" class="card screen hidden">
         <h3>Settings</h3>
         <div style="height:8px"></div>
@@ -125,7 +120,6 @@
 
     <div id="toast" class="toast">Saved</div>
 
-    <!-- Bottom nav -->
     <nav class="bottom-nav">
       <div class="nav-btn active" data-screen="home">Home</div>
       <div class="nav-btn" data-screen="targets">Targets</div>
@@ -135,352 +129,439 @@
   </div>
 
   <script>
-  (function(){
-    // metal_finder_v2 - single-file SPA
-    const STORAGE_KEY = 'metal_finder_v2_data';
+(function(){
+  const STORAGE_KEY = 'metal_finder_v2_data';
+  const NAV_INTERVAL_MS = 500;
+  const HEADING_SMOOTH = 6;
 
-    function uid(p='id'){ return p + Math.random().toString(36).slice(2,9) }
+  function uid(p='id'){ return p + Math.random().toString(36).slice(2,9) }
+  function escapeHtml(s){ 
+    return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) 
+  }
 
-    // screen elements
-    const screens = {
-      home: document.getElementById('screen-home'),
-      targets: document.getElementById('screen-targets'),
-      compass: document.getElementById('screen-compass'),
-      settings: document.getElementById('screen-settings')
+  const screens = {
+    home: document.getElementById('screen-home'),
+    targets: document.getElementById('screen-targets'),
+    compass: document.getElementById('screen-compass'),
+    settings: document.getElementById('screen-settings')
+  };
+  const navBtns = [...document.querySelectorAll('.nav-btn')];
+  const detectoristNameEl = document.getElementById('detectoristName');
+  const detectorUsedEl = document.getElementById('detectorUsed');
+  const btnNewSurvey = document.getElementById('btnNewSurvey');
+  const btnNewSurveyAdd = document.getElementById('btnNewSurveyAdd');
+  const btnCloseSurvey = document.getElementById('btnCloseSurvey');
+  const surveyListEl = document.getElementById('surveyList');
+  const btnAddTarget = document.getElementById('btnAddTarget');
+  const btnBatch = document.getElementById('btnBatch');
+  const targetsListEl = document.getElementById('targetsList');
+  const openSurveyNameEl = document.getElementById('openSurveyName');
+  const compassTargetName = document.getElementById('compassTargetName');
+  const headingEl = document.getElementById('heading');
+  const bearingEl = document.getElementById('bearing');
+  const distanceEl = document.getElementById('distance');
+  const arrowEl = document.getElementById('arrow');
+  const btnNextTarget = document.getElementById('btnNextTarget');
+  const btnMarkFound = document.getElementById('btnMarkFound');
+  const btnExport = document.getElementById('btnExport');
+  const btnImport = document.getElementById('btnImport');
+  const importFileEl = document.getElementById('importFile');
+  const btnClear = document.getElementById('btnClear');
+  const showArchivedCheckbox = document.getElementById('showArchived');
+  const toast = document.getElementById('toast');
+
+  let data = load();
+  data.detectoristName = data.detectoristName || '';
+  data.detectorUsed = data.detectorUsed || '';
+  data.surveys = data.surveys || [];
+  let lastPosition = null;
+  let watchId = null;
+  let batchInterval = null;
+  let selectedTargetId = null;
+  let headingSamples = [];
+  let smoothedHeading = 0;
+  let lastNav = 0;
+
+  function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); showToast('Saved'); }
+  function load(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}') } catch(e){ return {} } }
+  function showToast(msg='Saved'){ toast.textContent = msg; toast.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(()=> toast.style.display = 'none', 1200) }
+
+  function showScreen(name){
+    Object.values(screens).forEach(s=>s.classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+    navBtns.forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
+    if(name==='targets') renderTargets();
+    if(name==='home') renderSurveys();
+  }
+  navBtns.forEach(b=>b.addEventListener('click', ()=> showScreen(b.dataset.screen)));
+
+  detectoristNameEl.value = data.detectoristName;
+  detectorUsedEl.value = data.detectorUsed;
+  detectoristNameEl.addEventListener('input', ()=>{ data.detectoristName = detectoristNameEl.value; save(); });
+  detectorUsedEl.addEventListener('input', ()=>{ data.detectorUsed = detectorUsedEl.value; save(); });
+
+  function getOpenSurvey(){ return data.surveys.find(s=>s.status==='Open') }
+  function setOnlyOpen(id){
+    data.surveys.forEach(s=>{
+      if(s.id===id) s.status='Open';
+      else if(s.status==='Open') s.status='Closed';
+    });
+  }
+  function createSurvey(name){
+    data.surveys.forEach(s=>{ if(s.status==='Open') s.status='Closed' });
+    const s = { id: uid('s_'), name: name||('Survey '+new Date().toLocaleString()), createdAt: Date.now(), status:'Open', archived:false, targets:[] };
+    data.surveys.push(s);
+    save();
+    renderSurveys();
+    return s;
+  }
+
+  function renderSurveys(){
+    surveyListEl.innerHTML = '';
+    const showArch = showArchivedCheckbox.checked;
+    data.surveys.slice().sort((a,b)=>{
+      const sa = a.status==='Open'?0:(a.status==='Closed'?1:2);
+      const sb = b.status==='Open'?0:(b.status==='Closed'?1:2);
+      if(sa!==sb) return sa - sb;
+      return b.createdAt - a.createdAt;
+    }).forEach(s=>{
+      if(s.archived && !showArch) return;
+      const row = document.createElement('div'); 
+      row.className = 'survey-row' + (s.archived? ' status-archived':'');
+      row.innerHTML = `<div style="min-width:0"><strong>${escapeHtml(s.name)}</strong><div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets</div></div>
+        <div class="controls">
+          <button class="muted small" data-action="select" data-id="${s.id}">Open</button>
+          ${(s.status!=='Open')? `<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>` : `<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`}
+          <button class="muted small" data-action="archive" data-id="${s.id}">${s.archived? 'Unarchive':'Archive'}</button>
+          <button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>
+        </div>`;
+      surveyListEl.appendChild(row);
+    });
+    [...surveyListEl.querySelectorAll('button')].forEach(b=> b.addEventListener('click', surveyAction));
+    const open = getOpenSurvey(); 
+    openSurveyNameEl.textContent = open? open.name : '—';
+  }
+
+  function surveyAction(e){
+    const a = e.currentTarget.dataset.action;
+    const id = e.currentTarget.dataset.id;
+    const s = data.surveys.find(x=>x.id===id);
+    if(!s) return;
+    if(a==='select'){ selectedTargetId = null; showScreen('targets'); renderTargets(); }
+    if(a==='open'){ setOnlyOpen(id); save(); renderSurveys(); showToast('Set Open'); }
+    if(a==='close'){ s.status = 'Closed'; save(); renderSurveys(); showToast('Closed'); }
+    if(a==='archive'){ s.archived = !s.archived; save(); renderSurveys(); showToast(s.archived? 'Archived' : 'Unarchived'); }
+    if(a==='delete'){ 
+      if(!confirm('Delete survey and all its targets?')) return; 
+      data.surveys = data.surveys.filter(x=>x.id!==id); 
+      if(selectedTargetId && !data.surveys.some(s=>s.targets.some(t=>t.id===selectedTargetId))) selectedTargetId=null; 
+      save(); renderSurveys(); renderTargets(); showToast('Deleted'); 
+    }
+  }
+
+  function renderTargets(){
+    targetsListEl.innerHTML = '';
+    const open = getOpenSurvey();
+    if(!open){ 
+      targetsListEl.innerHTML = '<div class="coords">No Open survey — create or set one Open on Home</div>'; 
+      openSurveyNameEl.textContent = '—'; 
+      return; 
+    }
+    openSurveyNameEl.textContent = open.name;
+    open.targets.forEach(t=>{
+      const row = document.createElement('div'); 
+      row.className = 'target-row';
+      const tip = `Detectorist: ${escapeHtml(t.detectorist||data.detectoristName||'')} — Detector: ${escapeHtml(t.detector||data.detectorUsed||'')}`;
+      row.innerHTML = `<div style="min-width:0"><div class="tooltip" data-tip="${escapeHtml(tip)}"><strong>${escapeHtml(t.notes||t.name||'Target')}</strong></div><div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)} ${t.found? '• Found':''}</div></div>
+        <div class="controls">
+          <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
+          <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
+          <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
+        </div>`;
+      targetsListEl.appendChild(row);
+    });
+    [...targetsListEl.querySelectorAll('button')].forEach(b=> b.addEventListener('click', targetAction));
+  }
+
+  function targetAction(e){
+    const a = e.currentTarget.dataset.action;
+    const id = e.currentTarget.dataset.id;
+    const open = getOpenSurvey();
+    if(!open) return;
+    const t = open.targets.find(x=>x.id===id);
+    if(!t) return;
+    if(a==='goto'){ 
+      selectedTargetId = id; 
+      compassTargetName.textContent = t.notes || t.name || 'Target'; 
+      showScreen('compass'); 
+      updateNavImmediate(); 
+      showToast('Navigating'); 
+    }
+    if(a==='edit'){
+      const newNote = prompt('Edit descriptive text (first column):', t.notes||t.name||'');
+      if(newNote!==null){ 
+        t.notes = newNote; 
+        t.detectorist = t.detectorist || data.detectoristName; 
+        t.detector = t.detector || data.detectorUsed; 
+        save(); renderTargets(); showToast('Saved'); 
+      }
+    }
+    if(a==='delete'){ 
+      if(!confirm('Delete target?')) return; 
+      open.targets = open.targets.filter(x=>x.id!==id); 
+      if(selectedTargetId===id) selectedTargetId=null; 
+      save(); renderTargets(); showToast('Deleted'); 
+    }
+  }
+
+  btnAddTarget.addEventListener('click', ()=>{
+    const open = getOpenSurvey(); 
+    if(!open){ alert('No Open survey — create one on Home'); return; }
+    if(!lastPosition){ alert('No GPS fix'); return; }
+    const desc = prompt('Descriptive text for this target (first column):','') || '';
+    const t = { 
+      id: uid('t_'), 
+      name: 'Target '+(open.targets.length+1), 
+      lat: lastPosition.coords.latitude, 
+      lng: lastPosition.coords.longitude, 
+      notes: desc, 
+      detectorist: data.detectoristName||'', 
+      detector: data.detectorUsed||'', 
+      createdAt: Date.now(), 
+      found: false 
     };
-    const navBtns = [...document.querySelectorAll('.nav-btn')];
+    open.targets.push(t); save(); renderTargets(); showToast('Target added');
+  });
 
-    function showScreen(name){
-      Object.values(screens).forEach(s=>s.classList.add('hidden'));
-      screens[name].classList.remove('hidden');
-      navBtns.forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
-      if(name==='targets') renderTargets();
-      if(name==='home') renderSurveys();
-    }
-    navBtns.forEach(b=>b.addEventListener('click', ()=> showScreen(b.dataset.screen)));
+  btnNewSurvey.addEventListener('click', ()=>{
+    const name = prompt('Survey name','Field survey '+(new Date()).toLocaleDateString());
+    if(!name) return;
+    createSurvey(name);
+    showToast('Survey created');
+  });
 
-    // UI refs
-    const detectoristNameEl = document.getElementById('detectoristName');
-    const detectorUsedEl = document.getElementById('detectorUsed');
-    const btnNewSurvey = document.getElementById('btnNewSurvey');
-    const btnNewSurveyAdd = document.getElementById('btnNewSurveyAdd');
-    const btnCloseSurvey = document.getElementById('btnCloseSurvey');
-    const surveyListEl = document.getElementById('surveyList');
-    const btnAddTarget = document.getElementById('btnAddTarget');
-    const btnBatch = document.getElementById('btnBatch');
-    const targetsListEl = document.getElementById('targetsList');
-    const openSurveyNameEl = document.getElementById('openSurveyName');
-    const compassTargetName = document.getElementById('compassTargetName');
-    const headingEl = document.getElementById('heading');
-    const bearingEl = document.getElementById('bearing');
-    const distanceEl = document.getElementById('distance');
-    const arrowEl = document.getElementById('arrow');
-    const btnNextTarget = document.getElementById('btnNextTarget');
-    const btnMarkFound = document.getElementById('btnMarkFound');
-    const btnExport = document.getElementById('btnExport');
-    const btnImport = document.getElementById('btnImport');
-    const importFileEl = document.getElementById('importFile');
-    const btnClear = document.getElementById('btnClear');
-    const showArchivedCheckbox = document.getElementById('showArchived');
-    const toast = document.getElementById('toast');
+  btnNewSurveyAdd.addEventListener('click', ()=>{
+    if(!lastPosition){ alert('No GPS fix yet'); return; }
+    const name = prompt('Survey name','Field survey '+(new Date()).toLocaleDateString());
+    if(!name) return;
+    const s = createSurvey(name);
+    const note = prompt('Note for first target (optional)','') || '';
+    const t = { 
+      id: uid('t_'), 
+      name: 'Target 1', 
+      lat: lastPosition.coords.latitude, 
+      lng: lastPosition.coords.longitude, 
+      notes: note, 
+      detectorist: data.detectoristName||'', 
+      detector: data.detectorUsed||'', 
+      createdAt: Date.now(), 
+      found: false 
+    };
+    s.targets.push(t); save(); renderSurveys(); renderTargets(); showToast('Survey + target saved');
+  });
 
-    // App state
-    let data = load();
-    data.detectoristName = data.detectoristName || '';
-    data.detectorUsed = data.detectorUsed || '';
-    data.surveys = data.surveys || [];
-    let lastPosition = null;
-    let watchId = null;
-    let batchInterval = null;
-    let selectedTargetId = null;
+  btnCloseSurvey.addEventListener('click', ()=>{
+    const open = getOpenSurvey(); 
+    if(!open){ alert('No Open survey'); return; }
+    if(!confirm('Close the current Open survey?')) return;
+    open.status = 'Closed'; save(); renderSurveys(); showToast('Survey closed');
+  });
 
-    // Compass smoothing
-    let headingSamples = [];
-    const HEADING_SMOOTH = 6; // number of samples to average
-    let smoothedHeading = 0;
-
-    // NAV update rate (ms)
-    const NAV_INTERVAL_MS = 500;
-
-    // ---------- Helpers ----------
-    function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); showToast('Saved'); }
-    function load(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}') } catch(e){ return {} } }
-    function showToast(msg='Saved'){ toast.textContent = msg; toast.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(()=> toast.style.display = 'none', 1200) }
-
-    function escapeHtml(s){ return (s||'').toString().replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}) }
-
-    // ---------- Detector fields (persist live) ----------
-    detectoristNameEl.value = data.detectoristName;
-    detectorUsedEl.value = data.detectorUsed;
-    detectoristNameEl.addEventListener('input', ()=>{ data.detectoristName = detectoristNameEl.value; save(); });
-    detectorUsedEl.addEventListener('input', ()=>{ data.detectorUsed = detectorUsedEl.value; save(); });
-
-    // ---------- Surveys ----------
-    function getOpenSurvey(){ return data.surveys.find(s=>s.status==='Open') }
-    function setOnlyOpen(id){
-      data.surveys.forEach(s=>{
-        if(s.id===id) s.status='Open';
-        else if(s.status==='Open') s.status='Closed';
-      });
-    }
-    function createSurvey(name){
-      data.surveys.forEach(s=>{ if(s.status==='Open') s.status='Closed' });
-      const s = { id: uid('s_'), name: name||('Survey '+new Date().toLocaleString()), createdAt: Date.now(), status:'Open', archived:false, targets:[] };
-      data.surveys.push(s);
-      save();
-      renderSurveys();
-      return s;
-    }
-
-    function renderSurveys(){
-      surveyListEl.innerHTML = '';
-      const showArch = showArchivedCheckbox.checked;
-      data.surveys.slice().sort((a,b)=>{
-        const sa = a.status==='Open'?0:(a.status==='Closed'?1:2);
-        const sb = b.status==='Open'?0:(b.status==='Closed'?1:2);
-        if(sa!==sb) return sa - sb;
-        return b.createdAt - a.createdAt;
-      }).forEach(s=>{
-        if(s.archived && !showArch) return;
-        const row = document.createElement('div'); row.className = 'survey-row' + (s.archived? ' status-archived':'');
-        row.innerHTML = `<div style="min-width:0"><strong>${escapeHtml(s.name)}</strong><div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets</div></div>
-          <div class="controls">
-            <button class="muted small" data-action="select" data-id="${s.id}">Open</button>
-            ${(s.status!=='Open')? `<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>` : `<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`}
-            <button class="muted small" data-action="archive" data-id="${s.id}">${s.archived? 'Unarchive':'Archive'}</button>
-            <button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>
-          </div>`;
-        surveyListEl.appendChild(row);
-      });
-      [...surveyListEl.querySelectorAll('button')].forEach(b=> b.addEventListener('click', surveyAction));
-      const open = getOpenSurvey(); document.getElementById('openSurveyName').textContent = open? open.name : '—';
-    }
-
-    function surveyAction(e){
-      const a = e.currentTarget.dataset.action;
-      const id = e.currentTarget.dataset.id;
-      const s = data.surveys.find(x=>x.id===id);
-      if(!s) return;
-      if(a==='select'){ selectedTargetId = null; showScreen('targets'); renderTargets(); }
-      if(a==='open'){ setOnlyOpen(id); save(); renderSurveys(); showToast('Set Open'); }
-      if(a==='close'){ s.status = 'Closed'; save(); renderSurveys(); showToast('Closed'); }
-      if(a==='archive'){ s.archived = !s.archived; save(); renderSurveys(); showToast(s.archived? 'Archived' : 'Unarchived'); }
-      if(a==='delete'){ if(!confirm('Delete survey and all its targets?')) return; data.surveys = data.surveys.filter(x=>x.id!==id); if(selectedTargetId && !data.surveys.some(s=>s.targets.some(t=>t.id===selectedTargetId))) selectedTargetId=null; save(); renderSurveys(); renderTargets(); showToast('Deleted'); }
-    }
-
-    // ---------- Targets ----------
-    function renderTargets(){
-      targetsListEl.innerHTML = '';
-      const open = getOpenSurvey();
-      if(!open){ targetsListEl.innerHTML = '<div class="coords">No Open survey — create or set one Open on Home</div>'; openSurveyNameEl.textContent = '—'; return; }
-      openSurveyNameEl.textContent = open.name;
-      open.targets.forEach(t=>{
-        const row = document.createElement('div'); row.className = 'target-row';
-        const tip = `Detectorist: ${escapeHtml(t.detectorist||data.detectoristName||'')} — Detector: ${escapeHtml(t.detector||data.detectorUsed||'')}`;
-        row.innerHTML = `<div style="min-width:0"><div class="tooltip" data-tip="${escapeHtml(tip)}"><strong>${escapeHtml(t.notes||t.name||'Target')}</strong></div><div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)} ${t.found? '• Found':''}</div></div>
-          <div class="controls">
-            <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
-            <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
-            <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
-          </div>`;
-        targetsListEl.appendChild(row);
-      });
-      [...targetsListEl.querySelectorAll('button')].forEach(b=> b.addEventListener('click', targetAction));
-    }
-
-    function targetAction(e){
-      const a = e.currentTarget.dataset.action;
-      const id = e.currentTarget.dataset.id;
-      const open = getOpenSurvey();
-      if(!open) return;
-      const t = open.targets.find(x=>x.id===id);
-      if(!t) return;
-      if(a==='goto'){ selectedTargetId = id; compassTargetName.textContent = t.notes || t.name || 'Target'; showScreen('compass'); updateNavImmediate(); showToast('Navigating'); }
-      if(a==='edit'){
-        const newNote = prompt('Edit descriptive text (first column):', t.notes||t.name||'');
-        if(newNote!==null){ t.notes = newNote; t.detectorist = t.detectorist || data.detectoristName; t.detector = t.detector || data.detectorUsed; save(); renderTargets(); showToast('Saved'); }
-      }
-      if(a==='delete'){ if(!confirm('Delete target?')) return; open.targets = open.targets.filter(x=>x.id!==id); if(selectedTargetId===id) selectedTargetId=null; save(); renderTargets(); showToast('Deleted'); }
-    }
-
-    // Add target
-    document.getElementById('btnAddTarget').addEventListener('click', ()=>{
-      const open = getOpenSurvey(); if(!open){ alert('No Open survey — create one on Home'); return; }
-      if(!lastPosition){ alert('No GPS fix'); return; }
-      const desc = prompt('Descriptive text for this target (first column):','') || '';
-      const t = { id: uid('t_'), name: 'Target '+(open.targets.length+1), lat: lastPosition.coords.latitude, lng: lastPosition.coords.longitude, notes: desc, detectorist: data.detectoristName||'', detector: data.detectorUsed||'', createdAt: Date.now(), found: false };
-      open.targets.push(t); save(); renderTargets(); showToast('Target added');
-    });
-
-    // New survey buttons
-    btnNewSurvey.addEventListener('click', ()=>{
-      const name = prompt('Survey name','Field survey '+(new Date()).toLocaleDateString());
-      if(!name) return;
-      createSurvey(name);
-      showToast('Survey created');
-    });
-
-    btnNewSurveyAdd.addEventListener('click', ()=>{
-      if(!lastPosition){ alert('No GPS fix yet'); return; }
-      const name = prompt('Survey name','Field survey '+(new Date()).toLocaleDateString());
-      if(!name) return;
-      const s = createSurvey(name);
-      const note = prompt('Note for first target (optional)','') || '';
-      const t = { id: uid('t_'), name: 'Target 1', lat: lastPosition.coords.latitude, lng: lastPosition.coords.longitude, notes: note, detectorist: data.detectoristName||'', detector: data.detectorUsed||'', createdAt: Date.now(), found: false };
-      s.targets.push(t); save(); renderSurveys(); renderTargets(); showToast('Survey + target saved');
-    });
-
-    // Close survey
-    btnCloseSurvey.addEventListener('click', ()=>{
-      const open = getOpenSurvey(); if(!open){ alert('No Open survey'); return; }
-      if(!confirm('Close the current Open survey?')) return;
-      open.status = 'Closed'; save(); renderSurveys(); showToast('Survey closed');
-    });
-
-    // Batch add
-    btnBatch.addEventListener('click', ()=>{
-      const open = getOpenSurvey(); if(!open){ alert('No Open survey'); return; }
-      if(!batchInterval){
-        btnBatch.textContent = 'Stop batch';
-        batchInterval = setInterval(()=>{
-          if(lastPosition){
-            const t = { id: uid('t_'), name: 'Target '+(open.targets.length+1), lat: lastPosition.coords.latitude, lng: lastPosition.coords.longitude, notes:'', detectorist: data.detectoristName||'', detector: data.detectorUsed||'', createdAt: Date.now(), found:false };
-            open.targets.push(t); save(); renderTargets();
-          }
-        }, 3000);
-        showToast('Batch started');
-      } else {
-        clearInterval(batchInterval); batchInterval = null; btnBatch.textContent = 'Batch add'; showToast('Batch stopped');
-      }
-    });
-
-    // ---------- Compass & Navigation ----------
-    function toRad(v){return v*Math.PI/180} function toDeg(v){return v*180/Math.PI}
-    function haversineMeters(lat1,lon1,lat2,lon2){ const R=6371000; const dLat=toRad(lat2-lat1); const dLon=toRad(lon2-lon1); const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2; const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); return R*c }
-    function bearingTo(lat1,lon1,lat2,lon2){ const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2)); const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1)); return (toDeg(Math.atan2(y,x))+360)%360 }
-
-    // Device orientation handler (collect samples and compute circular mean)
-    function handleOrientation(e){
-      let head = null;
-      if(typeof e.webkitCompassHeading === 'number') head = e.webkitCompassHeading;
-      else if(typeof e.alpha === 'number') head = (360 - e.alpha);
-      if(head===null || isNaN(head)) return;
-      headingSamples.push((head+360)%360);
-      if(headingSamples.length > HEADING_SMOOTH) headingSamples.shift();
-      let x=0,y=0;
-      headingSamples.forEach(h=>{ x += Math.cos(toRad(h)); y += Math.sin(toRad(h)); });
-      smoothedHeading = (toDeg(Math.atan2(y,x)) + 360) % 360;
-      headingEl.textContent = Math.round(smoothedHeading);
-    }
-    if(window.DeviceOrientationEvent) window.addEventListener('deviceorientation', handleOrientation);
-
-    // GPS watch
-    function startGPS(){
-      if(!navigator.geolocation){ document.getElementById('gpsText').textContent='unsupported'; return; }
-      watchId = navigator.geolocation.watchPosition(p=>{
-        lastPosition = p;
-        document.getElementById('gpsText').textContent = 'locked';
-        document.getElementById('accText').textContent = (p.coords.accuracy||0).toFixed(1);
-        throttledNavUpdate();
-      }, err=>{
-        document.getElementById('gpsText').textContent = 'no fix';
-      }, { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
-    }
-
-    // Throttled nav update (500 ms)
-    let lastNav = 0;
-    function throttledNavUpdate(){
-      const now = Date.now();
-      if(now - lastNav >= NAV_INTERVAL_MS){ lastNav = now; updateNavImmediate(); }
-    }
-    // also ensure periodic updates even if orientation changes don't fire
-    setInterval(()=>{ if(lastPosition) throttledNavUpdate() }, NAV_INTERVAL_MS);
-
-    function updateNavImmediate(){
-      const open = getOpenSurvey(); if(!open || !selectedTargetId || !lastPosition) return;
-      const t = open.targets.find(x=>x.id===selectedTargetId); if(!t) return;
-      const lat = lastPosition.coords.latitude, lon = lastPosition.coords.longitude;
-      const d = haversineMeters(lat,lon,t.lat,t.lng);
-      const brg = bearingTo(lat,lon,t.lat,t.lng);
-      distanceEl.textContent = Math.round(d);
-      bearingEl.textContent = Math.round(brg);
-      compassTargetName.textContent = t.notes || t.name || 'Target';
-      // relative angle for UI: rotate arrow by difference (target bearing - device heading)
-      const rel = ((brg - smoothedHeading) + 540) % 360 - 180; // -180..180
-      arrowEl.style.transform = `rotate(${rel}deg)`;
-      // vibrate if very close
-      if(navigator.vibrate && d < 4) navigator.vibrate([80,30,80]);
-    }
-
-    // Next target
-    btnNextTarget.addEventListener('click', ()=>{
-      const open = getOpenSurvey(); if(!open){ alert('No Open survey'); return; }
-      let t = open.targets.find(x=>!x.found); if(!t) t = open.targets[0];
-      if(!t){ alert('No targets'); return; }
-      selectedTargetId = t.id; showScreen('compass'); updateNavImmediate(); showToast('Next: '+(t.notes||t.name||'Target'));
-    });
-
-    // Mark found
-    btnMarkFound.addEventListener('click', ()=>{
-      const open = getOpenSurvey(); if(!open || !selectedTargetId){ alert('Select a target first'); return; }
-      const t = open.targets.find(x=>x.id===selectedTargetId); if(!t) return;
-      const note = prompt('Add find note (optional):', t.foundNote||'');
-      if(note!==null){ t.found = true; t.foundNote = note; save(); renderTargets(); showToast('Marked found'); }
-    });
-
-    // Export / Import / Clear
-    btnExport.addEventListener('click', ()=>{
-      const txt = JSON.stringify(data, null, 2);
-      const name = `metal_finder_v2_${new Date().toISOString().slice(0,19)}.json`;
-      const blob = new Blob([txt], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
-      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove() },3000);
-    });
-
-    btnImport.addEventListener('click', ()=> importFileEl.click());
-    importFileEl.addEventListener('change', async e=>{
-      const f = e.target.files[0]; if(!f) return;
-      try{
-        const txt = await f.text();
-        const obj = JSON.parse(txt);
-        if(obj && obj.surveys){
-          data = obj; save(); showToast('Imported'); renderSurveys(); renderTargets();
-        } else if(Array.isArray(obj)){
-          obj.forEach(s=>{ s.id = s.id || uid('s_'); s.targets = s.targets || []; data.surveys.push(s) }); save(); renderSurveys(); showToast('Imported');
-        } else {
-          alert('JSON format not recognised');
+  btnBatch.addEventListener('click', ()=>{
+    const open = getOpenSurvey(); 
+    if(!open){ alert('No Open survey'); return; }
+    if(!batchInterval){
+      btnBatch.textContent = 'Stop batch';
+      batchInterval = setInterval(()=>{
+        if(lastPosition){
+          const t = { 
+            id: uid('t_'), 
+            name: 'Target '+(open.targets.length+1), 
+            lat: lastPosition.coords.latitude, 
+            lng: lastPosition.coords.longitude, 
+            notes:'', 
+            detectorist: data.detectoristName||'', 
+            detector: data.detectorUsed||'', 
+            createdAt: Date.now(), 
+            found:false 
+          };
+          open.targets.push(t); save(); renderTargets();
         }
-      } catch(err){
-        alert('Import failed: ' + err);
+      }, 3000);
+      showToast('Batch started');
+    } else {
+      clearInterval(batchInterval); 
+      batchInterval = null; 
+      btnBatch.textContent = 'Batch add'; 
+      showToast('Batch stopped');
+    }
+  });
+
+  function toRad(v){return v*Math.PI/180} 
+  function toDeg(v){return v*180/Math.PI}
+  function haversineMeters(lat1,lon1,lat2,lon2){ 
+    const R=6371000; 
+    const dLat=toRad(lat2-lat1); 
+    const dLon=toRad(lon2-lon1); 
+    const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2; 
+    const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); 
+    return R*c 
+  }
+  function bearingTo(lat1,lon1,lat2,lon2){ 
+    const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2)); 
+    const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1)); 
+    return (toDeg(Math.atan2(y,x))+360)%360 
+  }
+
+  function handleOrientation(e){
+    let head = null;
+    if(typeof e.webkitCompassHeading === 'number') head = e.webkitCompassHeading;
+    else if(typeof e.alpha === 'number') head = (360 - e.alpha);
+    if(head===null || isNaN(head)) return;
+    headingSamples.push((head+360)%360);
+    if(headingSamples.length > HEADING_SMOOTH) headingSamples.shift();
+    let x=0,y=0;
+    headingSamples.forEach(h=>{ x += Math.cos(toRad(h)); y += Math.sin(toRad(h)); });
+    smoothedHeading = (toDeg(Math.atan2(y,x)) + 360) % 360;
+    headingEl.textContent = Math.round(smoothedHeading);
+  }
+  if(window.DeviceOrientationEvent) window.addEventListener('deviceorientation', handleOrientation);
+
+  function startGPS(){
+    if(!navigator.geolocation){ 
+      document.getElementById('gpsText').textContent='unsupported'; 
+      return; 
+    }
+    watchId = navigator.geolocation.watchPosition(p=>{
+      lastPosition = p;
+      document.getElementById('gpsText').textContent = 'locked';
+      document.getElementById('accText').textContent = (p.coords.accuracy||0).toFixed(1);
+      throttledNavUpdate();
+    }, err=>{
+      document.getElementById('gpsText').textContent = 'no fix';
+    }, { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
+  }
+
+  function throttledNavUpdate(){
+    const now = Date.now();
+    if(now - lastNav >= NAV_INTERVAL_MS){ 
+      lastNav = now; 
+      updateNavImmediate(); 
+    }
+  }
+  setInterval(()=>{ if(lastPosition) throttledNavUpdate() }, NAV_INTERVAL_MS);
+
+  function updateNavImmediate(){
+    const open = getOpenSurvey(); 
+    if(!open || !selectedTargetId || !lastPosition) return;
+    const t = open.targets.find(x=>x.id===selectedTargetId); 
+    if(!t) return;
+    const lat = lastPosition.coords.latitude, lon = lastPosition.coords.longitude;
+    const d = haversineMeters(lat,lon,t.lat,t.lng);
+    const brg = bearingTo(lat,lon,t.lat,t.lng);
+    distanceEl.textContent = Math.round(d);
+    bearingEl.textContent = Math.round(brg);
+    compassTargetName.textContent = t.notes || t.name || 'Target';
+    const rel = ((brg - smoothedHeading) + 540) % 360 - 180;
+    arrowEl.style.transform = `rotate(${rel}deg)`;
+    if(navigator.vibrate && d < 4) navigator.vibrate([80,30,80]);
+  }
+
+  btnNextTarget.addEventListener('click', ()=>{
+    const open = getOpenSurvey(); 
+    if(!open){ alert('No Open survey'); return; }
+    let t = open.targets.find(x=>!x.found); 
+    if(!t) t = open.targets[0];
+    if(!t){ alert('No targets'); return; }
+    selectedTargetId = t.id; 
+    showScreen('compass'); 
+    updateNavImmediate(); 
+    showToast('Next: '+(t.notes||t.name||'Target'));
+  });
+
+  btnMarkFound.addEventListener('click', ()=>{
+    const open = getOpenSurvey(); 
+    if(!open || !selectedTargetId){ alert('Select a target first'); return; }
+    const t = open.targets.find(x=>x.id===selectedTargetId); 
+    if(!t) return;
+    const note = prompt('Add find note (optional):', t.foundNote||'');
+    if(note!==null){ 
+      t.found = true; 
+      t.foundNote = note; 
+      save(); renderTargets(); showToast('Marked found'); 
+    }
+  });
+
+  btnExport.addEventListener('click', ()=>{
+    const txt = JSON.stringify(data, null, 2);
+    const name = `metal_finder_v2_${new Date().toISOString().slice(0,19)}.json`;
+    const blob = new Blob([txt], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); 
+    a.href = url; 
+    a.download = name; 
+    document.body.appendChild(a); 
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove() },3000);
+  });
+
+  btnImport.addEventListener('click', ()=> importFileEl.click());
+  
+  importFileEl.addEventListener('change', async e=>{
+    const f = e.target.files[0]; 
+    if(!f) return;
+    try{
+      const txt = await f.text();
+      const obj = JSON.parse(txt);
+      if(obj && obj.surveys){
+        data = obj; 
+        save(); 
+        showToast('Imported'); 
+        renderSurveys(); 
+        renderTargets();
+      } else if(Array.isArray(obj)){
+        obj.forEach(s=>{ 
+          s.id = s.id || uid('s_'); 
+          s.targets = s.targets || []; 
+          data.surveys.push(s) 
+        }); 
+        save(); 
+        renderSurveys(); 
+        showToast('Imported');
+      } else {
+        alert('JSON format not recognised');
       }
-    });
+    } catch(err){
+      alert('Import failed: ' + err);
+    }
+  });
 
-    btnClear.addEventListener('click', ()=>{
-      if(!confirm('Clear all saved data? This cannot be undone.')) return;
-      if(!confirm('Are you sure?')) return;
-      data = { detectoristName:'', detectorUsed:'', surveys:[] };
-      save(); renderSurveys(); renderTargets(); showToast('Cleared');
-    });
+  btnClear.addEventListener('click', ()=>{
+    if(!confirm('Clear all saved data? This cannot be undone.')) return;
+    if(!confirm('Are you sure?')) return;
+    data = { detectoristName:'', detectorUsed:'', surveys:[] };
+    save(); 
+    renderSurveys(); 
+    renderTargets(); 
+    showToast('Cleared');
+  });
 
-    // Initial render & GPS start
-    renderSurveys(); renderTargets(); startGPS();
+  renderSurveys(); 
+  renderTargets(); 
+  startGPS();
 
-    // Touch long-press tooltip support for mobile on targets list
-    let touchTimer = null;
-    targetsListEl.addEventListener('touchstart', e=>{
-      const el = e.target.closest('.tooltip');
-      if(!el) return;
-      el.classList.add('touch-active');
-      clearTimeout(touchTimer);
-      touchTimer = setTimeout(()=> el.classList.remove('touch-active'), 2500);
-    });
+  let touchTimer = null;
+  targetsListEl.addEventListener('touchstart', e=>{
+    const el = e.target.closest('.tooltip');
+    if(!el) return;
+    el.classList.add('touch-active');
+    clearTimeout(touchTimer);
+    touchTimer = setTimeout(()=> el.classList.remove('touch-active'), 2500);
+  });
 
-    // expose showScreen for debugging if needed
-    window.showScreen = showScreen;
+  window.showScreen = showScreen;
 
-    // end of IIFE
-  })();
+})();
   </script>
 </body>
 </html>
