@@ -24,6 +24,10 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .small{font-size:12px;padding:6px}
 .list{max-height:52vh;overflow:auto;padding:6px;border-radius:8px}
 .survey-row,.target-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01)}
+.target-row{flex-direction:column;align-items:stretch}
+.target-info{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.target-name{font-weight:600;font-size:14px}
+.target-status{color:#16a34a;font-size:13px}
 .survey-row.open{background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.2)}
 .survey-row.archived{background:var(--arch-tint);opacity:0.9}
 .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -265,9 +269,12 @@ function renderTargets(){
   open.targets.forEach(t=>{
     const row=document.createElement('div');
     row.className='target-row';
-    row.innerHTML=`<div style="min-width:0">
-      <strong>${t.notes||'Target'}</strong>
-      <div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}${t.found?' • Found':''}</div>
+    const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
+    row.innerHTML=`<div class="target-info">
+      <div class="target-name">${t.notes||'Target'}</div>
+      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
+      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
+      ${foundStatus}
     </div>
     <div class="controls">
       <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
