@@ -40,7 +40,7 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
 .divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
-@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}} 
+@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
 </style>
 </head>
 <body>
@@ -81,6 +81,13 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
       <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
     </div>
     <div class="list" id="targetsList"></div>
+    <div class="row" style="justify-content:center;margin-top:12px;gap:6px">
+      <button id="btnFirstTarget" class="muted small">First</button>
+      <button id="btnPrevTarget" class="muted small">Prev</button>
+      <button id="btnMarkFound">Mark Found</button>
+      <button id="btnNextTarget" class="muted small">Next</button>
+      <button id="btnLastTarget" class="muted small">Last</button>
+    </div>
   </section>
 
   <section id="screen-compass" class="card screen hidden">
@@ -92,14 +99,6 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
     <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
     <div style="height:8px"></div>
     <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
-    <div style="height:12px"></div>
-    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-      <button id="btnFirstTarget" class="muted small">First</button>
-      <button id="btnPrevTarget" class="muted small">Prev</button>
-      <button id="btnMarkFound">Mark Found</button>
-      <button id="btnNextTarget" class="muted small">Next</button>
-      <button id="btnLastTarget" class="muted small">Last</button>
-    </div>
   </section>
 
   <section id="screen-settings" class="card screen hidden">
@@ -177,6 +176,7 @@ let smoothedHeading=0;
 let lastNav=0;
 let hasVibrated=false;
 let currentScreen='home';
+let selectedTargetIndex=0;
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
@@ -191,6 +191,7 @@ function showScreen(name){
   if(name==='home')renderSurveys();
   if(name==='targets')renderTargets();
 }
+
 navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 
 function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived)}
@@ -263,29 +264,24 @@ function renderTargets(){
     return;
   }
   openSurveyNameEl.textContent=open.name;
-
   open.targets.forEach(t=>{
     const row=document.createElement('div');
     row.className='target-row';
     const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
-    row.innerHTML=`
-      <div class="target-info">
-        <div class="target-name">${t.notes||'Target'}</div>
-        <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
-        <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
-        ${foundStatus}
-      </div>
-      <div class="controls">
-        <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
-        <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
-        <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
-      </div>
-    `;
+    row.innerHTML=`<div class="target-info">
+      <div class="target-name">${t.notes||'Target'}</div>
+      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
+      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
+      ${foundStatus}
+    </div>
+    <div class="controls">
+      <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
+      <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
+      <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
+      <button class="muted small" data-action="found" data-id="${t.id}">Mark Found</button>
+    </div>`;
     targetsListEl.appendChild(row);
-  });
-
-  targetsListEl.querySelectorAll('button').forEach(b=>{
-    b.addEventListener('click',targetAction);
+    row.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
   });
 }
 
@@ -293,42 +289,79 @@ function targetAction(e){
   const a=e.currentTarget.dataset.action;
   const id=e.currentTarget.dataset.id;
   const open=getOpenSurvey();
+  if(!open)return;
   const t=open.targets.find(x=>x.id===id);
   if(!t)return;
   if(a==='goto'){selectedTargetId=id;showScreen('compass');updateCompass();}
-  if(a==='edit'){let note=prompt('Edit note',t.notes||'');if(note!==null){t.notes=note;save();renderTargets();}}
+  if(a==='found'){t.found=true;save();renderTargets();}
+  if(a==='edit'){const note=prompt('Edit target note',t.notes||'');if(note!==null){t.notes=note;save();renderTargets();}}
   if(a==='delete'){if(!confirm('Delete target?'))return;open.targets=open.targets.filter(x=>x.id!==id);save();renderTargets();}
 }
 
-btnNewSurvey.addEventListener('click',()=>{const name=prompt('Survey name?');if(name)createSurvey(name);});
-btnNewSurveyAdd.addEventListener('click',()=>{const s=createSurvey(prompt('Survey name?'));if(s){btnAddTarget.click();}});
+btnNewSurvey.addEventListener('click',()=>{createSurvey(prompt('Survey name?'));});
+btnNewSurveyAdd.addEventListener('click',()=>{const s=createSurvey(prompt('Survey name?'));if(s){selectedTargetId=null;showScreen('targets');renderTargets();}});
 btnCloseSurvey.addEventListener('click',()=>{const s=getOpenSurvey();if(s){s.status='Closed';save();renderSurveys();}});
+btnAddTarget.addEventListener('click',()=>{const open=getOpenSurvey();if(!open){alert('No open survey');return;}const lat=lastPosition?.lat||0,lng=lastPosition?.lng||0;open.targets.push({id:uid('t_'),lat,lng,notes:''});save();renderTargets();});
+btnBatch.addEventListener('click',()=>{alert('Batch add not implemented');});
+btnMarkFound.addEventListener('click',()=>{const open=getOpenSurvey();if(!open||!selectedTargetId)return;const t=open.targets.find(x=>x.id===selectedTargetId);if(t){t.found=true;save();renderTargets();}});
 
-btnAddTarget.addEventListener('click',()=>{
-  const open=getOpenSurvey();
-  if(!open){showToast('No open survey');return;}
-  const lat=lastPosition?.lat||0;
-  const lng=lastPosition?.lng||0;
-  const t={id:uid('t_'),lat,lng,notes:'',found:false,foundNote:'',photos:[]};
-  open.targets.push(t);
-  save();renderTargets();
-});
+// Compass navigation buttons
+btnNextTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=Math.min(selectedTargetIndex+1,targets.length-1);selectedTargetId=targets[selectedTargetIndex].id;updateCompass();});
+btnPrevTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=Math.max(selectedTargetIndex-1,0);selectedTargetId=targets[selectedTargetIndex].id;updateCompass();});
+btnFirstTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=0;selectedTargetId=targets[0].id;updateCompass();});
+btnLastTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=targets.length-1;selectedTargetId=targets[selectedTargetIndex].id;updateCompass();});
 
-btnExport.addEventListener('click',()=>{const d=JSON.stringify(data,null,2);const blob=new Blob([d],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='metal_finder_v3.json';a.click();URL.revokeObjectURL(url);});
-btnImport.addEventListener('click',()=>importFileEl.click());
-importFileEl.addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=ev=>{try{data=JSON.parse(ev.target.result);save();renderSurveys();showToast('Imported')}catch(e){alert('Import failed')}};reader.readAsText(f);});
-btnClear.addEventListener('click',()=>{if(confirm('Clear all data?')){localStorage.removeItem(STORAGE_KEY);data={surveys:[]};renderSurveys();showToast('Cleared');}});
+function getOpenTargets(){const open=getOpenSurvey();return open?open.targets:[];}
 
 function updateCompass(){
-  const open=getOpenSurvey();
-  if(!open||!selectedTargetId)return;
-  const t=open.targets.find(x=>x.id===selectedTargetId);
-  if(!t)return;
+  const targets=getOpenTargets();
+  if(!targets.length)return;
+  if(!selectedTargetId)selectedTargetId=targets[0].id;
+  selectedTargetIndex=targets.findIndex(t=>t.id===selectedTargetId);
+  if(selectedTargetIndex<0)selectedTargetIndex=0;
+  selectedTargetId=targets[selectedTargetIndex].id;
+  const t=targets[selectedTargetIndex];
   compassTargetName.textContent=t.notes||'Target';
+  if(!lastPosition)return;
+  const distance=getDistance(lastPosition.lat,lastPosition.lng,t.lat,t.lng);
+  const bearingToTarget=getBearing(lastPosition.lat,lastPosition.lng,t.lat,t.lng);
+  const diff=(bearingToTarget-smoothedHeading+360)%360;
+  let directionText;
+  if(diff<10||diff>350)directionText='Straight ahead';
+  else if(diff<180)directionText=`Slight right - ${distance.toFixed(0)}m`;
+  else directionText=`Slight left - ${distance.toFixed(0)}m`;
+  bearingTextEl.textContent=directionText;
+  bearingEl.textContent=bearingToTarget.toFixed(0);
+  arrowEl.style.transform=`rotate(${diff}deg)`;
+}
+
+function toRad(d){return d*Math.PI/180;}
+function toDeg(r){return r*180/Math.PI;}
+function getDistance(lat1,lon1,lat2,lon2){const R=6371000,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+function getBearing(lat1,lon1,lat2,lon2){const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));return(toDeg(Math.atan2(y,x))+360)%360;}
+
+window.addEventListener('deviceorientationabsolute',e=>{
+  if(e.absolute&&e.alpha!==null){
+    headingSamples.push(e.alpha);
+    if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
+    smoothedHeading=headingSamples.reduce((a,b)=>a+b,0)/headingSamples.length;
+    headingEl.textContent=smoothedHeading.toFixed(0);
+    updateCompass();
+  }
+});
+
+function updateGPS(pos){
+  const crd=pos.coords;
+  lastPosition={lat:crd.latitude,lng:crd.longitude};
+  document.getElementById('gpsText').textContent=crd.latitude.toFixed(6)+', '+crd.longitude.toFixed(6);
+  document.getElementById('accText').textContent=crd.accuracy.toFixed(1);
+}
+
+if(navigator.geolocation){
+  watchId=navigator.geolocation.watchPosition(updateGPS,err=>console.warn(err),{enableHighAccuracy:true});
 }
 
 showScreen('home');
-
 })();
 </script>
 </body>
