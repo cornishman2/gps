@@ -81,13 +81,6 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
       <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
     </div>
     <div class="list" id="targetsList"></div>
-    <div class="row" style="justify-content:center;margin-top:12px;gap:6px">
-      <button id="btnFirstTarget" class="muted small">First</button>
-      <button id="btnPrevTarget" class="muted small">Prev</button>
-      <button id="btnMarkFound">Mark Found</button>
-      <button id="btnNextTarget" class="muted small">Next</button>
-      <button id="btnLastTarget" class="muted small">Last</button>
-    </div>
   </section>
 
   <section id="screen-compass" class="card screen hidden">
@@ -99,6 +92,14 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
     <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
     <div style="height:8px"></div>
     <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
+    <div style="height:12px"></div>
+    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+      <button id="btnFirstTarget" class="muted small">First</button>
+      <button id="btnPrevTarget" class="muted small">Prev</button>
+      <button id="btnMarkFound">Mark Found</button>
+      <button id="btnNextTarget" class="muted small">Next</button>
+      <button id="btnLastTarget" class="muted small">Last</button>
+    </div>
   </section>
 
   <section id="screen-settings" class="card screen hidden">
@@ -158,6 +159,7 @@ const compassTargetName=document.getElementById('compassTargetName');
 const headingEl=document.getElementById('heading');
 const bearingEl=document.getElementById('bearing');
 const bearingTextEl=document.getElementById('bearingText');
+const distanceEl=document.getElementById('distance');
 const arrowEl=document.getElementById('arrow');
 const btnNextTarget=document.getElementById('btnNextTarget');
 const btnPrevTarget=document.getElementById('btnPrevTarget');
@@ -176,7 +178,6 @@ let smoothedHeading=0;
 let lastNav=0;
 let hasVibrated=false;
 let currentScreen='home';
-let selectedTargetIndex=0;
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
@@ -190,8 +191,8 @@ function showScreen(name){
   currentScreen=name;
   if(name==='home')renderSurveys();
   if(name==='targets')renderTargets();
+  if(name!=='compass')hasVibrated=false;
 }
-
 navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 
 function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived)}
@@ -278,11 +279,10 @@ function renderTargets(){
       <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
       <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
       <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
-      <button class="muted small" data-action="found" data-id="${t.id}">Mark Found</button>
     </div>`;
     targetsListEl.appendChild(row);
-    row.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
   });
+  targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
 }
 
 function targetAction(e){
@@ -292,76 +292,333 @@ function targetAction(e){
   if(!open)return;
   const t=open.targets.find(x=>x.id===id);
   if(!t)return;
-  if(a==='goto'){selectedTargetId=id;showScreen('compass');updateCompass();}
-  if(a==='found'){t.found=true;save();renderTargets();}
-  if(a==='edit'){const note=prompt('Edit target note',t.notes||'');if(note!==null){t.notes=note;save();renderTargets();}}
-  if(a==='delete'){if(!confirm('Delete target?'))return;open.targets=open.targets.filter(x=>x.id!==id);save();renderTargets();}
-}
-
-btnNewSurvey.addEventListener('click',()=>{createSurvey(prompt('Survey name?'));});
-btnNewSurveyAdd.addEventListener('click',()=>{const s=createSurvey(prompt('Survey name?'));if(s){selectedTargetId=null;showScreen('targets');renderTargets();}});
-btnCloseSurvey.addEventListener('click',()=>{const s=getOpenSurvey();if(s){s.status='Closed';save();renderSurveys();}});
-btnAddTarget.addEventListener('click',()=>{const open=getOpenSurvey();if(!open){alert('No open survey');return;}const lat=lastPosition?.lat||0,lng=lastPosition?.lng||0;open.targets.push({id:uid('t_'),lat,lng,notes:''});save();renderTargets();});
-btnBatch.addEventListener('click',()=>{alert('Batch add not implemented');});
-btnMarkFound.addEventListener('click',()=>{const open=getOpenSurvey();if(!open||!selectedTargetId)return;const t=open.targets.find(x=>x.id===selectedTargetId);if(t){t.found=true;save();renderTargets();}});
-
-// Compass navigation buttons
-btnNextTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=Math.min(selectedTargetIndex+1,targets.length-1);selectedTargetId=targets[selectedTargetIndex].id;updateCompass();});
-btnPrevTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=Math.max(selectedTargetIndex-1,0);selectedTargetId=targets[selectedTargetIndex].id;updateCompass();});
-btnFirstTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=0;selectedTargetId=targets[0].id;updateCompass();});
-btnLastTarget.addEventListener('click',()=>{const targets=getOpenTargets();if(!targets.length)return;selectedTargetIndex=targets.length-1;selectedTargetId=targets[selectedTargetIndex].id;updateCompass();});
-
-function getOpenTargets(){const open=getOpenSurvey();return open?open.targets:[];}
-
-function updateCompass(){
-  const targets=getOpenTargets();
-  if(!targets.length)return;
-  if(!selectedTargetId)selectedTargetId=targets[0].id;
-  selectedTargetIndex=targets.findIndex(t=>t.id===selectedTargetId);
-  if(selectedTargetIndex<0)selectedTargetIndex=0;
-  selectedTargetId=targets[selectedTargetIndex].id;
-  const t=targets[selectedTargetIndex];
-  compassTargetName.textContent=t.notes||'Target';
-  if(!lastPosition)return;
-  const distance=getDistance(lastPosition.lat,lastPosition.lng,t.lat,t.lng);
-  const bearingToTarget=getBearing(lastPosition.lat,lastPosition.lng,t.lat,t.lng);
-  const diff=(bearingToTarget-smoothedHeading+360)%360;
-  let directionText;
-  if(diff<10||diff>350)directionText='Straight ahead';
-  else if(diff<180)directionText=`Slight right - ${distance.toFixed(0)}m`;
-  else directionText=`Slight left - ${distance.toFixed(0)}m`;
-  bearingTextEl.textContent=directionText;
-  bearingEl.textContent=bearingToTarget.toFixed(0);
-  arrowEl.style.transform=`rotate(${diff}deg)`;
-}
-
-function toRad(d){return d*Math.PI/180;}
-function toDeg(r){return r*180/Math.PI;}
-function getDistance(lat1,lon1,lat2,lon2){const R=6371000,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
-function getBearing(lat1,lon1,lat2,lon2){const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));return(toDeg(Math.atan2(y,x))+360)%360;}
-
-window.addEventListener('deviceorientationabsolute',e=>{
-  if(e.absolute&&e.alpha!==null){
-    headingSamples.push(e.alpha);
-    if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
-    smoothedHeading=headingSamples.reduce((a,b)=>a+b,0)/headingSamples.length;
-    headingEl.textContent=smoothedHeading.toFixed(0);
-    updateCompass();
+  if(a==='goto'){
+    selectedTargetId=id;
+    compassTargetName.textContent=t.notes||'Target';
+    showScreen('compass');
+    updateNavImmediate();
+    showToast('Navigating');
   }
-});
-
-function updateGPS(pos){
-  const crd=pos.coords;
-  lastPosition={lat:crd.latitude,lng:crd.longitude};
-  document.getElementById('gpsText').textContent=crd.latitude.toFixed(6)+', '+crd.longitude.toFixed(6);
-  document.getElementById('accText').textContent=crd.accuracy.toFixed(1);
+  if(a==='edit'){
+    const newNote=prompt('Edit target note:',t.notes||'');
+    if(newNote!==null){
+      t.notes=newNote;
+      save();
+      renderTargets();
+      showToast('Saved');
+    }
+  }
+  if(a==='delete'){
+    if(!confirm('Delete target?'))return;
+    open.targets=open.targets.filter(x=>x.id!==id);
+    if(selectedTargetId===id)selectedTargetId=null;
+    save();
+    renderTargets();
+    showToast('Deleted');
+  }
 }
 
-if(navigator.geolocation){
-  watchId=navigator.geolocation.watchPosition(updateGPS,err=>console.warn(err),{enableHighAccuracy:true});
+btnAddTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey — create one on Home');return;}
+  if(!lastPosition){alert('No GPS fix');return;}
+  const note=prompt('Target note (optional):','')||'';
+  const t={
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now(),
+    found:false
+  };
+  open.targets.push(t);
+  save();
+  renderTargets();
+  showToast('Target added');
+};
+
+btnBatch.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!batchInterval){
+    btnBatch.textContent='Stop batch';
+    batchInterval=setInterval(()=>{
+      if(lastPosition){
+        const t={
+          id:uid('t_'),
+          lat:lastPosition.coords.latitude,
+          lng:lastPosition.coords.longitude,
+          notes:'',
+          detectorist:data.detectoristName||'',
+          detector:data.detectorUsed||'',
+          createdAt:Date.now(),
+          found:false
+        };
+        open.targets.push(t);
+        save();
+        renderTargets();
+      }
+    },3000);
+    showToast('Batch started');
+  }else{
+    clearInterval(batchInterval);
+    batchInterval=null;
+    btnBatch.textContent='Batch add';
+    showToast('Batch stopped');
+  }
+};
+
+function toRad(v){return v*Math.PI/180}
+function toDeg(v){return v*180/Math.PI}
+function haversineMeters(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+function bearingTo(lat1,lon1,lat2,lon2){
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return(toDeg(Math.atan2(y,x))+360)%360;
 }
 
-showScreen('home');
+function handleOrientation(e){
+  let head=null;
+  if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
+  else if(typeof e.alpha==='number')head=(360-e.alpha);
+  if(head===null||isNaN(head))return;
+  headingSamples.push((head+360)%360);
+  if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
+  let x=0,y=0;
+  headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
+  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
+  headingEl.textContent=Math.round(smoothedHeading);
+}
+if(window.DeviceOrientationEvent)window.addEventListener('deviceorientation',handleOrientation);
+
+function throttledNavUpdate(){
+  const now=Date.now();
+  if(now-lastNav>=NAV_INTERVAL_MS){
+    lastNav=now;
+    updateNavImmediate();
+  }
+}
+setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
+
+function updateNavImmediate(){
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId||!lastPosition)return;
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const lat=lastPosition.coords.latitude,lon=lastPosition.coords.longitude;
+  const d=haversineMeters(lat,lon,t.lat,t.lng);
+  const brg=bearingTo(lat,lon,t.lat,t.lng);
+  bearingEl.textContent=Math.round(brg);
+  compassTargetName.textContent=t.notes||'Target';
+  const rel=((brg-smoothedHeading)+540)%360-180;
+  arrowEl.style.transform=`rotate(${rel}deg)`;
+  
+  // Bearing interpretation with distance
+  let direction='';
+  if(rel>=-10&&rel<=10)direction='Straight ahead';
+  else if(rel>10&&rel<=45)direction='Slight right';
+  else if(rel>45&&rel<=90)direction='Right';
+  else if(rel>90&&rel<=135)direction='Sharp right';
+  else if(rel>135||rel<-135)direction='Behind you';
+  else if(rel<-90&&rel>=-135)direction='Sharp left';
+  else if(rel<-45&&rel>=-90)direction='Left';
+  else if(rel<-10&&rel>=-45)direction='Slight left';
+  bearingTextEl.textContent=`${direction} - ${Math.round(d)}m`;
+  
+  // Vibrate only if compass screen is open, within 4m, and hasn't vibrated yet
+  if(currentScreen==='compass'&&navigator.vibrate&&d<4&&!hasVibrated){
+    navigator.vibrate([200,100,200]);
+    hasVibrated=true;
+    // Reset after moving away
+    setTimeout(()=>{
+      if(d>=5)hasVibrated=false;
+    },5000);
+  }
+  // Reset vibration flag if moved away
+  if(d>=5)hasVibrated=false;
+}
+
+btnFirstTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  selectedTargetId=open.targets[0].id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('First target');
+};
+
+btnPrevTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx>0){
+      selectedTargetId=open.targets[idx-1].id;
+    }else{
+      selectedTargetId=open.targets[open.targets.length-1].id;
+    }
+  }
+  showScreen('compass');
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('Previous: '+(t.notes||'Target'));
+};
+
+btnNextTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx<open.targets.length-1){
+      selectedTargetId=open.targets[idx+1].id;
+    }else{
+      selectedTargetId=open.targets[0].id;
+    }
+  }
+  showScreen('compass');
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('Next: '+(t.notes||'Target'));
+};
+
+btnLastTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  selectedTargetId=open.targets[open.targets.length-1].id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('Last target');
+};
+
+btnMarkFound.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId){alert('Select a target first');return;}
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const note=prompt('Add find note (optional):',t.foundNote||'');
+  if(note!==null){
+    t.found=true;
+    t.foundNote=note;
+    save();
+    renderTargets();
+    showToast('Marked found');
+  }
+};
+
+btnNewSurvey.onclick=()=>{
+  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  createSurvey(name);
+  showToast('Survey created');
+};
+
+btnNewSurveyAdd.onclick=()=>{
+  if(!lastPosition){alert('No GPS fix yet');return;}
+  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  const s=createSurvey(name);
+  const note=prompt('First target note','')||'';
+  s.targets.push({
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now(),
+    found:false
+  });
+  save();
+  showToast('Survey + target created');
+};
+
+btnCloseSurvey.onclick=()=>{
+  const o=getOpenSurvey();
+  if(!o){alert('No open survey');return;}
+  o.status='Closed';
+  save();
+  showToast('Closed');
+  renderSurveys();
+};
+
+btnExport.onclick=()=>{
+  const txt=JSON.stringify(data,null,2);
+  const blob=new Blob([txt],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='metal_finder_v3.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);
+};
+
+btnImport.onclick=()=>importFileEl.click();
+
+importFileEl.onchange=async e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  try{
+    const txt=await f.text();
+    const obj=JSON.parse(txt);
+    if(obj&&obj.surveys){
+      data=obj;
+      save();
+      showToast('Imported');
+      renderSurveys();
+    }
+  }catch(err){
+    alert('Import failed:'+err);
+  }
+};
+
+btnClear.onclick=()=>{
+  if(!confirm('Clear all data?'))return;
+  data={surveys:[]};
+  save();
+  renderSurveys();
+  showToast('Cleared');
+};
+
+detectoristNameEl.value=data.detectoristName||'';
+detectorUsedEl.value=data.detectorUsed||'';
+detectoristNameEl.oninput=()=>{data.detectoristName=detectoristNameEl.value;save()};
+detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()};
+
+function startGPS(){
+  if(!navigator.geolocation){
+    document.getElementById('gpsText').textContent='unsupported';
+    return;
+  }
+  watchId=navigator.geolocation.watchPosition(p=>{
+    lastPosition=p;
+    document.getElementById('gpsText').textContent='locked';
+    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1);
+    throttledNavUpdate();
+  },err=>{
+    document.getElementById('gpsText').textContent='no fix';
+  },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
+
+renderSurveys();
+startGPS();
 })();
 </script>
 </body>
