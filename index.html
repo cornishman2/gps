@@ -7,7 +7,7 @@
 <style>
 :root{
   --bg:#071018;--card:#0f1724;--accent:#16a34a;--muted:#98a2b3;--glass:rgba(255,255,255,0.03);
-  --danger:#ef4444;--arch-tint:rgba(200,200,200,0.08);
+  --danger:#ef4444;--arch-tint:rgba(200,200,200,0.08)
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#061019 0%,#0b1320 100%);-webkit-tap-highlight-color:transparent}
@@ -40,12 +40,18 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
 .divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
-.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;z-index:100}
-.modal{background:var(--card);padding:16px;border-radius:12px;max-width:400px;width:90%;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:flex;flex-direction:column;gap:8px}
-.modal img{width:100%;border-radius:8px;cursor:pointer;transition:transform 0.2s}
-.modal img.enlarged{transform:scale(2);z-index:101;position:relative}
-.modal textarea{resize:vertical;min-height:60px}
-@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}} 
+
+/* Modal styles */
+#foundModal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:100}
+#foundModal .modal-content{background:var(--card);padding:20px;border-radius:12px;width:90%;max-width:400px;display:flex;flex-direction:column;gap:8px}
+#foundModal label{font-size:13px;color:var(--muted)}
+#foundModal textarea{min-height:60px;resize:vertical}
+#foundModal .photos{display:flex;gap:4px}
+#foundModal .photos img{width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer;transition:0.2s}
+#foundModal .photos img:hover{transform:scale(1.05)}
+#foundModal .modal-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+
+@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
 </style>
 </head>
 <body>
@@ -62,151 +68,327 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 </header>
 
 <main>
-  <section id="screen-home" class="card screen">
-    <h3>Home — Surveys</h3>
-    <div class="row">
-      <input id="detectoristName" placeholder="Detectorist name" />
-      <input id="detectorUsed" placeholder="Detector used" />
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button id="btnNewSurvey">+ New survey</button>
-      <button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
-      <button id="btnCloseSurvey" class="muted small">Close survey</button>
-    </div>
-    <div style="height:12px"></div>
-    <strong>Surveys</strong>
-    <div class="list" id="surveyList"></div>
-  </section>
+<section id="screen-home" class="card screen">
+<h3>Home — Surveys</h3>
+<div class="row">
+<input id="detectoristName" placeholder="Detectorist name" />
+<input id="detectorUsed" placeholder="Detector used" />
+</div>
+<div class="row" style="margin-top:8px">
+<button id="btnNewSurvey">+ New survey</button>
+<button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
+<button id="btnCloseSurvey" class="muted small">Close survey</button>
+</div>
+<div style="height:12px"></div>
+<strong>Surveys</strong>
+<div class="list" id="surveyList"></div>
+</section>
 
-  <section id="screen-targets" class="card screen hidden">
-    <h3>Targets</h3>
-    <div class="row" style="align-items:center">
-      <button id="btnAddTarget">+ Add target</button>
-      <button id="btnBatch" class="muted small">Batch add</button>
-      <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
-    </div>
-    <div class="list" id="targetsList"></div>
-  </section>
+<section id="screen-targets" class="card screen hidden">
+<h3>Targets</h3>
+<div class="row" style="align-items:center">
+  <button id="btnAddTarget">+ Add target</button>
+  <button id="btnBatch" class="muted small">Batch add</button>
+  <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
+</div>
+<div class="list" id="targetsList"></div>
+</section>
 
-  <section id="screen-compass" class="card screen hidden">
-    <h3>Compass</h3>
-    <div style="height:8px"></div>
-    <div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
-    <div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
-    <div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
-    <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
-    <div style="height:8px"></div>
-    <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
-    <div style="height:12px"></div>
-    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-      <button id="btnFirstTarget" class="muted small">First</button>
-      <button id="btnPrevTarget" class="muted small">Prev</button>
-      <button id="btnMarkFound">Mark Found</button>
-      <button id="btnNextTarget" class="muted small">Next</button>
-      <button id="btnLastTarget" class="muted small">Last</button>
-    </div>
-  </section>
+<section id="screen-compass" class="card screen hidden">
+<h3>Compass</h3>
+<div style="height:8px"></div>
+<div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
+<div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
+<div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
+<div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
+<div style="height:8px"></div>
+<div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
+<div style="height:12px"></div>
+<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+<button id="btnFirstTarget" class="muted small">First</button>
+<button id="btnPrevTarget" class="muted small">Prev</button>
+<button id="btnMarkFound">Mark Found</button>
+<button id="btnNextTarget" class="muted small">Next</button>
+<button id="btnLastTarget" class="muted small">Last</button>
+</div>
+</section>
 
-  <section id="screen-settings" class="card screen hidden">
-    <h3>Settings</h3>
-    <div class="row" style="align-items:center">
-      <button id="btnExport">Export JSON</button>
-      <button id="btnImport" class="muted small">Import JSON</button>
-      <input id="importFile" type="file" accept="application/json" style="display:none" />
-    </div>
-    <div style="height:8px"></div>
-    <div class="row" style="align-items:center">
-      <button id="btnClear" class="small">Clear all data</button>
-      <div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v3</strong></div>
-    </div>
-  </section>
+<section id="screen-settings" class="card screen hidden">
+<h3>Settings</h3>
+<div class="row" style="align-items:center">
+<button id="btnExport">Export JSON</button>
+<button id="btnImport" class="muted small">Import JSON</button>
+<input id="importFile" type="file" accept="application/json" style="display:none" />
+</div>
+<div style="height:8px"></div>
+<div class="row" style="align-items:center">
+<button id="btnClear" class="small">Clear all data</button>
+<div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v3</strong></div>
+</div>
+</section>
 </main>
 
 <div id="toast" class="toast">Saved</div>
 
-<div id="modalBg" class="modal-bg">
-  <div class="modal">
-    <strong>Mark Found</strong>
-    <input id="shortNote" placeholder="Short note">
-    <textarea id="longNote" placeholder="Additional description (optional)"></textarea>
-    <input type="file" id="photosInput" accept="image/*" multiple>
-    <div id="photoPreviews" class="row"></div>
-    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">
-      <button id="modalSave">Save</button>
-      <button id="modalCancel" class="muted small">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <nav class="bottom-nav">
-  <div class="nav-btn active" data-screen="home">Home</div>
-  <div class="nav-btn" data-screen="targets">Targets</div>
-  <div class="nav-btn" data-screen="compass">Compass</div>
-  <div class="nav-btn" data-screen="settings">Settings</div>
+<div class="nav-btn active" data-screen="home">Home</div>
+<div class="nav-btn" data-screen="targets">Targets</div>
+<div class="nav-btn" data-screen="compass">Compass</div>
+<div class="nav-btn" data-screen="settings">Settings</div>
 </nav>
+
+<!-- Modal for marking found -->
+<div id="foundModal">
+<div class="modal-content">
+<h4>Mark Target Found</h4>
+<label>Short note:</label>
+<input id="modalShortNote" type="text" placeholder="Optional short note"/>
+<label>Additional description:</label>
+<textarea id="modalLongNote" placeholder="Optional detailed description"></textarea>
+<label>Photos (up to 3):</label>
+<input type="file" id="modalPhotos" accept="image/*" multiple />
+<div class="photos" id="modalPhotoPreview"></div>
+<div class="modal-actions">
+<button id="modalCancel" class="muted small">Cancel</button>
+<button id="modalSave">Save</button>
+</div>
+</div>
 </div>
 
 <script>
-// --- Utility ---
-function uid(p='id'){return p+Math.random().toString(36).slice(2,9);}
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',1200);}
-
-// --- Storage --- 
+(function(){
 const STORAGE_KEY='metal_finder_v3_data';
-let data=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{"surveys":[]}');
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved');}
+const NAV_INTERVAL_MS=500;
+const HEADING_SMOOTH=6;
 
-// --- Navigation ---
-const screens={home:document.getElementById('screen-home'),targets:document.getElementById('screen-targets'),compass:document.getElementById('screen-compass'),settings:document.getElementById('screen-settings')};
+const toast=document.getElementById('toast');
+const screens={
+  home:document.getElementById('screen-home'),
+  targets:document.getElementById('screen-targets'),
+  compass:document.getElementById('screen-compass'),
+  settings:document.getElementById('screen-settings')
+};
 const navBtns=[...document.querySelectorAll('.nav-btn')];
+const surveyListEl=document.getElementById('surveyList');
+const targetsListEl=document.getElementById('targetsList');
+const btnNewSurvey=document.getElementById('btnNewSurvey');
+const btnNewSurveyAdd=document.getElementById('btnNewSurveyAdd');
+const btnCloseSurvey=document.getElementById('btnCloseSurvey');
+const btnAddTarget=document.getElementById('btnAddTarget');
+const btnBatch=document.getElementById('btnBatch');
+const detectoristNameEl=document.getElementById('detectoristName');
+const detectorUsedEl=document.getElementById('detectorUsed');
+const openSurveyNameEl=document.getElementById('openSurveyName');
+const btnExport=document.getElementById('btnExport');
+const btnImport=document.getElementById('btnImport');
+const importFileEl=document.getElementById('importFile');
+const btnClear=document.getElementById('btnClear');
+const compassTargetName=document.getElementById('compassTargetName');
+const headingEl=document.getElementById('heading');
+const bearingEl=document.getElementById('bearing');
+const bearingTextEl=document.getElementById('bearingText');
+const arrowEl=document.getElementById('arrow');
+const btnNextTarget=document.getElementById('btnNextTarget');
+const btnPrevTarget=document.getElementById('btnPrevTarget');
+const btnFirstTarget=document.getElementById('btnFirstTarget');
+const btnLastTarget=document.getElementById('btnLastTarget');
+const btnMarkFound=document.getElementById('btnMarkFound');
+
+let data=load();
+data.surveys=data.surveys||[];
+let lastPosition=null;
+let watchId=null;
+let batchInterval=null;
+let selectedTargetId=null;
+let headingSamples=[];
+let smoothedHeading=0;
+let lastNav=0;
+let hasVibrated=false;
 let currentScreen='home';
-navBtns.forEach(b=>b.addEventListener('click',()=>{Object.values(screens).forEach(s=>s.classList.add('hidden'));screens[b.dataset.screen].classList.remove('hidden');navBtns.forEach(n=>n.classList.toggle('active',n===b));currentScreen=b.dataset.screen;}));
 
-// --- Modal ---
-const modalBg=document.getElementById('modalBg');
-const shortNoteEl=document.getElementById('shortNote');
-const longNoteEl=document.getElementById('longNote');
-const photosInput=document.getElementById('photosInput');
-const photoPreviews=document.getElementById('photoPreviews');
-let modalTarget=null;
-function openModal(target){
-  modalTarget=target;
-  shortNoteEl.value=target.foundNote||'';
-  longNoteEl.value=target.foundDesc||'';
-  photoPreviews.innerHTML='';
-  if(target.photos){
-    target.photos.forEach(src=>{
-      const img=document.createElement('img');img.src=src;photoPreviews.appendChild(img);
-      img.addEventListener('click',()=>img.classList.toggle('enlarged'));
-    });
-  }
-  modalBg.style.display='flex';
+function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
+function load(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){return{}}}
+function showToast(msg){toast.textContent=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',1200)}
+
+function showScreen(name){
+  Object.values(screens).forEach(s=>s.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+  navBtns.forEach(b=>b.classList.toggle('active',b.dataset.screen===name));
+  currentScreen=name;
+  if(name==='home')renderSurveys();
+  if(name==='targets')renderTargets();
+  if(name!=='compass')hasVibrated=false;
 }
-document.getElementById('modalCancel').addEventListener('click',()=>{modalBg.style.display='none';});
-document.getElementById('modalSave').addEventListener('click',()=>{
-  modalTarget.foundNote=shortNoteEl.value;
-  modalTarget.foundDesc=longNoteEl.value;
-  modalTarget.photos=[];
-  [...photoPreviews.children].forEach(img=>modalTarget.photos.push(img.src));
-  save();
-  modalBg.style.display='none';
-});
+navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 
-// --- Photo input preview ---
-photosInput.addEventListener('change',()=>{
-  const files=[...photosInput.files].slice(0,3);
-  photoPreviews.innerHTML='';
-  files.forEach(file=>{
+function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived)}
+function setOnlyOpen(id){data.surveys.forEach(s=>{s.status=(s.id===id)?'Open':(s.status==='Open'?'Closed':s.status)})}
+
+function createSurvey(name){
+  setOnlyOpen(null);
+  const s={id:uid('s_'),name:name||('Survey '+new Date().toLocaleString()),createdAt:Date.now(),status:'Open',archived:false,targets:[]};
+  data.surveys.push(s);save();renderSurveys();return s;
+}
+
+function renderSurveys(){
+  surveyListEl.innerHTML='';
+  const open=data.surveys.filter(s=>s.status==='Open'&&!s.archived);
+  const closed=data.surveys.filter(s=>s.status==='Closed'&&!s.archived);
+  const archived=data.surveys.filter(s=>s.archived);
+  const sortByDate=a=>a.sort((x,y)=>y.createdAt-x.createdAt);
+
+  sortByDate(open).forEach(s=>addSurveyRow(s,'open'));
+  sortByDate(closed).forEach(s=>addSurveyRow(s));
+  if(archived.length){
+    const div=document.createElement('div');
+    div.className='divider';
+    div.textContent='Archived Surveys';
+    surveyListEl.appendChild(div);
+    sortByDate(archived).forEach(s=>addSurveyRow(s,'archived'));
+  }
+}
+
+function addSurveyRow(s,cls){
+  const row=document.createElement('div');
+  row.className='survey-row'+(cls?' '+cls:'');
+  const statusText=s.archived?'Archived':s.status;
+  let btns='';
+  if(s.archived){
+    btns=`<button class="muted small" data-action="restore" data-id="${s.id}">Restore</button>`;
+  }else{
+    btns+=`<button class="muted small" data-action="select" data-id="${s.id}">View</button>`;
+    if(s.status!=='Open')btns+=`<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>`;
+    if(s.status==='Open')btns+=`<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`;
+    btns+=`<button class="muted small" data-action="archive" data-id="${s.id}">Archive</button>`;
+    btns+=`<button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>`;
+  }
+  row.innerHTML=`<div style="min-width:0"><strong>${s.name}</strong>
+  <div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets • ${statusText}</div></div>
+  <div class="controls">${btns}</div>`;
+  surveyListEl.appendChild(row);
+  row.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
+}
+
+function surveyAction(e){
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const s=data.surveys.find(x=>x.id===id);
+  if(!s)return;
+  if(a==='select'){showScreen('targets');renderTargets();}
+  if(a==='open'){setOnlyOpen(id);save();showToast('Set open');renderSurveys();}
+  if(a==='close'){s.status='Closed';save();showToast('Closed');renderSurveys();}
+  if(a==='archive'){s.archived=true;s.status='Closed';save();showToast('Archived');renderSurveys();}
+  if(a==='restore'){s.archived=false;s.status='Closed';save();showToast('Restored');renderSurveys();}
+  if(a==='delete'){if(!confirm('Delete survey?'))return;data.surveys=data.surveys.filter(x=>x.id!==id);save();showToast('Deleted');renderSurveys();}
+}
+
+function renderTargets(){
+  targetsListEl.innerHTML='';
+  const survey=getOpenSurvey();
+  if(!survey){openSurveyNameEl.textContent='—';return;}
+  openSurveyNameEl.textContent=survey.name;
+  survey.targets.forEach(t=>addTargetRow(t));
+}
+
+function addTargetRow(t){
+  const row=document.createElement('div');
+  row.className='target-row';
+  const photosHTML=(t.photos||[]).map(p=>`<img src="${p}" />`).join('');
+  row.innerHTML=`
+  <div class="target-info">
+    <div class="target-name">${t.name}</div>
+    <div class="target-status">${t.shortNote||''}</div>
+    <div>${t.longNote||''}</div>
+    <div class="photos">${photosHTML}</div>
+  </div>
+  <div class="controls">
+    <button class="muted small" data-id="${t.id}" data-action="mark">Mark Found</button>
+  </div>`;
+  targetsListEl.appendChild(row);
+  row.querySelector('button[data-action="mark"]').addEventListener('click',()=>openModal(t));
+}
+
+// Modal logic
+const foundModal=document.getElementById('foundModal');
+const modalShortNote=document.getElementById('modalShortNote');
+const modalLongNote=document.getElementById('modalLongNote');
+const modalPhotos=document.getElementById('modalPhotos');
+const modalPhotoPreview=document.getElementById('modalPhotoPreview');
+const modalCancel=document.getElementById('modalCancel');
+const modalSave=document.getElementById('modalSave');
+
+function openModal(target){
+  selectedTargetId=target.id;
+  modalShortNote.value=target.shortNote||'';
+  modalLongNote.value=target.longNote||'';
+  modalPhotoPreview.innerHTML=(target.photos||[]).map(p=>`<img src="${p}" />`).join('');
+  foundModal.style.display='flex';
+}
+
+function closeModal(){foundModal.style.display='none';selectedTargetId=null;modalPhotos.value='';modalPhotoPreview.innerHTML='';}
+
+modalCancel.addEventListener('click',closeModal);
+
+modalPhotos.addEventListener('change',e=>{
+  const files=[...e.target.files].slice(0,3);
+  modalPhotoPreview.innerHTML='';
+  files.forEach(f=>{
     const reader=new FileReader();
-    reader.onload=e=>{
-      const img=document.createElement('img');
-      img.src=e.target.result;
-      photoPreviews.appendChild(img);
-      img.addEventListener('click',()=>img.classList.toggle('enlarged'));
-    };
-    reader.readAsDataURL(file);
+    reader.onload=ev=>{const img=document.createElement('img');img.src=ev.target.result;modalPhotoPreview.appendChild(img);}
+    reader.readAsDataURL(f);
   });
 });
+
+modalSave.addEventListener('click',()=>{
+  const survey=getOpenSurvey();
+  if(!survey)return;
+  const t=survey.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  t.shortNote=modalShortNote.value.trim();
+  t.longNote=modalLongNote.value.trim();
+  t.photos=[...modalPhotoPreview.querySelectorAll('img')].map(img=>img.src);
+  save();renderTargets();closeModal();
+});
+
+// Home buttons
+btnNewSurvey.addEventListener('click',()=>{
+  createSurvey(detectoristNameEl.value||'Unnamed survey');
+});
+btnNewSurveyAdd.addEventListener('click',()=>{
+  const s=createSurvey(detectoristNameEl.value||'Unnamed survey');
+  showScreen('targets');
+});
+btnCloseSurvey.addEventListener('click',()=>{
+  const s=getOpenSurvey();
+  if(!s)return;
+  s.status='Closed';save();showToast('Closed');renderSurveys();
+});
+
+// Target buttons
+btnAddTarget.addEventListener('click',()=>{
+  const survey=getOpenSurvey();
+  if(!survey){alert('Open a survey first');return;}
+  const name=prompt('Target name:');
+  if(!name)return;
+  const t={id:uid('t_'),name:name,shortNote:'',longNote:'',photos:[]};
+  survey.targets.push(t);save();renderTargets();
+});
+
+// Export/Import
+btnExport.addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='metal_finder_data.json';a.click();URL.revokeObjectURL(url);});
+btnImport.addEventListener('click',()=>importFileEl.click());
+importFileEl.addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{try{data=JSON.parse(ev.target.result);save();renderSurveys();renderTargets();showToast('Imported')}catch(e){alert('Invalid JSON')}};reader.readAsText(file);
+});
+btnClear.addEventListener('click',()=>{if(confirm('Clear all data?')){localStorage.removeItem(STORAGE_KEY);data={surveys:[]};renderSurveys();renderTargets();showToast('Cleared')}});
+
+// Initial render
+renderSurveys();
+renderTargets();
+})();
 </script>
 </body>
 </html>
