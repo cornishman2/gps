@@ -89,9 +89,12 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
     <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
     <div style="text-align:center"><div class="coords">Distance: <span id="distance">—</span> m</div></div>
     <div style="height:12px"></div>
-    <div style="display:flex;gap:8px;justify-content:center">
-      <button id="btnNextTarget">Next target</button>
-      <button id="btnMarkFound" class="muted small">Mark found</button>
+    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+      <button id="btnFirstTarget" class="muted small">First</button>
+      <button id="btnPrevTarget" class="muted small">Prev</button>
+      <button id="btnMarkFound">Mark Found</button>
+      <button id="btnNextTarget" class="muted small">Next</button>
+      <button id="btnLastTarget" class="muted small">Last</button>
     </div>
   </section>
 
@@ -154,6 +157,9 @@ const bearingEl=document.getElementById('bearing');
 const distanceEl=document.getElementById('distance');
 const arrowEl=document.getElementById('arrow');
 const btnNextTarget=document.getElementById('btnNextTarget');
+const btnPrevTarget=document.getElementById('btnPrevTarget');
+const btnFirstTarget=document.getElementById('btnFirstTarget');
+const btnLastTarget=document.getElementById('btnLastTarget');
 const btnMarkFound=document.getElementById('btnMarkFound');
 
 let data=load();
@@ -407,16 +413,64 @@ function updateNavImmediate(){
   if(navigator.vibrate&&d<4)navigator.vibrate([80,30,80]);
 }
 
+btnFirstTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  selectedTargetId=open.targets[0].id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('First target');
+};
+
+btnPrevTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx>0){
+      selectedTargetId=open.targets[idx-1].id;
+    }else{
+      selectedTargetId=open.targets[open.targets.length-1].id;
+    }
+  }
+  showScreen('compass');
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('Previous: '+(t.notes||'Target'));
+};
+
 btnNextTarget.onclick=()=>{
   const open=getOpenSurvey();
   if(!open){alert('No Open survey');return;}
-  let t=open.targets.find(x=>!x.found);
-  if(!t)t=open.targets[0];
-  if(!t){alert('No targets');return;}
-  selectedTargetId=t.id;
+  if(!open.targets.length){alert('No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx<open.targets.length-1){
+      selectedTargetId=open.targets[idx+1].id;
+    }else{
+      selectedTargetId=open.targets[0].id;
+    }
+  }
   showScreen('compass');
   updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
   showToast('Next: '+(t.notes||'Target'));
+};
+
+btnLastTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  selectedTargetId=open.targets[open.targets.length-1].id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('Last target');
 };
 
 btnMarkFound.onclick=()=>{
