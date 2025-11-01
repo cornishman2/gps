@@ -33,7 +33,7 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .nav-btn.active{color:var(--accent)}
 .hidden{display:none}
 .arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
-.arrow{font-size:48px;transform-origin:center;transition:transform 0.2s ease-out}
+.arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
 .divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
 @media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
@@ -82,9 +82,10 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
   <section id="screen-compass" class="card screen hidden">
     <h3>Compass</h3>
     <div style="height:8px"></div>
-    <div class="coords">Target: <strong id="compassTargetName">—</strong></div>
-    <div class="coords">Device heading: <span id="heading">—</span>°</div>
-    <div class="coords">Bearing to target: <span id="bearing">—</span>°</div>
+    <div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
+    <div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
+    <div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
+    <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
     <div style="height:8px"></div>
     <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
     <div style="text-align:center"><div class="coords">Distance: <span id="distance">—</span> m</div></div>
@@ -154,6 +155,7 @@ const btnClear=document.getElementById('btnClear');
 const compassTargetName=document.getElementById('compassTargetName');
 const headingEl=document.getElementById('heading');
 const bearingEl=document.getElementById('bearing');
+const bearingTextEl=document.getElementById('bearingText');
 const distanceEl=document.getElementById('distance');
 const arrowEl=document.getElementById('arrow');
 const btnNextTarget=document.getElementById('btnNextTarget');
@@ -171,6 +173,8 @@ let selectedTargetId=null;
 let headingSamples=[];
 let smoothedHeading=0;
 let lastNav=0;
+let hasVibrated=false;
+let currentScreen='home';
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
@@ -181,8 +185,10 @@ function showScreen(name){
   Object.values(screens).forEach(s=>s.classList.add('hidden'));
   screens[name].classList.remove('hidden');
   navBtns.forEach(b=>b.classList.toggle('active',b.dataset.screen===name));
+  currentScreen=name;
   if(name==='home')renderSurveys();
   if(name==='targets')renderTargets();
+  if(name!=='compass')hasVibrated=false;
 }
 navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 
@@ -410,7 +416,30 @@ function updateNavImmediate(){
   compassTargetName.textContent=t.notes||'Target';
   const rel=((brg-smoothedHeading)+540)%360-180;
   arrowEl.style.transform=`rotate(${rel}deg)`;
-  if(navigator.vibrate&&d<4)navigator.vibrate([80,30,80]);
+  
+  // Bearing interpretation
+  let direction='';
+  if(rel>=-10&&rel<=10)direction='Straight ahead';
+  else if(rel>10&&rel<=45)direction='Slight right';
+  else if(rel>45&&rel<=90)direction='Right';
+  else if(rel>90&&rel<=135)direction='Sharp right';
+  else if(rel>135||rel<-135)direction='Behind you';
+  else if(rel<-90&&rel>=-135)direction='Sharp left';
+  else if(rel<-45&&rel>=-90)direction='Left';
+  else if(rel<-10&&rel>=-45)direction='Slight left';
+  bearingTextEl.textContent=direction;
+  
+  // Vibrate only if compass screen is open, within 4m, and hasn't vibrated yet
+  if(currentScreen==='compass'&&navigator.vibrate&&d<4&&!hasVibrated){
+    navigator.vibrate([200,100,200]);
+    hasVibrated=true;
+    // Reset after moving away
+    setTimeout(()=>{
+      if(d>=5)hasVibrated=false;
+    },5000);
+  }
+  // Reset vibration flag if moved away
+  if(d>=5)hasVibrated=false;
 }
 
 btnFirstTarget.onclick=()=>{
