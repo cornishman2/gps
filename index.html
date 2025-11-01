@@ -32,6 +32,8 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .nav-btn{flex:1;text-align:center;color:var(--muted);font-weight:700;cursor:pointer}
 .nav-btn.active{color:var(--accent)}
 .hidden{display:none}
+.arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
+.arrow{font-size:48px;transform-origin:center;transition:transform 0.2s ease-out}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
 .divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
 @media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
@@ -77,6 +79,22 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
     <div class="list" id="targetsList"></div>
   </section>
 
+  <section id="screen-compass" class="card screen hidden">
+    <h3>Compass</h3>
+    <div style="height:8px"></div>
+    <div class="coords">Target: <strong id="compassTargetName">—</strong></div>
+    <div class="coords">Device heading: <span id="heading">—</span>°</div>
+    <div class="coords">Bearing to target: <span id="bearing">—</span>°</div>
+    <div style="height:8px"></div>
+    <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
+    <div style="text-align:center"><div class="coords">Distance: <span id="distance">—</span> m</div></div>
+    <div style="height:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button id="btnNextTarget">Next target</button>
+      <button id="btnMarkFound" class="muted small">Mark found</button>
+    </div>
+  </section>
+
   <section id="screen-settings" class="card screen hidden">
     <h3>Settings</h3>
     <div class="row" style="align-items:center">
@@ -97,6 +115,7 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 <nav class="bottom-nav">
   <div class="nav-btn active" data-screen="home">Home</div>
   <div class="nav-btn" data-screen="targets">Targets</div>
+  <div class="nav-btn" data-screen="compass">Compass</div>
   <div class="nav-btn" data-screen="settings">Settings</div>
 </nav>
 </div>
@@ -104,8 +123,16 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 <script>
 (function(){
 const STORAGE_KEY='metal_finder_v3_data';
+const NAV_INTERVAL_MS=500;
+const HEADING_SMOOTH=6;
+
 const toast=document.getElementById('toast');
-const screens={home:document.getElementById('screen-home'),targets:document.getElementById('screen-targets'),settings:document.getElementById('screen-settings')};
+const screens={
+  home:document.getElementById('screen-home'),
+  targets:document.getElementById('screen-targets'),
+  compass:document.getElementById('screen-compass'),
+  settings:document.getElementById('screen-settings')
+};
 const navBtns=[...document.querySelectorAll('.nav-btn')];
 const surveyListEl=document.getElementById('surveyList');
 const targetsListEl=document.getElementById('targetsList');
@@ -121,12 +148,23 @@ const btnExport=document.getElementById('btnExport');
 const btnImport=document.getElementById('btnImport');
 const importFileEl=document.getElementById('importFile');
 const btnClear=document.getElementById('btnClear');
+const compassTargetName=document.getElementById('compassTargetName');
+const headingEl=document.getElementById('heading');
+const bearingEl=document.getElementById('bearing');
+const distanceEl=document.getElementById('distance');
+const arrowEl=document.getElementById('arrow');
+const btnNextTarget=document.getElementById('btnNextTarget');
+const btnMarkFound=document.getElementById('btnMarkFound');
 
 let data=load();
 data.surveys=data.surveys||[];
 let lastPosition=null;
 let watchId=null;
 let batchInterval=null;
+let selectedTargetId=null;
+let headingSamples=[];
+let smoothedHeading=0;
+let lastNav=0;
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
@@ -217,9 +255,10 @@ function renderTargets(){
     row.className='target-row';
     row.innerHTML=`<div style="min-width:0">
       <strong>${t.notes||'Target'}</strong>
-      <div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}</div>
+      <div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}${t.found?' • Found':''}</div>
     </div>
     <div class="controls">
+      <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
       <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
       <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
     </div>`;
@@ -235,6 +274,13 @@ function targetAction(e){
   if(!open)return;
   const t=open.targets.find(x=>x.id===id);
   if(!t)return;
+  if(a==='goto'){
+    selectedTargetId=id;
+    compassTargetName.textContent=t.notes||'Target';
+    showScreen('compass');
+    updateNavImmediate();
+    showToast('Navigating');
+  }
   if(a==='edit'){
     const newNote=prompt('Edit target note:',t.notes||'');
     if(newNote!==null){
@@ -247,6 +293,7 @@ function targetAction(e){
   if(a==='delete'){
     if(!confirm('Delete target?'))return;
     open.targets=open.targets.filter(x=>x.id!==id);
+    if(selectedTargetId===id)selectedTargetId=null;
     save();
     renderTargets();
     showToast('Deleted');
@@ -265,7 +312,8 @@ btnAddTarget.onclick=()=>{
     notes:note,
     detectorist:data.detectoristName||'',
     detector:data.detectorUsed||'',
-    createdAt:Date.now()
+    createdAt:Date.now(),
+    found:false
   };
   open.targets.push(t);
   save();
@@ -287,7 +335,8 @@ btnBatch.onclick=()=>{
           notes:'',
           detectorist:data.detectoristName||'',
           detector:data.detectorUsed||'',
-          createdAt:Date.now()
+          createdAt:Date.now(),
+          found:false
         };
         open.targets.push(t);
         save();
@@ -300,6 +349,88 @@ btnBatch.onclick=()=>{
     batchInterval=null;
     btnBatch.textContent='Batch add';
     showToast('Batch stopped');
+  }
+};
+
+function toRad(v){return v*Math.PI/180}
+function toDeg(v){return v*180/Math.PI}
+function haversineMeters(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+function bearingTo(lat1,lon1,lat2,lon2){
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return(toDeg(Math.atan2(y,x))+360)%360;
+}
+
+function handleOrientation(e){
+  let head=null;
+  if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
+  else if(typeof e.alpha==='number')head=(360-e.alpha);
+  if(head===null||isNaN(head))return;
+  headingSamples.push((head+360)%360);
+  if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
+  let x=0,y=0;
+  headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
+  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
+  headingEl.textContent=Math.round(smoothedHeading);
+}
+if(window.DeviceOrientationEvent)window.addEventListener('deviceorientation',handleOrientation);
+
+function throttledNavUpdate(){
+  const now=Date.now();
+  if(now-lastNav>=NAV_INTERVAL_MS){
+    lastNav=now;
+    updateNavImmediate();
+  }
+}
+setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
+
+function updateNavImmediate(){
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId||!lastPosition)return;
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const lat=lastPosition.coords.latitude,lon=lastPosition.coords.longitude;
+  const d=haversineMeters(lat,lon,t.lat,t.lng);
+  const brg=bearingTo(lat,lon,t.lat,t.lng);
+  distanceEl.textContent=Math.round(d);
+  bearingEl.textContent=Math.round(brg);
+  compassTargetName.textContent=t.notes||'Target';
+  const rel=((brg-smoothedHeading)+540)%360-180;
+  arrowEl.style.transform=`rotate(${rel}deg)`;
+  if(navigator.vibrate&&d<4)navigator.vibrate([80,30,80]);
+}
+
+btnNextTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  let t=open.targets.find(x=>!x.found);
+  if(!t)t=open.targets[0];
+  if(!t){alert('No targets');return;}
+  selectedTargetId=t.id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('Next: '+(t.notes||'Target'));
+};
+
+btnMarkFound.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId){alert('Select a target first');return;}
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const note=prompt('Add find note (optional):',t.foundNote||'');
+  if(note!==null){
+    t.found=true;
+    t.foundNote=note;
+    save();
+    renderTargets();
+    showToast('Marked found');
   }
 };
 
@@ -323,7 +454,8 @@ btnNewSurveyAdd.onclick=()=>{
     notes:note,
     detectorist:data.detectoristName||'',
     detector:data.detectorUsed||'',
-    createdAt:Date.now()
+    createdAt:Date.now(),
+    found:false
   });
   save();
   showToast('Survey + target created');
@@ -391,6 +523,7 @@ function startGPS(){
     lastPosition=p;
     document.getElementById('gpsText').textContent='locked';
     document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1);
+    throttledNavUpdate();
   },err=>{
     document.getElementById('gpsText').textContent='no fix';
   },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
