@@ -28,6 +28,7 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .target-info{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
 .target-name{font-weight:600;font-size:14px}
 .target-status{color:#16a34a;font-size:13px}
+.target-image{max-width:100%;height:auto;border-radius:8px;margin-top:8px;max-height:200px;object-fit:contain}
 .survey-row.open{background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.2)}
 .survey-row.archived{background:var(--arch-tint);opacity:0.9}
 .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -270,12 +271,14 @@ function renderTargets(){
     row.className='target-row';
     const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
     const description=t.description?`<div class="coords" style="font-size:13px;margin-top:4px;white-space:pre-wrap">${t.description}</div>`:'';
+    const image=t.image?`<img src="${t.image}" class="target-image" alt="Target photo" />`:'';
     row.innerHTML=`<div class="target-info">
       <div class="target-name">${t.notes||'Target'}</div>
       <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
       <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
       ${foundStatus}
       ${description}
+      ${image}
     </div>
     <div class="controls">
       <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
@@ -309,9 +312,20 @@ function targetAction(e){
     if(newDesc!==null){
       t.description=newDesc;
     }
-    save();
-    renderTargets();
-    showToast('Saved');
+    if(confirm('Add or change image?')){
+      selectImage((imgData)=>{
+        if(imgData){
+          t.image=imgData;
+          save();
+          renderTargets();
+          showToast('Saved');
+        }
+      });
+    }else{
+      save();
+      renderTargets();
+      showToast('Saved');
+    }
   }
   if(a==='delete'){
     if(!confirm('Delete target?'))return;
@@ -520,15 +534,42 @@ btnMarkFound.onclick=()=>{
   const note=prompt('What did you find? (e.g., Gold ring, Roman coin):',t.foundNote||'');
   if(note===null)return;
   const desc=prompt('Additional description (optional):',t.description||'');
-  if(desc!==null){
-    t.found=true;
-    t.foundNote=note;
-    t.description=desc;
+  if(desc===null)return;
+  t.found=true;
+  t.foundNote=note;
+  t.description=desc;
+  
+  if(confirm('Add a photo of your find?')){
+    selectImage((imgData)=>{
+      if(imgData){
+        t.image=imgData;
+      }
+      save();
+      renderTargets();
+      showToast('Marked found');
+    });
+  }else{
     save();
     renderTargets();
     showToast('Marked found');
   }
 };
+
+function selectImage(callback){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.onchange=async(e)=>{
+    const file=e.target.files[0];
+    if(!file)return callback(null);
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      callback(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
 
 btnNewSurvey.onclick=()=>{
   const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
