@@ -37,10 +37,10 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .nav-btn.active{color:var(--accent)}
 .hidden{display:none}
 .arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
-.arrow{font-size:72px;transform-origin:center;transition:transform 0.3s ease-out}
+.arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
 .divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
-@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}  
+@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}} 
 </style>
 </head>
 <body>
@@ -190,7 +190,6 @@ function showScreen(name){
   currentScreen=name;
   if(name==='home')renderSurveys();
   if(name==='targets')renderTargets();
-  if(name!=='compass')hasVibrated=false;
 }
 navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 
@@ -239,28 +238,22 @@ function addSurveyRow(s,cls){
   <div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets • ${statusText}</div></div>
   <div class="controls">${btns}</div>`;
   surveyListEl.appendChild(row);
+  row.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
 }
 
-// --- EVENT DELEGATION FOR SURVEYS ---
-surveyListEl.addEventListener('click', function(e){
-  const btn = e.target.closest('button');
-  if(!btn) return;
-  const action = btn.dataset.action;
-  const id = btn.dataset.id;
-  if(!action || !id) return;
+function surveyAction(e){
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const s=data.surveys.find(x=>x.id===id);
+  if(!s)return;
+  if(a==='select'){showScreen('targets');renderTargets();}
+  if(a==='open'){setOnlyOpen(id);save();showToast('Set open');renderSurveys();}
+  if(a==='close'){s.status='Closed';save();showToast('Closed');renderSurveys();}
+  if(a==='archive'){s.archived=true;s.status='Closed';save();showToast('Archived');renderSurveys();}
+  if(a==='restore'){s.archived=false;s.status='Closed';save();showToast('Restored');renderSurveys();}
+  if(a==='delete'){if(!confirm('Delete survey?'))return;data.surveys=data.surveys.filter(x=>x.id!==id);save();showToast('Deleted');renderSurveys();}
+}
 
-  const s = data.surveys.find(x=>x.id===id);
-  if(!s) return;
-
-  if(action==='select'){showScreen('targets'); renderTargets();}
-  if(action==='open'){setOnlyOpen(id); save(); showToast('Set open'); renderSurveys();}
-  if(action==='close'){s.status='Closed'; save(); showToast('Closed'); renderSurveys();}
-  if(action==='archive'){s.archived=true; s.status='Closed'; save(); showToast('Archived'); renderSurveys();}
-  if(action==='restore'){s.archived=false; s.status='Closed'; save(); showToast('Restored'); renderSurveys();}
-  if(action==='delete'){if(confirm('Delete survey?')){data.surveys=data.surveys.filter(x=>x.id!==id); save(); showToast('Deleted'); renderSurveys();}}
-});
-
-// --- TARGETS RENDERING ---
 function renderTargets(){
   targetsListEl.innerHTML='';
   const open=getOpenSurvey();
@@ -270,103 +263,72 @@ function renderTargets(){
     return;
   }
   openSurveyNameEl.textContent=open.name;
+
   open.targets.forEach(t=>{
     const row=document.createElement('div');
     row.className='target-row';
     const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
-    row.innerHTML=`<div class="target-info">
-      <div class="target-name">${t.notes||'Target'}</div>
-      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
-      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
-      ${foundStatus}
-    </div>
-    <div class="controls">
-      <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
-      <button class="muted small" data-action="mark" data-id="${t.id}">Mark Found</button>
-    </div>`;
+    row.innerHTML=`
+      <div class="target-info">
+        <div class="target-name">${t.notes||'Target'}</div>
+        <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
+        <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
+        ${foundStatus}
+      </div>
+      <div class="controls">
+        <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
+        <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
+        <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
+      </div>
+    `;
     targetsListEl.appendChild(row);
+  });
+
+  targetsListEl.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click',targetAction);
   });
 }
 
-// --- EVENT DELEGATION FOR TARGETS ---
-targetsListEl.addEventListener('click', function(e){
-  const btn=e.target.closest('button');
-  if(!btn) return;
-  const action=btn.dataset.action;
-  const id=btn.dataset.id;
+function targetAction(e){
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
   const open=getOpenSurvey();
-  if(!open) return;
   const t=open.targets.find(x=>x.id===id);
-  if(!t) return;
-  if(action==='mark'){markFound(t);}
-  if(action==='goto'){selectTarget(t);}
-});
-
-function markFound(t){
-  const note=prompt('Optional note about found target:','');
-  t.found=true;
-  if(note)t.foundNote=note;
-  save();
-  renderTargets();
-  showToast('Marked Found');
+  if(!t)return;
+  if(a==='goto'){selectedTargetId=id;showScreen('compass');updateCompass();}
+  if(a==='edit'){let note=prompt('Edit note',t.notes||'');if(note!==null){t.notes=note;save();renderTargets();}}
+  if(a==='delete'){if(!confirm('Delete target?'))return;open.targets=open.targets.filter(x=>x.id!==id);save();renderTargets();}
 }
 
-// --- ADD SURVEY ---
-btnNewSurvey.addEventListener('click',()=>{
-  const name=prompt('Survey name?')||undefined;
-  createSurvey(name);
-});
-btnNewSurveyAdd.addEventListener('click',()=>{
-  const name=prompt('Survey name?')||undefined;
-  const s=createSurvey(name);
-  showScreen('targets');
-  renderTargets();
-});
+btnNewSurvey.addEventListener('click',()=>{const name=prompt('Survey name?');if(name)createSurvey(name);});
+btnNewSurveyAdd.addEventListener('click',()=>{const s=createSurvey(prompt('Survey name?'));if(s){btnAddTarget.click();}});
+btnCloseSurvey.addEventListener('click',()=>{const s=getOpenSurvey();if(s){s.status='Closed';save();renderSurveys();}});
 
-// --- ADD TARGET ---
 btnAddTarget.addEventListener('click',()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No open survey'); return;}
-  const notes=prompt('Target notes / description (optional)','');
-  const t={id:uid('t_'),lat:lastPosition?.coords?.latitude||0,lng:lastPosition?.coords?.longitude||0,notes,found:false};
-  open.targets.push(t);save();renderTargets();
+  if(!open){showToast('No open survey');return;}
+  const lat=lastPosition?.lat||0;
+  const lng=lastPosition?.lng||0;
+  const t={id:uid('t_'),lat,lng,notes:'',found:false,foundNote:'',photos:[]};
+  open.targets.push(t);
+  save();renderTargets();
 });
 
-// --- GPS ---
-function updatePosition(p){
-  lastPosition=p;
-  document.getElementById('gpsText').textContent=p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6);
-  document.getElementById('accText').textContent=p.coords.accuracy.toFixed(1);
-}
-if(navigator.geolocation) navigator.geolocation.watchPosition(updatePosition,err=>{},{enableHighAccuracy:true,maximumAge:2000,timeout:5000});
-
-// --- COMPASS PLACEHOLDER ---
-function selectTarget(t){selectedTargetId=t.id;compassTargetName.textContent=t.notes||'Target';showScreen('compass');}
-function updateCompass(){
-  if(!lastPosition||!selectedTargetId) return;
-  const open=getOpenSurvey();if(!open) return;
-  const t=open.targets.find(x=>x.id===selectedTargetId);if(!t) return;
-  const dx=t.lng-lastPosition.coords.longitude;
-  const dy=t.lat-lastPosition.coords.latitude;
-  const bearingDeg=(Math.atan2(dx,dy)*180/Math.PI+360)%360;
-  // smooth heading
-  smoothedHeading+=(bearingDeg-smoothedHeading)/HEADING_SMOOTH;
-  arrowEl.style.transform=`rotate(${smoothedHeading}deg)`;
-  headingEl.textContent=smoothedHeading.toFixed(0);
-  bearingEl.textContent=bearingDeg.toFixed(0);
-  bearingTextEl.textContent=bearingDeg>0?'→':'←';
-}
-setInterval(updateCompass,300);
-
-// --- EXPORT / IMPORT ---
-btnExport.addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='metal_finder.json';a.click();});
+btnExport.addEventListener('click',()=>{const d=JSON.stringify(data,null,2);const blob=new Blob([d],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='metal_finder_v3.json';a.click();URL.revokeObjectURL(url);});
 btnImport.addEventListener('click',()=>importFileEl.click());
-importFileEl.addEventListener('change',()=>{const f=importFileEl.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{data=JSON.parse(e.target.result);save();renderSurveys();renderTargets();showToast('Imported')}catch(ex){alert('Import error')}};r.readAsText(f);});
+importFileEl.addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=ev=>{try{data=JSON.parse(ev.target.result);save();renderSurveys();showToast('Imported')}catch(e){alert('Import failed')}};reader.readAsText(f);});
+btnClear.addEventListener('click',()=>{if(confirm('Clear all data?')){localStorage.removeItem(STORAGE_KEY);data={surveys:[]};renderSurveys();showToast('Cleared');}});
 
-// --- CLEAR ---
-btnClear.addEventListener('click',()=>{if(confirm('Clear all data?')){localStorage.removeItem(STORAGE_KEY);data={surveys:[]};renderSurveys();renderTargets();showToast('Cleared');}});
+function updateCompass(){
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId)return;
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  compassTargetName.textContent=t.notes||'Target';
+}
 
-renderSurveys();
+showScreen('home');
+
 })();
 </script>
 </body>
