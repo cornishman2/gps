@@ -37,21 +37,10 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 .nav-btn.active{color:var(--accent)}
 .hidden{display:none}
 .arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
-.arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
+.arrow{font-size:72px;transform-origin:center;transition:transform 0.3s ease-out}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
 .divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
-
-/* Modal styles */
-#foundModal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:100}
-#foundModal .modal-content{background:var(--card);padding:20px;border-radius:12px;width:90%;max-width:400px;display:flex;flex-direction:column;gap:8px}
-#foundModal label{font-size:13px;color:var(--muted)}
-#foundModal textarea{min-height:60px;resize:vertical}
-#foundModal .photos{display:flex;gap:4px}
-#foundModal .photos img{width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer;transition:0.2s}
-#foundModal .photos img:hover{transform:scale(1.05)}
-#foundModal .modal-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
-
-@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
+@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}  
 </style>
 </head>
 <body>
@@ -59,7 +48,7 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 <header>
   <div>
     <h1>Metal Finder</h1>
-    <small>v3 — with archive restore & photos</small>
+    <small>v3 — with archive restore</small>
   </div>
   <div style="margin-left:auto;text-align:right">
     <div class="coords">GPS: <span id="gpsText">unknown</span></div>
@@ -68,91 +57,74 @@ button{background:var(--accent);border:none;color:white;padding:10px 12px;border
 </header>
 
 <main>
-<section id="screen-home" class="card screen">
-<h3>Home — Surveys</h3>
-<div class="row">
-<input id="detectoristName" placeholder="Detectorist name" />
-<input id="detectorUsed" placeholder="Detector used" />
-</div>
-<div class="row" style="margin-top:8px">
-<button id="btnNewSurvey">+ New survey</button>
-<button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
-<button id="btnCloseSurvey" class="muted small">Close survey</button>
-</div>
-<div style="height:12px"></div>
-<strong>Surveys</strong>
-<div class="list" id="surveyList"></div>
-</section>
+  <section id="screen-home" class="card screen">
+    <h3>Home — Surveys</h3>
+    <div class="row">
+      <input id="detectoristName" placeholder="Detectorist name" />
+      <input id="detectorUsed" placeholder="Detector used" />
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnNewSurvey">+ New survey</button>
+      <button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
+      <button id="btnCloseSurvey" class="muted small">Close survey</button>
+    </div>
+    <div style="height:12px"></div>
+    <strong>Surveys</strong>
+    <div class="list" id="surveyList"></div>
+  </section>
 
-<section id="screen-targets" class="card screen hidden">
-<h3>Targets</h3>
-<div class="row" style="align-items:center">
-  <button id="btnAddTarget">+ Add target</button>
-  <button id="btnBatch" class="muted small">Batch add</button>
-  <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
-</div>
-<div class="list" id="targetsList"></div>
-</section>
+  <section id="screen-targets" class="card screen hidden">
+    <h3>Targets</h3>
+    <div class="row" style="align-items:center">
+      <button id="btnAddTarget">+ Add target</button>
+      <button id="btnBatch" class="muted small">Batch add</button>
+      <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
+    </div>
+    <div class="list" id="targetsList"></div>
+  </section>
 
-<section id="screen-compass" class="card screen hidden">
-<h3>Compass</h3>
-<div style="height:8px"></div>
-<div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
-<div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
-<div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
-<div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
-<div style="height:8px"></div>
-<div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
-<div style="height:12px"></div>
-<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-<button id="btnFirstTarget" class="muted small">First</button>
-<button id="btnPrevTarget" class="muted small">Prev</button>
-<button id="btnMarkFound">Mark Found</button>
-<button id="btnNextTarget" class="muted small">Next</button>
-<button id="btnLastTarget" class="muted small">Last</button>
-</div>
-</section>
+  <section id="screen-compass" class="card screen hidden">
+    <h3>Compass</h3>
+    <div style="height:8px"></div>
+    <div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
+    <div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
+    <div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
+    <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
+    <div style="height:8px"></div>
+    <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
+    <div style="height:12px"></div>
+    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+      <button id="btnFirstTarget" class="muted small">First</button>
+      <button id="btnPrevTarget" class="muted small">Prev</button>
+      <button id="btnMarkFound">Mark Found</button>
+      <button id="btnNextTarget" class="muted small">Next</button>
+      <button id="btnLastTarget" class="muted small">Last</button>
+    </div>
+  </section>
 
-<section id="screen-settings" class="card screen hidden">
-<h3>Settings</h3>
-<div class="row" style="align-items:center">
-<button id="btnExport">Export JSON</button>
-<button id="btnImport" class="muted small">Import JSON</button>
-<input id="importFile" type="file" accept="application/json" style="display:none" />
-</div>
-<div style="height:8px"></div>
-<div class="row" style="align-items:center">
-<button id="btnClear" class="small">Clear all data</button>
-<div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v3</strong></div>
-</div>
-</section>
+  <section id="screen-settings" class="card screen hidden">
+    <h3>Settings</h3>
+    <div class="row" style="align-items:center">
+      <button id="btnExport">Export JSON</button>
+      <button id="btnImport" class="muted small">Import JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+    </div>
+    <div style="height:8px"></div>
+    <div class="row" style="align-items:center">
+      <button id="btnClear" class="small">Clear all data</button>
+      <div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v3</strong></div>
+    </div>
+  </section>
 </main>
 
 <div id="toast" class="toast">Saved</div>
 
 <nav class="bottom-nav">
-<div class="nav-btn active" data-screen="home">Home</div>
-<div class="nav-btn" data-screen="targets">Targets</div>
-<div class="nav-btn" data-screen="compass">Compass</div>
-<div class="nav-btn" data-screen="settings">Settings</div>
+  <div class="nav-btn active" data-screen="home">Home</div>
+  <div class="nav-btn" data-screen="targets">Targets</div>
+  <div class="nav-btn" data-screen="compass">Compass</div>
+  <div class="nav-btn" data-screen="settings">Settings</div>
 </nav>
-
-<!-- Modal for marking found -->
-<div id="foundModal">
-<div class="modal-content">
-<h4>Mark Target Found</h4>
-<label>Short note:</label>
-<input id="modalShortNote" type="text" placeholder="Optional short note"/>
-<label>Additional description:</label>
-<textarea id="modalLongNote" placeholder="Optional detailed description"></textarea>
-<label>Photos (up to 3):</label>
-<input type="file" id="modalPhotos" accept="image/*" multiple />
-<div class="photos" id="modalPhotoPreview"></div>
-<div class="modal-actions">
-<button id="modalCancel" class="muted small">Cancel</button>
-<button id="modalSave">Save</button>
-</div>
-</div>
 </div>
 
 <script>
@@ -267,127 +239,134 @@ function addSurveyRow(s,cls){
   <div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets • ${statusText}</div></div>
   <div class="controls">${btns}</div>`;
   surveyListEl.appendChild(row);
-  row.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
 }
 
-function surveyAction(e){
-  const a=e.currentTarget.dataset.action;
-  const id=e.currentTarget.dataset.id;
-  const s=data.surveys.find(x=>x.id===id);
-  if(!s)return;
-  if(a==='select'){showScreen('targets');renderTargets();}
-  if(a==='open'){setOnlyOpen(id);save();showToast('Set open');renderSurveys();}
-  if(a==='close'){s.status='Closed';save();showToast('Closed');renderSurveys();}
-  if(a==='archive'){s.archived=true;s.status='Closed';save();showToast('Archived');renderSurveys();}
-  if(a==='restore'){s.archived=false;s.status='Closed';save();showToast('Restored');renderSurveys();}
-  if(a==='delete'){if(!confirm('Delete survey?'))return;data.surveys=data.surveys.filter(x=>x.id!==id);save();showToast('Deleted');renderSurveys();}
-}
+// --- EVENT DELEGATION FOR SURVEYS ---
+surveyListEl.addEventListener('click', function(e){
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+  if(!action || !id) return;
 
+  const s = data.surveys.find(x=>x.id===id);
+  if(!s) return;
+
+  if(action==='select'){showScreen('targets'); renderTargets();}
+  if(action==='open'){setOnlyOpen(id); save(); showToast('Set open'); renderSurveys();}
+  if(action==='close'){s.status='Closed'; save(); showToast('Closed'); renderSurveys();}
+  if(action==='archive'){s.archived=true; s.status='Closed'; save(); showToast('Archived'); renderSurveys();}
+  if(action==='restore'){s.archived=false; s.status='Closed'; save(); showToast('Restored'); renderSurveys();}
+  if(action==='delete'){if(confirm('Delete survey?')){data.surveys=data.surveys.filter(x=>x.id!==id); save(); showToast('Deleted'); renderSurveys();}}
+});
+
+// --- TARGETS RENDERING ---
 function renderTargets(){
   targetsListEl.innerHTML='';
-  const survey=getOpenSurvey();
-  if(!survey){openSurveyNameEl.textContent='—';return;}
-  openSurveyNameEl.textContent=survey.name;
-  survey.targets.forEach(t=>addTargetRow(t));
-}
-
-function addTargetRow(t){
-  const row=document.createElement('div');
-  row.className='target-row';
-  const photosHTML=(t.photos||[]).map(p=>`<img src="${p}" />`).join('');
-  row.innerHTML=`
-  <div class="target-info">
-    <div class="target-name">${t.name}</div>
-    <div class="target-status">${t.shortNote||''}</div>
-    <div>${t.longNote||''}</div>
-    <div class="photos">${photosHTML}</div>
-  </div>
-  <div class="controls">
-    <button class="muted small" data-id="${t.id}" data-action="mark">Mark Found</button>
-  </div>`;
-  targetsListEl.appendChild(row);
-  row.querySelector('button[data-action="mark"]').addEventListener('click',()=>openModal(t));
-}
-
-// Modal logic
-const foundModal=document.getElementById('foundModal');
-const modalShortNote=document.getElementById('modalShortNote');
-const modalLongNote=document.getElementById('modalLongNote');
-const modalPhotos=document.getElementById('modalPhotos');
-const modalPhotoPreview=document.getElementById('modalPhotoPreview');
-const modalCancel=document.getElementById('modalCancel');
-const modalSave=document.getElementById('modalSave');
-
-function openModal(target){
-  selectedTargetId=target.id;
-  modalShortNote.value=target.shortNote||'';
-  modalLongNote.value=target.longNote||'';
-  modalPhotoPreview.innerHTML=(target.photos||[]).map(p=>`<img src="${p}" />`).join('');
-  foundModal.style.display='flex';
-}
-
-function closeModal(){foundModal.style.display='none';selectedTargetId=null;modalPhotos.value='';modalPhotoPreview.innerHTML='';}
-
-modalCancel.addEventListener('click',closeModal);
-
-modalPhotos.addEventListener('change',e=>{
-  const files=[...e.target.files].slice(0,3);
-  modalPhotoPreview.innerHTML='';
-  files.forEach(f=>{
-    const reader=new FileReader();
-    reader.onload=ev=>{const img=document.createElement('img');img.src=ev.target.result;modalPhotoPreview.appendChild(img);}
-    reader.readAsDataURL(f);
+  const open=getOpenSurvey();
+  if(!open){
+    targetsListEl.innerHTML='<div class="coords">No Open survey — create or set one Open on Home</div>';
+    openSurveyNameEl.textContent='—';
+    return;
+  }
+  openSurveyNameEl.textContent=open.name;
+  open.targets.forEach(t=>{
+    const row=document.createElement('div');
+    row.className='target-row';
+    const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
+    row.innerHTML=`<div class="target-info">
+      <div class="target-name">${t.notes||'Target'}</div>
+      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
+      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
+      ${foundStatus}
+    </div>
+    <div class="controls">
+      <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
+      <button class="muted small" data-action="mark" data-id="${t.id}">Mark Found</button>
+    </div>`;
+    targetsListEl.appendChild(row);
   });
+}
+
+// --- EVENT DELEGATION FOR TARGETS ---
+targetsListEl.addEventListener('click', function(e){
+  const btn=e.target.closest('button');
+  if(!btn) return;
+  const action=btn.dataset.action;
+  const id=btn.dataset.id;
+  const open=getOpenSurvey();
+  if(!open) return;
+  const t=open.targets.find(x=>x.id===id);
+  if(!t) return;
+  if(action==='mark'){markFound(t);}
+  if(action==='goto'){selectTarget(t);}
 });
 
-modalSave.addEventListener('click',()=>{
-  const survey=getOpenSurvey();
-  if(!survey)return;
-  const t=survey.targets.find(x=>x.id===selectedTargetId);
-  if(!t)return;
-  t.shortNote=modalShortNote.value.trim();
-  t.longNote=modalLongNote.value.trim();
-  t.photos=[...modalPhotoPreview.querySelectorAll('img')].map(img=>img.src);
-  save();renderTargets();closeModal();
-});
+function markFound(t){
+  const note=prompt('Optional note about found target:','');
+  t.found=true;
+  if(note)t.foundNote=note;
+  save();
+  renderTargets();
+  showToast('Marked Found');
+}
 
-// Home buttons
+// --- ADD SURVEY ---
 btnNewSurvey.addEventListener('click',()=>{
-  createSurvey(detectoristNameEl.value||'Unnamed survey');
+  const name=prompt('Survey name?')||undefined;
+  createSurvey(name);
 });
 btnNewSurveyAdd.addEventListener('click',()=>{
-  const s=createSurvey(detectoristNameEl.value||'Unnamed survey');
+  const name=prompt('Survey name?')||undefined;
+  const s=createSurvey(name);
   showScreen('targets');
-});
-btnCloseSurvey.addEventListener('click',()=>{
-  const s=getOpenSurvey();
-  if(!s)return;
-  s.status='Closed';save();showToast('Closed');renderSurveys();
+  renderTargets();
 });
 
-// Target buttons
+// --- ADD TARGET ---
 btnAddTarget.addEventListener('click',()=>{
-  const survey=getOpenSurvey();
-  if(!survey){alert('Open a survey first');return;}
-  const name=prompt('Target name:');
-  if(!name)return;
-  const t={id:uid('t_'),name:name,shortNote:'',longNote:'',photos:[]};
-  survey.targets.push(t);save();renderTargets();
+  const open=getOpenSurvey();
+  if(!open){alert('No open survey'); return;}
+  const notes=prompt('Target notes / description (optional)','');
+  const t={id:uid('t_'),lat:lastPosition?.coords?.latitude||0,lng:lastPosition?.coords?.longitude||0,notes,found:false};
+  open.targets.push(t);save();renderTargets();
 });
 
-// Export/Import
-btnExport.addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='metal_finder_data.json';a.click();URL.revokeObjectURL(url);});
+// --- GPS ---
+function updatePosition(p){
+  lastPosition=p;
+  document.getElementById('gpsText').textContent=p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6);
+  document.getElementById('accText').textContent=p.coords.accuracy.toFixed(1);
+}
+if(navigator.geolocation) navigator.geolocation.watchPosition(updatePosition,err=>{},{enableHighAccuracy:true,maximumAge:2000,timeout:5000});
+
+// --- COMPASS PLACEHOLDER ---
+function selectTarget(t){selectedTargetId=t.id;compassTargetName.textContent=t.notes||'Target';showScreen('compass');}
+function updateCompass(){
+  if(!lastPosition||!selectedTargetId) return;
+  const open=getOpenSurvey();if(!open) return;
+  const t=open.targets.find(x=>x.id===selectedTargetId);if(!t) return;
+  const dx=t.lng-lastPosition.coords.longitude;
+  const dy=t.lat-lastPosition.coords.latitude;
+  const bearingDeg=(Math.atan2(dx,dy)*180/Math.PI+360)%360;
+  // smooth heading
+  smoothedHeading+=(bearingDeg-smoothedHeading)/HEADING_SMOOTH;
+  arrowEl.style.transform=`rotate(${smoothedHeading}deg)`;
+  headingEl.textContent=smoothedHeading.toFixed(0);
+  bearingEl.textContent=bearingDeg.toFixed(0);
+  bearingTextEl.textContent=bearingDeg>0?'→':'←';
+}
+setInterval(updateCompass,300);
+
+// --- EXPORT / IMPORT ---
+btnExport.addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='metal_finder.json';a.click();});
 btnImport.addEventListener('click',()=>importFileEl.click());
-importFileEl.addEventListener('change',e=>{
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{try{data=JSON.parse(ev.target.result);save();renderSurveys();renderTargets();showToast('Imported')}catch(e){alert('Invalid JSON')}};reader.readAsText(file);
-});
-btnClear.addEventListener('click',()=>{if(confirm('Clear all data?')){localStorage.removeItem(STORAGE_KEY);data={surveys:[]};renderSurveys();renderTargets();showToast('Cleared')}});
+importFileEl.addEventListener('change',()=>{const f=importFileEl.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{data=JSON.parse(e.target.result);save();renderSurveys();renderTargets();showToast('Imported')}catch(ex){alert('Import error')}};r.readAsText(f);});
 
-// Initial render
+// --- CLEAR ---
+btnClear.addEventListener('click',()=>{if(confirm('Clear all data?')){localStorage.removeItem(STORAGE_KEY);data={surveys:[]};renderSurveys();renderTargets();showToast('Cleared');}});
+
 renderSurveys();
-renderTargets();
 })();
 </script>
 </body>
