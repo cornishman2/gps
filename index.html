@@ -108,17 +108,25 @@ const toast=document.getElementById('toast');
 const screens={home:document.getElementById('screen-home'),targets:document.getElementById('screen-targets'),settings:document.getElementById('screen-settings')};
 const navBtns=[...document.querySelectorAll('.nav-btn')];
 const surveyListEl=document.getElementById('surveyList');
+const targetsListEl=document.getElementById('targetsList');
 const btnNewSurvey=document.getElementById('btnNewSurvey');
 const btnNewSurveyAdd=document.getElementById('btnNewSurveyAdd');
 const btnCloseSurvey=document.getElementById('btnCloseSurvey');
+const btnAddTarget=document.getElementById('btnAddTarget');
+const btnBatch=document.getElementById('btnBatch');
 const detectoristNameEl=document.getElementById('detectoristName');
 const detectorUsedEl=document.getElementById('detectorUsed');
+const openSurveyNameEl=document.getElementById('openSurveyName');
 const btnExport=document.getElementById('btnExport');
 const btnImport=document.getElementById('btnImport');
 const importFileEl=document.getElementById('importFile');
 const btnClear=document.getElementById('btnClear');
+
 let data=load();
 data.surveys=data.surveys||[];
+let lastPosition=null;
+let watchId=null;
+let batchInterval=null;
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
@@ -130,10 +138,11 @@ function showScreen(name){
   screens[name].classList.remove('hidden');
   navBtns.forEach(b=>b.classList.toggle('active',b.dataset.screen===name));
   if(name==='home')renderSurveys();
+  if(name==='targets')renderTargets();
 }
 navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 
-function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open')}
+function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived)}
 function setOnlyOpen(id){data.surveys.forEach(s=>{s.status=(s.id===id)?'Open':(s.status==='Open'?'Closed':s.status)})}
 
 function createSurvey(name){
@@ -168,7 +177,8 @@ function addSurveyRow(s,cls){
   if(s.archived){
     btns=`<button class="muted small" data-action="restore" data-id="${s.id}">Restore</button>`;
   }else{
-    btns+=`<button class="muted small" data-action="open" data-id="${s.id}">Open</button>`;
+    btns+=`<button class="muted small" data-action="select" data-id="${s.id}">View</button>`;
+    if(s.status!=='Open')btns+=`<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>`;
     if(s.status==='Open')btns+=`<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`;
     btns+=`<button class="muted small" data-action="archive" data-id="${s.id}">Archive</button>`;
     btns+=`<button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>`;
@@ -185,6 +195,7 @@ function surveyAction(e){
   const id=e.currentTarget.dataset.id;
   const s=data.surveys.find(x=>x.id===id);
   if(!s)return;
+  if(a==='select'){showScreen('targets');renderTargets();}
   if(a==='open'){setOnlyOpen(id);save();showToast('Set open');renderSurveys();}
   if(a==='close'){s.status='Closed';save();showToast('Closed');renderSurveys();}
   if(a==='archive'){s.archived=true;s.status='Closed';save();showToast('Archived');renderSurveys();}
@@ -192,20 +203,201 @@ function surveyAction(e){
   if(a==='delete'){if(!confirm('Delete survey?'))return;data.surveys=data.surveys.filter(x=>x.id!==id);save();showToast('Deleted');renderSurveys();}
 }
 
-btnNewSurvey.onclick=()=>{const name=prompt('Survey name','Field '+new Date().toLocaleDateString());if(!name)return;createSurvey(name);showToast('Survey created');}
-btnNewSurveyAdd.onclick=()=>{const name=prompt('Survey name','Field '+new Date().toLocaleDateString());if(!name)return;const s=createSurvey(name);const note=prompt('First target note','')||'';s.targets.push({id:uid('t_'),lat:0,lng:0,notes:note,createdAt:Date.now()});save();showToast('Survey + target created');}
-btnCloseSurvey.onclick=()=>{const o=getOpenSurvey();if(!o){alert('No open survey');return;}o.status='Closed';save();showToast('Closed');renderSurveys();}
+function renderTargets(){
+  targetsListEl.innerHTML='';
+  const open=getOpenSurvey();
+  if(!open){
+    targetsListEl.innerHTML='<div class="coords">No Open survey — create or set one Open on Home</div>';
+    openSurveyNameEl.textContent='—';
+    return;
+  }
+  openSurveyNameEl.textContent=open.name;
+  open.targets.forEach(t=>{
+    const row=document.createElement('div');
+    row.className='target-row';
+    row.innerHTML=`<div style="min-width:0">
+      <strong>${t.notes||'Target'}</strong>
+      <div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}</div>
+    </div>
+    <div class="controls">
+      <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
+      <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
+    </div>`;
+    targetsListEl.appendChild(row);
+  });
+  targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
+}
 
-btnExport.onclick=()=>{const txt=JSON.stringify(data,null,2);const blob=new Blob([txt],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='metal_finder_v3.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);}
+function targetAction(e){
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const open=getOpenSurvey();
+  if(!open)return;
+  const t=open.targets.find(x=>x.id===id);
+  if(!t)return;
+  if(a==='edit'){
+    const newNote=prompt('Edit target note:',t.notes||'');
+    if(newNote!==null){
+      t.notes=newNote;
+      save();
+      renderTargets();
+      showToast('Saved');
+    }
+  }
+  if(a==='delete'){
+    if(!confirm('Delete target?'))return;
+    open.targets=open.targets.filter(x=>x.id!==id);
+    save();
+    renderTargets();
+    showToast('Deleted');
+  }
+}
+
+btnAddTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey — create one on Home');return;}
+  if(!lastPosition){alert('No GPS fix');return;}
+  const note=prompt('Target note (optional):','')||'';
+  const t={
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now()
+  };
+  open.targets.push(t);
+  save();
+  renderTargets();
+  showToast('Target added');
+};
+
+btnBatch.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!batchInterval){
+    btnBatch.textContent='Stop batch';
+    batchInterval=setInterval(()=>{
+      if(lastPosition){
+        const t={
+          id:uid('t_'),
+          lat:lastPosition.coords.latitude,
+          lng:lastPosition.coords.longitude,
+          notes:'',
+          detectorist:data.detectoristName||'',
+          detector:data.detectorUsed||'',
+          createdAt:Date.now()
+        };
+        open.targets.push(t);
+        save();
+        renderTargets();
+      }
+    },3000);
+    showToast('Batch started');
+  }else{
+    clearInterval(batchInterval);
+    batchInterval=null;
+    btnBatch.textContent='Batch add';
+    showToast('Batch stopped');
+  }
+};
+
+btnNewSurvey.onclick=()=>{
+  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  createSurvey(name);
+  showToast('Survey created');
+};
+
+btnNewSurveyAdd.onclick=()=>{
+  if(!lastPosition){alert('No GPS fix yet');return;}
+  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  const s=createSurvey(name);
+  const note=prompt('First target note','')||'';
+  s.targets.push({
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now()
+  });
+  save();
+  showToast('Survey + target created');
+};
+
+btnCloseSurvey.onclick=()=>{
+  const o=getOpenSurvey();
+  if(!o){alert('No open survey');return;}
+  o.status='Closed';
+  save();
+  showToast('Closed');
+  renderSurveys();
+};
+
+btnExport.onclick=()=>{
+  const txt=JSON.stringify(data,null,2);
+  const blob=new Blob([txt],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='metal_finder_v3.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);
+};
+
 btnImport.onclick=()=>importFileEl.click();
-importFileEl.onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const txt=await f.text();const obj=JSON.parse(txt);if(obj&&obj.surveys){data=obj;save();showToast('Imported');renderSurveys();}}catch(err){alert('Import failed:'+err)}}
-btnClear.onclick=()=>{if(!confirm('Clear all data?'))return;data={surveys:[]};save();renderSurveys();showToast('Cleared')}
 
-detectoristNameEl.value=data.detectoristName||'';detectorUsedEl.value=data.detectorUsed||'';
-detectoristNameEl.oninput=()=>{data.detectoristName=detectoristNameEl.value;save()}
-detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()}
+importFileEl.onchange=async e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  try{
+    const txt=await f.text();
+    const obj=JSON.parse(txt);
+    if(obj&&obj.surveys){
+      data=obj;
+      save();
+      showToast('Imported');
+      renderSurveys();
+    }
+  }catch(err){
+    alert('Import failed:'+err);
+  }
+};
+
+btnClear.onclick=()=>{
+  if(!confirm('Clear all data?'))return;
+  data={surveys:[]};
+  save();
+  renderSurveys();
+  showToast('Cleared');
+};
+
+detectoristNameEl.value=data.detectoristName||'';
+detectorUsedEl.value=data.detectorUsed||'';
+detectoristNameEl.oninput=()=>{data.detectoristName=detectoristNameEl.value;save()};
+detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()};
+
+function startGPS(){
+  if(!navigator.geolocation){
+    document.getElementById('gpsText').textContent='unsupported';
+    return;
+  }
+  watchId=navigator.geolocation.watchPosition(p=>{
+    lastPosition=p;
+    document.getElementById('gpsText').textContent='locked';
+    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1);
+  },err=>{
+    document.getElementById('gpsText').textContent='no fix';
+  },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
 
 renderSurveys();
+startGPS();
 })();
 </script>
 </body>
