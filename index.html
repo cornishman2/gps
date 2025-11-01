@@ -269,12 +269,9 @@ function renderTargets(){
   open.targets.forEach(t=>{
     const row=document.createElement('div');
     row.className='target-row';
-    const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
-    row.innerHTML=`<div class="target-info">
-      <div class="target-name">${t.notes||'Target'}</div>
-      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
-      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
-      ${foundStatus}
+    row.innerHTML=`<div style="min-width:0">
+      <strong>${t.notes||'Target'}</strong>
+      <div class="coords">${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}${t.found?' • Found':''}</div>
     </div>
     <div class="controls">
       <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
