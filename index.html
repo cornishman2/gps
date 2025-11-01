@@ -269,11 +269,13 @@ function renderTargets(){
     const row=document.createElement('div');
     row.className='target-row';
     const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
+    const description=t.description?`<div class="coords" style="font-size:13px;margin-top:4px;white-space:pre-wrap">${t.description}</div>`:'';
     row.innerHTML=`<div class="target-info">
       <div class="target-name">${t.notes||'Target'}</div>
       <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
       <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
       ${foundStatus}
+      ${description}
     </div>
     <div class="controls">
       <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
@@ -300,13 +302,16 @@ function targetAction(e){
     showToast('Navigating');
   }
   if(a==='edit'){
-    const newNote=prompt('Edit target note:',t.notes||'');
-    if(newNote!==null){
-      t.notes=newNote;
-      save();
-      renderTargets();
-      showToast('Saved');
+    const newNote=prompt('Edit target name:',t.notes||'');
+    if(newNote===null)return;
+    t.notes=newNote;
+    const newDesc=prompt('Edit description (optional):',t.description||'');
+    if(newDesc!==null){
+      t.description=newDesc;
     }
+    save();
+    renderTargets();
+    showToast('Saved');
   }
   if(a==='delete'){
     if(!confirm('Delete target?'))return;
@@ -512,10 +517,13 @@ btnMarkFound.onclick=()=>{
   if(!open||!selectedTargetId){alert('Select a target first');return;}
   const t=open.targets.find(x=>x.id===selectedTargetId);
   if(!t)return;
-  const note=prompt('Add find note (optional):',t.foundNote||'');
-  if(note!==null){
+  const note=prompt('What did you find? (e.g., Gold ring, Roman coin):',t.foundNote||'');
+  if(note===null)return;
+  const desc=prompt('Additional description (optional):',t.description||'');
+  if(desc!==null){
     t.found=true;
     t.foundNote=note;
+    t.description=desc;
     save();
     renderTargets();
     showToast('Marked found');
