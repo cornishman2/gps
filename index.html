@@ -478,18 +478,6 @@ function renderTargets(){
     
     const foundBadge=t.found?`<span class="badge badge-success">✓ Found${t.foundNote?' - '+escapeHtml(t.foundNote):''}</span>`:'<span class="badge badge-muted">Not found</span>';
     
-    let imagesHtml='';
-    if(t.images&&t.images.length){
-      imagesHtml='<div class="image-gallery">';
-      t.images.forEach((img,idx)=>{
-        imagesHtml+=`<img src="${img}" class="gallery-image" data-target="${t.id}" data-index="${idx}" alt="Find photo ${idx+1}" />`;
-      });
-      imagesHtml+=`<div class="add-image-btn" data-target="${t.id}">+</div>`;
-      imagesHtml+='</div>';
-    }else{
-      imagesHtml=`<div class="image-gallery"><div class="add-image-btn" data-target="${t.id}">+</div></div>`;
-    }
-    
     item.innerHTML=`
       <div class="item-header">
         <div style="flex:1">
@@ -506,7 +494,7 @@ function renderTargets(){
           </div>
           <div style="margin-top:8px">${foundBadge}</div>
           ${t.description?`<div class="target-description">${escapeHtml(t.description)}</div>`:''}
-          ${imagesHtml}
+          <div class="image-gallery" id="gallery-${t.id}"></div>
         </div>
       </div>
       <div class="item-actions">
@@ -517,9 +505,29 @@ function renderTargets(){
     `;
     
     targetsListEl.appendChild(item);
+    
+    const gallery=document.getElementById(`gallery-${t.id}`);
+    if(t.images&&t.images.length){
+      t.images.forEach((img,idx)=>{
+        const wrapper=document.createElement('div');
+        wrapper.className='gallery-image-wrapper';
+        wrapper.innerHTML=`
+          <img src="${img}" class="gallery-image" data-target="${t.id}" data-index="${idx}" alt="Find photo ${idx+1}" />
+          <div class="delete-image-btn" data-target="${t.id}" data-index="${idx}">×</div>
+        `;
+        gallery.appendChild(wrapper);
+      });
+    }
+    
+    const addBtn=document.createElement('div');
+    addBtn.className='add-image-btn';
+    addBtn.textContent='+';
+    addBtn.dataset.target=t.id;
+    gallery.appendChild(addBtn);
   });
   
   targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
+  
   targetsListEl.querySelectorAll('.gallery-image').forEach(img=>{
     img.addEventListener('click',()=>{
       const targetId=img.dataset.target;
@@ -528,6 +536,22 @@ function renderTargets(){
       if(target&&target.images)openLightbox(target.images,index);
     });
   });
+  
+  targetsListEl.querySelectorAll('.delete-image-btn').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const targetId=btn.dataset.target;
+      const index=parseInt(btn.dataset.index);
+      const target=open.targets.find(t=>t.id===targetId);
+      if(target&&confirm('Delete this image?')){
+        target.images.splice(index,1);
+        save();
+        renderTargets();
+        showToast('🗑️ Image deleted');
+      }
+    });
+  });
+  
   targetsListEl.querySelectorAll('.add-image-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const targetId=btn.dataset.target;
@@ -600,23 +624,62 @@ function addImagesToTarget(target){
     const files=Array.from(e.target.files);
     if(!files.length)return;
     
-    showToast('📸 Processing images...');
-    
     if(!target.images)target.images=[];
     
+    const gallery=document.getElementById(`gallery-${target.id}`);
+    if(!gallery)return;
+    
+    let processedCount=0;
+    const totalFiles=files.length;
+    
     for(const file of files){
-      const reader=new FileReader();
+      const processingDiv=document.createElement('div');
+      processingDiv.className='image-processing';
+      processingDiv.innerHTML=`
+        <div class="spinner"></div>
+        <div style="font-size:12px;color:var(--muted)">${processedCount+1}/${totalFiles}</div>
+      `;
+      
+      const addBtn=gallery.querySelector('.add-image-btn');
+      if(addBtn){
+        gallery.insertBefore(processingDiv,addBtn);
+      }else{
+        gallery.appendChild(processingDiv);
+      }
+      
       await new Promise((resolve)=>{
+        const reader=new FileReader();
         reader.onload=(ev)=>{
           target.images.push(ev.target.result);
-          resolve();
+          processedCount++;
+          
+          processingDiv.innerHTML=`
+            <div style="font-size:24px;color:var(--accent)">✓</div>
+            <div style="font-size:12px;color:var(--accent)">Done</div>
+          `;
+          
+          setTimeout(()=>{
+            save();
+            renderTargets();
+            if(processedCount===totalFiles){
+              showToast(`✅ ${totalFiles} image(s) added successfully`);
+            }
+            resolve();
+          },300);
+        };
+        reader.onerror=()=>{
+          processingDiv.innerHTML=`
+            <div style="font-size:24px;color:var(--danger)">✗</div>
+            <div style="font-size:12px;color:var(--danger)">Failed</div>
+          `;
+          setTimeout(()=>{
+            processingDiv.remove();
+            resolve();
+          },1000);
         };
         reader.readAsDataURL(file);
       });
     }
-    
-    save();renderTargets();
-    showToast(`✅ ${files.length} image(s) added`);
   };
   input.click();
 }
