@@ -1,300 +1,684 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Survey Tracker</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Metal Finder v3</title>
 <style>
-  body {
-    margin: 0; font-family: system-ui, sans-serif;
-    background: #0b111b; color: #e0e6f0;
-  }
-  .app { max-width: 800px; margin: auto; padding: 12px; }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  h1 { font-size: 1.3rem; margin: 0; }
-  button {
-    background: #1e293b; color: #e0e6f0; border: none; border-radius: 8px;
-    padding: 8px 12px; cursor: pointer; transition: background 0.2s;
-  }
-  button:hover { background: #334155; }
-  button.small { font-size: 0.85em; padding: 4px 8px; }
-  button.muted { background: #2b364a; color: #a8b2c4; }
-  input, textarea, select {
-    background: #1e293b; color: #e0e6f0; border: none; border-radius: 6px;
-    padding: 6px; width: 100%; box-sizing: border-box; margin-bottom: 8px;
-  }
-  .hidden { display: none; }
-  .toast {
-    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-    background: #16a34a; color: white; padding: 8px 16px; border-radius: 8px;
-    opacity: 0; transition: opacity 0.3s;
-  }
-  .toast.show { opacity: 1; }
-
-  /* Layout sections */
-  .screen { display: none; }
-  .screen.active { display: block; }
-
-  .targets { margin-top: 12px; }
-  .target-row {
-    display: flex; align-items: center; justify-content: space-between;
-    background: #1e293b; border-radius: 10px; padding: 8px; margin-bottom: 6px;
-  }
-  .target-row.found { background: #1a3b29; }
-  .target-row img {
-    max-height: 50px; border-radius: 6px; cursor: pointer;
-  }
-
-  .divider {
-    border-top: 1px solid #2a3345; margin: 12px 0;
-  }
-  .archive { background: rgba(100,100,100,0.1); border-radius: 10px; padding: 6px; }
-
-  /* Modals */
-  .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.8);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100;
-  }
-  .modal-backdrop.hidden { display: none; }
-  .modal-card {
-    background: #0f1724; border-radius: 12px; padding: 16px;
-    width: 90%; max-width: 400px; box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-  }
-  #imageModal img {
-    max-width: 90%; max-height: 90%; border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.6);
-  }
+:root{
+  --bg:#071018;--card:#0f1724;--accent:#16a34a;--muted:#98a2b3;--glass:rgba(255,255,255,0.03);
+  --danger:#ef4444;--arch-tint:rgba(200,200,200,0.08)
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#061019 0%,#0b1320 100%);-webkit-tap-highlight-color:transparent}
+.app{max-width:980px;margin:0 auto;padding-bottom:84px}
+header{display:flex;gap:12px;align-items:center;padding:12px}
+h1{font-size:18px;margin:6px 0}
+small{color:var(--muted)}
+.card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);margin:12px}
+.row{display:flex;gap:8px}
+input,textarea,select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:100%}
+input[type=file]{padding:6px}
+button{background:var(--accent);border:none;color:white;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
+.muted{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:10px}
+.small{font-size:12px;padding:6px}
+.list{max-height:52vh;overflow:auto;padding:6px;border-radius:8px}
+.survey-row,.target-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01)}
+.target-row{flex-direction:column;align-items:stretch}
+.target-info{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.target-name{font-weight:600;font-size:14px}
+.target-status{color:#16a34a;font-size:13px}
+.target-image{max-width:100%;height:auto;border-radius:8px;margin-top:8px;max-height:200px;object-fit:contain;cursor:pointer;transition:all 0.3s ease}
+.target-image.enlarged{max-height:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;max-width:90vw;max-height:90vh;box-shadow:0 12px 40px rgba(0,0,0,0.8)}
+.image-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99;display:none}
+.image-backdrop.active{display:block}
+.survey-row.open{background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.2)}
+.survey-row.archived{background:var(--arch-tint);opacity:0.9}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.coords{font-family:monospace;font-size:13px;color:var(--muted)}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:64px;background:rgba(6,8,12,0.96);display:flex;align-items:center;justify-content:space-around;border-top:1px solid rgba(255,255,255,0.03);z-index:50}
+.nav-btn{flex:1;text-align:center;color:var(--muted);font-weight:700;cursor:pointer}
+.nav-btn.active{color:var(--accent)}
+.hidden{display:none}
+.arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
+.arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
+.divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
+@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
 </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <h1>Survey Tracker</h1>
-    <div>
-      <button class="nav-btn" data-screen="homeScreen">🏠</button>
-      <button class="nav-btn" data-screen="targetsScreen">🎯</button>
-      <button class="nav-btn" data-screen="compassScreen">🧭</button>
-    </div>
-  </header>
-
-  <!-- Home -->
-  <section id="homeScreen" class="screen active">
-    <button id="btnNewSurvey">New Survey</button>
-    <div id="surveysList"></div>
-  </section>
-
-  <!-- Targets -->
-  <section id="targetsScreen" class="screen">
-    <div>
-      <button id="btnAddTarget">Add Target</button>
-      <button id="btnMarkFound" class="muted small">Mark Found</button>
-    </div>
-    <div class="targets" id="targetsList"></div>
-  </section>
-
-  <!-- Compass -->
-  <section id="compassScreen" class="screen">
-    <div id="compassArea" style="text-align:center;margin-top:20px;">
-      <div id="needle" style="width:100px;height:100px;border-radius:50%;
-        border:2px solid #e0e6f0;margin:auto;position:relative;">
-        <div id="arrow" style="position:absolute;left:50%;top:50%;
-          width:2px;height:40px;background:#e11d48;transform-origin:bottom center;"></div>
-      </div>
-      <div id="directionText" style="margin-top:12px;">Direction</div>
-    </div>
-    <div style="text-align:center;margin-top:20px;">
-      <button id="btnFirst">⏮ First</button>
-      <button id="btnPrev">◀ Prev</button>
-      <button id="btnNext">Next ▶</button>
-      <button id="btnLast">Last ⏭</button>
-    </div>
-  </section>
-
-  <div id="toast" class="toast">Saved</div>
-
-  <!-- Image modal -->
-  <div id="imageModal" class="hidden modal-backdrop">
-    <img id="modalImage" alt="Enlarged target" />
+<header>
+  <div>
+    <h1>Metal Finder</h1>
+    <small>v3 — with archive restore</small>
   </div>
-
-  <!-- Edit modal -->
-  <div id="editModal" class="hidden modal-backdrop">
-    <div class="modal-card">
-      <h3 id="modalTitle">Edit Target</h3>
-      <input id="modalNote" placeholder="Target note" />
-      <textarea id="modalDesc" rows="3" placeholder="Description (optional)"></textarea>
-      <input id="modalFound" placeholder="Found item (optional)" />
-      <div style="text-align:center;margin-top:8px">
-        <img id="modalPreview" src="" alt="" style="max-height:180px;display:none;border-radius:8px;margin-bottom:6px">
-        <input id="modalImageInput" type="file" accept="image/*" style="display:none">
-        <button id="modalUpload" class="muted small">Upload Image</button>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
-        <button id="modalCancel" class="muted small">Cancel</button>
-        <button id="modalSave">Save</button>
-      </div>
-    </div>
+  <div style="margin-left:auto;text-align:right">
+    <div class="coords">GPS: <span id="gpsText">unknown</span></div>
+    <div class="coords">Accuracy: <span id="accText">—</span> m</div>
   </div>
+</header>
+
+<main>
+  <section id="screen-home" class="card screen">
+    <h3>Home — Surveys</h3>
+    <div class="row">
+      <input id="detectoristName" placeholder="Detectorist name" />
+      <input id="detectorUsed" placeholder="Detector used" />
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnNewSurvey">+ New survey</button>
+      <button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
+      <button id="btnCloseSurvey" class="muted small">Close survey</button>
+    </div>
+    <div style="height:12px"></div>
+    <strong>Surveys</strong>
+    <div class="list" id="surveyList"></div>
+  </section>
+
+  <section id="screen-targets" class="card screen hidden">
+    <h3>Targets</h3>
+    <div class="row" style="align-items:center">
+      <button id="btnAddTarget">+ Add target</button>
+      <button id="btnBatch" class="muted small">Batch add</button>
+      <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
+    </div>
+    <div class="list" id="targetsList"></div>
+  </section>
+
+  <section id="screen-compass" class="card screen hidden">
+    <h3>Compass</h3>
+    <div style="height:8px"></div>
+    <div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
+    <div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
+    <div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
+    <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
+    <div style="height:8px"></div>
+    <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
+    <div style="height:12px"></div>
+    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+      <button id="btnFirstTarget" class="muted small">First</button>
+      <button id="btnPrevTarget" class="muted small">Prev</button>
+      <button id="btnMarkFound">Mark Found</button>
+      <button id="btnNextTarget" class="muted small">Next</button>
+      <button id="btnLastTarget" class="muted small">Last</button>
+    </div>
+  </section>
+
+  <section id="screen-settings" class="card screen hidden">
+    <h3>Settings</h3>
+    <div class="row" style="align-items:center">
+      <button id="btnExport">Export JSON</button>
+      <button id="btnImport" class="muted small">Import JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+    </div>
+    <div style="height:8px"></div>
+    <div class="row" style="align-items:center">
+      <button id="btnClear" class="small">Clear all data</button>
+      <div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v3</strong></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast">Saved</div>
+<div id="imageBackdrop" class="image-backdrop"></div>
+
+<nav class="bottom-nav">
+  <div class="nav-btn active" data-screen="home">Home</div>
+  <div class="nav-btn" data-screen="targets">Targets</div>
+  <div class="nav-btn" data-screen="compass">Compass</div>
+  <div class="nav-btn" data-screen="settings">Settings</div>
+</nav>
 </div>
 
 <script>
-let data = JSON.parse(localStorage.getItem('surveyData')||'{"surveys":[]}');
-function save(){ localStorage.setItem('surveyData',JSON.stringify(data)); showToast('Saved'); }
-function showToast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),1500); }
+(function(){
+const STORAGE_KEY='metal_finder_v3_data';
+const NAV_INTERVAL_MS=500;
+const HEADING_SMOOTH=6;
 
-const homeScreen=document.getElementById('homeScreen');
-const targetsScreen=document.getElementById('targetsScreen');
-const compassScreen=document.getElementById('compassScreen');
-const screens=[homeScreen,targetsScreen,compassScreen];
-document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{
-  const s=btn.dataset.screen; screens.forEach(sc=>sc.classList.remove('active'));
-  document.getElementById(s).classList.add('active');
-}));
-
-// --- Surveys ---
-function renderSurveys(){
-  const list=document.getElementById('surveysList');
-  let open=data.surveys.find(s=>!s.closed);
-  let html='';
-  if(open){
-    html+=`<div class="target-row"><b>${open.name}</b> (Open)
-      <button id="btnCloseSurvey" class="small muted">Close</button></div>`;
-  }
-  const archived=data.surveys.filter(s=>s.closed);
-  if(archived.length){
-    html+=`<div class="divider"></div><div class="archive"><b>Archived Surveys</b>`;
-    archived.forEach((s,i)=>{
-      html+=`<div class="target-row">
-        <span>${s.name}</span>
-        <button class="restore-btn small" data-i="${i}">Restore</button>
-      </div>`;
-    });
-    html+=`</div>`;
-  }
-  list.innerHTML=html;
-  const btnClose=document.getElementById('btnCloseSurvey');
-  if(btnClose) btnClose.onclick=()=>{ open.closed=true; save(); renderSurveys(); };
-  document.querySelectorAll('.restore-btn').forEach(b=>b.addEventListener('click',()=>{
-    const s=archived[b.dataset.i]; s.closed=false; save(); renderSurveys();
-  }));
-}
-renderSurveys();
-
-document.getElementById('btnNewSurvey').onclick=()=>{
-  const name=prompt('Survey name?'); if(!name)return;
-  data.surveys.unshift({name,targets:[],closed:false});
-  save(); renderSurveys();
+const toast=document.getElementById('toast');
+const imageBackdrop=document.getElementById('imageBackdrop');
+const screens={
+  home:document.getElementById('screen-home'),
+  targets:document.getElementById('screen-targets'),
+  compass:document.getElementById('screen-compass'),
+  settings:document.getElementById('screen-settings')
 };
+const navBtns=[...document.querySelectorAll('.nav-btn')];
+const surveyListEl=document.getElementById('surveyList');
+const targetsListEl=document.getElementById('targetsList');
+const btnNewSurvey=document.getElementById('btnNewSurvey');
+const btnNewSurveyAdd=document.getElementById('btnNewSurveyAdd');
+const btnCloseSurvey=document.getElementById('btnCloseSurvey');
+const btnAddTarget=document.getElementById('btnAddTarget');
+const btnBatch=document.getElementById('btnBatch');
+const detectoristNameEl=document.getElementById('detectoristName');
+const detectorUsedEl=document.getElementById('detectorUsed');
+const openSurveyNameEl=document.getElementById('openSurveyName');
+const btnExport=document.getElementById('btnExport');
+const btnImport=document.getElementById('btnImport');
+const importFileEl=document.getElementById('importFile');
+const btnClear=document.getElementById('btnClear');
+const compassTargetName=document.getElementById('compassTargetName');
+const headingEl=document.getElementById('heading');
+const bearingEl=document.getElementById('bearing');
+const bearingTextEl=document.getElementById('bearingText');
+const arrowEl=document.getElementById('arrow');
+const btnNextTarget=document.getElementById('btnNextTarget');
+const btnPrevTarget=document.getElementById('btnPrevTarget');
+const btnFirstTarget=document.getElementById('btnFirstTarget');
+const btnLastTarget=document.getElementById('btnLastTarget');
+const btnMarkFound=document.getElementById('btnMarkFound');
 
-// --- Targets ---
-const targetsList=document.getElementById('targetsList');
+let data=load();
+data.surveys=data.surveys||[];
+let lastPosition=null;
+let watchId=null;
+let batchInterval=null;
 let selectedTargetId=null;
-function getOpenSurvey(){ return data.surveys.find(s=>!s.closed); }
+let headingSamples=[];
+let smoothedHeading=0;
+let lastNav=0;
+let hasVibrated=false;
+let currentScreen='home';
+
+function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
+function load(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){return{}}}
+function showToast(msg){toast.textContent=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',1200)}
+
+function showScreen(name){
+  Object.values(screens).forEach(s=>s.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+  navBtns.forEach(b=>b.classList.toggle('active',b.dataset.screen===name));
+  currentScreen=name;
+  if(name==='home')renderSurveys();
+  if(name==='targets')renderTargets();
+  if(name!=='compass')hasVibrated=false;
+}
+navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
+
+function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived)}
+function setOnlyOpen(id){data.surveys.forEach(s=>{s.status=(s.id===id)?'Open':(s.status==='Open'?'Closed':s.status)})}
+
+function createSurvey(name){
+  setOnlyOpen(null);
+  const s={id:uid('s_'),name:name||('Survey '+new Date().toLocaleString()),createdAt:Date.now(),status:'Open',archived:false,targets:[]};
+  data.surveys.push(s);save();renderSurveys();return s;
+}
+
+function renderSurveys(){
+  surveyListEl.innerHTML='';
+  const open=data.surveys.filter(s=>s.status==='Open'&&!s.archived);
+  const closed=data.surveys.filter(s=>s.status==='Closed'&&!s.archived);
+  const archived=data.surveys.filter(s=>s.archived);
+  const sortByDate=a=>a.sort((x,y)=>y.createdAt-x.createdAt);
+
+  sortByDate(open).forEach(s=>addSurveyRow(s,'open'));
+  sortByDate(closed).forEach(s=>addSurveyRow(s));
+  if(archived.length){
+    const div=document.createElement('div');
+    div.className='divider';
+    div.textContent='Archived Surveys';
+    surveyListEl.appendChild(div);
+    sortByDate(archived).forEach(s=>addSurveyRow(s,'archived'));
+  }
+}
+
+function addSurveyRow(s,cls){
+  const row=document.createElement('div');
+  row.className='survey-row'+(cls?' '+cls:'');
+  const statusText=s.archived?'Archived':s.status;
+  let btns='';
+  if(s.archived){
+    btns=`<button class="muted small" data-action="restore" data-id="${s.id}">Restore</button>`;
+  }else{
+    btns+=`<button class="muted small" data-action="select" data-id="${s.id}">View</button>`;
+    if(s.status!=='Open')btns+=`<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>`;
+    if(s.status==='Open')btns+=`<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`;
+    btns+=`<button class="muted small" data-action="archive" data-id="${s.id}">Archive</button>`;
+    btns+=`<button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>`;
+  }
+  row.innerHTML=`<div style="min-width:0"><strong>${s.name}</strong>
+  <div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets • ${statusText}</div></div>
+  <div class="controls">${btns}</div>`;
+  surveyListEl.appendChild(row);
+  row.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
+}
+
+function surveyAction(e){
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const s=data.surveys.find(x=>x.id===id);
+  if(!s)return;
+  if(a==='select'){showScreen('targets');renderTargets();}
+  if(a==='open'){setOnlyOpen(id);save();showToast('Set open');renderSurveys();}
+  if(a==='close'){s.status='Closed';save();showToast('Closed');renderSurveys();}
+  if(a==='archive'){s.archived=true;s.status='Closed';save();showToast('Archived');renderSurveys();}
+  if(a==='restore'){s.archived=false;s.status='Closed';save();showToast('Restored');renderSurveys();}
+  if(a==='delete'){if(!confirm('Delete survey?'))return;data.surveys=data.surveys.filter(x=>x.id!==id);save();showToast('Deleted');renderSurveys();}
+}
 
 function renderTargets(){
-  const s=getOpenSurvey(); if(!s){ targetsList.innerHTML='<p>No open survey.</p>'; return;}
-  let html='';
-  s.targets.forEach(t=>{
-    const image=t.image?`<img src="${t.image}" class="clickable" alt="">`:'';
-    html+=`<div class="target-row ${t.found?'found':''}">
-      <span>${t.notes||'(no note)'}</span>
-      <div>${image}
-        <button class="small muted" data-act="goto" data-id="${t.id}">Goto</button>
-        <button class="small muted" data-act="edit" data-id="${t.id}">Edit</button>
-        <button class="small muted" data-act="delete" data-id="${t.id}">🗑</button>
-      </div></div>`;
+  targetsListEl.innerHTML='';
+  const open=getOpenSurvey();
+  if(!open){
+    targetsListEl.innerHTML='<div class="coords">No Open survey — create or set one Open on Home</div>';
+    openSurveyNameEl.textContent='—';
+    return;
+  }
+  openSurveyNameEl.textContent=open.name;
+  open.targets.forEach(t=>{
+    const row=document.createElement('div');
+    row.className='target-row';
+    const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
+    const description=t.description?`<div class="coords" style="font-size:13px;margin-top:4px;white-space:pre-wrap">${t.description}</div>`:'';
+    row.innerHTML=`<div class="target-info">
+      <div class="target-name">${t.notes||'Target'}</div>
+      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
+      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
+      ${foundStatus}
+      ${description}
+    </div>
+    <div class="controls">
+      <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
+      <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
+      <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
+    </div>`;
+    targetsListEl.appendChild(row);
+    
+    if(t.image){
+      const img=document.createElement('img');
+      img.src=t.image;
+      img.className='target-image';
+      img.alt='Target photo';
+      img.onclick=()=>toggleImageEnlarge(img);
+      row.querySelector('.target-info').appendChild(img);
+    }
   });
-  targetsList.innerHTML=html;
-  targetsList.querySelectorAll('.clickable').forEach(img=>{
-    img.addEventListener('click',()=>openImageModal(img.src));
-  });
-  targetsList.querySelectorAll('button[data-act]').forEach(btn=>btn.addEventListener('click',targetAction));
+  targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
 }
-renderTargets();
 
-document.getElementById('btnAddTarget').onclick=()=>{
-  const s=getOpenSurvey(); if(!s)return alert('No open survey');
-  const note=prompt('Target note?')||'';
-  const id=Date.now();
-  s.targets.push({id,notes:note,found:false});
-  save(); renderTargets();
+function toggleImageEnlarge(img){
+  if(img.classList.contains('enlarged')){
+    img.classList.remove('enlarged');
+    imageBackdrop.classList.remove('active');
+  }else{
+    img.classList.add('enlarged');
+    imageBackdrop.classList.add('active');
+  }
+}
+
+imageBackdrop.onclick=()=>{
+  document.querySelectorAll('.target-image.enlarged').forEach(img=>img.classList.remove('enlarged'));
+  imageBackdrop.classList.remove('active');
 };
 
 function targetAction(e){
-  const act=e.target.dataset.act; const id=+e.target.dataset.id;
-  const s=getOpenSurvey(); if(!s)return;
-  const t=s.targets.find(x=>x.id===id); if(!t)return;
-  if(act==='goto'){ selectedTargetId=id; showToast('Selected'); }
-  else if(act==='edit'){ openEditModal(t,'edit'); }
-  else if(act==='delete'){ if(confirm('Delete?')){ s.targets=s.targets.filter(x=>x.id!==id); save(); renderTargets(); } }
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const open=getOpenSurvey();
+  if(!open)return;
+  const t=open.targets.find(x=>x.id===id);
+  if(!t)return;
+  if(a==='goto'){
+    selectedTargetId=id;
+    compassTargetName.textContent=t.notes||'Target';
+    showScreen('compass');
+    updateNavImmediate();
+    showToast('Navigating');
+  }
+  if(a==='edit'){
+    const newNote=prompt('Edit target name:',t.notes||'');
+    if(newNote===null)return;
+    t.notes=newNote;
+    const newDesc=prompt('Edit description (optional):',t.description||'');
+    if(newDesc!==null){
+      t.description=newDesc;
+    }
+    save();
+    renderTargets();
+    showToast('Saved');
+    
+    if(confirm('Add or change image?')){
+      selectImageForTarget(t);
+    }
+  }
+  if(a==='delete'){
+    if(!confirm('Delete target?'))return;
+    open.targets=open.targets.filter(x=>x.id!==id);
+    if(selectedTargetId===id)selectedTargetId=null;
+    save();
+    renderTargets();
+    showToast('Deleted');
+  }
 }
 
-document.getElementById('btnMarkFound').onclick=()=>{
-  const s=getOpenSurvey(); if(!s||!selectedTargetId){ alert('Select target first'); return;}
-  const t=s.targets.find(x=>x.id===selectedTargetId); if(!t)return;
-  openEditModal(t,'found');
-};
-
-// --- Compass dummy display ---
-let bearing=0;
-setInterval(()=>{ bearing=(bearing+10)%360;
-  document.getElementById('arrow').style.transform=`rotate(${bearing}deg) translate(-50%,-50%)`;
-  document.getElementById('directionText').textContent=`Slight right - ${Math.abs(180-bearing)}m`;
-},1200);
-
-// --- Image modal ---
-const imageModal=document.getElementById('imageModal');
-const modalImage=document.getElementById('modalImage');
-imageModal.addEventListener('click',()=>imageModal.classList.add('hidden'));
-function openImageModal(src){ modalImage.src=src; imageModal.classList.remove('hidden'); }
-
-// --- Edit modal ---
-const editModal=document.getElementById('editModal');
-const modalNote=document.getElementById('modalNote');
-const modalDesc=document.getElementById('modalDesc');
-const modalFound=document.getElementById('modalFound');
-const modalPreview=document.getElementById('modalPreview');
-const modalImageInput=document.getElementById('modalImageInput');
-const modalUpload=document.getElementById('modalUpload');
-const modalSave=document.getElementById('modalSave');
-const modalCancel=document.getElementById('modalCancel');
-const modalTitle=document.getElementById('modalTitle');
-
-let currentEditTarget=null;
-function openEditModal(target,mode='edit'){
-  currentEditTarget=target;
-  modalTitle.textContent=mode==='found'?'Mark Found':'Edit Target';
-  modalNote.value=target.notes||'';
-  modalDesc.value=target.description||'';
-  modalFound.value=target.foundNote||'';
-  if(target.image){ modalPreview.src=target.image; modalPreview.style.display='block'; }
-  else modalPreview.style.display='none';
-  editModal.classList.remove('hidden');
-}
-function closeEditModal(){ editModal.classList.add('hidden'); currentEditTarget=null; }
-
-modalUpload.onclick=()=>modalImageInput.click();
-modalCancel.onclick=()=>closeEditModal();
-
-modalImageInput.onchange=(e)=>{
-  const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    modalPreview.src=ev.target.result;
-    modalPreview.style.display='block';
-    if(currentEditTarget) currentEditTarget.image=ev.target.result;
+btnAddTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey — create one on Home');return;}
+  if(!lastPosition){alert('No GPS fix');return;}
+  const note=prompt('Target note (optional):','')||'';
+  const t={
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now(),
+    found:false
   };
-  r.readAsDataURL(f);
+  open.targets.push(t);
+  save();
+  renderTargets();
+  showToast('Target added');
 };
 
-modalSave.onclick=()=>{
-  if(!currentEditTarget)return;
-  currentEditTarget.notes=modalNote.value.trim();
-  currentEditTarget.description=modalDesc.value.trim();
-  if(modalFound.value.trim()){ currentEditTarget.found=true; currentEditTarget.foundNote=modalFound.value.trim(); }
-  save(); renderTargets(); showToast('Saved'); closeEditModal();
+btnBatch.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!batchInterval){
+    btnBatch.textContent='Stop batch';
+    batchInterval=setInterval(()=>{
+      if(lastPosition){
+        const t={
+          id:uid('t_'),
+          lat:lastPosition.coords.latitude,
+          lng:lastPosition.coords.longitude,
+          notes:'',
+          detectorist:data.detectoristName||'',
+          detector:data.detectorUsed||'',
+          createdAt:Date.now(),
+          found:false
+        };
+        open.targets.push(t);
+        save();
+        renderTargets();
+      }
+    },3000);
+    showToast('Batch started');
+  }else{
+    clearInterval(batchInterval);
+    batchInterval=null;
+    btnBatch.textContent='Batch add';
+    showToast('Batch stopped');
+  }
 };
+
+function toRad(v){return v*Math.PI/180}
+function toDeg(v){return v*180/Math.PI}
+function haversineMeters(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+function bearingTo(lat1,lon1,lat2,lon2){
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return(toDeg(Math.atan2(y,x))+360)%360;
+}
+
+function handleOrientation(e){
+  let head=null;
+  if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
+  else if(typeof e.alpha==='number')head=(360-e.alpha);
+  if(head===null||isNaN(head))return;
+  headingSamples.push((head+360)%360);
+  if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
+  let x=0,y=0;
+  headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
+  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
+  headingEl.textContent=Math.round(smoothedHeading);
+}
+if(window.DeviceOrientationEvent)window.addEventListener('deviceorientation',handleOrientation);
+
+function throttledNavUpdate(){
+  const now=Date.now();
+  if(now-lastNav>=NAV_INTERVAL_MS){
+    lastNav=now;
+    updateNavImmediate();
+  }
+}
+setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
+
+function updateNavImmediate(){
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId||!lastPosition)return;
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const lat=lastPosition.coords.latitude,lon=lastPosition.coords.longitude;
+  const d=haversineMeters(lat,lon,t.lat,t.lng);
+  const brg=bearingTo(lat,lon,t.lat,t.lng);
+  bearingEl.textContent=Math.round(brg);
+  compassTargetName.textContent=t.notes||'Target';
+  const rel=((brg-smoothedHeading)+540)%360-180;
+  arrowEl.style.transform=`rotate(${rel}deg)`;
+  
+  let direction='';
+  if(rel>=-10&&rel<=10)direction='Straight ahead';
+  else if(rel>10&&rel<=45)direction='Slight right';
+  else if(rel>45&&rel<=90)direction='Right';
+  else if(rel>90&&rel<=135)direction='Sharp right';
+  else if(rel>135||rel<-135)direction='Behind you';
+  else if(rel<-90&&rel>=-135)direction='Sharp left';
+  else if(rel<-45&&rel>=-90)direction='Left';
+  else if(rel<-10&&rel>=-45)direction='Slight left';
+  bearingTextEl.textContent=`${direction} - ${Math.round(d)}m`;
+  
+  if(currentScreen==='compass'&&navigator.vibrate&&d<4&&!hasVibrated){
+    navigator.vibrate([200,100,200]);
+    hasVibrated=true;
+    setTimeout(()=>{
+      if(d>=5)hasVibrated=false;
+    },5000);
+  }
+  if(d>=5)hasVibrated=false;
+}
+
+btnFirstTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  selectedTargetId=open.targets[0].id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('First target');
+};
+
+btnPrevTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx>0){
+      selectedTargetId=open.targets[idx-1].id;
+    }else{
+      selectedTargetId=open.targets[open.targets.length-1].id;
+    }
+  }
+  showScreen('compass');
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('Previous: '+(t.notes||'Target'));
+};
+
+btnNextTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx<open.targets.length-1){
+      selectedTargetId=open.targets[idx+1].id;
+    }else{
+      selectedTargetId=open.targets[0].id;
+    }
+  }
+  showScreen('compass');
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('Next: '+(t.notes||'Target'));
+};
+
+btnLastTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('No Open survey');return;}
+  if(!open.targets.length){alert('No targets');return;}
+  selectedTargetId=open.targets[open.targets.length-1].id;
+  showScreen('compass');
+  updateNavImmediate();
+  showToast('Last target');
+};
+
+btnMarkFound.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId){alert('Select a target first');return;}
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const note=prompt('What did you find? (e.g., Gold ring, Roman coin):',t.foundNote||'');
+  if(note===null)return;
+  const desc=prompt('Additional description (optional):',t.description||'');
+  if(desc===null)return;
+  t.found=true;
+  t.foundNote=note;
+  t.description=desc;
+  save();
+  renderTargets();
+  showToast('Marked found');
+  
+  if(confirm('Add a photo of your find?')){
+    selectImageForTarget(t);
+  }
+};
+
+function selectImageForTarget(target){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.onchange=async(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      target.image=ev.target.result;
+      save();
+      renderTargets();
+      showToast('Image added');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+btnNewSurvey.onclick=()=>{
+  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  createSurvey(name);
+  showToast('Survey created');
+};
+
+btnNewSurveyAdd.onclick=()=>{
+  if(!lastPosition){alert('No GPS fix yet');return;}
+  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  const s=createSurvey(name);
+  const note=prompt('First target note','')||'';
+  s.targets.push({
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now(),
+    found:false
+  });
+  save();
+  showToast('Survey + target created');
+};
+
+btnCloseSurvey.onclick=()=>{
+  const o=getOpenSurvey();
+  if(!o){alert('No open survey');return;}
+  o.status='Closed';
+  save();
+  showToast('Closed');
+  renderSurveys();
+};
+
+btnExport.onclick=()=>{
+  const txt=JSON.stringify(data,null,2);
+  const blob=new Blob([txt],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='metal_finder_v3.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);
+};
+
+btnImport.onclick=()=>importFileEl.click();
+
+importFileEl.onchange=async e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  try{
+    const txt=await f.text();
+    const obj=JSON.parse(txt);
+    if(obj&&obj.surveys){
+      data=obj;
+      save();
+      showToast('Imported');
+      renderSurveys();
+    }
+  }catch(err){
+    alert('Import failed:'+err);
+  }
+};
+
+btnClear.onclick=()=>{
+  if(!confirm('Clear all data?'))return;
+  data={surveys:[]};
+  save();
+  renderSurveys();
+  showToast('Cleared');
+};
+
+detectoristNameEl.value=data.detectoristName||'';
+detectorUsedEl.value=data.detectorUsed||'';
+detectoristNameEl.oninput=()=>{data.detectoristName=detectoristNameEl.value;save()};
+detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()};
+
+function startGPS(){
+  if(!navigator.geolocation){
+    document.getElementById('gpsText').textContent='unsupported';
+    return;
+  }
+  watchId=navigator.geolocation.watchPosition(p=>{
+    lastPosition=p;
+    document.getElementById('gpsText').textContent='locked';
+    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1);
+    throttledNavUpdate();
+  },err=>{
+    document.getElementById('gpsText').textContent='no fix';
+  },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
+
+renderSurveys();
+startGPS();
+})();
 </script>
 </body>
 </html>
