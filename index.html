@@ -3,150 +3,314 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>Metal Finder v3</title>
+<title>Metal Finder v4</title>
 <style>
 :root{
-  --bg:#071018;--card:#0f1724;--accent:#16a34a;--muted:#98a2b3;--glass:rgba(255,255,255,0.03);
-  --danger:#ef4444;--arch-tint:rgba(200,200,200,0.08)
+  --bg:#0a0f1a;--card:#141b2d;--card-hover:#1a2333;--accent:#10b981;--accent-dark:#059669;
+  --muted:#6b7280;--text:#e5e7eb;--text-bright:#f9fafb;--danger:#ef4444;--warning:#f59e0b;
+  --glass:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.1);--shadow:rgba(0,0,0,0.4)
 }
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:#e6eef8;background:linear-gradient(180deg,#061019 0%,#0b1320 100%);-webkit-tap-highlight-color:transparent}
-.app{max-width:980px;margin:0 auto;padding-bottom:84px}
-header{display:flex;gap:12px;align-items:center;padding:12px}
-h1{font-size:18px;margin:6px 0}
-small{color:var(--muted)}
-.card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);margin:12px}
-.row{display:flex;gap:8px}
-input,textarea,select{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:100%}
-input[type=file]{padding:6px}
-button{background:var(--accent);border:none;color:white;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
-.muted{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:10px}
-.small{font-size:12px;padding:6px}
-.list{max-height:52vh;overflow:auto;padding:6px;border-radius:8px}
-.survey-row,.target-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01)}
-.target-row{flex-direction:column;align-items:stretch}
-.target-info{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
-.target-name{font-weight:600;font-size:14px}
-.target-status{color:#16a34a;font-size:13px}
-.target-image{max-width:100%;height:auto;border-radius:8px;margin-top:8px;max-height:200px;object-fit:contain;cursor:pointer;transition:all 0.3s ease}
-.target-image.enlarged{max-height:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;max-width:90vw;max-height:90vh;box-shadow:0 12px 40px rgba(0,0,0,0.8)}
-.image-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99;display:none}
-.image-backdrop.active{display:block}
-.survey-row.open{background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.2)}
-.survey-row.archived{background:var(--arch-tint);opacity:0.9}
-.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.coords{font-family:monospace;font-size:13px;color:var(--muted)}
-.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:64px;background:rgba(6,8,12,0.96);display:flex;align-items:center;justify-content:space-around;border-top:1px solid rgba(255,255,255,0.03);z-index:50}
-.nav-btn{flex:1;text-align:center;color:var(--muted);font-weight:700;cursor:pointer}
-.nav-btn.active{color:var(--accent)}
-.hidden{display:none}
-.arrow-wrap{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);margin:12px auto}
-.arrow{font-size:72px;transform-origin:center;transition:transform 0.2s ease-out}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:#111827;color:white;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:none;z-index:60}
-.divider{text-align:center;color:var(--muted);margin:10px 0;font-size:13px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px}
-@media(min-width:700px){.bottom-nav{max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%)}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:var(--text);background:linear-gradient(135deg,#0a0f1a 0%,#1a1f2e 100%);-webkit-tap-highlight-color:transparent}
+.app{max-width:1200px;margin:0 auto;padding:20px 16px 100px;min-height:100vh}
+
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:var(--card);border-radius:16px;margin-bottom:24px;box-shadow:0 4px 20px var(--shadow)}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
+h1{font-size:24px;font-weight:700;color:var(--text-bright)}
+.version{font-size:12px;color:var(--muted);font-weight:400}
+.gps-info{text-align:right}
+.gps-status{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.gps-label{display:flex;align-items:center;gap:6px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+
+.card{background:var(--card);border-radius:16px;padding:24px;margin-bottom:20px;box-shadow:0 2px 12px var(--shadow);transition:all 0.2s}
+.card:hover{background:var(--card-hover)}
+.card-title{font-size:20px;font-weight:600;margin-bottom:20px;color:var(--text-bright);display:flex;align-items:center;gap:10px}
+.card-title::before{content:'';width:4px;height:24px;background:var(--accent);border-radius:2px}
+
+input,textarea,select{padding:12px 16px;border-radius:12px;border:1px solid var(--border);background:var(--glass);color:var(--text);width:100%;font-size:14px;transition:all 0.2s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);background:rgba(16,185,129,0.05)}
+textarea{resize:vertical;min-height:80px;font-family:inherit}
+
+.btn{padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:white;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(16,185,129,0.4)}
+.btn-primary:active{transform:translateY(0)}
+.btn-secondary{background:var(--glass);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:rgba(255,255,255,0.08)}
+.btn-danger{background:var(--danger);color:white}
+.btn-danger:hover{background:#dc2626}
+.btn-sm{padding:8px 14px;font-size:13px}
+
+.row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.row>*{flex:1;min-width:200px}
+
+.list{max-height:60vh;overflow-y:auto;padding-right:8px}
+.list::-webkit-scrollbar{width:6px}
+.list::-webkit-scrollbar-track{background:transparent}
+.list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.list::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+.survey-item,.target-item{background:var(--glass);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;transition:all 0.2s}
+.survey-item:hover,.target-item:hover{background:rgba(255,255,255,0.08);border-color:var(--accent)}
+.survey-item.open{border-color:var(--accent);background:rgba(16,185,129,0.08)}
+.survey-item.archived{opacity:0.6}
+
+.item-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:12px}
+.item-title{font-size:16px;font-weight:600;color:var(--text-bright);margin-bottom:4px}
+.item-meta{font-size:13px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.item-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600}
+.badge-success{background:rgba(16,185,129,0.15);color:var(--accent);border:1px solid rgba(16,185,129,0.3)}
+.badge-muted{background:var(--glass);color:var(--muted);border:1px solid var(--border)}
+
+.target-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.target-coords{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:8px 0;font-size:13px}
+.coord-item{display:flex;flex-direction:column;gap:2px}
+.coord-label{color:var(--muted);font-size:12px}
+.coord-value{color:var(--text-bright);font-family:monospace}
+.target-description{margin-top:12px;color:var(--text);font-size:14px;line-height:1.5;white-space:pre-wrap}
+
+.image-gallery{display:flex;gap:8px;margin-top:12px;overflow-x:auto;padding:4px 0}
+.image-gallery::-webkit-scrollbar{height:6px}
+.image-gallery::-webkit-scrollbar-track{background:transparent}
+.image-gallery::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.gallery-image{width:120px;height:120px;object-fit:cover;border-radius:8px;cursor:pointer;transition:all 0.2s;flex-shrink:0;border:2px solid transparent}
+.gallery-image:hover{transform:scale(1.05);border-color:var(--accent)}
+.add-image-btn{width:120px;height:120px;border-radius:8px;border:2px dashed var(--border);background:var(--glass);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--muted);cursor:pointer;transition:all 0.2s;flex-shrink:0}
+.add-image-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(16,185,129,0.05)}
+
+.lightbox{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.lightbox.active{display:flex}
+.lightbox-content{max-width:90vw;max-height:90vh;position:relative}
+.lightbox-image{max-width:100%;max-height:90vh;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.8)}
+.lightbox-close{position:absolute;top:-40px;right:0;background:none;border:none;color:white;font-size:32px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:all 0.2s}
+.lightbox-close:hover{background:rgba(255,255,255,0.1)}
+.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.6);border:none;color:white;font-size:32px;cursor:pointer;width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.2s}
+.lightbox-nav:hover{background:rgba(255,255,255,0.2)}
+.lightbox-prev{left:-60px}
+.lightbox-next{right:-60px}
+.lightbox-counter{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);color:white;font-size:14px}
+
+.compass-screen{text-align:center}
+.compass-info{display:flex;justify-content:space-around;margin:20px 0;flex-wrap:wrap;gap:16px}
+.compass-stat{flex:1;min-width:150px}
+.stat-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:700;color:var(--text-bright)}
+.direction-text{font-size:18px;color:var(--accent);font-weight:600;margin:16px 0}
+.arrow-container{width:200px;height:200px;margin:20px auto;border-radius:50%;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));display:flex;align-items:center;justify-content:center;box-shadow:inset 0 2px 12px rgba(0,0,0,0.3)}
+.arrow{font-size:80px;transition:transform 0.3s ease-out;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4))}
+.compass-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:70px;background:rgba(20,27,45,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:100;box-shadow:0 -4px 20px var(--shadow)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer;transition:all 0.2s;color:var(--muted);font-size:12px;font-weight:600;border-radius:12px;margin:0 4px}
+.nav-item:hover{background:var(--glass)}
+.nav-item.active{color:var(--accent)}
+.nav-icon{font-size:24px}
+
+.divider{border-top:1px solid var(--border);margin:20px 0;padding-top:12px;font-size:14px;color:var(--muted);font-weight:600}
+
+.hidden{display:none!important}
+
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card);color:var(--text-bright);padding:12px 24px;border-radius:12px;box-shadow:0 4px 20px var(--shadow);display:none;z-index:200;border:1px solid var(--accent);animation:slideUp 0.3s ease}
+@keyframes slideUp{from{transform:translate(-50%,20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.active{display:flex}
+.modal-content{background:var(--card);border-radius:16px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px var(--shadow)}
+.modal-title{font-size:20px;font-weight:700;margin-bottom:20px;color:var(--text-bright)}
+.modal-actions{display:flex;gap:12px;margin-top:20px;justify-content:flex-end}
+
+@media(max-width:768px){
+  header{flex-direction:column;gap:16px;text-align:center}
+  .gps-info{text-align:center}
+  .row>*{min-width:100%}
+  .compass-info{flex-direction:column}
+  .lightbox-prev{left:10px}
+  .lightbox-next{right:10px}
+}
 </style>
 </head>
 <body>
 <div class="app">
 <header>
-  <div>
-    <h1>Metal Finder</h1>
-    <small>v3 — with archive restore</small>
+  <div class="logo">
+    <div class="logo-icon">📍</div>
+    <div>
+      <h1>Metal Finder</h1>
+      <div class="version">v4.0 - Professional</div>
+    </div>
   </div>
-  <div style="margin-left:auto;text-align:right">
-    <div class="coords">GPS: <span id="gpsText">unknown</span></div>
-    <div class="coords">Accuracy: <span id="accText">—</span> m</div>
+  <div class="gps-info">
+    <div class="gps-status">
+      <div class="gps-label">
+        <span class="status-dot"></span>
+        <span>GPS: <strong id="gpsText">Searching...</strong></span>
+      </div>
+      <div>Accuracy: <strong id="accText">—</strong></div>
+    </div>
   </div>
 </header>
 
 <main>
-  <section id="screen-home" class="card screen">
-    <h3>Home — Surveys</h3>
-    <div class="row">
-      <input id="detectoristName" placeholder="Detectorist name" />
-      <input id="detectorUsed" placeholder="Detector used" />
+  <section id="screen-home" class="screen">
+    <div class="card">
+      <div class="card-title">Settings</div>
+      <div class="row">
+        <input id="detectoristName" placeholder="Your name" />
+        <input id="detectorUsed" placeholder="Detector model" />
+      </div>
     </div>
-    <div class="row" style="margin-top:8px">
-      <button id="btnNewSurvey">+ New survey</button>
-      <button id="btnNewSurveyAdd" class="muted small">New survey + add target</button>
-      <button id="btnCloseSurvey" class="muted small">Close survey</button>
+
+    <div class="card">
+      <div class="card-title">Quick Actions</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
+        <button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
+        <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
+      </div>
     </div>
-    <div style="height:12px"></div>
-    <strong>Surveys</strong>
-    <div class="list" id="surveyList"></div>
+
+    <div class="card">
+      <div class="card-title">Surveys</div>
+      <div class="list" id="surveyList"></div>
+    </div>
   </section>
 
-  <section id="screen-targets" class="card screen hidden">
-    <h3>Targets</h3>
-    <div class="row" style="align-items:center">
-      <button id="btnAddTarget">+ Add target</button>
-      <button id="btnBatch" class="muted small">Batch add</button>
-      <div style="margin-left:auto" class="coords">Open survey: <span id="openSurveyName">—</span></div>
+  <section id="screen-targets" class="screen hidden">
+    <div class="card">
+      <div class="card-title">Targets</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
+        <button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
+      </div>
+      <div style="margin-top:12px;color:var(--muted);font-size:14px">
+        Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
+      </div>
     </div>
     <div class="list" id="targetsList"></div>
   </section>
 
-  <section id="screen-compass" class="card screen hidden">
-    <h3>Compass</h3>
-    <div style="height:8px"></div>
-    <div class="coords" style="font-size:15px">Target: <strong id="compassTargetName">—</strong></div>
-    <div class="coords" style="font-size:15px">Device heading: <span id="heading">—</span>°</div>
-    <div class="coords" style="font-size:15px">Bearing to target: <span id="bearing">—</span>°</div>
-    <div class="coords" style="font-size:14px;color:#16a34a;margin-top:4px"><span id="bearingText">—</span></div>
-    <div style="height:8px"></div>
-    <div class="arrow-wrap"><div class="arrow" id="arrow">↑</div></div>
-    <div style="height:12px"></div>
-    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-      <button id="btnFirstTarget" class="muted small">First</button>
-      <button id="btnPrevTarget" class="muted small">Prev</button>
-      <button id="btnMarkFound">Mark Found</button>
-      <button id="btnNextTarget" class="muted small">Next</button>
-      <button id="btnLastTarget" class="muted small">Last</button>
+  <section id="screen-compass" class="screen hidden">
+    <div class="card compass-screen">
+      <div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
+      
+      <div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
+      
+      <div class="compass-info">
+        <div class="compass-stat">
+          <div class="stat-label">Your Heading</div>
+          <div class="stat-value"><span id="heading">—</span>°</div>
+        </div>
+        <div class="compass-stat">
+          <div class="stat-label">Target Bearing</div>
+          <div class="stat-value"><span id="bearing">—</span>°</div>
+        </div>
+      </div>
+
+      <div class="direction-text" id="bearingText">—</div>
+
+      <div class="arrow-container">
+        <div class="arrow" id="arrow">↑</div>
+      </div>
+
+      <div class="compass-controls">
+        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
+        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
+        <button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
+        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
+        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
+      </div>
     </div>
   </section>
 
-  <section id="screen-settings" class="card screen hidden">
-    <h3>Settings</h3>
-    <div class="row" style="align-items:center">
-      <button id="btnExport">Export JSON</button>
-      <button id="btnImport" class="muted small">Import JSON</button>
-      <input id="importFile" type="file" accept="application/json" style="display:none" />
-    </div>
-    <div style="height:8px"></div>
-    <div class="row" style="align-items:center">
-      <button id="btnClear" class="small">Clear all data</button>
-      <div style="margin-left:auto" class="coords">Version: <strong>metal_finder_v3</strong></div>
+  <section id="screen-settings" class="screen hidden">
+    <div class="card">
+      <div class="card-title">Data Management</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnExport">💾 Export Data</button>
+        <button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
+      <div class="row">
+        <button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
+      </div>
     </div>
   </section>
 </main>
 
+<div id="lightbox" class="lightbox">
+  <div class="lightbox-content">
+    <button class="lightbox-close" id="lightboxClose">×</button>
+    <button class="lightbox-nav lightbox-prev" id="lightboxPrev">‹</button>
+    <img id="lightboxImage" class="lightbox-image" src="" alt="Full size" />
+    <button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
+    <div class="lightbox-counter" id="lightboxCounter"></div>
+  </div>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-title" id="modalTitle">Title</div>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary" id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast">Saved</div>
-<div id="imageBackdrop" class="image-backdrop"></div>
 
 <nav class="bottom-nav">
-  <div class="nav-btn active" data-screen="home">Home</div>
-  <div class="nav-btn" data-screen="targets">Targets</div>
-  <div class="nav-btn" data-screen="compass">Compass</div>
-  <div class="nav-btn" data-screen="settings">Settings</div>
+  <div class="nav-item active" data-screen="home">
+    <div class="nav-icon">🏠</div>
+    <div>Home</div>
+  </div>
+  <div class="nav-item" data-screen="targets">
+    <div class="nav-icon">📍</div>
+    <div>Targets</div>
+  </div>
+  <div class="nav-item" data-screen="compass">
+    <div class="nav-icon">🧭</div>
+    <div>Compass</div>
+  </div>
+  <div class="nav-item" data-screen="settings">
+    <div class="nav-icon">⚙️</div>
+    <div>Settings</div>
+  </div>
 </nav>
 </div>
 
 <script>
 (function(){
-const STORAGE_KEY='metal_finder_v3_data';
+const STORAGE_KEY='metal_finder_v4_data';
 const NAV_INTERVAL_MS=500;
 const HEADING_SMOOTH=6;
 
 const toast=document.getElementById('toast');
-const imageBackdrop=document.getElementById('imageBackdrop');
+const lightbox=document.getElementById('lightbox');
+const lightboxImage=document.getElementById('lightboxImage');
+const lightboxClose=document.getElementById('lightboxClose');
+const lightboxPrev=document.getElementById('lightboxPrev');
+const lightboxNext=document.getElementById('lightboxNext');
+const lightboxCounter=document.getElementById('lightboxCounter');
+const modal=document.getElementById('modal');
+const modalTitle=document.getElementById('modalTitle');
+const modalBody=document.getElementById('modalBody');
+const modalCancel=document.getElementById('modalCancel');
+const modalConfirm=document.getElementById('modalConfirm');
+
 const screens={
   home:document.getElementById('screen-home'),
   targets:document.getElementById('screen-targets'),
   compass:document.getElementById('screen-compass'),
   settings:document.getElementById('screen-settings')
 };
-const navBtns=[...document.querySelectorAll('.nav-btn')];
+const navBtns=[...document.querySelectorAll('.nav-item')];
 const surveyListEl=document.getElementById('surveyList');
 const targetsListEl=document.getElementById('targetsList');
 const btnNewSurvey=document.getElementById('btnNewSurvey');
@@ -183,11 +347,14 @@ let smoothedHeading=0;
 let lastNav=0;
 let hasVibrated=false;
 let currentScreen='home';
+let currentLightboxImages=[];
+let currentLightboxIndex=0;
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved')}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('💾 Saved')}
 function load(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){return{}}}
-function showToast(msg){toast.textContent=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',1200)}
+function showToast(msg){toast.textContent=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',2000)}
+function escapeHtml(text){const div=document.createElement('div');div.textContent=text;return div.innerHTML;}
 
 function showScreen(name){
   Object.values(screens).forEach(s=>s.classList.add('hidden'));
@@ -216,36 +383,52 @@ function renderSurveys(){
   const archived=data.surveys.filter(s=>s.archived);
   const sortByDate=a=>a.sort((x,y)=>y.createdAt-x.createdAt);
 
-  sortByDate(open).forEach(s=>addSurveyRow(s,'open'));
-  sortByDate(closed).forEach(s=>addSurveyRow(s));
+  sortByDate(open).forEach(s=>addSurveyItem(s,'open'));
+  sortByDate(closed).forEach(s=>addSurveyItem(s));
   if(archived.length){
-    const div=document.createElement('div');
-    div.className='divider';
-    div.textContent='Archived Surveys';
-    surveyListEl.appendChild(div);
-    sortByDate(archived).forEach(s=>addSurveyRow(s,'archived'));
+    surveyListEl.innerHTML+='<div class="divider">📦 Archived Surveys</div>';
+    sortByDate(archived).forEach(s=>addSurveyItem(s,'archived'));
+  }
+  if(!data.surveys.length){
+    surveyListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No surveys yet. Create one to get started!</div>';
   }
 }
 
-function addSurveyRow(s,cls){
-  const row=document.createElement('div');
-  row.className='survey-row'+(cls?' '+cls:'');
-  const statusText=s.archived?'Archived':s.status;
-  let btns='';
+function addSurveyItem(s,cls){
+  const item=document.createElement('div');
+  item.className='survey-item'+(cls?' '+cls:'');
+  
+  let actions='';
   if(s.archived){
-    btns=`<button class="muted small" data-action="restore" data-id="${s.id}">Restore</button>`;
+    actions=`<button class="btn btn-secondary btn-sm" data-action="restore" data-id="${s.id}">Restore</button>`;
   }else{
-    btns+=`<button class="muted small" data-action="select" data-id="${s.id}">View</button>`;
-    if(s.status!=='Open')btns+=`<button class="muted small" data-action="open" data-id="${s.id}">Set Open</button>`;
-    if(s.status==='Open')btns+=`<button class="muted small" data-action="close" data-id="${s.id}">Close</button>`;
-    btns+=`<button class="muted small" data-action="archive" data-id="${s.id}">Archive</button>`;
-    btns+=`<button class="small" style="background:var(--danger);" data-action="delete" data-id="${s.id}">Del</button>`;
+    actions+=`<button class="btn btn-secondary btn-sm" data-action="view" data-id="${s.id}">View</button>`;
+    if(s.status!=='Open')actions+=`<button class="btn btn-secondary btn-sm" data-action="open" data-id="${s.id}">Set Open</button>`;
+    if(s.status==='Open')actions+=`<button class="btn btn-secondary btn-sm" data-action="close" data-id="${s.id}">Close</button>`;
+    actions+=`<button class="btn btn-secondary btn-sm" data-action="archive" data-id="${s.id}">Archive</button>`;
+    actions+=`<button class="btn btn-danger btn-sm" data-action="delete" data-id="${s.id}">Delete</button>`;
   }
-  row.innerHTML=`<div style="min-width:0"><strong>${s.name}</strong>
-  <div class="coords">${new Date(s.createdAt).toLocaleString()} • ${s.targets.length} targets • ${statusText}</div></div>
-  <div class="controls">${btns}</div>`;
-  surveyListEl.appendChild(row);
-  row.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
+  
+  const statusBadge=s.status==='Open'?'<span class="badge badge-success">● Open</span>':'<span class="badge badge-muted">Closed</span>';
+  
+  item.innerHTML=`
+    <div class="item-header">
+      <div>
+        <div class="item-title">${escapeHtml(s.name)}</div>
+        <div class="item-meta">
+          <span>${new Date(s.createdAt).toLocaleDateString()}</span>
+          <span>•</span>
+          <span>${s.targets.length} targets</span>
+          <span>•</span>
+          ${statusBadge}
+        </div>
+      </div>
+    </div>
+    <div class="item-actions">${actions}</div>
+  `;
+  
+  surveyListEl.appendChild(item);
+  item.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
 }
 
 function surveyAction(e){
@@ -253,68 +436,99 @@ function surveyAction(e){
   const id=e.currentTarget.dataset.id;
   const s=data.surveys.find(x=>x.id===id);
   if(!s)return;
-  if(a==='select'){showScreen('targets');renderTargets();}
-  if(a==='open'){setOnlyOpen(id);save();showToast('Set open');renderSurveys();}
-  if(a==='close'){s.status='Closed';save();showToast('Closed');renderSurveys();}
-  if(a==='archive'){s.archived=true;s.status='Closed';save();showToast('Archived');renderSurveys();}
-  if(a==='restore'){s.archived=false;s.status='Closed';save();showToast('Restored');renderSurveys();}
-  if(a==='delete'){if(!confirm('Delete survey?'))return;data.surveys=data.surveys.filter(x=>x.id!==id);save();showToast('Deleted');renderSurveys();}
+  
+  if(a==='view'){showScreen('targets');renderTargets();}
+  if(a==='open'){setOnlyOpen(id);save();renderSurveys();showToast('✅ Set as open');}
+  if(a==='close'){s.status='Closed';save();renderSurveys();showToast('🔒 Closed');}
+  if(a==='archive'){s.archived=true;s.status='Closed';save();renderSurveys();showToast('📦 Archived');}
+  if(a==='restore'){s.archived=false;s.status='Closed';save();renderSurveys();showToast('✅ Restored');}
+  if(a==='delete'){
+    if(!confirm('Delete this survey and all its targets? This cannot be undone.'))return;
+    data.surveys=data.surveys.filter(x=>x.id!==id);
+    save();renderSurveys();showToast('🗑️ Deleted');
+  }
 }
 
 function renderTargets(){
   targetsListEl.innerHTML='';
   const open=getOpenSurvey();
   if(!open){
-    targetsListEl.innerHTML='<div class="coords">No Open survey — create or set one Open on Home</div>';
-    openSurveyNameEl.textContent='—';
+    targetsListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No open survey. Please create or open a survey on the Home screen.</div>';
+    openSurveyNameEl.textContent='None';
     return;
   }
+  
   openSurveyNameEl.textContent=open.name;
-  open.targets.forEach(t=>{
-    const row=document.createElement('div');
-    row.className='target-row';
-    const foundStatus=t.found?`<div class="target-status">Found${t.foundNote?' - '+t.foundNote:''}</div>`:'<div class="coords" style="font-size:13px">Not found</div>';
-    const description=t.description?`<div class="coords" style="font-size:13px;margin-top:4px;white-space:pre-wrap">${t.description}</div>`:'';
-    row.innerHTML=`<div class="target-info">
-      <div class="target-name">${t.notes||'Target'}</div>
-      <div class="coords" style="font-size:13px">Latitude: ${t.lat.toFixed(6)}</div>
-      <div class="coords" style="font-size:13px">Longitude: ${t.lng.toFixed(6)}</div>
-      ${foundStatus}
-      ${description}
-    </div>
-    <div class="controls">
-      <button class="muted small" data-action="goto" data-id="${t.id}">Go</button>
-      <button class="muted small" data-action="edit" data-id="${t.id}">Edit</button>
-      <button class="small" style="background:var(--danger);" data-action="delete" data-id="${t.id}">Del</button>
-    </div>`;
-    targetsListEl.appendChild(row);
-    
-    if(t.image){
-      const img=document.createElement('img');
-      img.src=t.image;
-      img.className='target-image';
-      img.alt='Target photo';
-      img.onclick=()=>toggleImageEnlarge(img);
-      row.querySelector('.target-info').appendChild(img);
-    }
-  });
-  targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
-}
-
-function toggleImageEnlarge(img){
-  if(img.classList.contains('enlarged')){
-    img.classList.remove('enlarged');
-    imageBackdrop.classList.remove('active');
-  }else{
-    img.classList.add('enlarged');
-    imageBackdrop.classList.add('active');
+  
+  if(!open.targets.length){
+    targetsListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No targets yet. Add your first target!</div>';
+    return;
   }
+  
+  open.targets.forEach(t=>{
+    const item=document.createElement('div');
+    item.className='target-item';
+    
+    const foundBadge=t.found?`<span class="badge badge-success">✓ Found${t.foundNote?' - '+escapeHtml(t.foundNote):''}</span>`:'<span class="badge badge-muted">Not found</span>';
+    
+    let imagesHtml='';
+    if(t.images&&t.images.length){
+      imagesHtml='<div class="image-gallery">';
+      t.images.forEach((img,idx)=>{
+        imagesHtml+=`<img src="${img}" class="gallery-image" data-target="${t.id}" data-index="${idx}" alt="Find photo ${idx+1}" />`;
+      });
+      imagesHtml+=`<div class="add-image-btn" data-target="${t.id}">+</div>`;
+      imagesHtml+='</div>';
+    }else{
+      imagesHtml=`<div class="image-gallery"><div class="add-image-btn" data-target="${t.id}">+</div></div>`;
+    }
+    
+    item.innerHTML=`
+      <div class="item-header">
+        <div style="flex:1">
+          <div class="item-title">${escapeHtml(t.notes||'Target')}</div>
+          <div class="target-coords">
+            <div class="coord-item">
+              <div class="coord-label">Latitude</div>
+              <div class="coord-value">${t.lat.toFixed(6)}</div>
+            </div>
+            <div class="coord-item">
+              <div class="coord-label">Longitude</div>
+              <div class="coord-value">${t.lng.toFixed(6)}</div>
+            </div>
+          </div>
+          <div style="margin-top:8px">${foundBadge}</div>
+          ${t.description?`<div class="target-description">${escapeHtml(t.description)}</div>`:''}
+          ${imagesHtml}
+        </div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-primary btn-sm" data-action="goto" data-id="${t.id}">🧭 Navigate</button>
+        <button class="btn btn-secondary btn-sm" data-action="edit" data-id="${t.id}">✏️ Edit</button>
+        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${t.id}">Delete</button>
+      </div>
+    `;
+    
+    targetsListEl.appendChild(item);
+  });
+  
+  targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
+  targetsListEl.querySelectorAll('.gallery-image').forEach(img=>{
+    img.addEventListener('click',()=>{
+      const targetId=img.dataset.target;
+      const index=parseInt(img.dataset.index);
+      const target=open.targets.find(t=>t.id===targetId);
+      if(target&&target.images)openLightbox(target.images,index);
+    });
+  });
+  targetsListEl.querySelectorAll('.add-image-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const targetId=btn.dataset.target;
+      const target=open.targets.find(t=>t.id===targetId);
+      if(target)addImagesToTarget(target);
+    });
+  });
 }
-
-imageBackdrop.onclick=()=>{
-  document.querySelectorAll('.target-image.enlarged').forEach(img=>img.classList.remove('enlarged'));
-  imageBackdrop.classList.remove('active');
-};
 
 function targetAction(e){
   const a=e.currentTarget.dataset.action;
@@ -323,65 +537,165 @@ function targetAction(e){
   if(!open)return;
   const t=open.targets.find(x=>x.id===id);
   if(!t)return;
+  
   if(a==='goto'){
     selectedTargetId=id;
     compassTargetName.textContent=t.notes||'Target';
     showScreen('compass');
     updateNavImmediate();
-    showToast('Navigating');
+    showToast('🧭 Navigation started');
   }
   if(a==='edit'){
-    const newNote=prompt('Edit target name:',t.notes||'');
-    if(newNote===null)return;
-    t.notes=newNote;
-    const newDesc=prompt('Edit description (optional):',t.description||'');
-    if(newDesc!==null){
-      t.description=newDesc;
-    }
-    save();
-    renderTargets();
-    showToast('Saved');
-    
-    if(confirm('Add or change image?')){
-      selectImageForTarget(t);
-    }
+    showEditTargetModal(t);
   }
   if(a==='delete'){
-    if(!confirm('Delete target?'))return;
+    if(!confirm('Delete this target?'))return;
     open.targets=open.targets.filter(x=>x.id!==id);
     if(selectedTargetId===id)selectedTargetId=null;
-    save();
-    renderTargets();
-    showToast('Deleted');
+    save();renderTargets();showToast('🗑️ Deleted');
   }
 }
 
+function showEditTargetModal(target){
+  modalTitle.textContent='Edit Target';
+  modalBody.innerHTML=`
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Name</label>
+      <input type="text" id="editName" value="${escapeHtml(target.notes||'')}" style="width:100%" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
+      <textarea id="editDesc" style="width:100%">${escapeHtml(target.description||'')}</textarea>
+    </div>
+  `;
+  
+  modal.classList.add('active');
+  
+  modalConfirm.onclick=()=>{
+    target.notes=document.getElementById('editName').value;
+    target.description=document.getElementById('editDesc').value;
+    save();renderTargets();
+    modal.classList.remove('active');
+    showToast('✅ Updated');
+  };
+  
+  modalCancel.onclick=()=>{
+    modal.classList.remove('active');
+  };
+}
+
+function addImagesToTarget(target){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.multiple=true;
+  input.onchange=async(e)=>{
+    const files=Array.from(e.target.files);
+    if(!files.length)return;
+    
+    showToast('📸 Processing images...');
+    
+    if(!target.images)target.images=[];
+    
+    for(const file of files){
+      const reader=new FileReader();
+      await new Promise((resolve)=>{
+        reader.onload=(ev)=>{
+          target.images.push(ev.target.result);
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    save();renderTargets();
+    showToast(`✅ ${files.length} image(s) added`);
+  };
+  input.click();
+}
+
+function openLightbox(images,startIndex){
+  currentLightboxImages=images;
+  currentLightboxIndex=startIndex;
+  showLightboxImage();
+  lightbox.classList.add('active');
+}
+
+function showLightboxImage(){
+  if(currentLightboxImages.length===0)return;
+  lightboxImage.src=currentLightboxImages[currentLightboxIndex];
+  lightboxCounter.textContent=`${currentLightboxIndex+1} / ${currentLightboxImages.length}`;
+  
+  lightboxPrev.style.display=currentLightboxImages.length>1?'flex':'none';
+  lightboxNext.style.display=currentLightboxImages.length>1?'flex':'none';
+}
+
+lightboxClose.onclick=()=>lightbox.classList.remove('active');
+lightbox.onclick=(e)=>{if(e.target===lightbox)lightbox.classList.remove('active')};
+lightboxPrev.onclick=()=>{
+  currentLightboxIndex=(currentLightboxIndex-1+currentLightboxImages.length)%currentLightboxImages.length;
+  showLightboxImage();
+};
+lightboxNext.onclick=()=>{
+  currentLightboxIndex=(currentLightboxIndex+1)%currentLightboxImages.length;
+  showLightboxImage();
+};
+
 btnAddTarget.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No Open survey — create one on Home');return;}
-  if(!lastPosition){alert('No GPS fix');return;}
-  const note=prompt('Target note (optional):','')||'';
-  const t={
-    id:uid('t_'),
-    lat:lastPosition.coords.latitude,
-    lng:lastPosition.coords.longitude,
-    notes:note,
-    detectorist:data.detectoristName||'',
-    detector:data.detectorUsed||'',
-    createdAt:Date.now(),
-    found:false
+  if(!open){alert('⚠️ No open survey. Please create or open a survey first.');return;}
+  if(!lastPosition){alert('⚠️ No GPS fix yet. Please wait for GPS signal.');return;}
+  
+  modalTitle.textContent='Add New Target';
+  modalBody.innerHTML=`
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Name (optional)</label>
+      <input type="text" id="newTargetName" placeholder="e.g., Roman coin signal" style="width:100%" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description (optional)</label>
+      <textarea id="newTargetDesc" placeholder="Add notes about this location..." style="width:100%"></textarea>
+    </div>
+  `;
+  
+  modal.classList.add('active');
+  
+  modalConfirm.onclick=()=>{
+    const name=document.getElementById('newTargetName').value||'';
+    const desc=document.getElementById('newTargetDesc').value||'';
+    
+    const t={
+      id:uid('t_'),
+      lat:lastPosition.coords.latitude,
+      lng:lastPosition.coords.longitude,
+      notes:name,
+      description:desc,
+      detectorist:data.detectoristName||'',
+      detector:data.detectorUsed||'',
+      createdAt:Date.now(),
+      found:false,
+      images:[]
+    };
+    
+    open.targets.push(t);
+    save();renderTargets();
+    modal.classList.remove('active');
+    showToast('✅ Target added');
   };
-  open.targets.push(t);
-  save();
-  renderTargets();
-  showToast('Target added');
+  
+  modalCancel.onclick=()=>{
+    modal.classList.remove('active');
+  };
 };
 
 btnBatch.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No Open survey');return;}
+  if(!open){alert('⚠️ No open survey');return;}
+  
   if(!batchInterval){
-    btnBatch.textContent='Stop batch';
+    btnBatch.innerHTML='⏹️ Stop Batch';
+    btnBatch.classList.remove('btn-secondary');
+    btnBatch.classList.add('btn-danger');
     batchInterval=setInterval(()=>{
       if(lastPosition){
         const t={
@@ -389,22 +703,25 @@ btnBatch.onclick=()=>{
           lat:lastPosition.coords.latitude,
           lng:lastPosition.coords.longitude,
           notes:'',
+          description:'',
           detectorist:data.detectoristName||'',
           detector:data.detectorUsed||'',
           createdAt:Date.now(),
-          found:false
+          found:false,
+          images:[]
         };
         open.targets.push(t);
-        save();
-        renderTargets();
+        save();renderTargets();
       }
     },3000);
-    showToast('Batch started');
+    showToast('🔄 Batch mode started');
   }else{
     clearInterval(batchInterval);
     batchInterval=null;
-    btnBatch.textContent='Batch add';
-    showToast('Batch stopped');
+    btnBatch.innerHTML='🔄 Batch Add';
+    btnBatch.classList.remove('btn-danger');
+    btnBatch.classList.add('btn-secondary');
+    showToast('⏹️ Batch mode stopped');
   }
 };
 
@@ -469,7 +786,7 @@ function updateNavImmediate(){
   else if(rel<-90&&rel>=-135)direction='Sharp left';
   else if(rel<-45&&rel>=-90)direction='Left';
   else if(rel<-10&&rel>=-45)direction='Slight left';
-  bearingTextEl.textContent=`${direction} - ${Math.round(d)}m`;
+  bearingTextEl.textContent=`${direction} • ${Math.round(d)}m`;
   
   if(currentScreen==='compass'&&navigator.vibrate&&d<4&&!hasVibrated){
     navigator.vibrate([200,100,200]);
@@ -483,18 +800,17 @@ function updateNavImmediate(){
 
 btnFirstTarget.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No Open survey');return;}
-  if(!open.targets.length){alert('No targets');return;}
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
   selectedTargetId=open.targets[0].id;
-  showScreen('compass');
   updateNavImmediate();
-  showToast('First target');
+  showToast('⏮️ First target');
 };
 
 btnPrevTarget.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No Open survey');return;}
-  if(!open.targets.length){alert('No targets');return;}
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
   if(!selectedTargetId){
     selectedTargetId=open.targets[0].id;
   }else{
@@ -505,16 +821,15 @@ btnPrevTarget.onclick=()=>{
       selectedTargetId=open.targets[open.targets.length-1].id;
     }
   }
-  showScreen('compass');
   updateNavImmediate();
   const t=open.targets.find(x=>x.id===selectedTargetId);
-  showToast('Previous: '+(t.notes||'Target'));
+  showToast('◀️ '+(t.notes||'Target'));
 };
 
 btnNextTarget.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No Open survey');return;}
-  if(!open.targets.length){alert('No targets');return;}
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
   if(!selectedTargetId){
     selectedTargetId=open.targets[0].id;
   }else{
@@ -525,96 +840,94 @@ btnNextTarget.onclick=()=>{
       selectedTargetId=open.targets[0].id;
     }
   }
-  showScreen('compass');
   updateNavImmediate();
   const t=open.targets.find(x=>x.id===selectedTargetId);
-  showToast('Next: '+(t.notes||'Target'));
+  showToast('▶️ '+(t.notes||'Target'));
 };
 
 btnLastTarget.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open){alert('No Open survey');return;}
-  if(!open.targets.length){alert('No targets');return;}
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
   selectedTargetId=open.targets[open.targets.length-1].id;
-  showScreen('compass');
   updateNavImmediate();
-  showToast('Last target');
+  showToast('⏭️ Last target');
 };
 
 btnMarkFound.onclick=()=>{
   const open=getOpenSurvey();
-  if(!open||!selectedTargetId){alert('Select a target first');return;}
+  if(!open||!selectedTargetId){alert('⚠️ Select a target first');return;}
   const t=open.targets.find(x=>x.id===selectedTargetId);
   if(!t)return;
-  const note=prompt('What did you find? (e.g., Gold ring, Roman coin):',t.foundNote||'');
-  if(note===null)return;
-  const desc=prompt('Additional description (optional):',t.description||'');
-  if(desc===null)return;
-  t.found=true;
-  t.foundNote=note;
-  t.description=desc;
-  save();
-  renderTargets();
-  showToast('Marked found');
   
-  if(confirm('Add a photo of your find?')){
-    selectImageForTarget(t);
-  }
+  modalTitle.textContent='Mark as Found';
+  modalBody.innerHTML=`
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">What did you find?</label>
+      <input type="text" id="foundWhat" value="${escapeHtml(t.foundNote||'')}" placeholder="e.g., Gold ring, Roman coin" style="width:100%" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
+      <textarea id="foundDesc" placeholder="Add details about your find..." style="width:100%">${escapeHtml(t.description||'')}</textarea>
+    </div>
+  `;
+  
+  modal.classList.add('active');
+  
+  modalConfirm.onclick=()=>{
+    t.found=true;
+    t.foundNote=document.getElementById('foundWhat').value;
+    t.description=document.getElementById('foundDesc').value;
+    save();renderTargets();
+    modal.classList.remove('active');
+    showToast('✅ Marked as found!');
+    
+    if(confirm('📸 Add photos of your find?')){
+      addImagesToTarget(t);
+    }
+  };
+  
+  modalCancel.onclick=()=>{
+    modal.classList.remove('active');
+  };
 };
 
-function selectImageForTarget(target){
-  const input=document.createElement('input');
-  input.type='file';
-  input.accept='image/*';
-  input.onchange=async(e)=>{
-    const file=e.target.files[0];
-    if(!file)return;
-    const reader=new FileReader();
-    reader.onload=(ev)=>{
-      target.image=ev.target.result;
-      save();
-      renderTargets();
-      showToast('Image added');
-    };
-    reader.readAsDataURL(file);
-  };
-  input.click();
-}
-
 btnNewSurvey.onclick=()=>{
-  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
   if(!name)return;
   createSurvey(name);
-  showToast('Survey created');
+  showToast('✨ Survey created');
 };
 
 btnNewSurveyAdd.onclick=()=>{
-  if(!lastPosition){alert('No GPS fix yet');return;}
-  const name=prompt('Survey name','Field '+new Date().toLocaleDateString());
+  if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
+  const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
   if(!name)return;
   const s=createSurvey(name);
-  const note=prompt('First target note','')||'';
+  const note=prompt('First target name:','')||'';
   s.targets.push({
     id:uid('t_'),
     lat:lastPosition.coords.latitude,
     lng:lastPosition.coords.longitude,
     notes:note,
+    description:'',
     detectorist:data.detectoristName||'',
     detector:data.detectorUsed||'',
     createdAt:Date.now(),
-    found:false
+    found:false,
+    images:[]
   });
   save();
-  showToast('Survey + target created');
+  showToast('✅ Survey + target created');
 };
 
 btnCloseSurvey.onclick=()=>{
   const o=getOpenSurvey();
-  if(!o){alert('No open survey');return;}
+  if(!o){alert('⚠️ No open survey');return;}
+  if(!confirm('Close the current survey?'))return;
   o.status='Closed';
-  save();
-  showToast('Closed');
-  renderSurveys();
+  save();renderSurveys();
+  showToast('🔒 Survey closed');
 };
 
 btnExport.onclick=()=>{
@@ -623,10 +936,11 @@ btnExport.onclick=()=>{
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
-  a.download='metal_finder_v3.json';
+  a.download=`metal_finder_${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a);
   a.click();
   setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);
+  showToast('💾 Data exported');
 };
 
 btnImport.onclick=()=>importFileEl.click();
@@ -638,22 +952,26 @@ importFileEl.onchange=async e=>{
     const txt=await f.text();
     const obj=JSON.parse(txt);
     if(obj&&obj.surveys){
+      if(!confirm('Import data? This will merge with existing data.'))return;
       data=obj;
       save();
-      showToast('Imported');
       renderSurveys();
+      showToast('✅ Data imported');
+    }else{
+      alert('Invalid data format');
     }
   }catch(err){
-    alert('Import failed:'+err);
+    alert('Import failed: '+err.message);
   }
 };
 
 btnClear.onclick=()=>{
-  if(!confirm('Clear all data?'))return;
+  if(!confirm('⚠️ Clear ALL data? This cannot be undone!'))return;
+  if(!confirm('Are you absolutely sure?'))return;
   data={surveys:[]};
   save();
   renderSurveys();
-  showToast('Cleared');
+  showToast('🗑️ All data cleared');
 };
 
 detectoristNameEl.value=data.detectoristName||'';
@@ -663,16 +981,16 @@ detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()};
 
 function startGPS(){
   if(!navigator.geolocation){
-    document.getElementById('gpsText').textContent='unsupported';
+    document.getElementById('gpsText').textContent='Not supported';
     return;
   }
   watchId=navigator.geolocation.watchPosition(p=>{
     lastPosition=p;
-    document.getElementById('gpsText').textContent='locked';
-    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1);
+    document.getElementById('gpsText').textContent='Locked';
+    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1)+'m';
     throttledNavUpdate();
   },err=>{
-    document.getElementById('gpsText').textContent='no fix';
+    document.getElementById('gpsText').textContent='No signal';
   },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
 }
 
