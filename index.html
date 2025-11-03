@@ -7,7 +7,7 @@
 <style>
 :root{
   --bg:#0a0f1a;--card:#141b2d;--card-hover:#1a2333;--accent:#10b981;--accent-dark:#059669;
-  --muted:#6b7280;--text:#e5e7eb;--text-bright:#f9fafb;--danger:#ef4444;--warning:#f59e0b;
+  --muted:#6b7280;--text:#e5e7eb;--text-bright:#f9fafb;--danger:#ef4444;
   --glass:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.1);--shadow:rgba(0,0,0,0.4)
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -19,8 +19,6 @@ header{display:flex;justify-content:space-between;align-items:center;padding:20p
 h1{font-size:24px;font-weight:700;color:var(--text-bright)}
 .version{font-size:12px;color:var(--muted);font-weight:400}
 .gps-info{text-align:right}
-.gps-status{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px;align-items:flex-end}
-.gps-label{display:flex;align-items:center;gap:6px}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
@@ -29,60 +27,20 @@ h1{font-size:24px;font-weight:700;color:var(--text-bright)}
 .card-title{font-size:20px;font-weight:600;margin-bottom:20px;color:var(--text-bright);display:flex;align-items:center;gap:10px}
 .card-title::before{content:'';width:4px;height:24px;background:var(--accent);border-radius:2px}
 
-input,textarea,select{padding:12px 16px;border-radius:12px;border:1px solid var(--border);background:var(--glass);color:var(--text);width:100%;font-size:14px;transition:all 0.2s}
-input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);background:rgba(16,185,129,0.05)}
-textarea{resize:vertical;min-height:80px;font-family:inherit}
-
-.btn{padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
-.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:white;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(16,185,129,0.4)}
-.btn-primary:active{transform:translateY(0)}
+.btn{padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:white}
 .btn-secondary{background:var(--glass);color:var(--text);border:1px solid var(--border)}
-.btn-secondary:hover{background:rgba(255,255,255,0.08)}
 .btn-danger{background:var(--danger);color:white}
-.btn-danger:hover{background:#dc2626}
 .btn-sm{padding:8px 14px;font-size:13px}
 
-.row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.row>*{flex:1;min-width:200px}
-
-.list{max-height:60vh;overflow-y:auto;padding-right:8px}
-.list::-webkit-scrollbar{width:6px}
-.list::-webkit-scrollbar-track{background:transparent}
-.list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.list::-webkit-scrollbar-thumb:hover{background:var(--muted)}
-
-.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600}
-.badge-success{background:rgba(16,185,129,0.15);color:var(--accent);border:1px solid rgba(16,185,129,0.3)}
-.badge-muted{background:var(--glass);color:var(--muted);border:1px solid var(--border)}
-
-.compass-screen{text-align:center}
-.compass-info{display:flex;justify-content:space-around;margin:20px 0;flex-wrap:wrap;gap:16px}
-.compass-stat{flex:1;min-width:150px}
-.stat-label{font-size:12px;color:var(--muted);margin-bottom:4px}
-.stat-value{font-size:24px;font-weight:700;color:var(--text-bright)}
-.direction-text{font-size:18px;color:var(--accent);font-weight:600;margin:16px 0}
-.arrow-container{width:200px;height:200px;margin:20px auto;border-radius:50%;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));display:flex;align-items:center;justify-content:center;box-shadow:inset 0 2px 12px rgba(0,0,0,0.3)}
-.arrow{font-size:80px;transition:transform 0.3s ease-out;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4))}
-.compass-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:24px}
-
-.coords-box{font-size:14px;margin-top:8px;color:var(--muted);line-height:1.4}
-
-.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:70px;background:rgba(20,27,45,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:100;box-shadow:0 -4px 20px var(--shadow)}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer;transition:all 0.2s;color:var(--muted);font-size:12px;font-weight:600;border-radius:12px;margin:0 4px}
-.nav-item:hover{background:var(--glass)}
-.nav-item.active{color:var(--accent)}
-.nav-icon{font-size:24px}
-
 .hidden{display:none!important}
-
-.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card);color:var(--text-bright);padding:12px 24px;border-radius:12px;box-shadow:0 4px 20px var(--shadow);display:none;z-index:200;border:1px solid var(--accent);animation:slideUp 0.3s ease}
-@keyframes slideUp{from{transform:translate(-50%,20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
-
-@media(max-width:768px){
-  header{flex-direction:column;gap:16px;text-align:center}
-  .gps-info{text-align:center}
-}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:70px;background:rgba(20,27,45,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:100}
+.nav-item{flex:1;text-align:center;color:var(--muted);cursor:pointer}
+.nav-item.active{color:var(--accent)}
+.arrow-container{width:200px;height:200px;margin:20px auto;border-radius:50%;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));display:flex;align-items:center;justify-content:center}
+.arrow{font-size:80px;transition:transform 0.3s ease-out}
+.coords-box{font-size:14px;margin-top:8px;color:var(--muted);line-height:1.4}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card);color:var(--text-bright);padding:12px 24px;border-radius:12px;display:none;z-index:200;border:1px solid var(--accent)}
 </style>
 </head>
 <body>
@@ -92,67 +50,40 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
     <div class="logo-icon">📍</div>
     <div>
       <h1>Metal Finder</h1>
-      <div class="version">v4.0 - Professional</div>
+      <div class="version">v4.0</div>
     </div>
   </div>
   <div class="gps-info">
-    <div class="gps-status">
-      <div class="gps-label">
-        <span class="status-dot"></span>
-        <span>GPS: <strong id="gpsText">Searching...</strong></span>
-      </div>
-      <div>Accuracy: <strong id="accText">—</strong></div>
-    </div>
+    <span class="status-dot"></span> GPS: <strong id="gpsText">Searching...</strong>
   </div>
 </header>
 
 <main>
   <section id="screen-home" class="screen">
     <div class="card">
-      <div class="card-title">Settings</div>
-      <div class="row">
-        <input id="detectoristName" placeholder="Your name" />
-        <input id="detectorUsed" placeholder="Detector model" />
-      </div>
-    </div>
-
-    <div class="card">
       <div class="card-title">Quick Actions</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
-        <button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
-        <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
-      </div>
+      <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
+      <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
     </div>
-
     <div class="card">
       <div class="card-title">Surveys</div>
-      <div class="list" id="surveyList"></div>
+      <div id="surveyList">No surveys yet.</div>
     </div>
   </section>
 
   <section id="screen-targets" class="screen hidden">
     <div class="card">
       <div class="card-title">Targets</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
-        <button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
-      </div>
-      <div style="margin-top:12px;color:var(--muted);font-size:14px">
-        Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
-      </div>
+      <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
+      <button class="btn btn-secondary btn-sm" id="btnMarkFound">✅ Mark Found</button>
+      <div id="targetsList" style="margin-top:12px;color:var(--muted)">No targets</div>
     </div>
-    <div class="list" id="targetsList"></div>
   </section>
 
   <section id="screen-compass" class="screen hidden">
     <div class="card compass-screen">
-      <div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
-      <div id="compassTargetName" style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)">Select a target</div>
-      <div class="compass-info">
-        <div class="compass-stat"><div class="stat-label">Your Heading</div><div class="stat-value"><span id="heading">—</span>°</div></div>
-        <div class="compass-stat"><div class="stat-label">Target Bearing</div><div class="stat-value"><span id="bearing">—</span>°</div></div>
-      </div>
+      <div class="card-title">🧭 Compass</div>
+      <div id="compassTargetName">Select a target</div>
       <div class="coords-box">
         Target: <span id="targetLat">—</span>°, <span id="targetLng">—</span>°<br>
         You: <span id="userLat">—</span>°, <span id="userLng">—</span>° (<span id="userHem">—</span>)
@@ -161,27 +92,20 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
         <div id="latDirection">Lat: —</div>
         <div id="lngDirection">Lon: —</div>
       </div>
-      <div class="direction-text" id="bearingText">—</div>
       <div class="arrow-container"><div class="arrow" id="arrow">↑</div></div>
-      <div class="compass-controls">
-        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
-        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
-        <button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
-        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
-        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
+      <div style="text-align:center">
+        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮ First</button>
+        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀ Prev</button>
+        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶</button>
+        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭</button>
       </div>
     </div>
   </section>
 
   <section id="screen-settings" class="screen hidden">
     <div class="card">
-      <div class="card-title">Data Management</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnExport">💾 Export Data</button>
-        <button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
-      </div>
-      <div class="row"><button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button></div>
+      <div class="card-title">Settings</div>
+      <button class="btn btn-danger" id="btnClear">🗑 Clear Data</button>
     </div>
   </section>
 </main>
@@ -189,136 +113,104 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 <div id="toast" class="toast">Saved</div>
 
 <nav class="bottom-nav">
-  <div class="nav-item active" data-screen="home"><div class="nav-icon">🏠</div><div>Home</div></div>
-  <div class="nav-item" data-screen="targets"><div class="nav-icon">📍</div><div>Targets</div></div>
-  <div class="nav-item" data-screen="compass"><div class="nav-icon">🧭</div><div>Compass</div></div>
-  <div class="nav-item" data-screen="settings"><div class="nav-icon">⚙️</div><div>Settings</div></div>
+  <div class="nav-item active" data-screen="home">🏠<br>Home</div>
+  <div class="nav-item" data-screen="targets">📍<br>Targets</div>
+  <div class="nav-item" data-screen="compass">🧭<br>Compass</div>
+  <div class="nav-item" data-screen="settings">⚙️<br>Settings</div>
 </nav>
 </div>
 
 <script>
 (function(){
 const STORAGE_KEY='metal_finder_v4_data';
-const NAV_INTERVAL_MS=500;
-const HEADING_SMOOTH=6;
-
-const toast=document.getElementById('toast');
-const headingEl=document.getElementById('heading');
-const bearingEl=document.getElementById('bearing');
-const arrowEl=document.getElementById('arrow');
-const compassTargetName=document.getElementById('compassTargetName');
-const bearingTextEl=document.getElementById('bearingText');
-const targetLatEl=document.getElementById('targetLat');
-const targetLngEl=document.getElementById('targetLng');
-const userLatEl=document.getElementById('userLat');
-const userLngEl=document.getElementById('userLng');
-const userLatHemEl=document.getElementById('userHem');
-const latDirectionEl=document.getElementById('latDirection');
-const lngDirectionEl=document.getElementById('lngDirection');
-
 let data=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{"surveys":[]}');
-let lastPosition=null;
-let selectedTargetId=null;
-let headingSamples=[],smoothedHeading=0,lastNav=0,currentScreen='compass',hasVibrated=false;
-
+let selectedTargetId=null,lastPosition=null,smoothedHeading=0;
+const toast=document.getElementById('toast');
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('Saved');}
-function showToast(msg){toast.textContent=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',1500);}
-function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived);}
+function showToast(m){toast.textContent=m;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',1200);}
 
-function toRad(v){return v*Math.PI/180;}
-function toDeg(v){return v*180/Math.PI;}
-function normalizeLon(lon){return((lon+180)%360+360)%360-180;}
-function lonDifference(userLon,targetLon){
-  let diff=normalizeLon(targetLon)-normalizeLon(userLon);
-  if(diff>180)diff-=360;
-  if(diff<-180)diff+=360;
-  return diff;
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById('screen-'+id).classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.screen===id));
 }
-function haversineMeters(lat1,lon1,lat2,lon2){
-  const R=6371000;
-  const dLat=toRad(lat2-lat1);
-  const dLon=toRad(lon2-lon1);
-  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-  return R*c;
-}
-function bearingTo(lat1,lon1,lat2,lon2){
-  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
-  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
-  return(toDeg(Math.atan2(y,x))+360)%360;
-}
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>showScreen(n.dataset.screen)));
 
-function handleOrientation(e){
-  let head=null;
-  if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
-  else if(typeof e.alpha==='number')head=(360-e.alpha);
-  if(head===null||isNaN(head))return;
-  headingSamples.push((head+360)%360);
-  if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
-  let x=0,y=0;
-  headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
-  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
-  headingEl.textContent=Math.round(smoothedHeading);
+document.getElementById('btnNewSurvey').onclick=()=>{
+  const name=prompt('Survey name?');if(!name)return;
+  data.surveys.push({name,targets:[],status:'Open'});
+  save();renderSurveys();
+};
+document.getElementById('btnCloseSurvey').onclick=()=>{
+  const s=data.surveys.find(x=>x.status==='Open');
+  if(s){s.status='Closed';save();renderSurveys();}
+};
+document.getElementById('btnAddTarget').onclick=()=>{
+  const s=data.surveys.find(x=>x.status==='Open');
+  if(!s){alert('No open survey');return;}
+  if(!lastPosition){alert('No GPS yet');return;}
+  const note=prompt('Target note?')||'';
+  s.targets.push({id:Date.now(),lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,notes:note});
+  save();renderTargets();
+};
+document.getElementById('btnMarkFound').onclick=()=>{
+  alert('Marked found (demo)');
+};
+document.getElementById('btnClear').onclick=()=>{
+  if(confirm('Clear all data?')){data={surveys:[]};save();renderSurveys();}
+};
+function renderSurveys(){
+  const el=document.getElementById('surveyList');
+  el.innerHTML='';
+  data.surveys.forEach(s=>{
+    const d=document.createElement('div');
+    d.textContent=s.name+' ('+s.status+')';
+    el.appendChild(d);
+  });
 }
-if(window.DeviceOrientationEvent)window.addEventListener('deviceorientation',handleOrientation);
+function renderTargets(){
+  const el=document.getElementById('targetsList');
+  const s=data.surveys.find(x=>x.status==='Open');
+  if(!s){el.textContent='No open survey';return;}
+  el.innerHTML='';
+  s.targets.forEach(t=>{
+    const d=document.createElement('div');
+    d.textContent=t.notes||'Target';
+    el.appendChild(d);
+  });
+}
+renderSurveys();
 
-function updateNavImmediate(){
-  const open=getOpenSurvey();
-  if(!open||!selectedTargetId||!lastPosition)return;
-  const t=open.targets.find(x=>x.id===selectedTargetId);
-  if(!t)return;
+// Compass + GPS
+const targetLatEl=document.getElementById('targetLat'),targetLngEl=document.getElementById('targetLng');
+const userLatEl=document.getElementById('userLat'),userLngEl=document.getElementById('userLng');
+const userHemEl=document.getElementById('userHem'),latDirectionEl=document.getElementById('latDirection');
+const lngDirectionEl=document.getElementById('lngDirection'),arrowEl=document.getElementById('arrow');
+
+function normalizeLon(l){return((l+180)%360+360)%360-180;}
+function lonDiff(u,t){let d=normalizeLon(t)-normalizeLon(u);if(d>180)d-=360;if(d<-180)d+=360;return d;}
+function hav(lat1,lon1,lat2,lon2){const R=6371000;const dLat=(lat2-lat1)*Math.PI/180;const dLon=(lon2-lon1)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+function bearing(lat1,lon1,lat2,lon2){const y=Math.sin((lon2-lon1)*Math.PI/180)*Math.cos(lat2*Math.PI/180);const x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos((lon2-lon1)*Math.PI/180);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
+
+function updateCompass(){
+  const s=data.surveys.find(x=>x.status==='Open');
+  if(!s||!s.targets.length||!lastPosition)return;
+  const t=s.targets[0];
   const lat=lastPosition.coords.latitude,lon=lastPosition.coords.longitude;
-  const d=haversineMeters(lat,lon,t.lat,t.lng);
-  const brg=bearingTo(lat,lon,t.lat,t.lng);
-  bearingEl.textContent=Math.round(brg);
-  compassTargetName.textContent=t.notes||'Target';
-
-  // --- coordinates display and fixed logic ---
   targetLatEl.textContent=t.lat.toFixed(6);
   targetLngEl.textContent=t.lng.toFixed(6);
   userLatEl.textContent=lat.toFixed(6);
   userLngEl.textContent=lon.toFixed(6);
-  userLatHemEl.textContent=(lat>=0)?'North':'South';
-
-  let latInstruction='—';
-  if(lat<t.lat)latInstruction='Go North';
-  else if(lat>t.lat)latInstruction='Go South';
-  else latInstruction='Same latitude';
-
-  let diff=lonDifference(lon,t.lng);
-  let lonInstruction='—';
-  if(diff>0.0001)lonInstruction='Go East';
-  else if(diff<-0.0001)lonInstruction='Go West';
-  else lonInstruction='Same longitude';
-
-  latDirectionEl.textContent=`Lat: ${latInstruction}`;
-  lngDirectionEl.textContent=`Lon: ${lonInstruction}`;
-
-  const rel=((brg-smoothedHeading)+540)%360-180;
-  arrowEl.style.transform=`rotate(${rel}deg)`;
-
-  let direction='';
-  if(rel>=-10&&rel<=10)direction='Straight ahead';
-  else if(rel>10&&rel<=45)direction='Slight right';
-  else if(rel>45&&rel<=90)direction='Right';
-  else if(rel>90&&rel<=135)direction='Sharp right';
-  else if(rel>135||rel<-135)direction='Behind you';
-  else if(rel<-90&&rel>=-135)direction='Sharp left';
-  else if(rel<-45&&rel>=-90)direction='Left';
-  else if(rel<-10&&rel>=-45)direction='Slight left';
-  bearingTextEl.textContent=`${direction} • ${Math.round(d)}m`;
+  userHemEl.textContent=(lat>=0)?'North':'South';
+  let latMsg='—';if(lat<t.lat)latMsg='Go North';else if(lat>t.lat)latMsg='Go South';else latMsg='Same latitude';
+  let d=lonDiff(lon,t.lng);let lonMsg='—';if(d>0.0001)lonMsg='Go East';else if(d<-0.0001)lonMsg='Go West';else lonMsg='Same longitude';
+  latDirectionEl.textContent='Lat: '+latMsg;lngDirectionEl.textContent='Lon: '+lonMsg;
+  const b=bearing(lat,lon,t.lat,t.lng);arrowEl.style.transform='rotate('+b+'deg)';
 }
-
-function startGPS(){
-  if(!navigator.geolocation)return;
-  navigator.geolocation.watchPosition(p=>{
-    lastPosition=p;
-    document.getElementById('gpsText').textContent='Locked';
-    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1)+'m';
-    updateNavImmediate();
-  },()=>{document.getElementById('gpsText').textContent='No signal';},{enableHighAccuracy:true});
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(p=>{lastPosition=p;document.getElementById('gpsText').textContent='Locked';updateCompass();},
+  ()=>{document.getElementById('gpsText').textContent='No signal';},{enableHighAccuracy:true});
 }
-startGPS();
 })();
 </script>
 </body>
