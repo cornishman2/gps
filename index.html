@@ -1,276 +1,1068 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Survey Tracker</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Metal Finder v4</title>
 <style>
-  body {
-    margin: 0; font-family: system-ui, sans-serif;
-    background: #0b111b; color: #e0e6f0;
-  }
-  .app { max-width: 800px; margin: auto; padding: 12px; }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  h1 { font-size: 1.3rem; margin: 0; }
-  button {
-    background: #1e293b; color: #e0e6f0; border: none; border-radius: 8px;
-    padding: 8px 12px; cursor: pointer; transition: background 0.2s;
-  }
-  button:hover { background: #334155; }
-  button.small { font-size: 0.85em; padding: 4px 8px; }
-  button.muted { background: #2b364a; color: #a8b2c4; }
-  input, textarea, select {
-    background: #1e293b; color: #e0e6f0; border: none; border-radius: 6px;
-    padding: 6px; width: 100%; box-sizing: border-box; margin-bottom: 8px;
-  }
-  .hidden { display: none; }
-  .toast {
-    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-    background: #16a34a; color: white; padding: 8px 16px; border-radius: 8px;
-    opacity: 0; transition: opacity 0.3s;
-  }
-  .toast.show { opacity: 1; }
+:root{
+  --bg:#0a0f1a;--card:#141b2d;--card-hover:#1a2333;--accent:#10b981;--accent-dark:#059669;
+  --muted:#6b7280;--text:#e5e7eb;--text-bright:#f9fafb;--danger:#ef4444;--warning:#f59e0b;
+  --glass:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.1);--shadow:rgba(0,0,0,0.4)
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:var(--text);background:linear-gradient(135deg,#0a0f1a 0%,#1a1f2e 100%);-webkit-tap-highlight-color:transparent}
+.app{max-width:1200px;margin:0 auto;padding:20px 16px 100px;min-height:100vh}
 
-  .screen { display: none; }
-  .screen.active { display: block; }
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:var(--card);border-radius:16px;margin-bottom:24px;box-shadow:0 4px 20px var(--shadow)}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
+h1{font-size:24px;font-weight:700;color:var(--text-bright)}
+.version{font-size:12px;color:var(--muted);font-weight:400}
+.gps-info{text-align:right}
+.gps-status{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.gps-label{display:flex;align-items:center;gap:6px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
-  .targets { margin-top: 12px; }
-  .target-row {
-    display: flex; align-items: center; justify-content: space-between;
-    background: #1e293b; border-radius: 10px; padding: 8px; margin-bottom: 6px;
-  }
-  .target-row.found { background: #1a3b29; }
-  .target-row img {
-    max-height: 50px; border-radius: 6px; cursor: pointer;
-  }
+.card{background:var(--card);border-radius:16px;padding:24px;margin-bottom:20px;box-shadow:0 2px 12px var(--shadow);transition:all 0.2s}
+.card:hover{background:var(--card-hover)}
+.card-title{font-size:20px;font-weight:600;margin-bottom:20px;color:var(--text-bright);display:flex;align-items:center;gap:10px}
+.card-title::before{content:'';width:4px;height:24px;background:var(--accent);border-radius:2px}
 
-  .divider {
-    border-top: 1px solid #2a3345; margin: 12px 0;
-  }
-  .archive { background: rgba(100,100,100,0.1); border-radius: 10px; padding: 6px; }
+input,textarea,select{padding:12px 16px;border-radius:12px;border:1px solid var(--border);background:var(--glass);color:var(--text);width:100%;font-size:14px;transition:all 0.2s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);background:rgba(16,185,129,0.05)}
+textarea{resize:vertical;min-height:80px;font-family:inherit}
 
-  #compassCircle {
-    width: 200px; height: 200px; border: 2px solid #e0e6f0;
-    border-radius: 50%; margin: 20px auto; position: relative;
-  }
-  #compassArrow {
-    position: absolute; left: 50%; top: 50%;
-    width: 2px; height: 90px; background: #e11d48;
-    transform-origin: bottom center; transition: transform 0.3s linear;
-  }
+.btn{padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:white;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(16,185,129,0.4)}
+.btn-primary:active{transform:translateY(0)}
+.btn-secondary{background:var(--glass);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:rgba(255,255,255,0.08)}
+.btn-danger{background:var(--danger);color:white}
+.btn-danger:hover{background:#dc2626}
+.btn-sm{padding:8px 14px;font-size:13px}
+
+.row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.row>*{flex:1;min-width:200px}
+
+.list{max-height:60vh;overflow-y:auto;padding-right:8px}
+.list::-webkit-scrollbar{width:6px}
+.list::-webkit-scrollbar-track{background:transparent}
+.list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.list::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+.survey-item,.target-item{background:var(--glass);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;transition:all 0.2s}
+.survey-item:hover,.target-item:hover{background:rgba(255,255,255,0.08);border-color:var(--accent)}
+.survey-item.open{border-color:var(--accent);background:rgba(16,185,129,0.08)}
+.survey-item.archived{opacity:0.6}
+
+.item-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:12px}
+.item-title{font-size:16px;font-weight:600;color:var(--text-bright);margin-bottom:4px}
+.item-meta{font-size:13px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.item-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600}
+.badge-success{background:rgba(16,185,129,0.15);color:var(--accent);border:1px solid rgba(16,185,129,0.3)}
+.badge-muted{background:var(--glass);color:var(--muted);border:1px solid var(--border)}
+
+.target-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.target-coords{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:8px 0;font-size:13px}
+.coord-item{display:flex;flex-direction:column;gap:2px}
+.coord-label{color:var(--muted);font-size:12px}
+.coord-value{color:var(--text-bright);font-family:monospace}
+.target-description{margin-top:12px;color:var(--text);font-size:14px;line-height:1.5;white-space:pre-wrap}
+
+.image-gallery{display:flex;gap:8px;margin-top:12px;overflow-x:auto;padding:4px 0}
+.image-gallery::-webkit-scrollbar{height:6px}
+.image-gallery::-webkit-scrollbar-track{background:transparent}
+.image-gallery::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.gallery-image{width:120px;height:120px;object-fit:cover;border-radius:8px;cursor:pointer;transition:all 0.2s;flex-shrink:0;border:2px solid transparent;position:relative}
+.gallery-image:hover{transform:scale(1.05);border-color:var(--accent)}
+.gallery-image-wrapper{position:relative;width:120px;height:120px;flex-shrink:0}
+.gallery-image{width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;display:block}
+.gallery-image:hover{transform:scale(1.05);border-color:var(--accent)}
+.image-processing{width:120px;height:120px;border-radius:8px;border:2px solid var(--accent);background:var(--glass);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;flex-shrink:0}
+.spinner{width:32px;height:32px;border:3px solid var(--glass);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.add-image-btn{width:120px;height:120px;border-radius:8px;border:2px dashed var(--border);background:var(--glass);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--muted);cursor:pointer;transition:all 0.2s;flex-shrink:0}
+.add-image-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(16,185,129,0.05)}
+
+.lightbox{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.lightbox.active{display:flex}
+.lightbox-content{max-width:90vw;max-height:90vh;position:relative}
+.lightbox-image{max-width:100%;max-height:90vh;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.8)}
+.lightbox-close{position:absolute;top:-40px;right:0;background:none;border:none;color:white;font-size:32px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:all 0.2s}
+.lightbox-close:hover{background:rgba(255,255,255,0.1)}
+.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.6);border:none;color:white;font-size:32px;cursor:pointer;width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.2s}
+.lightbox-nav:hover{background:rgba(255,255,255,0.2)}
+.lightbox-prev{left:-60px}
+.lightbox-next{right:-60px}
+.lightbox-actions{display:flex;gap:12px;justify-content:center;margin-top:16px}
+.lightbox-counter{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);color:white;font-size:14px}
+
+.compass-screen{text-align:center}
+.compass-info{display:flex;justify-content:space-around;margin:20px 0;flex-wrap:wrap;gap:16px}
+.compass-stat{flex:1;min-width:150px}
+.stat-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:700;color:var(--text-bright)}
+.direction-text{font-size:18px;color:var(--accent);font-weight:600;margin:16px 0}
+.arrow-container{width:200px;height:200px;margin:20px auto;border-radius:50%;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));display:flex;align-items:center;justify-content:center;box-shadow:inset 0 2px 12px rgba(0,0,0,0.3)}
+.arrow{font-size:80px;transition:transform 0.3s ease-out;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4))}
+.compass-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;height:70px;background:rgba(20,27,45,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:100;box-shadow:0 -4px 20px var(--shadow)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer;transition:all 0.2s;color:var(--muted);font-size:12px;font-weight:600;border-radius:12px;margin:0 4px}
+.nav-item:hover{background:var(--glass)}
+.nav-item.active{color:var(--accent)}
+.nav-icon{font-size:24px}
+
+.divider{border-top:1px solid var(--border);margin:20px 0;padding-top:12px;font-size:14px;color:var(--muted);font-weight:600}
+
+.hidden{display:none!important}
+
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card);color:var(--text-bright);padding:12px 24px;border-radius:12px;box-shadow:0 4px 20px var(--shadow);display:none;z-index:200;border:1px solid var(--accent);animation:slideUp 0.3s ease}
+@keyframes slideUp{from{transform:translate(-50%,20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.active{display:flex}
+.modal-content{background:var(--card);border-radius:16px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px var(--shadow)}
+.modal-title{font-size:20px;font-weight:700;margin-bottom:20px;color:var(--text-bright)}
+.modal-actions{display:flex;gap:12px;margin-top:20px;justify-content:flex-end}
+
+@media(max-width:768px){
+  header{flex-direction:column;gap:16px;text-align:center}
+  .gps-info{text-align:center}
+  .row>*{min-width:100%}
+  .compass-info{flex-direction:column}
+  .lightbox-prev{left:10px}
+  .lightbox-next{right:10px}
+}
 </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <h1>Survey Tracker</h1>
+<header>
+  <div class="logo">
+    <div class="logo-icon">📍</div>
     <div>
-      <button class="nav-btn" data-screen="homeScreen">🏠</button>
-      <button class="nav-btn" data-screen="targetsScreen">🎯</button>
-      <button class="nav-btn" data-screen="compassScreen">🧭</button>
+      <h1>Metal Finder</h1>
+      <div class="version">v4.0 - Professional</div>
     </div>
-  </header>
+  </div>
+  <div class="gps-info">
+    <div class="gps-status">
+      <div class="gps-label">
+        <span class="status-dot"></span>
+        <span>GPS: <strong id="gpsText">Searching...</strong></span>
+      </div>
+      <div>Accuracy: <strong id="accText">—</strong></div>
+    </div>
+  </div>
+</header>
 
-  <!-- Home -->
-  <section id="homeScreen" class="screen active">
-    <button id="btnNewSurvey">New Survey</button>
-    <div id="surveysList"></div>
+<main>
+  <section id="screen-home" class="screen">
+    <div class="card">
+      <div class="card-title">Settings</div>
+      <div class="row">
+        <input id="detectoristName" placeholder="Your name" />
+        <input id="detectorUsed" placeholder="Detector model" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Quick Actions</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
+        <button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
+        <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Surveys</div>
+      <div class="list" id="surveyList"></div>
+    </div>
   </section>
 
-  <!-- Targets -->
-  <section id="targetsScreen" class="screen">
-    <div>
-      <button id="btnAddTarget">Add Target</button>
-      <button id="btnMarkFound" class="muted small">Mark Found</button>
+  <section id="screen-targets" class="screen hidden">
+    <div class="card">
+      <div class="card-title">Targets</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
+        <button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
+      </div>
+      <div style="margin-top:12px;color:var(--muted);font-size:14px">
+        Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
+      </div>
     </div>
-    <div class="targets" id="targetsList"></div>
+    <div class="list" id="targetsList"></div>
   </section>
 
-  <!-- Compass -->
-  <section id="compassScreen" class="screen" style="text-align:center">
-    <div id="compassCircle">
-      <div id="compassArrow"></div>
-    </div>
-    <div id="directionText" style="margin-top:12px;">Direction</div>
-    <div style="text-align:center;margin-top:20px;">
-      <button id="btnFirst">⏮ First</button>
-      <button id="btnPrev">◀ Prev</button>
-      <button id="btnNext">Next ▶</button>
-      <button id="btnLast">Last ⏭</button>
+  <section id="screen-compass" class="screen hidden">
+    <div class="card compass-screen">
+      <div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
+      
+      <div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
+      
+      <div class="compass-info">
+        <div class="compass-stat">
+          <div class="stat-label">Your Heading</div>
+          <div class="stat-value"><span id="heading">—</span>°</div>
+        </div>
+        <div class="compass-stat">
+          <div class="stat-label">Target Bearing</div>
+          <div class="stat-value"><span id="bearing">—</span>°</div>
+        </div>
+      </div>
+
+      <div class="direction-text" id="bearingText">—</div>
+
+      <div class="arrow-container">
+        <div class="arrow" id="arrow">↑</div>
+      </div>
+
+      <div class="compass-controls">
+        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
+        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
+        <button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
+        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
+        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
+      </div>
     </div>
   </section>
 
-  <div id="toast" class="toast">Saved</div>
+  <section id="screen-settings" class="screen hidden">
+    <div class="card">
+      <div class="card-title">Data Management</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnExport">💾 Export Data</button>
+        <button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
+      <div class="row">
+        <button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="lightbox" class="lightbox">
+  <div class="lightbox-content">
+    <button class="lightbox-close" id="lightboxClose">×</button>
+    <button class="lightbox-nav lightbox-prev" id="lightboxPrev">‹</button>
+    <img id="lightboxImage" class="lightbox-image" src="" alt="Full size" />
+    <button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
+    <div class="lightbox-counter" id="lightboxCounter"></div>
+    <div class="lightbox-actions">
+      <button class="btn btn-secondary" id="lightboxChange">🔄 Change</button>
+      <button class="btn btn-danger" id="lightboxDelete">🗑️ Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-title" id="modalTitle">Title</div>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary" id="modalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast">Saved</div>
+
+<nav class="bottom-nav">
+  <div class="nav-item active" data-screen="home">
+    <div class="nav-icon">🏠</div>
+    <div>Home</div>
+  </div>
+  <div class="nav-item" data-screen="targets">
+    <div class="nav-icon">📍</div>
+    <div>Targets</div>
+  </div>
+  <div class="nav-item" data-screen="compass">
+    <div class="nav-icon">🧭</div>
+    <div>Compass</div>
+  </div>
+  <div class="nav-item" data-screen="settings">
+    <div class="nav-icon">⚙️</div>
+    <div>Settings</div>
+  </div>
+</nav>
 </div>
 
 <script>
-let data = JSON.parse(localStorage.getItem('surveyData')||'{"surveys":[]}');
-function save(){ localStorage.setItem('surveyData',JSON.stringify(data)); showToast('Saved'); }
-function showToast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),1500); }
+(function(){
+const STORAGE_KEY='metal_finder_v4_data';
+const NAV_INTERVAL_MS=500;
+const HEADING_SMOOTH=6;
 
-const homeScreen=document.getElementById('homeScreen');
-const targetsScreen=document.getElementById('targetsScreen');
-const compassScreen=document.getElementById('compassScreen');
-const screens=[homeScreen,targetsScreen,compassScreen];
-document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{
-  const s=btn.dataset.screen; screens.forEach(sc=>sc.classList.remove('active'));
-  document.getElementById(s).classList.add('active');
-}));
+const toast=document.getElementById('toast');
+const lightbox=document.getElementById('lightbox');
+const lightboxImage=document.getElementById('lightboxImage');
+const lightboxClose=document.getElementById('lightboxClose');
+const lightboxPrev=document.getElementById('lightboxPrev');
+const lightboxNext=document.getElementById('lightboxNext');
+const lightboxCounter=document.getElementById('lightboxCounter');
+const lightboxChange=document.getElementById('lightboxChange');
+const lightboxDelete=document.getElementById('lightboxDelete');
+const modal=document.getElementById('modal');
+const modalTitle=document.getElementById('modalTitle');
+const modalBody=document.getElementById('modalBody');
+const modalCancel=document.getElementById('modalCancel');
+const modalConfirm=document.getElementById('modalConfirm');
 
-// --- Surveys ---
-function renderSurveys(){
-  const list=document.getElementById('surveysList');
-  let open=data.surveys.find(s=>!s.closed);
-  let html='';
-  if(open){
-    html+=`<div class="target-row"><b>${open.name}</b> (Open)
-      <button id="btnCloseSurvey" class="small muted">Close</button></div>`;
-  }
-  const archived=data.surveys.filter(s=>s.closed);
-  if(archived.length){
-    html+=`<div class="divider"></div><div class="archive"><b>Archived Surveys</b>`;
-    archived.forEach((s,i)=>{
-      html+=`<div class="target-row">
-        <span>${s.name}</span>
-        <button class="restore-btn small" data-i="${i}">Restore</button>
-      </div>`;
-    });
-    html+=`</div>`;
-  }
-  list.innerHTML=html;
-  const btnClose=document.getElementById('btnCloseSurvey');
-  if(btnClose) btnClose.onclick=()=>{ open.closed=true; save(); renderSurveys(); };
-  document.querySelectorAll('.restore-btn').forEach(b=>b.addEventListener('click',()=>{
-    const s=archived[b.dataset.i]; s.closed=false; save(); renderSurveys();
-  }));
-}
-renderSurveys();
-
-document.getElementById('btnNewSurvey').onclick=()=>{
-  const name=prompt('Survey name?'); if(!name)return;
-  data.surveys.unshift({name,targets:[],closed:false});
-  save(); renderSurveys();
+const screens={
+  home:document.getElementById('screen-home'),
+  targets:document.getElementById('screen-targets'),
+  compass:document.getElementById('screen-compass'),
+  settings:document.getElementById('screen-settings')
 };
+const navBtns=[...document.querySelectorAll('.nav-item')];
+const surveyListEl=document.getElementById('surveyList');
+const targetsListEl=document.getElementById('targetsList');
+const btnNewSurvey=document.getElementById('btnNewSurvey');
+const btnNewSurveyAdd=document.getElementById('btnNewSurveyAdd');
+const btnCloseSurvey=document.getElementById('btnCloseSurvey');
+const btnAddTarget=document.getElementById('btnAddTarget');
+const btnBatch=document.getElementById('btnBatch');
+const detectoristNameEl=document.getElementById('detectoristName');
+const detectorUsedEl=document.getElementById('detectorUsed');
+const openSurveyNameEl=document.getElementById('openSurveyName');
+const btnExport=document.getElementById('btnExport');
+const btnImport=document.getElementById('btnImport');
+const importFileEl=document.getElementById('importFile');
+const btnClear=document.getElementById('btnClear');
+const compassTargetName=document.getElementById('compassTargetName');
+const headingEl=document.getElementById('heading');
+const bearingEl=document.getElementById('bearing');
+const bearingTextEl=document.getElementById('bearingText');
+const arrowEl=document.getElementById('arrow');
+const btnNextTarget=document.getElementById('btnNextTarget');
+const btnPrevTarget=document.getElementById('btnPrevTarget');
+const btnFirstTarget=document.getElementById('btnFirstTarget');
+const btnLastTarget=document.getElementById('btnLastTarget');
+const btnMarkFound=document.getElementById('btnMarkFound');
 
-// --- Targets ---
-const targetsList=document.getElementById('targetsList');
+let data=load();
+data.surveys=data.surveys||[];
+let lastPosition=null;
+let watchId=null;
+let batchInterval=null;
 let selectedTargetId=null;
-function getOpenSurvey(){ return data.surveys.find(s=>!s.closed); }
+let headingSamples=[];
+let smoothedHeading=0;
+let lastNav=0;
+let hasVibrated=false;
+let currentScreen='home';
+let currentLightboxImages=[];
+let currentLightboxIndex=0;
+let currentLightboxTarget=null;
+
+function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('💾 Saved')}
+function load(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch(e){return{}}}
+function showToast(msg){toast.textContent=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>toast.style.display='none',2000)}
+function escapeHtml(text){const div=document.createElement('div');div.textContent=text;return div.innerHTML;}
+
+function showScreen(name){
+  Object.values(screens).forEach(s=>s.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+  navBtns.forEach(b=>b.classList.toggle('active',b.dataset.screen===name));
+  currentScreen=name;
+  if(name==='home')renderSurveys();
+  if(name==='targets')renderTargets();
+  if(name!=='compass')hasVibrated=false;
+}
+navBtns.forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
+
+function getOpenSurvey(){return data.surveys.find(s=>s.status==='Open'&&!s.archived)}
+function setOnlyOpen(id){data.surveys.forEach(s=>{s.status=(s.id===id)?'Open':(s.status==='Open'?'Closed':s.status)})}
+
+function createSurvey(name){
+  setOnlyOpen(null);
+  const s={id:uid('s_'),name:name||('Survey '+new Date().toLocaleString()),createdAt:Date.now(),status:'Open',archived:false,targets:[]};
+  data.surveys.push(s);save();renderSurveys();return s;
+}
+
+function renderSurveys(){
+  surveyListEl.innerHTML='';
+  const open=data.surveys.filter(s=>s.status==='Open'&&!s.archived);
+  const closed=data.surveys.filter(s=>s.status==='Closed'&&!s.archived);
+  const archived=data.surveys.filter(s=>s.archived);
+  const sortByDate=a=>a.sort((x,y)=>y.createdAt-x.createdAt);
+
+  sortByDate(open).forEach(s=>addSurveyItem(s,'open'));
+  sortByDate(closed).forEach(s=>addSurveyItem(s));
+  if(archived.length){
+    surveyListEl.innerHTML+='<div class="divider">📦 Archived Surveys</div>';
+    sortByDate(archived).forEach(s=>addSurveyItem(s,'archived'));
+  }
+  if(!data.surveys.length){
+    surveyListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No surveys yet. Create one to get started!</div>';
+  }
+}
+
+function addSurveyItem(s,cls){
+  const item=document.createElement('div');
+  item.className='survey-item'+(cls?' '+cls:'');
+  
+  let actions='';
+  if(s.archived){
+    actions=`<button class="btn btn-secondary btn-sm" data-action="restore" data-id="${s.id}">Restore</button>`;
+  }else{
+    actions+=`<button class="btn btn-secondary btn-sm" data-action="view" data-id="${s.id}">View</button>`;
+    if(s.status!=='Open')actions+=`<button class="btn btn-secondary btn-sm" data-action="open" data-id="${s.id}">Set Open</button>`;
+    if(s.status==='Open')actions+=`<button class="btn btn-secondary btn-sm" data-action="close" data-id="${s.id}">Close</button>`;
+    actions+=`<button class="btn btn-secondary btn-sm" data-action="archive" data-id="${s.id}">Archive</button>`;
+    actions+=`<button class="btn btn-danger btn-sm" data-action="delete" data-id="${s.id}">Delete</button>`;
+  }
+  
+  const statusBadge=s.status==='Open'?'<span class="badge badge-success">● Open</span>':'<span class="badge badge-muted">Closed</span>';
+  
+  item.innerHTML=`
+    <div class="item-header">
+      <div>
+        <div class="item-title">${escapeHtml(s.name)}</div>
+        <div class="item-meta">
+          <span>${new Date(s.createdAt).toLocaleDateString()}</span>
+          <span>•</span>
+          <span>${s.targets.length} targets</span>
+          <span>•</span>
+          ${statusBadge}
+        </div>
+      </div>
+    </div>
+    <div class="item-actions">${actions}</div>
+  `;
+  
+  surveyListEl.appendChild(item);
+  item.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
+}
+
+function surveyAction(e){
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const s=data.surveys.find(x=>x.id===id);
+  if(!s)return;
+  
+  if(a==='view'){showScreen('targets');renderTargets();}
+  if(a==='open'){setOnlyOpen(id);save();renderSurveys();showToast('✅ Set as open');}
+  if(a==='close'){s.status='Closed';save();renderSurveys();showToast('🔒 Closed');}
+  if(a==='archive'){s.archived=true;s.status='Closed';save();renderSurveys();showToast('📦 Archived');}
+  if(a==='restore'){s.archived=false;s.status='Closed';save();renderSurveys();showToast('✅ Restored');}
+  if(a==='delete'){
+    if(!confirm('Delete this survey and all its targets? This cannot be undone.'))return;
+    data.surveys=data.surveys.filter(x=>x.id!==id);
+    save();renderSurveys();showToast('🗑️ Deleted');
+  }
+}
 
 function renderTargets(){
-  const s=getOpenSurvey(); if(!s){ targetsList.innerHTML='<p>No open survey.</p>'; return;}
-  let html='';
-  s.targets.forEach(t=>{
-    const image=t.image?`<img src="${t.image}" class="clickable" alt="">`:'';
-    html+=`<div class="target-row ${t.found?'found':''}">
-      <span>${t.notes||'(no note)'}</span>
-      <div>${image}
-        <button class="small muted" data-act="goto" data-id="${t.id}">Goto</button>
-        <button class="small muted" data-act="delete" data-id="${t.id}">🗑</button>
-      </div></div>`;
+  targetsListEl.innerHTML='';
+  const open=getOpenSurvey();
+  if(!open){
+    targetsListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No open survey. Please create or open a survey on the Home screen.</div>';
+    openSurveyNameEl.textContent='None';
+    return;
+  }
+  
+  openSurveyNameEl.textContent=open.name;
+  
+  if(!open.targets.length){
+    targetsListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No targets yet. Add your first target!</div>';
+    return;
+  }
+  
+  open.targets.forEach(t=>{
+    const item=document.createElement('div');
+    item.className='target-item';
+    
+    const foundBadge=t.found?`<span class="badge badge-success">✓ Found${t.foundNote?' - '+escapeHtml(t.foundNote):''}</span>`:'<span class="badge badge-muted">Not found</span>';
+    
+    item.innerHTML=`
+      <div class="item-header">
+        <div style="flex:1">
+          <div class="item-title">${escapeHtml(t.notes||'Target')}</div>
+          <div class="target-coords">
+            <div class="coord-item">
+              <div class="coord-label">Latitude</div>
+              <div class="coord-value">${t.lat.toFixed(6)}</div>
+            </div>
+            <div class="coord-item">
+              <div class="coord-label">Longitude</div>
+              <div class="coord-value">${t.lng.toFixed(6)}</div>
+            </div>
+          </div>
+          <div style="margin-top:8px">${foundBadge}</div>
+          ${t.description?`<div class="target-description">${escapeHtml(t.description)}</div>`:''}
+          <div class="image-gallery" id="gallery-${t.id}"></div>
+        </div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-primary btn-sm" data-action="goto" data-id="${t.id}">🧭 Navigate</button>
+        <button class="btn btn-secondary btn-sm" data-action="edit" data-id="${t.id}">✏️ Edit</button>
+        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${t.id}">Delete</button>
+      </div>
+    `;
+    
+    targetsListEl.appendChild(item);
+    
+    const gallery=document.getElementById(`gallery-${t.id}`);
+    if(t.images&&t.images.length){
+      t.images.forEach((img,idx)=>{
+        const wrapper=document.createElement('div');
+        wrapper.className='gallery-image-wrapper';
+        const imgEl=document.createElement('img');
+        imgEl.src=img;
+        imgEl.className='gallery-image';
+        imgEl.dataset.target=t.id;
+        imgEl.dataset.index=idx;
+        imgEl.alt=`Find photo ${idx+1}`;
+        wrapper.appendChild(imgEl);
+        gallery.appendChild(wrapper);
+      });
+    }
+    
+    const addBtn=document.createElement('div');
+    addBtn.className='add-image-btn';
+    addBtn.textContent='+';
+    addBtn.dataset.target=t.id;
+    gallery.appendChild(addBtn);
   });
-  targetsList.innerHTML=html;
-  targetsList.querySelectorAll('button[data-act]').forEach(btn=>btn.addEventListener('click',targetAction));
+  
+  targetsListEl.querySelectorAll('button').forEach(b=>b.addEventListener('click',targetAction));
+  
+  targetsListEl.querySelectorAll('.gallery-image').forEach(img=>{
+    img.addEventListener('click',()=>{
+      const targetId=img.dataset.target;
+      const index=parseInt(img.dataset.index);
+      const target=open.targets.find(t=>t.id===targetId);
+      if(target&&target.images)openLightbox(target.images,index,target);
+    });
+  });
+  
+  targetsListEl.querySelectorAll('.add-image-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const targetId=btn.dataset.target;
+      const target=open.targets.find(t=>t.id===targetId);
+      if(target)addImageToTarget(target);
+    });
+  });
 }
-renderTargets();
-
-document.getElementById('btnAddTarget').onclick=()=>{
-  const s=getOpenSurvey(); if(!s)return alert('No open survey');
-  const note=prompt('Target note?')||'';
-  const id=Date.now();
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const {latitude,longitude}=pos.coords;
-    s.targets.push({id,notes:note,lat:latitude,lon:longitude,found:false});
-    save(); renderTargets();
-  },()=>{ alert('Location unavailable'); });
-};
 
 function targetAction(e){
-  const act=e.target.dataset.act; const id=+e.target.dataset.id;
-  const s=getOpenSurvey(); if(!s)return;
-  const t=s.targets.find(x=>x.id===id); if(!t)return;
-  if(act==='goto'){ selectedTargetId=id; showToast('Target selected'); }
-  else if(act==='delete'){ if(confirm('Delete?')){ s.targets=s.targets.filter(x=>x.id!==id); save(); renderTargets(); } }
+  const a=e.currentTarget.dataset.action;
+  const id=e.currentTarget.dataset.id;
+  const open=getOpenSurvey();
+  if(!open)return;
+  const t=open.targets.find(x=>x.id===id);
+  if(!t)return;
+  
+  if(a==='goto'){
+    selectedTargetId=id;
+    compassTargetName.textContent=t.notes||'Target';
+    showScreen('compass');
+    updateNavImmediate();
+    showToast('🧭 Navigation started');
+  }
+  if(a==='edit'){
+    showEditTargetModal(t);
+  }
+  if(a==='delete'){
+    if(!confirm('Delete this target?'))return;
+    open.targets=open.targets.filter(x=>x.id!==id);
+    if(selectedTargetId===id)selectedTargetId=null;
+    save();renderTargets();showToast('🗑️ Deleted');
+  }
 }
 
-document.getElementById('btnMarkFound').onclick=()=>{
-  const s=getOpenSurvey(); if(!s||!selectedTargetId){ alert('Select target first'); return;}
-  const t=s.targets.find(x=>x.id===selectedTargetId); if(!t)return;
-  t.found=true; save(); renderTargets(); showToast('Marked as found');
+function showEditTargetModal(target){
+  modalTitle.textContent='Edit Target';
+  modalBody.innerHTML=`
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Name</label>
+      <input type="text" id="editName" value="${escapeHtml(target.notes||'')}" style="width:100%" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
+      <textarea id="editDesc" style="width:100%">${escapeHtml(target.description||'')}</textarea>
+    </div>
+  `;
+  
+  modal.classList.add('active');
+  
+  modalConfirm.onclick=()=>{
+    target.notes=document.getElementById('editName').value;
+    target.description=document.getElementById('editDesc').value;
+    save();renderTargets();
+    modal.classList.remove('active');
+    showToast('✅ Updated');
+  };
+  
+  modalCancel.onclick=()=>{
+    modal.classList.remove('active');
+  };
+}
+
+function addImageToTarget(target){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.multiple=false;
+  
+  input.onchange=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    
+    if(!target.images)target.images=[];
+    
+    showToast('📸 Processing image...');
+    
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      target.images.push(ev.target.result);
+      save();
+      renderTargets();
+      showToast('✅ Image added successfully');
+    };
+    reader.onerror=()=>{
+      showToast('❌ Failed to process image');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function openLightbox(images,startIndex,target){
+  currentLightboxImages=images;
+  currentLightboxIndex=startIndex;
+  currentLightboxTarget=target;
+  showLightboxImage();
+  lightbox.classList.add('active');
+}
+
+function showLightboxImage(){
+  if(currentLightboxImages.length===0)return;
+  lightboxImage.src=currentLightboxImages[currentLightboxIndex];
+  lightboxCounter.textContent=`${currentLightboxIndex+1} / ${currentLightboxImages.length}`;
+  
+  lightboxPrev.style.display=currentLightboxImages.length>1?'flex':'none';
+  lightboxNext.style.display=currentLightboxImages.length>1?'flex':'none';
+}
+
+lightboxClose.onclick=()=>lightbox.classList.remove('active');
+lightbox.onclick=(e)=>{if(e.target===lightbox)lightbox.classList.remove('active')};
+lightboxPrev.onclick=()=>{
+  currentLightboxIndex=(currentLightboxIndex-1+currentLightboxImages.length)%currentLightboxImages.length;
+  showLightboxImage();
+};
+lightboxNext.onclick=()=>{
+  currentLightboxIndex=(currentLightboxIndex+1)%currentLightboxImages.length;
+  showLightboxImage();
 };
 
-// --- Compass (Orientation Fixed) ---
-const arrow=document.getElementById('compassArrow');
-const dirText=document.getElementById('directionText');
-let compassHeading=0;
-let userLat=null,userLon=null;
-let currentIndex=0;
+lightboxChange.onclick=()=>{
+  if(!currentLightboxTarget)return;
+  
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.multiple=false;
+  input.onchange=async(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    
+    lightbox.classList.remove('active');
+    showToast('📸 Processing new image...');
+    
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      currentLightboxTarget.images[currentLightboxIndex]=ev.target.result;
+      save();
+      renderTargets();
+      showToast('✅ Image changed successfully');
+    };
+    reader.onerror=()=>{
+      showToast('❌ Failed to process image');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+};
 
-function getTargets(){ const s=getOpenSurvey(); return s?s.targets:[]; }
-function getCurrentTarget(){ const ts=getTargets(); return ts[currentIndex]; }
+lightboxDelete.onclick=()=>{
+  if(!currentLightboxTarget)return;
+  if(!confirm('Delete this image?'))return;
+  
+  currentLightboxTarget.images.splice(currentLightboxIndex,1);
+  save();
+  lightbox.classList.remove('active');
+  renderTargets();
+  showToast('🗑️ Image deleted');
+};
 
-// Orientation fix
-if(window.DeviceOrientationEvent){
-  window.addEventListener("deviceorientationabsolute",handleCompass,true);
-  window.addEventListener("deviceorientation",handleCompass,true);
-}
+btnAddTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('⚠️ No open survey. Please create or open a survey first.');return;}
+  if(!lastPosition){alert('⚠️ No GPS fix yet. Please wait for GPS signal.');return;}
+  
+  modalTitle.textContent='Add New Target';
+  modalBody.innerHTML=`
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Name (optional)</label>
+      <input type="text" id="newTargetName" placeholder="e.g., Roman coin signal" style="width:100%" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description (optional)</label>
+      <textarea id="newTargetDesc" placeholder="Add notes about this location..." style="width:100%"></textarea>
+    </div>
+  `;
+  
+  modal.classList.add('active');
+  
+  modalConfirm.onclick=()=>{
+    const name=document.getElementById('newTargetName').value||'';
+    const desc=document.getElementById('newTargetDesc').value||'';
+    
+    const t={
+      id:uid('t_'),
+      lat:lastPosition.coords.latitude,
+      lng:lastPosition.coords.longitude,
+      notes:name,
+      description:desc,
+      detectorist:data.detectoristName||'',
+      detector:data.detectorUsed||'',
+      createdAt:Date.now(),
+      found:false,
+      images:[]
+    };
+    
+    open.targets.push(t);
+    save();renderTargets();
+    modal.classList.remove('active');
+    showToast('✅ Target added');
+  };
+  
+  modalCancel.onclick=()=>{
+    modal.classList.remove('active');
+  };
+};
 
-function handleCompass(e){
-  let heading=null;
-  if(e.webkitCompassHeading!=null){ // iOS
-    heading=e.webkitCompassHeading;
-  } else if(e.alpha!=null){ // Android
-    heading=360 - e.alpha;
+btnBatch.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('⚠️ No open survey');return;}
+  
+  if(!batchInterval){
+    btnBatch.innerHTML='⏹️ Stop Batch';
+    btnBatch.classList.remove('btn-secondary');
+    btnBatch.classList.add('btn-danger');
+    batchInterval=setInterval(()=>{
+      if(lastPosition){
+        const t={
+          id:uid('t_'),
+          lat:lastPosition.coords.latitude,
+          lng:lastPosition.coords.longitude,
+          notes:'',
+          description:'',
+          detectorist:data.detectoristName||'',
+          detector:data.detectorUsed||'',
+          createdAt:Date.now(),
+          found:false,
+          images:[]
+        };
+        open.targets.push(t);
+        save();renderTargets();
+      }
+    },3000);
+    showToast('🔄 Batch mode started');
+  }else{
+    clearInterval(batchInterval);
+    batchInterval=null;
+    btnBatch.innerHTML='🔄 Batch Add';
+    btnBatch.classList.remove('btn-danger');
+    btnBatch.classList.add('btn-secondary');
+    showToast('⏹️ Batch mode stopped');
   }
-  if(heading!=null){
-    compassHeading=heading;
-  }
-}
+};
 
-function updateCompass(){
-  navigator.geolocation.getCurrentPosition(pos=>{
-    userLat=pos.coords.latitude;
-    userLon=pos.coords.longitude;
-    const target=getCurrentTarget();
-    if(!target){ dirText.textContent='No target'; return; }
-
-    const distance=getDistance(userLat,userLon,target.lat,target.lon);
-    const bearingToTarget=getBearing(userLat,userLon,target.lat,target.lon);
-    const relative=(bearingToTarget - compassHeading + 360) % 360;
-
-    let direction='Ahead';
-    if(relative>20 && relative<180) direction='Slight right';
-    else if(relative>=180 && relative<340) direction='Slight left';
-    else if(relative>=340 || relative<=20) direction='On target';
-
-    arrow.style.transform=`rotate(${relative}deg)`;
-    dirText.textContent=`${direction} - ${Math.round(distance)}m`;
-  });
-}
-
-function getDistance(lat1,lon1,lat2,lon2){
+function toRad(v){return v*Math.PI/180}
+function toDeg(v){return v*180/Math.PI}
+function haversineMeters(lat1,lon1,lat2,lon2){
   const R=6371000;
-  const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180;
-  const Δφ=(lat2-lat1)*Math.PI/180, Δλ=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+function bearingTo(lat1,lon1,lat2,lon2){
+  const y=Math.sin(toRad(lon2-lon1))*Math.cos(toRad(lat2));
+  const x=Math.cos(toRad(lat1))*Math.sin(toRad(lat2))-Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(toRad(lon2-lon1));
+  return(toDeg(Math.atan2(y,x))+360)%360;
 }
 
-function getBearing(lat1,lon1,lat2,lon2){
-  const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180;
-  const λ1=lon1*Math.PI/180, λ2=lon2*Math.PI/180;
-  const y=Math.sin(λ2-λ1)*Math.cos(φ2);
-  const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+function handleOrientation(e){
+  let head=null;
+  if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
+  else if(typeof e.alpha==='number')head=(360-e.alpha);
+  if(head===null||isNaN(head))return;
+  headingSamples.push((head+360)%360);
+  if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
+  let x=0,y=0;
+  headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
+  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
+  headingEl.textContent=Math.round(smoothedHeading);
+}
+if(window.DeviceOrientationEvent)window.addEventListener('deviceorientation',handleOrientation);
+
+function throttledNavUpdate(){
+  const now=Date.now();
+  if(now-lastNav>=NAV_INTERVAL_MS){
+    lastNav=now;
+    updateNavImmediate();
+  }
+}
+setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
+
+function updateNavImmediate(){
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId||!lastPosition)return;
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  const lat=lastPosition.coords.latitude,lon=lastPosition.coords.longitude;
+  const d=haversineMeters(lat,lon,t.lat,t.lng);
+  const brg=bearingTo(lat,lon,t.lat,t.lng);
+  bearingEl.textContent=Math.round(brg);
+  compassTargetName.textContent=t.notes||'Target';
+  const rel=((brg-smoothedHeading)+540)%360-180;
+  arrowEl.style.transform=`rotate(${rel}deg)`;
+  
+  let direction='';
+  if(rel>=-10&&rel<=10)direction='Straight ahead';
+  else if(rel>10&&rel<=45)direction='Slight right';
+  else if(rel>45&&rel<=90)direction='Right';
+  else if(rel>90&&rel<=135)direction='Sharp right';
+  else if(rel>135||rel<-135)direction='Behind you';
+  else if(rel<-90&&rel>=-135)direction='Sharp left';
+  else if(rel<-45&&rel>=-90)direction='Left';
+  else if(rel<-10&&rel>=-45)direction='Slight left';
+  bearingTextEl.textContent=`${direction} • ${Math.round(d)}m`;
+  
+  if(currentScreen==='compass'&&navigator.vibrate&&d<4&&!hasVibrated){
+    navigator.vibrate([200,100,200]);
+    hasVibrated=true;
+    setTimeout(()=>{
+      if(d>=5)hasVibrated=false;
+    },5000);
+  }
+  if(d>=5)hasVibrated=false;
 }
 
-setInterval(updateCompass,2000);
+btnFirstTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
+  selectedTargetId=open.targets[0].id;
+  updateNavImmediate();
+  showToast('⏮️ First target');
+};
 
-// Compass navigation
-document.getElementById('btnFirst').onclick=()=>{ currentIndex=0; showToast('First target'); };
-document.getElementById('btnPrev').onclick=()=>{ if(currentIndex>0) currentIndex--; showToast('Previous'); };
-document.getElementById('btnNext').onclick=()=>{ if(currentIndex<getTargets().length-1) currentIndex++; showToast('Next'); };
-document.getElementById('btnLast').onclick=()=>{ currentIndex=getTargets().length-1; showToast('Last target'); };
+btnPrevTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx>0){
+      selectedTargetId=open.targets[idx-1].id;
+    }else{
+      selectedTargetId=open.targets[open.targets.length-1].id;
+    }
+  }
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('◀️ '+(t.notes||'Target'));
+};
+
+btnNextTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
+  if(!selectedTargetId){
+    selectedTargetId=open.targets[0].id;
+  }else{
+    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
+    if(idx<open.targets.length-1){
+      selectedTargetId=open.targets[idx+1].id;
+    }else{
+      selectedTargetId=open.targets[0].id;
+    }
+  }
+  updateNavImmediate();
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  showToast('▶️ '+(t.notes||'Target'));
+};
+
+btnLastTarget.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open){alert('⚠️ No open survey');return;}
+  if(!open.targets.length){alert('⚠️ No targets');return;}
+  selectedTargetId=open.targets[open.targets.length-1].id;
+  updateNavImmediate();
+  showToast('⏭️ Last target');
+};
+
+btnMarkFound.onclick=()=>{
+  const open=getOpenSurvey();
+  if(!open||!selectedTargetId){alert('⚠️ Select a target first');return;}
+  const t=open.targets.find(x=>x.id===selectedTargetId);
+  if(!t)return;
+  
+  modalTitle.textContent='Mark as Found';
+  modalBody.innerHTML=`
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">What did you find?</label>
+      <input type="text" id="foundWhat" value="${escapeHtml(t.foundNote||'')}" placeholder="e.g., Gold ring, Roman coin" style="width:100%" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
+      <textarea id="foundDesc" placeholder="Add details about your find..." style="width:100%">${escapeHtml(t.description||'')}</textarea>
+    </div>
+  `;
+  
+  modal.classList.add('active');
+  
+  modalConfirm.onclick=()=>{
+    t.found=true;
+    t.foundNote=document.getElementById('foundWhat').value;
+    t.description=document.getElementById('foundDesc').value;
+    save();renderTargets();
+    modal.classList.remove('active');
+    showToast('✅ Marked as found!');
+    
+    if(confirm('📸 Add photos of your find?')){
+      addImageToTarget(t);
+    }
+  };
+  
+  modalCancel.onclick=()=>{
+    modal.classList.remove('active');
+  };
+};
+
+btnNewSurvey.onclick=()=>{
+  const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  createSurvey(name);
+  showToast('✨ Survey created');
+};
+
+btnNewSurveyAdd.onclick=()=>{
+  if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
+  const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
+  if(!name)return;
+  const s=createSurvey(name);
+  const note=prompt('First target name:','')||'';
+  s.targets.push({
+    id:uid('t_'),
+    lat:lastPosition.coords.latitude,
+    lng:lastPosition.coords.longitude,
+    notes:note,
+    description:'',
+    detectorist:data.detectoristName||'',
+    detector:data.detectorUsed||'',
+    createdAt:Date.now(),
+    found:false,
+    images:[]
+  });
+  save();
+  showToast('✅ Survey + target created');
+};
+
+btnCloseSurvey.onclick=()=>{
+  const o=getOpenSurvey();
+  if(!o){alert('⚠️ No open survey');return;}
+  if(!confirm('Close the current survey?'))return;
+  o.status='Closed';
+  save();renderSurveys();
+  showToast('🔒 Survey closed');
+};
+
+btnExport.onclick=()=>{
+  const txt=JSON.stringify(data,null,2);
+  const blob=new Blob([txt],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`metal_finder_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);
+  showToast('💾 Data exported');
+};
+
+btnImport.onclick=()=>importFileEl.click();
+
+importFileEl.onchange=async e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  try{
+    const txt=await f.text();
+    const obj=JSON.parse(txt);
+    if(obj&&obj.surveys){
+      if(!confirm('Import data? This will merge with existing data.'))return;
+      data=obj;
+      save();
+      renderSurveys();
+      showToast('✅ Data imported');
+    }else{
+      alert('Invalid data format');
+    }
+  }catch(err){
+    alert('Import failed: '+err.message);
+  }
+};
+
+btnClear.onclick=()=>{
+  if(!confirm('⚠️ Clear ALL data? This cannot be undone!'))return;
+  if(!confirm('Are you absolutely sure?'))return;
+  data={surveys:[]};
+  save();
+  renderSurveys();
+  showToast('🗑️ All data cleared');
+};
+
+detectoristNameEl.value=data.detectoristName||'';
+detectorUsedEl.value=data.detectorUsed||'';
+detectoristNameEl.oninput=()=>{data.detectoristName=detectoristNameEl.value;save()};
+detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()};
+
+function startGPS(){
+  if(!navigator.geolocation){
+    document.getElementById('gpsText').textContent='Not supported';
+    return;
+  }
+  watchId=navigator.geolocation.watchPosition(p=>{
+    lastPosition=p;
+    document.getElementById('gpsText').textContent='Locked';
+    document.getElementById('accText').textContent=(p.coords.accuracy||0).toFixed(1)+'m';
+    throttledNavUpdate();
+  },err=>{
+    document.getElementById('gpsText').textContent='No signal';
+  },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
+
+renderSurveys();
+startGPS();
+})();
 </script>
 </body>
 </html>
