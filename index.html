@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Survey Tracker</title>
+<title>Metal Finder v5</title>
 <style>
   body {
     margin: 0; font-family: system-ui, sans-serif;
@@ -19,6 +19,7 @@
   button:hover { background: #334155; }
   button.small { font-size: 0.85em; padding: 4px 8px; }
   button.muted { background: #2b364a; color: #a8b2c4; }
+  button.danger { background: #dc2626; }
   input, textarea, select {
     background: #1e293b; color: #e0e6f0; border: none; border-radius: 6px;
     padding: 6px; width: 100%; box-sizing: border-box; margin-bottom: 8px;
@@ -40,9 +41,21 @@
     background: #1e293b; border-radius: 10px; padding: 8px; margin-bottom: 6px;
   }
   .target-row.found { background: #1a3b29; }
-  .target-row img {
-    max-height: 50px; border-radius: 6px; cursor: pointer;
+  .target-info { flex: 1; }
+  .target-coords { font-size: 0.85em; color: #a8b2c4; margin-top: 4px; }
+  .target-description { font-size: 0.9em; color: #c4cdd8; margin-top: 4px; }
+  .target-images { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; }
+  .target-images img {
+    max-height: 80px; border-radius: 6px; cursor: pointer;
+    border: 2px solid transparent; transition: border-color 0.2s;
   }
+  .target-images img:hover { border-color: #16a34a; }
+  .add-image-btn {
+    min-width: 80px; height: 80px; border: 2px dashed #2b364a;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    font-size: 2em; color: #2b364a; cursor: pointer; background: #1a2332;
+  }
+  .add-image-btn:hover { border-color: #16a34a; color: #16a34a; }
 
   .divider {
     border-top: 1px solid #2a3345; margin: 12px 0;
@@ -58,12 +71,33 @@
     width: 2px; height: 90px; background: #e11d48;
     transform-origin: bottom center; transition: transform 0.3s linear;
   }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.95); z-index: 1000;
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; padding: 20px;
+  }
+  .lightbox.active { display: flex; }
+  .lightbox img {
+    max-width: 90vw; max-height: 70vh; border-radius: 12px;
+  }
+  .lightbox-actions {
+    display: flex; gap: 12px; margin-top: 20px;
+  }
+  .lightbox-close {
+    position: absolute; top: 20px; right: 20px;
+    background: rgba(255,255,255,0.2); border: none;
+    color: white; font-size: 32px; width: 50px; height: 50px;
+    border-radius: 50%; cursor: pointer;
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Survey Tracker</h1>
+    <h1>Metal Finder v5</h1>
     <div>
       <button class="nav-btn" data-screen="homeScreen">🏠</button>
       <button class="nav-btn" data-screen="targetsScreen">🎯</button>
@@ -101,6 +135,16 @@
   </section>
 
   <div id="toast" class="toast">Saved</div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="lightbox">
+    <button class="lightbox-close" id="lightboxClose">×</button>
+    <img id="lightboxImage" src="" alt="">
+    <div class="lightbox-actions">
+      <button id="lightboxChange">🔄 Change</button>
+      <button id="lightboxDelete" class="danger">🗑️ Delete</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -155,24 +199,76 @@ document.getElementById('btnNewSurvey').onclick=()=>{
 // --- Targets ---
 const targetsList=document.getElementById('targetsList');
 let selectedTargetId=null;
+let currentLightboxTarget=null;
+let currentLightboxImageIndex=null;
+
 function getOpenSurvey(){ return data.surveys.find(s=>!s.closed); }
 
 function renderTargets(){
-  const s=getOpenSurvey(); if(!s){ targetsList.innerHTML='<p>No open survey.</p>'; return;}
+  const s=getOpenSurvey(); 
+  if(!s){ 
+    targetsList.innerHTML='<p>No open survey.</p>'; 
+    return;
+  }
+  
   let html='';
   s.targets.forEach(t=>{
-    const image=t.image?`<img src="${t.image}" class="clickable" alt="">`:'';
+    const foundBadge=t.found?'<span style="color:#16a34a">✓ Found</span>':'';
+    const coords=`${t.lat.toFixed(6)}, ${t.lon.toFixed(6)}`;
+    const desc=t.description?`<div class="target-description">${escapeHtml(t.description)}</div>`:'';
+    
+    let imagesHtml='';
+    if(t.images && t.images.length){
+      imagesHtml='<div class="target-images">';
+      t.images.forEach((img,idx)=>{
+        imagesHtml+=`<img src="${img}" data-tid="${t.id}" data-idx="${idx}" alt="Photo ${idx+1}">`;
+      });
+      imagesHtml+=`<div class="add-image-btn" data-tid="${t.id}">+</div>`;
+      imagesHtml+='</div>';
+    } else {
+      imagesHtml=`<div class="target-images"><div class="add-image-btn" data-tid="${t.id}">+</div></div>`;
+    }
+    
     html+=`<div class="target-row ${t.found?'found':''}">
-      <span>${t.notes||'(no note)'}</span>
-      <div>${image}
+      <div class="target-info">
+        <b>${escapeHtml(t.notes||'(no note)')}</b> ${foundBadge}
+        <div class="target-coords">${coords}</div>
+        ${desc}
+        ${imagesHtml}
+      </div>
+      <div style="display:flex;gap:4px;flex-direction:column">
         <button class="small muted" data-act="goto" data-id="${t.id}">Goto</button>
-        <button class="small muted" data-act="delete" data-id="${t.id}">🗑</button>
-      </div></div>`;
+        <button class="small muted" data-act="edit" data-id="${t.id}">Edit</button>
+        <button class="small danger" data-act="delete" data-id="${t.id}">🗑</button>
+      </div>
+    </div>`;
   });
   targetsList.innerHTML=html;
+  
   targetsList.querySelectorAll('button[data-act]').forEach(btn=>btn.addEventListener('click',targetAction));
+  targetsList.querySelectorAll('.target-images img').forEach(img=>{
+    img.addEventListener('click',()=>{
+      const tid=parseInt(img.dataset.tid);
+      const idx=parseInt(img.dataset.idx);
+      const target=s.targets.find(t=>t.id===tid);
+      if(target) openLightbox(target,idx);
+    });
+  });
+  targetsList.querySelectorAll('.add-image-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const tid=parseInt(btn.dataset.tid);
+      const target=s.targets.find(t=>t.id===tid);
+      if(target) addImageToTarget(target);
+    });
+  });
 }
 renderTargets();
+
+function escapeHtml(text){
+  const div=document.createElement('div');
+  div.textContent=text;
+  return div.innerHTML;
+}
 
 document.getElementById('btnAddTarget').onclick=()=>{
   const s=getOpenSurvey(); if(!s)return alert('No open survey');
@@ -180,26 +276,169 @@ document.getElementById('btnAddTarget').onclick=()=>{
   const id=Date.now();
   navigator.geolocation.getCurrentPosition(pos=>{
     const {latitude,longitude}=pos.coords;
-    s.targets.push({id,notes:note,lat:latitude,lon:longitude,found:false});
+    s.targets.push({
+      id,
+      notes:note,
+      description:'',
+      lat:latitude,
+      lon:longitude,
+      found:false,
+      images:[]
+    });
     save(); renderTargets();
   },()=>{ alert('Location unavailable'); });
 };
 
 function targetAction(e){
-  const act=e.target.dataset.act; const id=+e.target.dataset.id;
-  const s=getOpenSurvey(); if(!s)return;
-  const t=s.targets.find(x=>x.id===id); if(!t)return;
-  if(act==='goto'){ selectedTargetId=id; showToast('Target selected'); }
-  else if(act==='delete'){ if(confirm('Delete?')){ s.targets=s.targets.filter(x=>x.id!==id); save(); renderTargets(); } }
+  const act=e.target.dataset.act; 
+  const id=+e.target.dataset.id;
+  const s=getOpenSurvey(); 
+  if(!s)return;
+  const t=s.targets.find(x=>x.id===id); 
+  if(!t)return;
+  
+  if(act==='goto'){ 
+    selectedTargetId=id; 
+    showToast('Target selected'); 
+  }
+  else if(act==='edit'){ 
+    const newNote=prompt('Edit name:',t.notes||'');
+    if(newNote!==null){
+      t.notes=newNote;
+      const newDesc=prompt('Edit description:',t.description||'');
+      if(newDesc!==null){
+        t.description=newDesc;
+        save();
+        renderTargets();
+        showToast('Updated');
+      }
+    }
+  }
+  else if(act==='delete'){ 
+    if(confirm('Delete target?')){ 
+      s.targets=s.targets.filter(x=>x.id!==id); 
+      if(selectedTargetId===id) selectedTargetId=null;
+      save(); 
+      renderTargets(); 
+    } 
+  }
 }
 
 document.getElementById('btnMarkFound').onclick=()=>{
-  const s=getOpenSurvey(); if(!s||!selectedTargetId){ alert('Select target first'); return;}
-  const t=s.targets.find(x=>x.id===selectedTargetId); if(!t)return;
-  t.found=true; save(); renderTargets(); showToast('Marked as found');
+  const s=getOpenSurvey(); 
+  if(!s||!selectedTargetId){ 
+    alert('Select target first'); 
+    return;
+  }
+  const t=s.targets.find(x=>x.id===selectedTargetId); 
+  if(!t)return;
+  
+  const what=prompt('What did you find?',t.foundNote||'');
+  if(what!==null){
+    t.found=true;
+    t.foundNote=what;
+    const desc=prompt('Additional description:',t.description||'');
+    if(desc!==null){
+      t.description=desc;
+      save();
+      renderTargets();
+      showToast('Marked as found');
+      
+      if(confirm('Add a photo?')){
+        addImageToTarget(t);
+      }
+    }
+  }
 };
 
-// --- Compass (Turn Mode Fix) ---
+// --- Image handling ---
+function addImageToTarget(target){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.multiple=false;
+  
+  input.onchange=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    
+    showToast('Processing image...');
+    
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      if(!target.images) target.images=[];
+      target.images.push(ev.target.result);
+      save();
+      renderTargets();
+      showToast('Image added');
+    };
+    reader.onerror=()=>{
+      showToast('Failed to process image');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+const lightbox=document.getElementById('lightbox');
+const lightboxImage=document.getElementById('lightboxImage');
+const lightboxClose=document.getElementById('lightboxClose');
+const lightboxChange=document.getElementById('lightboxChange');
+const lightboxDelete=document.getElementById('lightboxDelete');
+
+function openLightbox(target,imageIndex){
+  currentLightboxTarget=target;
+  currentLightboxImageIndex=imageIndex;
+  lightboxImage.src=target.images[imageIndex];
+  lightbox.classList.add('active');
+}
+
+lightboxClose.onclick=()=>{
+  lightbox.classList.remove('active');
+};
+
+lightboxChange.onclick=()=>{
+  if(!currentLightboxTarget)return;
+  
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.multiple=false;
+  
+  input.onchange=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    
+    lightbox.classList.remove('active');
+    showToast('Processing new image...');
+    
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      currentLightboxTarget.images[currentLightboxImageIndex]=ev.target.result;
+      save();
+      renderTargets();
+      showToast('Image changed');
+    };
+    reader.onerror=()=>{
+      showToast('Failed to process image');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+};
+
+lightboxDelete.onclick=()=>{
+  if(!currentLightboxTarget)return;
+  if(!confirm('Delete this image?'))return;
+  
+  currentLightboxTarget.images.splice(currentLightboxImageIndex,1);
+  save();
+  lightbox.classList.remove('active');
+  renderTargets();
+  showToast('Image deleted');
+};
+
+// --- Compass (Orientation Fixed) ---
 const arrow=document.getElementById('compassArrow');
 const dirText=document.getElementById('directionText');
 let compassHeading=0;
@@ -209,6 +448,7 @@ let currentIndex=0;
 function getTargets(){ const s=getOpenSurvey(); return s?s.targets:[]; }
 function getCurrentTarget(){ const ts=getTargets(); return ts[currentIndex]; }
 
+// Orientation fix
 if(window.DeviceOrientationEvent){
   window.addEventListener("deviceorientationabsolute",handleCompass,true);
   window.addEventListener("deviceorientation",handleCompass,true);
@@ -216,9 +456,14 @@ if(window.DeviceOrientationEvent){
 
 function handleCompass(e){
   let heading=null;
-  if(e.webkitCompassHeading!=null){ heading=e.webkitCompassHeading; }
-  else if(e.alpha!=null){ heading=360 - e.alpha; }
-  if(heading!=null) compassHeading=heading;
+  if(e.webkitCompassHeading!=null){ // iOS
+    heading=e.webkitCompassHeading;
+  } else if(e.alpha!=null){ // Android
+    heading=360 - e.alpha;
+  }
+  if(heading!=null){
+    compassHeading=heading;
+  }
 }
 
 function updateCompass(){
@@ -230,14 +475,16 @@ function updateCompass(){
 
     const distance=getDistance(userLat,userLon,target.lat,target.lon);
     const bearingToTarget=getBearing(userLat,userLon,target.lat,target.lon);
-    
-    // ✅ Fixed orientation: arrow points toward where to turn
-    const relative=(compassHeading - bearingToTarget + 360) % 360;
+    const relative=(bearingToTarget - compassHeading + 360) % 360;
 
-    let direction='Ahead';
-    if(relative>20 && relative<180) direction='Slight left';
-    else if(relative>=180 && relative<340) direction='Slight right';
-    else if(relative<=20 || relative>=340) direction='On target';
+    let direction='Straight ahead';
+    if(relative>10 && relative<=45) direction='Slight right';
+    else if(relative>45 && relative<=90) direction='Right';
+    else if(relative>90 && relative<=135) direction='Sharp right';
+    else if(relative>135 && relative<225) direction='Behind you';
+    else if(relative>=225 && relative<270) direction='Sharp left';
+    else if(relative>=270 && relative<315) direction='Left';
+    else if(relative>=315 && relative<350) direction='Slight left';
 
     arrow.style.transform=`rotate(${relative}deg)`;
     dirText.textContent=`${direction} - ${Math.round(distance)}m`;
@@ -260,8 +507,9 @@ function getBearing(lat1,lon1,lat2,lon2){
   return (Math.atan2(y,x)*180/Math.PI+360)%360;
 }
 
-setInterval(updateCompass,2000);
+setInterval(updateCompass,500);
 
+// Compass navigation
 document.getElementById('btnFirst').onclick=()=>{ currentIndex=0; showToast('First target'); };
 document.getElementById('btnPrev').onclick=()=>{ if(currentIndex>0) currentIndex--; showToast('Previous'); };
 document.getElementById('btnNext').onclick=()=>{ if(currentIndex<getTargets().length-1) currentIndex++; showToast('Next'); };
