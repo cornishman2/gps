@@ -610,33 +610,41 @@ function showEditTargetModal(target){
   };
 }
 
-function addImageToTarget(target){
-  const input=document.createElement('input');
-  input.type='file';
-  input.accept='image/*';
-  input.multiple=false;
-  
-  input.onchange=(e)=>{
-    const file=e.target.files[0];
-    if(!file)return;
-    
-    if(!target.images)target.images=[];
-    
-    showToast('📸 Processing image...');
-    
-    const reader=new FileReader();
-    reader.onload=(ev)=>{
-      target.images.push(ev.target.result);
-      save();
-      renderTargets();
-      showToast('✅ Image added successfully');
+function addImageToTarget(target) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = false;
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!target.images) target.images = [];
+        showToast('📸 Processing image...');
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const newImage = ev.target.result;
+            target.images.push(newImage);
+            // Update the image gallery
+            const gallery = document.getElementById(`gallery-${target.id}`);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'gallery-image-wrapper';
+            const imgEl = document.createElement('img');
+            imgEl.src = newImage;
+            imgEl.className = 'gallery-image';
+            imgEl.dataset.target = target.id;
+            imgEl.dataset.index = target.images.length - 1;
+            imgEl.alt = `Find photo ${target.images.length}`;
+            wrapper.appendChild(imgEl);
+            gallery.insertBefore(wrapper, gallery.lastChild); // Insert before the add button
+            save();
+            showToast('✅ Image added successfully');
+        };
+        reader.onerror = () => {
+            showToast('❌ Failed to process image');
+        };
+        reader.readAsDataURL(file);
     };
-    reader.onerror=()=>{
-      showToast('❌ Failed to process image');
-    };
-    reader.readAsDataURL(file);
-  };
-  input.click();
+    input.click();
 }
 
 function openLightbox(images,startIndex,target){
