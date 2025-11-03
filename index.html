@@ -83,10 +83,6 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 .gallery-image-wrapper{position:relative;width:120px;height:120px;flex-shrink:0}
 .gallery-image{width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;display:block}
 .gallery-image:hover{transform:scale(1.05);border-color:var(--accent)}
-.delete-image-btn{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;background:var(--danger);border:2px solid white;color:white;font-size:18px;font-weight:bold;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;z-index:10;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.gallery-image-wrapper:hover .delete-image-btn,.gallery-image-wrapper.touch-active .delete-image-btn{opacity:1;visibility:visible}
-.delete-image-btn{opacity:0;visibility:hidden}
-.delete-image-btn:active{background:#dc2626;transform:scale(1.15)}
 .image-processing{width:120px;height:120px;border-radius:8px;border:2px solid var(--accent);background:var(--glass);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;flex-shrink:0}
 .spinner{width:32px;height:32px;border:3px solid var(--glass);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -103,6 +99,7 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 .lightbox-nav:hover{background:rgba(255,255,255,0.2)}
 .lightbox-prev{left:-60px}
 .lightbox-next{right:-60px}
+.lightbox-actions{display:flex;gap:12px;justify-content:center;margin-top:16px}
 .lightbox-counter{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);color:white;font-size:14px}
 
 .compass-screen{text-align:center}
@@ -259,6 +256,10 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
     <img id="lightboxImage" class="lightbox-image" src="" alt="Full size" />
     <button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
     <div class="lightbox-counter" id="lightboxCounter"></div>
+    <div class="lightbox-actions">
+      <button class="btn btn-secondary" id="lightboxChange">🔄 Change</button>
+      <button class="btn btn-danger" id="lightboxDelete">🗑️ Delete</button>
+    </div>
   </div>
 </div>
 
@@ -308,6 +309,8 @@ const lightboxClose=document.getElementById('lightboxClose');
 const lightboxPrev=document.getElementById('lightboxPrev');
 const lightboxNext=document.getElementById('lightboxNext');
 const lightboxCounter=document.getElementById('lightboxCounter');
+const lightboxChange=document.getElementById('lightboxChange');
+const lightboxDelete=document.getElementById('lightboxDelete');
 const modal=document.getElementById('modal');
 const modalTitle=document.getElementById('modalTitle');
 const modalBody=document.getElementById('modalBody');
@@ -359,6 +362,7 @@ let hasVibrated=false;
 let currentScreen='home';
 let currentLightboxImages=[];
 let currentLightboxIndex=0;
+let currentLightboxTarget=null;
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('💾 Saved')}
@@ -514,10 +518,13 @@ function renderTargets(){
       t.images.forEach((img,idx)=>{
         const wrapper=document.createElement('div');
         wrapper.className='gallery-image-wrapper';
-        wrapper.innerHTML=`
-          <img src="${img}" class="gallery-image" data-target="${t.id}" data-index="${idx}" alt="Find photo ${idx+1}" />
-          <div class="delete-image-btn" data-target="${t.id}" data-index="${idx}">×</div>
-        `;
+        const imgEl=document.createElement('img');
+        imgEl.src=img;
+        imgEl.className='gallery-image';
+        imgEl.dataset.target=t.id;
+        imgEl.dataset.index=idx;
+        imgEl.alt=`Find photo ${idx+1}`;
+        wrapper.appendChild(imgEl);
         gallery.appendChild(wrapper);
       });
     }
@@ -536,22 +543,7 @@ function renderTargets(){
       const targetId=img.dataset.target;
       const index=parseInt(img.dataset.index);
       const target=open.targets.find(t=>t.id===targetId);
-      if(target&&target.images)openLightbox(target.images,index);
-    });
-  });
-  
-  targetsListEl.querySelectorAll('.delete-image-btn').forEach(btn=>{
-    btn.addEventListener('click',(e)=>{
-      e.stopPropagation();
-      const targetId=btn.dataset.target;
-      const index=parseInt(btn.dataset.index);
-      const target=open.targets.find(t=>t.id===targetId);
-      if(target&&confirm('Delete this image?')){
-        target.images.splice(index,1);
-        save();
-        renderTargets();
-        showToast('🗑️ Image deleted');
-      }
+      if(target&&target.images)openLightbox(target.images,index,target);
     });
   });
   
@@ -559,7 +551,7 @@ function renderTargets(){
     btn.addEventListener('click',()=>{
       const targetId=btn.dataset.target;
       const target=open.targets.find(t=>t.id===targetId);
-      if(target)addImagesToTarget(target);
+      if(target)addImageToTarget(target);
     });
   });
 }
@@ -618,78 +610,54 @@ function showEditTargetModal(target){
   };
 }
 
-function addImagesToTarget(target){
+function addImageToTarget(target){
   const input=document.createElement('input');
   input.type='file';
   input.accept='image/*';
-  input.multiple=true;
+  input.multiple=false;
   input.onchange=async(e)=>{
-    const files=Array.from(e.target.files);
-    if(!files.length)return;
+    const file=e.target.files[0];
+    if(!file)return;
     
     if(!target.images)target.images=[];
     
     const gallery=document.getElementById(`gallery-${target.id}`);
     if(!gallery)return;
     
-    let processedCount=0;
-    const totalFiles=files.length;
+    const processingDiv=document.createElement('div');
+    processingDiv.className='image-processing';
+    processingDiv.innerHTML=`
+      <div class="spinner"></div>
+      <div style="font-size:12px;color:var(--muted)">Processing...</div>
+    `;
     
-    for(const file of files){
-      const processingDiv=document.createElement('div');
-      processingDiv.className='image-processing';
-      processingDiv.innerHTML=`
-        <div class="spinner"></div>
-        <div style="font-size:12px;color:var(--muted)">${processedCount+1}/${totalFiles}</div>
-      `;
-      
-      const addBtn=gallery.querySelector('.add-image-btn');
-      if(addBtn){
-        gallery.insertBefore(processingDiv,addBtn);
-      }else{
-        gallery.appendChild(processingDiv);
-      }
-      
-      await new Promise((resolve)=>{
-        const reader=new FileReader();
-        reader.onload=(ev)=>{
-          target.images.push(ev.target.result);
-          processedCount++;
-          
-          processingDiv.innerHTML=`
-            <div style="font-size:24px;color:var(--accent)">✓</div>
-            <div style="font-size:12px;color:var(--accent)">Done</div>
-          `;
-          
-          setTimeout(()=>{
-            save();
-            renderTargets();
-            if(processedCount===totalFiles){
-              showToast(`✅ ${totalFiles} image(s) added successfully`);
-            }
-            resolve();
-          },300);
-        };
-        reader.onerror=()=>{
-          processingDiv.innerHTML=`
-            <div style="font-size:24px;color:var(--danger)">✗</div>
-            <div style="font-size:12px;color:var(--danger)">Failed</div>
-          `;
-          setTimeout(()=>{
-            processingDiv.remove();
-            resolve();
-          },1000);
-        };
-        reader.readAsDataURL(file);
-      });
+    const addBtn=gallery.querySelector('.add-image-btn');
+    if(addBtn){
+      gallery.insertBefore(processingDiv,addBtn);
+    }else{
+      gallery.appendChild(processingDiv);
     }
+    
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      target.images.push(ev.target.result);
+      save();
+      renderTargets();
+      showToast('✅ Image added successfully');
+    };
+    reader.onerror=()=>{
+      processingDiv.remove();
+      showToast('❌ Failed to process image');
+    };
+    reader.readAsDataURL(file);
   };
   input.click();
 }
 
-function openLightbox(images,startIndex){
+function openLightbox(images,startIndex,target){
   currentLightboxImages=images;
   currentLightboxIndex=startIndex;
+  currentLightboxTarget=target;
   showLightboxImage();
   lightbox.classList.add('active');
 }
