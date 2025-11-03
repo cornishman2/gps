@@ -236,7 +236,9 @@ function updateCompass(){
 
     const distance=getDistance(userLat,userLon,target.lat,target.lon);
     const bearingToTarget=getBearing(userLat,userLon,target.lat,target.lon);
-    const relative=(bearingToTarget - compassHeading + 360) % 360;
+    
+    // Fix arrow orientation by adding 180°
+    const relative=(bearingToTarget - compassHeading + 360 + 180) % 360;
 
     let direction='Ahead';
     if(relative>20 && relative<180) direction='Slight right';
