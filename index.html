@@ -816,7 +816,7 @@ function handleOrientation(e){
   if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
   let x=0,y=0;
   headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
-  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
+  smoothedHeading=(toDeg(Math.atan2(y,x))+360+180)%360; //Added 180, Laurence
   headingEl.textContent=Math.round(smoothedHeading);
 }
 if(window.DeviceOrientationEvent)window.addEventListener('deviceorientation',handleOrientation);
