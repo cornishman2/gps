@@ -569,6 +569,7 @@ function updateNavImmediate(){
 setInterval(()=>{ if(lastPosition) updateNavImmediate(); }, NAV_INTERVAL_MS);
 
 // --- Orientation handling ---
+// --- Orientation handling ---
 function getScreenRotationDeg(){
   const a = (screen.orientation && typeof screen.orientation.angle === 'number')
     ? screen.orientation.angle
@@ -623,38 +624,6 @@ function handleOrientation(e){
   setDebug();           // <-- important: refresh your debug panel
 }
 
-// --- Enable device orientation events ---
-if (window.DeviceOrientationEvent) {
-  // Some browsers (like iOS/Chrome) require explicit permission first
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    const permBtn = document.createElement('button');
-    permBtn.textContent = 'Enable Compass';
-    permBtn.className = 'btn btn-primary btn-sm';
-    permBtn.style.marginTop = '8px';
-    permBtn.onclick = async () => {
-      try {
-        const res = await DeviceOrientationEvent.requestPermission();
-        if (res === 'granted') {
-          window.addEventListener('deviceorientation', handleOrientation);
-          permBtn.remove();
-          showToast('🧭 Orientation enabled');
-        } else {
-          alert('Orientation permission denied');
-        }
-      } catch (err) {
-        alert('Orientation error: ' + err);
-      }
-    };
-
-    // Attach the button to the debug panel so it's always visible
-    const dbg = document.getElementById('debugPanel') || document.body;
-    dbg.appendChild(permBtn);
-  } else {
-    // Standard desktop / Android browsers
-    window.addEventListener('deviceorientation', handleOrientation);
-  }
-}
-
 // --- GPS watch ---
 function startGPS(){
   if(!navigator.geolocation){
@@ -701,142 +670,39 @@ function setDebug(){
   document.getElementById('debugTarget').textContent = `Target: ${t? t.lat.toFixed(6)+', '+t.lng.toFixed(6) : '—'}`;
 }
 
-// --- Compass target selectors ---
-btnFirstTarget.onclick=()=>{
-  const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
-  if(!open.targets.length){alert('⚠️ No targets');return;}
-  selectedTargetId=open.targets[0].id; updateNavImmediate(); showToast('⏮️ First target');
-};
-btnPrevTarget.onclick=()=>{
-  const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
-  if(!open.targets.length){alert('⚠️ No targets');return;}
-  if(!selectedTargetId){selectedTargetId=open.targets[0].id;}
-  else{
-    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
-    selectedTargetId = idx>0 ? open.targets[idx-1].id : open.targets[open.targets.length-1].id;
-  }
-  updateNavImmediate();
-  const t=open.targets.find(x=>x.id===selectedTargetId);
-  showToast('◀️ '+(t.notes||'Target'));
-};
-btnNextTarget.onclick=()=>{
-  const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
-  if(!open.targets.length){alert('⚠️ No targets');return;}
-  if(!selectedTargetId){selectedTargetId=open.targets[0].id;}
-  else{
-    const idx=open.targets.findIndex(x=>x.id===selectedTargetId);
-    selectedTargetId = idx<open.targets.length-1 ? open.targets[idx+1].id : open.targets[0].id;
-  }
-  updateNavImmediate();
-  const t=open.targets.find(x=>x.id===selectedTargetId);
-  showToast('▶️ '+(t.notes||'Target'));
-};
-btnLastTarget.onclick=()=>{
-  const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
-  if(!open.targets.length){alert('⚠️ No targets');return;}
-  selectedTargetId=open.targets[open.targets.length-1].id; updateNavImmediate(); showToast('⏭️ Last target');
-};
-
-btnMarkFound.onclick=()=>{
-  const open=getOpenSurvey();
-  if(!open||!selectedTargetId){alert('⚠️ Select a target first');return;}
-  const t=open.targets.find(x=>x.id===selectedTargetId); if(!t)return;
-
-  modalTitle.textContent='Mark as Found';
-  modalBody.innerHTML=`
-    <div style="margin-bottom:16px">
-      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">What did you find?</label>
-      <input type="text" id="foundWhat" value="${escapeHtml(t.foundNote||'')}" placeholder="e.g., Gold ring, Roman coin" style="width:100%" />
-    </div>
-    <div style="margin-bottom:16px">
-      <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
-      <textarea id="foundDesc" placeholder="Add details about your find..." style="width:100%">${escapeHtml(t.description||'')}</textarea>
-    </div>`;
-  modal.classList.add('active');
-
-  modalConfirm.onclick=()=>{
-    t.found=true;
-    t.foundNote=document.getElementById('foundWhat').value;
-    t.description=document.getElementById('foundDesc').value;
-    save();renderTargets(); modal.classList.remove('active');
-    showToast('✅ Marked as found!');
-    if(confirm('📸 Add photos of your find?')) addImageToTarget(t);
-  };
-  modalCancel.onclick=()=>{modal.classList.remove('active');};
-};
-
-// --- New/Close Survey buttons ---
-btnNewSurvey.onclick=()=>{
-  const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
-  if(!name)return;
-  createSurvey(name);
-  showToast('✨ Survey created');
-};
-btnNewSurveyAdd.onclick=()=>{
-  if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
-  const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
-  if(!name)return;
-  const s=createSurvey(name);
-  const note=prompt('First target name:','')||'';
-  s.targets.push({
-    id:uid('t_'),
-    lat:lastPosition.coords.latitude,
-    lng:lastPosition.coords.longitude,
-    notes:note, description:'',
-    detectorist:data.detectoristName||'',
-    detector:data.detectorUsed||'',
-    createdAt:Date.now(), found:false, images:[]
-  });
-  save();
-  showToast('✅ Survey + target created');
-  renderTargets();
-};
-btnCloseSurvey.onclick=()=>{
-  const o=getOpenSurvey(); if(!o){alert('⚠️ No open survey');return;}
-  if(!confirm('Close the current survey?'))return;
-  o.status='Closed'; save(); renderSurveys(); showToast('🔒 Survey closed');
-};
-
-// --- Export / Import / Clear ---
-btnExport.onclick=()=>{
-  const txt=JSON.stringify(data,null,2);
-  const blob=new Blob([txt],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`metal_finder_${new Date().toISOString().slice(0,10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},2000);
-  showToast('💾 Data exported');
-};
-btnImport.onclick=()=>importFileEl.click();
-importFileEl.onchange=async e=>{
-  const f=e.target.files[0]; if(!f)return;
-  try{
-    const txt=await f.text();
-    const obj=JSON.parse(txt);
-    if(obj&&obj.surveys){
-      if(!confirm('Import data? This will merge with existing data.'))return;
-      data=obj; save(); renderSurveys(); showToast('✅ Data imported');
-    }else{
-      alert('Invalid data format');
-    }
-  }catch(err){
-    alert('Import failed: '+err.message);
-  }
-};
-btnClear.onclick=()=>{
-  if(!confirm('⚠️ Clear ALL data? This cannot be undone!'))return;
-  if(!confirm('Are you absolutely sure?'))return;
-  data={surveys:[]}; save(); renderSurveys(); showToast('🗑️ All data cleared');
-};
-
 // --- Settings inputs ---
 detectoristNameEl.value=data.detectoristName||'';
 detectorUsedEl.value=data.detectorUsed||'';
 detectoristNameEl.oninput=()=>{data.detectoristName=detectoristNameEl.value;save()};
 detectorUsedEl.oninput=()=>{data.detectorUsed=detectorUsedEl.value;save()};
+
+// --- Enable device orientation events (universal) ---
+if (window.DeviceOrientationEvent) {
+  // Always attach listener immediately
+  window.addEventListener('deviceorientation', handleOrientation);
+
+  // If this browser supports requestPermission(), show a button just in case
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const permBtn = document.createElement('button');
+    permBtn.textContent = 'Enable Compass';
+    permBtn.className = 'btn btn-primary btn-sm';
+    permBtn.style.marginTop = '8px';
+    permBtn.onclick = async () => {
+      try {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res === 'granted') {
+          showToast('🧭 Orientation enabled');
+        } else {
+          alert('Orientation permission denied');
+        }
+      } catch (err) {
+        alert('Orientation error: ' + err);
+      }
+    };
+    const dbg = document.getElementById('debugPanel') || document.body;
+    dbg.appendChild(permBtn);
+  }
+}
 
 // --- Init ---
 renderSurveys();
