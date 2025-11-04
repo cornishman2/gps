@@ -709,9 +709,9 @@ renderSurveys();
 startGPS();
 setDebug(); // prime the debug panel
 // --- Wake the orientation sensors early ---
-if (window.DeviceOrientationEvent) {
+//if (window.DeviceOrientationEvent) {
   // Trigger a harmless read to wake up the sensor fusion pipeline
-  window.addEventListener('deviceorientation', () => {}, { once: true });
-}
+  //window.addEventListener('deviceorientation', () => {}, { once: true });
+//}
 
 })();
