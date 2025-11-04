@@ -83,7 +83,7 @@ function bearingTo(lat1, lon1, lat2, lon2) {
 
 // =============== DEBUG PANEL ==================
 let debugPanelEl=null;
-let debugOpen=false; // default hidden
+let debugOpen=true; // default hidden
 
 function normalizeDeltaLonDeg(lon2, lon1) {
   return ((lon2 - lon1 + 540) % 360) - 180;
