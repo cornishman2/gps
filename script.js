@@ -161,19 +161,53 @@ function addSurveyItem(s,cls){
   item.querySelectorAll('button').forEach(b=>b.addEventListener('click',surveyAction));
 }
 function surveyAction(e){
-  const a=e.currentTarget.dataset.action;
-  const id=e.currentTarget.dataset.id;
-  const s=data.surveys.find(x=>x.id===id);
-  if(!s)return;
-  if(a==='view'){showScreen('targets');renderTargets();}
-  if(a==='open'){setOnlyOpen(id);save();renderSurveys();showToast('✅ Set as open');}
-  if(a==='close'){s.status='Closed';save();renderSurveys();showToast('🔒 Closed');}
-  if(a==='archive'){s.archived=true;s.status='Closed';save();renderSurveys();showToast('📦 Archived');}
-  if(a==='restore'){s.archived=false;s.status='Closed';save();renderSurveys();showToast('✅ Restored');}
-  if(a==='delete'){
-    if(!confirm('Delete this survey and all its targets? This cannot be undone.'))return;
-    data.surveys=data.surveys.filter(x=>x.id!==id);
-    save();renderSurveys();showToast('🗑️ Deleted');
+  e.preventDefault();
+  const btn = e.currentTarget;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+  const surveyIndex = data.surveys.findIndex(x => x.id === id);
+  if (surveyIndex === -1) return;
+
+  const s = data.surveys[surveyIndex];
+
+  switch (action) {
+    case 'view':
+      showScreen('targets');
+      renderTargets();
+      break;
+    case 'open':
+      setOnlyOpen(id);
+      save();
+      renderSurveys();
+      showToast('✅ Set as open');
+      break;
+    case 'close':
+      s.status = 'Closed';
+      save();
+      renderSurveys();
+      showToast('🔒 Closed');
+      break;
+    case 'archive':
+      s.archived = true;
+      s.status = 'Closed';
+      save();
+      renderSurveys();
+      showToast('📦 Archived');
+      break;
+    case 'restore':
+      s.archived = false;
+      s.status = 'Closed';
+      save();
+      renderSurveys();
+      showToast('✅ Restored');
+      break;
+    case 'delete':
+      if (!confirm(`Delete survey "${s.name}" and all its targets? This cannot be undone.`)) return;
+      data.surveys.splice(surveyIndex, 1);
+      save();
+      renderSurveys();
+      showToast('🗑️ Survey deleted');
+      break;
   }
 }
 // --- Helpers for angles & distances (used by compass) ---
