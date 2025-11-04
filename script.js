@@ -622,6 +622,39 @@ function handleOrientation(e){
   updateNavImmediate(); // keep arrow/distance in sync
   setDebug();           // <-- important: refresh your debug panel
 }
+
+// --- Enable device orientation events ---
+if (window.DeviceOrientationEvent) {
+  // Some browsers (like iOS/Chrome) require explicit permission first
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const permBtn = document.createElement('button');
+    permBtn.textContent = 'Enable Compass';
+    permBtn.className = 'btn btn-primary btn-sm';
+    permBtn.style.marginTop = '8px';
+    permBtn.onclick = async () => {
+      try {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res === 'granted') {
+          window.addEventListener('deviceorientation', handleOrientation);
+          permBtn.remove();
+          showToast('🧭 Orientation enabled');
+        } else {
+          alert('Orientation permission denied');
+        }
+      } catch (err) {
+        alert('Orientation error: ' + err);
+      }
+    };
+
+    // Attach the button to the debug panel so it's always visible
+    const dbg = document.getElementById('debugPanel') || document.body;
+    dbg.appendChild(permBtn);
+  } else {
+    // Standard desktop / Android browsers
+    window.addEventListener('deviceorientation', handleOrientation);
+  }
+}
+
 // --- GPS watch ---
 function startGPS(){
   if(!navigator.geolocation){
