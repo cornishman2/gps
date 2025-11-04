@@ -569,25 +569,66 @@ function updateNavImmediate(){
 setInterval(()=>{ if(lastPosition) updateNavImmediate(); }, NAV_INTERVAL_MS);
 
 // --- Orientation handling ---
-function handleOrientation(e){
-  let head=null;
-  if(typeof e.webkitCompassHeading==='number') head=e.webkitCompassHeading;
-  else if(typeof e.alpha==='number') head=(360-e.alpha);
-  orientationActive = !(head===null||isNaN(head));
-  if(!orientationActive){ setDebug(); return; }
-
-  headingSamples.push((head+360)%360);
-  if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
-
-  let x=0,y=0;
-  headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
-  smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
-  headingEl.textContent=Math.round(smoothedHeading);
-
-  updateNavImmediate();
+// Put this helper near your other utilities:
+function getScreenRotationDeg(){
+  // Chrome/Android uses screen.orientation.angle; fallback for older browsers
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number')
+    ? screen.orientation.angle
+    : (typeof window.orientation === 'number' ? window.orientation : 0);
+  // Normalize to 0..360
+  return ((a % 360) + 360) % 360;
 }
-if(window.DeviceOrientationEvent) window.addEventListener('deviceorientation',handleOrientation);
 
+// Optional: if you want to nudge magnetic -> true north later, set this.
+// Around Cornwall, declination is typically small (≈ -1° to -3°). Leave 0 for now.
+const DECLINATION_DEG = 0;
+
+// ✅ Replacement: corrects heading for screen rotation and normalizes
+function handleOrientation(e){
+  let heading = null;
+
+  if (typeof e.webkitCompassHeading === 'number') {
+    // iOS: already a compass bearing (clockwise from true north or magnetic depending on device)
+    heading = e.webkitCompassHeading; // 0..360
+  } else if (typeof e.alpha === 'number') {
+    // Most Android/Chrome devices: alpha is device-relative; adjust by screen rotation
+    const alpha = e.alpha; // 0..360 clockwise, device coordinate frame
+    const rot = getScreenRotationDeg(); // 0, 90, 180, 270 depending on orientation
+    // Convert device alpha to a compass-like heading:
+    // - add screen rotation so "top of device" maps to "top of screen"
+    // - invert to make it a bearing clockwise from North
+    heading = (360 - ((alpha + rot) % 360)) % 360;
+  }
+
+  // If we still didn't get a usable heading, mark sensor as inactive
+  if (heading === null || isNaN(heading)) {
+    orientationActive = false;
+    updateDebugReadout?.();
+    return;
+  }
+
+  orientationActive = true;
+
+  // Apply optional declination offset (if you choose to use true north later)
+  heading = (heading + DECLINATION_DEG + 360) % 360;
+
+  // Smooth the heading
+  headingSamples.push(heading);
+  if (headingSamples.length > HEADING_SMOOTH) headingSamples.shift();
+
+  let x = 0, y = 0;
+  for (const h of headingSamples) {
+    const r = h * Math.PI / 180;
+    x += Math.cos(r);
+    y += Math.sin(r);
+  }
+  smoothedHeading = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+  // Update UI + nav
+  if (typeof headingEl !== 'undefined') headingEl.textContent = Math.round(smoothedHeading);
+  updateNavImmediate?.();
+  updateDebugReadout?.();
+}
 // --- GPS watch ---
 function startGPS(){
   if(!navigator.geolocation){
