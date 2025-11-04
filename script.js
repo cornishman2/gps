@@ -1,5 +1,7 @@
 // Metal Finder v4 - Fixed Compass Version with Debug Panel (Visible by Default)
-(function(){
+// Metal Finder v4 - Fixed Compass Version with Debug Panel (Visible by Default)
+document.addEventListener('DOMContentLoaded', () => {
+
 const STORAGE_KEY='metal_finder_v4_data';
 const NAV_INTERVAL_MS=500;
 const HEADING_SMOOTH=6;
@@ -714,4 +716,5 @@ if (window.DeviceOrientationEvent) {
   window.addEventListener('deviceorientation', () => {}, { once: true });
 }
 
-})();
+}); // end of DOMContentLoaded
+
