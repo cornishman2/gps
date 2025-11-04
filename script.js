@@ -369,9 +369,6 @@ function addImageToTarget(target){
 }
 
 // --- Lightbox ---
-let currentLightboxImages=[];
-let currentLightboxIndex=0;
-let currentLightboxTarget=null;
 
 function openLightbox(images,startIndex,target){
   currentLightboxImages=images;
