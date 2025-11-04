@@ -373,7 +373,7 @@ function addImageToTarget(target){
 function openLightbox(images,startIndex,target){
   currentLightboxImages=images;
   currentLightboxIndex=startIndex;
-  currentLightboxTarget=target;
+  currentLightboxTarget=target; 
   showLightboxImage();
   lightbox.classList.add('active');
 }
