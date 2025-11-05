@@ -1,119 +1,131 @@
-// Metal Finder v5 – Working Compass, fixed buttons, no debug panel
-document.addEventListener('DOMContentLoaded', () => {
+// Metal Finder v5 – Part 1: Core Framework
+document.addEventListener("DOMContentLoaded", () => {
+  const STORAGE_KEY = "metal_finder_v5_data";
 
-  const STORAGE_KEY = 'metal_finder_v5_data';
-  const NAV_INTERVAL_MS = 500;
-  const HEADING_SMOOTH = 6;
-
-  const toast = document.getElementById('toast');
+  // --- Element references ---
+  const toast = document.getElementById("toast");
   const screens = {
-    home: document.getElementById('screen-home'),
-    targets: document.getElementById('screen-targets'),
-    compass: document.getElementById('screen-compass'),
-    settings: document.getElementById('screen-settings')
+    home: document.getElementById("screen-home"),
+    targets: document.getElementById("screen-targets"),
+    compass: document.getElementById("screen-compass"),
+    settings: document.getElementById("screen-settings"),
   };
-  const navBtns = [...document.querySelectorAll('.nav-item')];
+  const navBtns = [...document.querySelectorAll(".nav-item")];
+  const surveyListEl = document.getElementById("surveyList");
+  const btnNewSurvey = document.getElementById("btnNewSurvey");
+  const btnNewSurveyAdd = document.getElementById("btnNewSurveyAdd");
+  const btnCloseSurvey = document.getElementById("btnCloseSurvey");
 
-  const surveyListEl = document.getElementById('surveyList');
-  const targetsListEl = document.getElementById('targetsList');
-  const btnNewSurvey = document.getElementById('btnNewSurvey');
-  const btnNewSurveyAdd = document.getElementById('btnNewSurveyAdd');
-  const btnCloseSurvey = document.getElementById('btnCloseSurvey');
-  const btnAddTarget = document.getElementById('btnAddTarget');
-  const btnBatch = document.getElementById('btnBatch');
-  const detectoristNameEl = document.getElementById('detectoristName');
-  const detectorUsedEl = document.getElementById('detectorUsed');
-  const openSurveyNameEl = document.getElementById('openSurveyName');
-  const btnExport = document.getElementById('btnExport');
-  const btnImport = document.getElementById('btnImport');
-  const importFileEl = document.getElementById('importFile');
-  const btnClear = document.getElementById('btnClear');
-  const compassTargetName = document.getElementById('compassTargetName');
-  const headingEl = document.getElementById('heading');
-  const bearingEl = document.getElementById('bearing');
-  const bearingTextEl = document.getElementById('bearingText');
-  const arrowEl = document.getElementById('arrow');
-  const btnNextTarget = document.getElementById('btnNextTarget');
-  const btnPrevTarget = document.getElementById('btnPrevTarget');
-  const btnFirstTarget = document.getElementById('btnFirstTarget');
-  const btnLastTarget = document.getElementById('btnLastTarget');
-  const btnMarkFound = document.getElementById('btnMarkFound');
-
-  // --- Data + State ---
+  // --- State ---
   let data = load();
   data.surveys = data.surveys || [];
-  let lastPosition = null;
-  let selectedTargetId = null;
-  let headingSamples = [];
-  let smoothedHeading = 0;
-  let currentScreen = 'home';
-  let orientationActive = false;
+  let currentScreen = "home";
 
   // --- Utilities ---
-  function uid(p = 'id') { return p + Math.random().toString(36).slice(2, 9); }
-  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); showToast('💾 Saved'); }
-  function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; } }
+  function uid(p = "id") {
+    return p + Math.random().toString(36).slice(2, 9);
+  }
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    showToast("💾 Saved");
+  }
+  function load() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
   function showToast(msg) {
     toast.textContent = msg;
-    toast.style.display = 'block';
+    toast.style.display = "block";
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => toast.style.display = 'none', 2000);
+    toast._t = setTimeout(() => (toast.style.display = "none"), 2000);
   }
-  function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function escapeHtml(t) {
+    const d = document.createElement("div");
+    d.textContent = t;
+    return d.innerHTML;
+  }
 
   // --- Screen navigation ---
   function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.add('hidden'));
-    screens[name].classList.remove('hidden');
-    navBtns.forEach(b => b.classList.toggle('active', b.dataset.screen === name));
+    Object.values(screens).forEach((s) => s.classList.add("hidden"));
+    screens[name].classList.remove("hidden");
+    navBtns.forEach((b) =>
+      b.classList.toggle("active", b.dataset.screen === name)
+    );
     currentScreen = name;
-    if (name === 'home') renderSurveys();
-    if (name === 'targets') renderTargets();
+    if (name === "home") renderSurveys();
   }
-  navBtns.forEach(b => b.addEventListener('click', () => showScreen(b.dataset.screen)));
+  navBtns.forEach((b) =>
+    b.addEventListener("click", () => showScreen(b.dataset.screen))
+  );
 
   // --- Survey Management ---
-  function getOpenSurvey() { return data.surveys.find(s => s.status === 'Open' && !s.archived); }
-  function setOnlyOpen(id) { data.surveys.forEach(s => { s.status = (s.id === id) ? 'Open' : (s.status === 'Open' ? 'Closed' : s.status); }); }
+  function getOpenSurvey() {
+    return data.surveys.find((s) => s.status === "Open" && !s.archived);
+  }
+  function setOnlyOpen(id) {
+    data.surveys.forEach((s) => {
+      s.status =
+        s.id === id ? "Open" : s.status === "Open" ? "Closed" : s.status;
+    });
+  }
   function createSurvey(name) {
     setOnlyOpen(null);
-    const s = { id: uid('s_'), name: name || ('Survey ' + new Date().toLocaleString()), createdAt: Date.now(), status: 'Open', archived: false, targets: [] };
-    data.surveys.push(s); save(); renderSurveys(); return s;
+    const s = {
+      id: uid("s_"),
+      name: name || "Survey " + new Date().toLocaleString(),
+      createdAt: Date.now(),
+      status: "Open",
+      archived: false,
+      targets: [],
+    };
+    data.surveys.push(s);
+    save();
+    renderSurveys();
+    return s;
   }
 
   function renderSurveys() {
-    surveyListEl.innerHTML = '';
-    const open = data.surveys.filter(s => s.status === 'Open' && !s.archived);
-    const closed = data.surveys.filter(s => s.status === 'Closed' && !s.archived);
-    const archived = data.surveys.filter(s => s.archived);
-    const sortByDate = a => a.sort((x, y) => y.createdAt - x.createdAt);
-    sortByDate(open).forEach(s => addSurveyItem(s, 'open'));
-    sortByDate(closed).forEach(s => addSurveyItem(s));
+    surveyListEl.innerHTML = "";
+    const open = data.surveys.filter((s) => s.status === "Open" && !s.archived);
+    const closed = data.surveys.filter((s) => s.status === "Closed" && !s.archived);
+    const archived = data.surveys.filter((s) => s.archived);
+    const sortByDate = (arr) => arr.sort((a, b) => b.createdAt - a.createdAt);
+
+    sortByDate(open).forEach((s) => addSurveyItem(s, "open"));
+    sortByDate(closed).forEach((s) => addSurveyItem(s));
     if (archived.length) {
-      surveyListEl.innerHTML += '<div class="divider">📦 Archived Surveys</div>';
-      sortByDate(archived).forEach(s => addSurveyItem(s, 'archived'));
+      surveyListEl.innerHTML += `<div class="divider">📦 Archived Surveys</div>`;
+      sortByDate(archived).forEach((s) => addSurveyItem(s, "archived"));
     }
     if (!data.surveys.length) {
-      surveyListEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No surveys yet. Create one to get started!</div>';
+      surveyListEl.innerHTML =
+        '<div style="text-align:center;padding:40px;color:var(--muted)">No surveys yet. Create one to get started!</div>';
     }
   }
 
   function addSurveyItem(s, cls) {
-    const item = document.createElement('div');
-    item.className = 'survey-item' + (cls ? ' ' + cls : '');
-    let actions = '';
+    const item = document.createElement("div");
+    item.className = "survey-item" + (cls ? " " + cls : "");
+    let actions = "";
     if (s.archived) {
       actions = `<button class="btn btn-secondary btn-sm" data-action="restore" data-id="${s.id}">Restore</button>`;
     } else {
       actions += `<button class="btn btn-secondary btn-sm" data-action="view" data-id="${s.id}">View</button>`;
-      if (s.status !== 'Open') actions += `<button class="btn btn-secondary btn-sm" data-action="open" data-id="${s.id}">Set Open</button>`;
-      if (s.status === 'Open') actions += `<button class="btn btn-secondary btn-sm" data-action="close" data-id="${s.id}">Close</button>`;
+      if (s.status !== "Open")
+        actions += `<button class="btn btn-secondary btn-sm" data-action="open" data-id="${s.id}">Set Open</button>`;
+      if (s.status === "Open")
+        actions += `<button class="btn btn-secondary btn-sm" data-action="close" data-id="${s.id}">Close</button>`;
       actions += `<button class="btn btn-secondary btn-sm" data-action="archive" data-id="${s.id}">Archive</button>`;
       actions += `<button class="btn btn-danger btn-sm" data-action="delete" data-id="${s.id}">Delete</button>`;
     }
-    const statusBadge = s.status === 'Open'
-      ? '<span class="badge badge-success">● Open</span>'
-      : '<span class="badge badge-muted">Closed</span>';
+    const statusBadge =
+      s.status === "Open"
+        ? '<span class="badge badge-success">● Open</span>'
+        : '<span class="badge badge-muted">Closed</span>';
     item.innerHTML = `
       <div class="item-header">
         <div>
@@ -129,612 +141,85 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="item-actions">${actions}</div>`;
     surveyListEl.appendChild(item);
-    item.querySelectorAll('button').forEach(b => b.addEventListener('click', surveyAction));
+    item.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", surveyAction)
+    );
   }
 
   function surveyAction(e) {
     const btn = e.currentTarget;
     const action = btn.dataset.action;
     const id = btn.dataset.id;
-    const i = data.surveys.findIndex(x => x.id === id);
-    if (i === -1) return;
-    const s = data.surveys[i];
+    const idx = data.surveys.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const s = data.surveys[idx];
 
     switch (action) {
-      case 'view':
-        showScreen('targets'); renderTargets(); break;
-      case 'open':
-        setOnlyOpen(id); save(); renderSurveys(); showToast('✅ Set as open'); break;
-      case 'close':
-        s.status = 'Closed'; save(); renderSurveys(); showToast('🔒 Closed'); break;
-      case 'archive':
-        s.archived = true; s.status = 'Closed'; save(); renderSurveys(); showToast('📦 Archived'); break;
-      case 'restore':
-        s.archived = false; s.status = 'Closed'; save(); renderSurveys(); showToast('✅ Restored'); break;
-      case 'delete':
-        if (!confirm(`Delete survey "${s.name}"?`)) return;
-        data.surveys.splice(i, 1); save(); renderSurveys(); showToast('🗑️ Deleted'); break;
+      case "view":
+        showScreen("targets");
+        break;
+      case "open":
+        setOnlyOpen(id);
+        save();
+        renderSurveys();
+        showToast("✅ Set as open");
+        break;
+      case "close":
+        s.status = "Closed";
+        save();
+        renderSurveys();
+        showToast("🔒 Closed");
+        break;
+      case "archive":
+        s.archived = true;
+        s.status = "Closed";
+        save();
+        renderSurveys();
+        showToast("📦 Archived");
+        break;
+      case "restore":
+        s.archived = false;
+        s.status = "Closed";
+        save();
+        renderSurveys();
+        showToast("✅ Restored");
+        break;
+      case "delete":
+        if (!confirm(`Delete survey “${s.name}”?`)) return;
+        data.surveys.splice(idx, 1);
+        save();
+        renderSurveys();
+        showToast("🗑️ Deleted");
+        break;
     }
   }
 
-  // --- Helpers for angles & distances ---
-  function toRad(v) { return v * Math.PI / 180; }
-  function toDeg(v) { return v * 180 / Math.PI; }
-  function haversineMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371000;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-  function bearingTo(lat1, lon1, lat2, lon2) {
-    const φ1 = toRad(lat1), φ2 = toRad(lat2);
-    const Δλ = toRad(lon2 - lon1);
-    const y = Math.sin(Δλ) * Math.cos(φ2);
-    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-    return (toDeg(Math.atan2(y, x)) + 360) % 360;
-  }
-
-  // --- Compass calculation core ---
-  function getScreenRotationDeg() {
-    const a = (screen.orientation && typeof screen.orientation.angle === 'number')
-      ? screen.orientation.angle
-      : (typeof window.orientation === 'number' ? window.orientation : 0);
-    return ((a % 360) + 360) % 360;
-  }
-
-  const DECLINATION_DEG = 0;
-
-  function handleOrientation(e) {
-    let heading = null;
-    if (typeof e.webkitCompassHeading === 'number') {
-      heading = e.webkitCompassHeading;
-    } else if (typeof e.alpha === 'number') {
-      const rot = getScreenRotationDeg();
-      heading = (360 - ((e.alpha + rot) % 360)) % 360;
-    }
-    if (heading === null || isNaN(heading)) return;
-    orientationActive = true;
-    heading = (heading + DECLINATION_DEG + 360) % 360;
-
-    headingSamples.push(heading);
-    if (headingSamples.length > HEADING_SMOOTH) headingSamples.shift();
-
-    let x = 0, y = 0;
-    for (const h of headingSamples) {
-      const r = h * Math.PI / 180;
-      x += Math.cos(r); y += Math.sin(r);
-    }
-    smoothedHeading = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-    if (headingEl) headingEl.textContent = Math.round(smoothedHeading);
-    updateNavImmediate();
-  }
-
-  if (window.DeviceOrientationEvent) {
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      const permBtn = document.createElement('button');
-      permBtn.textContent = 'Enable Compass';
-      permBtn.className = 'btn btn-primary btn-sm';
-      permBtn.style.marginTop = '8px';
-      permBtn.onclick = async () => {
-        try {
-          const res = await DeviceOrientationEvent.requestPermission();
-          if (res === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation);
-            permBtn.remove();
-            showToast('🧭 Orientation enabled');
-          } else alert('Orientation permission denied');
-        } catch (err) { alert('Orientation error: ' + err); }
-      };
-      document.querySelector('#screen-compass').appendChild(permBtn);
-    } else {
-      window.addEventListener('deviceorientation', handleOrientation);
-    }
-  }
-  // ---------- Lightbox refs (used by Targets gallery) ----------
-  const lightbox = document.getElementById('lightbox');
-  const lightboxImage = document.getElementById('lightboxImage');
-  const lightboxClose = document.getElementById('lightboxClose');
-  const lightboxPrev = document.getElementById('lightboxPrev');
-  const lightboxNext = document.getElementById('lightboxNext');
-  const lightboxCounter = document.getElementById('lightboxCounter');
-  const lightboxChange = document.getElementById('lightboxChange');
-  const lightboxDelete = document.getElementById('lightboxDelete');
-
-  let currentLightboxImages = [];
-  let currentLightboxIndex = 0;
-  let currentLightboxTarget = null;
-
-  // ---------- Targets rendering & actions ----------
-  function renderTargets() {
-    targetsListEl.innerHTML = '';
-    const open = getOpenSurvey();
-    if (!open) {
-      targetsListEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No open survey. Please create or open a survey on the Home screen.</div>';
-      openSurveyNameEl.textContent = 'None';
-      return;
-    }
-
-    openSurveyNameEl.textContent = open.name;
-
-    if (!open.targets.length) {
-      targetsListEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No targets yet. Add your first target!</div>';
-      return;
-    }
-
-    open.targets.forEach(t => {
-      const item = document.createElement('div');
-      item.className = 'target-item';
-
-      const foundBadge = t.found
-        ? `<span class="badge badge-success">✓ Found${t.foundNote ? ' - ' + escapeHtml(t.foundNote) : ''}</span>`
-        : '<span class="badge badge-muted">Not found</span>';
-
-      item.innerHTML = `
-        <div class="item-header">
-          <div style="flex:1">
-            <div class="item-title">${escapeHtml(t.notes || 'Target')}</div>
-            <div class="target-coords">
-              <div class="coord-item">
-                <div class="coord-label">Latitude</div>
-                <div class="coord-value">${t.lat.toFixed(6)}</div>
-              </div>
-              <div class="coord-item">
-                <div class="coord-label">Longitude</div>
-                <div class="coord-value">${t.lng.toFixed(6)}</div>
-              </div>
-            </div>
-            <div style="margin-top:8px">${foundBadge}</div>
-            ${t.description ? `<div class="target-description">${escapeHtml(t.description)}</div>` : ''}
-            <div class="image-gallery" id="gallery-${t.id}"></div>
-          </div>
-        </div>
-        <div class="item-actions">
-          <button class="btn btn-primary btn-sm" data-action="goto" data-id="${t.id}">🧭 Navigate</button>
-          <button class="btn btn-secondary btn-sm" data-action="edit" data-id="${t.id}">✏️ Edit</button>
-          <button class="btn btn-danger btn-sm" data-action="delete" data-id="${t.id}">Delete</button>
-        </div>
-      `;
-
-      targetsListEl.appendChild(item);
-
-      // Gallery
-      const gallery = document.getElementById(`gallery-${t.id}`);
-      if (t.images && t.images.length) {
-        t.images.forEach((img, idx) => {
-          const wrap = document.createElement('div');
-          wrap.className = 'gallery-image-wrapper';
-          const imgEl = document.createElement('img');
-          imgEl.src = img;
-          imgEl.className = 'gallery-image';
-          imgEl.dataset.target = t.id;
-          imgEl.dataset.index = idx;
-          imgEl.alt = `Find photo ${idx + 1}`;
-          wrap.appendChild(imgEl);
-          gallery.appendChild(wrap);
-        });
-      }
-      const addBtn = document.createElement('div');
-      addBtn.className = 'add-image-btn';
-      addBtn.textContent = '+';
-      addBtn.dataset.target = t.id;
-      gallery.appendChild(addBtn);
-    });
-
-    // Button actions
-    targetsListEl.querySelectorAll('button').forEach(b => b.addEventListener('click', targetAction));
-
-    // Open lightbox
-    targetsListEl.querySelectorAll('.gallery-image').forEach(img => {
-      img.addEventListener('click', () => {
-        const open = getOpenSurvey();
-        const targetId = img.dataset.target;
-        const index = parseInt(img.dataset.index, 10);
-        const target = open && open.targets.find(t => t.id === targetId);
-        if (target && target.images) openLightbox(target.images, index, target);
-      });
-    });
-    // Add image
-    targetsListEl.querySelectorAll('.add-image-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const open = getOpenSurvey();
-        const targetId = btn.dataset.target;
-        const target = open && open.targets.find(t => t.id === targetId);
-        if (target) addImageToTarget(target);
-      });
-    });
-  }
-
-  function targetAction(e) {
-    const a = e.currentTarget.dataset.action;
-    const id = e.currentTarget.dataset.id;
-    const open = getOpenSurvey();
-    if (!open) return;
-    const t = open.targets.find(x => x.id === id);
-    if (!t) return;
-
-    if (a === 'goto') {
-      selectedTargetId = id;
-      compassTargetName.textContent = t.notes || 'Target';
-      showScreen('compass');
-      updateNavImmediate();
-      showToast('🧭 Navigation started');
-    }
-    if (a === 'edit') {
-      showEditTargetModal(t);
-    }
-    if (a === 'delete') {
-      if (!confirm('Delete this target?')) return;
-      open.targets = open.targets.filter(x => x.id !== id);
-      if (selectedTargetId === id) selectedTargetId = null;
-      save(); renderTargets(); showToast('🗑️ Deleted');
-    }
-  }
-
-  function showEditTargetModal(target) {
-    modalTitle.textContent = 'Edit Target';
-    modalBody.innerHTML = `
-      <div style="margin-bottom:16px">
-        <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Name</label>
-        <input type="text" id="editName" value="${escapeHtml(target.notes || '')}" style="width:100%" />
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
-        <textarea id="editDesc" style="width:100%">${escapeHtml(target.description || '')}</textarea>
-      </div>
-    `;
-    modal.classList.add('active');
-
-    modalConfirm.onclick = () => {
-      target.notes = document.getElementById('editName').value;
-      target.description = document.getElementById('editDesc').value;
-      save(); renderTargets();
-      modal.classList.remove('active');
-      showToast('✅ Updated');
-    };
-    modalCancel.onclick = () => { modal.classList.remove('active'); };
-  }
-
-  function addImageToTarget(target) {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*'; input.multiple = false;
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (!target.images) target.images = [];
-      showToast('📸 Processing image...');
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        target.images.push(ev.target.result);
-        save(); renderTargets();
-        showToast('✅ Image added successfully');
-      };
-      reader.onerror = () => { showToast('❌ Failed to process image'); };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  }
-
-  // ---------- Lightbox controls ----------
-  function openLightbox(images, startIndex, target) {
-    currentLightboxImages = images;
-    currentLightboxIndex = startIndex;
-    currentLightboxTarget = target;
-    showLightboxImage();
-    lightbox.classList.add('active');
-  }
-  function showLightboxImage() {
-    if (!currentLightboxImages.length) return;
-    lightboxImage.src = currentLightboxImages[currentLightboxIndex];
-    lightboxCounter.textContent = `${currentLightboxIndex + 1} / ${currentLightboxImages.length}`;
-    lightboxPrev.style.display = currentLightboxImages.length > 1 ? 'flex' : 'none';
-    lightboxNext.style.display = currentLightboxImages.length > 1 ? 'flex' : 'none';
-  }
-  lightboxClose.onclick = () => lightbox.classList.remove('active');
-  lightbox.onclick = (e) => { if (e.target === lightbox) lightbox.classList.remove('active'); };
-  lightboxPrev.onclick = () => {
-    currentLightboxIndex = (currentLightboxIndex - 1 + currentLightboxImages.length) % currentLightboxImages.length;
-    showLightboxImage();
-  };
-  lightboxNext.onclick = () => {
-    currentLightboxIndex = (currentLightboxIndex + 1) % currentLightboxImages.length;
-    showLightboxImage();
-  };
-  lightboxChange.onclick = () => {
-    if (!currentLightboxTarget) return;
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*'; input.multiple = false;
-    input.onchange = (e) => {
-      const file = e.target.files[0]; if (!file) return;
-      lightbox.classList.remove('active');
-      showToast('📸 Processing new image...');
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        currentLightboxTarget.images[currentLightboxIndex] = ev.target.result;
-        save(); renderTargets();
-        showToast('✅ Image changed successfully');
-      };
-      reader.onerror = () => { showToast('❌ Failed to process image'); };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  };
-  lightboxDelete.onclick = () => {
-    if (!currentLightboxTarget) return;
-    if (!confirm('Delete this image?')) return;
-    currentLightboxTarget.images.splice(currentLightboxIndex, 1);
-    save(); lightbox.classList.remove('active'); renderTargets();
-    showToast('🗑️ Image deleted');
-  };
-
-  // ---------- Add Target & Batch ----------
-  btnAddTarget.addEventListener('click', () => {
-    const open = getOpenSurvey();
-    if (!open) { alert('⚠️ No open survey. Please create or open a survey first.'); return; }
-    if (!lastPosition) { alert('⚠️ No GPS fix yet. Please wait for GPS signal.'); return; }
-
-    modalTitle.textContent = 'Add New Target';
-    modalBody.innerHTML = `
-      <div style="margin-bottom:16px">
-        <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Name (optional)</label>
-        <input type="text" id="newTargetName" placeholder="e.g., Roman coin signal" style="width:100%" />
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description (optional)</label>
-        <textarea id="newTargetDesc" placeholder="Add notes about this location..." style="width:100%"></textarea>
-      </div>
-    `;
-    modal.classList.add('active');
-
-    modalConfirm.onclick = () => {
-      const name = document.getElementById('newTargetName').value || '';
-      const desc = document.getElementById('newTargetDesc').value || '';
-      const t = {
-        id: uid('t_'),
-        lat: lastPosition.coords.latitude,
-        lng: lastPosition.coords.longitude,
-        notes: name, description: desc,
-        detectorist: data.detectoristName || '',
-        detector: data.detectorUsed || '',
-        createdAt: Date.now(), found: false, images: []
-      };
-      open.targets.push(t);
-      save(); renderTargets(); modal.classList.remove('active');
-      showToast('✅ Target added');
-    };
-    modalCancel.onclick = () => { modal.classList.remove('active'); };
-  });
-
-  btnBatch.addEventListener('click', (() => {
-    let batchInterval = null;
-    return () => {
-      const open = getOpenSurvey();
-      if (!open) { alert('⚠️ No open survey'); return; }
-
-      if (!batchInterval) {
-        btnBatch.innerHTML = '⏹️ Stop Batch';
-        btnBatch.classList.remove('btn-secondary');
-        btnBatch.classList.add('btn-danger');
-        batchInterval = setInterval(() => {
-          if (lastPosition) {
-            open.targets.push({
-              id: uid('t_'),
-              lat: lastPosition.coords.latitude,
-              lng: lastPosition.coords.longitude,
-              notes: '', description: '',
-              detectorist: data.detectoristName || '',
-              detector: data.detectorUsed || '',
-              createdAt: Date.now(), found: false, images: []
-            });
-            save(); renderTargets();
-          }
-        }, 3000);
-        showToast('🔄 Batch mode started');
-      } else {
-        clearInterval(batchInterval);
-        batchInterval = null;
-        btnBatch.innerHTML = '🔄 Batch Add';
-        btnBatch.classList.remove('btn-danger');
-        btnBatch.classList.add('btn-secondary');
-        showToast('⏹️ Batch mode stopped');
-      }
-    };
-  })());
-
-  // ---------- Compass updates ----------
-  function updateNavImmediate() {
-    const open = getOpenSurvey();
-    if (!open || !selectedTargetId || !lastPosition) return;
-    const t = open.targets.find(x => x.id === selectedTargetId);
-    if (!t) return;
-
-    const lat = lastPosition.coords.latitude, lon = lastPosition.coords.longitude;
-    const d = haversineMeters(lat, lon, t.lat, t.lng);
-    const brg = bearingTo(lat, lon, t.lat, t.lng);
-    bearingEl.textContent = Math.round(brg);
-    compassTargetName.textContent = t.notes || 'Target';
-
-    const rel = ((brg - smoothedHeading) + 540) % 360 - 180;
-    arrowEl.style.transform = `rotate(${rel}deg)`;
-
-    let dir = '';
-    if (rel >= -10 && rel <= 10) dir = 'Straight ahead';
-    else if (rel > 10 && rel <= 45) dir = 'Slight right';
-    else if (rel > 45 && rel <= 90) dir = 'Right';
-    else if (rel > 90 && rel <= 135) dir = 'Sharp right';
-    else if (rel > 135 || rel < -135) dir = 'Behind you';
-    else if (rel < -90 && rel >= -135) dir = 'Sharp left';
-    else if (rel < -45 && rel >= -90) dir = 'Left';
-    else if (rel < -10 && rel >= -45) dir = 'Slight left';
-    bearingTextEl.textContent = `${dir} • ${Math.round(d)}m`;
-
-    if (currentScreen === 'compass' && navigator.vibrate && d < 4) {
-      navigator.vibrate([200, 100, 200]);
-    }
-  }
-
-  setInterval(() => { if (lastPosition) updateNavImmediate(); }, NAV_INTERVAL_MS);
-
-  // ---------- Compass target selectors ----------
-  btnFirstTarget.addEventListener('click', () => {
-    const open = getOpenSurvey(); if (!open) { alert('⚠️ No open survey'); return; }
-    if (!open.targets.length) { alert('⚠️ No targets'); return; }
-    selectedTargetId = open.targets[0].id; updateNavImmediate(); showToast('⏮️ First target');
-  });
-  btnPrevTarget.addEventListener('click', () => {
-    const open = getOpenSurvey(); if (!open) { alert('⚠️ No open survey'); return; }
-    if (!open.targets.length) { alert('⚠️ No targets'); return; }
-    if (!selectedTargetId) { selectedTargetId = open.targets[0].id; }
-    else {
-      const idx = open.targets.findIndex(x => x.id === selectedTargetId);
-      selectedTargetId = idx > 0 ? open.targets[idx - 1].id : open.targets[open.targets.length - 1].id;
-    }
-    updateNavImmediate();
-    const t = open.targets.find(x => x.id === selectedTargetId);
-    showToast('◀️ ' + (t.notes || 'Target'));
-  });
-  btnNextTarget.addEventListener('click', () => {
-    const open = getOpenSurvey(); if (!open) { alert('⚠️ No open survey'); return; }
-    if (!open.targets.length) { alert('⚠️ No targets'); return; }
-    if (!selectedTargetId) { selectedTargetId = open.targets[0].id; }
-    else {
-      const idx = open.targets.findIndex(x => x.id === selectedTargetId);
-      selectedTargetId = idx < open.targets.length - 1 ? open.targets[idx + 1].id : open.targets[0].id;
-    }
-    updateNavImmediate();
-    const t = open.targets.find(x => x.id === selectedTargetId);
-    showToast('▶️ ' + (t.notes || 'Target'));
-  });
-  btnLastTarget.addEventListener('click', () => {
-    const open = getOpenSurvey(); if (!open) { alert('⚠️ No open survey'); return; }
-    if (!open.targets.length) { alert('⚠️ No targets'); return; }
-    selectedTargetId = open.targets[open.targets.length - 1].id; updateNavImmediate(); showToast('⏭️ Last target');
-  });
-
-  btnMarkFound.addEventListener('click', () => {
-    const open = getOpenSurvey();
-    if (!open || !selectedTargetId) { alert('⚠️ Select a target first'); return; }
-    const t = open.targets.find(x => x.id === selectedTargetId); if (!t) return;
-
-    modalTitle.textContent = 'Mark as Found';
-    modalBody.innerHTML = `
-      <div style="margin-bottom:16px">
-        <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">What did you find?</label>
-        <input type="text" id="foundWhat" value="${escapeHtml(t.foundNote || '')}" placeholder="e.g., Gold ring, Roman coin" style="width:100%" />
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description</label>
-        <textarea id="foundDesc" placeholder="Add details about your find..." style="width:100%">${escapeHtml(t.description || '')}</textarea>
-      </div>`;
-    modal.classList.add('active');
-
-    modalConfirm.onclick = () => {
-      t.found = true;
-      t.foundNote = document.getElementById('foundWhat').value;
-      t.description = document.getElementById('foundDesc').value;
-      save(); renderTargets(); modal.classList.remove('active');
-      showToast('✅ Marked as found!');
-      if (confirm('📸 Add photos of your find?')) addImageToTarget(t);
-    };
-    modalCancel.onclick = () => { modal.classList.remove('active'); };
-  });
-
-  // ---------- New/Close Survey buttons ----------
-  btnNewSurvey.addEventListener('click', () => {
-    const name = prompt('Survey name:', 'Field ' + new Date().toLocaleDateString());
+  // --- New / Add / Close survey buttons ---
+  btnNewSurvey.addEventListener("click", () => {
+    const name = prompt("Survey name:", "Field " + new Date().toLocaleDateString());
     if (!name) return;
     createSurvey(name);
-    showToast('✨ Survey created');
+    showToast("✨ Survey created");
   });
-  btnNewSurveyAdd.addEventListener('click', () => {
-    if (!lastPosition) { alert('⚠️ No GPS fix yet'); return; }
-    const name = prompt('Survey name:', 'Field ' + new Date().toLocaleDateString());
-    if (!name) return;
-    const s = createSurvey(name);
-    const note = prompt('First target name:', '') || '';
-    s.targets.push({
-      id: uid('t_'),
-      lat: lastPosition.coords.latitude,
-      lng: lastPosition.coords.longitude,
-      notes: note, description: '',
-      detectorist: data.detectoristName || '',
-      detector: data.detectorUsed || '',
-      createdAt: Date.now(), found: false, images: []
-    });
-    save();
-    showToast('✅ Survey + target created');
-    renderTargets();
+  btnNewSurveyAdd.addEventListener("click", () => {
+    showToast("🪄 Add + New Survey – to be implemented");
   });
-  btnCloseSurvey.addEventListener('click', () => {
-    const o = getOpenSurvey(); if (!o) { alert('⚠️ No open survey'); return; }
-    if (!confirm('Close the current survey?')) return;
-    o.status = 'Closed'; save(); renderSurveys(); showToast('🔒 Survey closed');
-  });
-
-  // ---------- Export / Import / Clear ----------
-  btnExport.addEventListener('click', () => {
-    const txt = JSON.stringify(data, null, 2);
-    const blob = new Blob([txt], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `metal_finder_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
-    showToast('💾 Data exported');
-  });
-  btnImport.addEventListener('click', () => importFileEl.click());
-  importFileEl.addEventListener('change', async e => {
-    const f = e.target.files[0]; if (!f) return;
-    try {
-      const txt = await f.text();
-      const obj = JSON.parse(txt);
-      if (obj && obj.surveys) {
-        if (!confirm('Import data? This will merge with existing data.')) return;
-        data = obj; save(); renderSurveys(); showToast('✅ Data imported');
-      } else {
-        alert('Invalid data format');
-      }
-    } catch (err) {
-      alert('Import failed: ' + err.message);
-    }
-  });
-  btnClear.addEventListener('click', () => {
-    if (!confirm('⚠️ Clear ALL data? This cannot be undone!')) return;
-    if (!confirm('Are you absolutely sure?')) return;
-    data = { surveys: [] }; save(); renderSurveys(); showToast('🗑️ All data cleared');
-  });
-
-  // ---------- Settings inputs ----------
-  detectoristNameEl.value = data.detectoristName || '';
-  detectorUsedEl.value = data.detectorUsed || '';
-  detectoristNameEl.addEventListener('input', () => { data.detectoristName = detectoristNameEl.value; save(); });
-  detectorUsedEl.addEventListener('input', () => { data.detectorUsed = detectorUsedEl.value; save(); });
-
-  // ---------- GPS watch ----------
-  function startGPS() {
-    if (!navigator.geolocation) {
-      document.getElementById('gpsText').textContent = 'Not supported';
+  btnCloseSurvey.addEventListener("click", () => {
+    const o = getOpenSurvey();
+    if (!o) {
+      alert("⚠️ No open survey");
       return;
     }
-    navigator.geolocation.watchPosition(p => {
-      lastPosition = p;
-      document.getElementById('gpsText').textContent = 'Locked';
-      document.getElementById('accText').textContent = (p.coords.accuracy || 0).toFixed(1) + 'm';
-      updateNavImmediate();
-    }, () => {
-      document.getElementById('gpsText').textContent = 'No signal';
-    }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
-  }
+    if (!confirm("Close the current survey?")) return;
+    o.status = "Closed";
+    save();
+    renderSurveys();
+    showToast("🔒 Survey closed");
+  });
 
-  // ---------- Init ----------
+  // --- Initial render ---
   renderSurveys();
-  startGPS();
+  showScreen("home");
 
-  // Wake the orientation pipeline early (harmless one-shot read)
-  if (window.DeviceOrientationEvent) {
-    window.addEventListener('deviceorientation', () => {}, { once: true });
-  }
-
-}); // <-- end of DOMContentLoaded
+}); // end DOMContentLoaded
+// --- END OF PART 1 ---
