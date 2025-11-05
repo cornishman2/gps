@@ -1,4 +1,4 @@
-(function(){
+document.addEventlistener('DOMContentLoaded',function(){
 const STORAGE_KEY='metal_finder_v4_data';
 const NAV_INTERVAL_MS=500;
 const HEADING_SMOOTH=6;
@@ -587,4 +587,4 @@ function updateNavImmediate(){
 renderSurveys();
 startGPS();
 showScreen('home');
-})();
+});
