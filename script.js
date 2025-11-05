@@ -476,7 +476,7 @@ lightboxDelete.addEventListener("click", () => {
   renderTargets();
   lightbox.classList.remove("active");
   showToast("🗑️ Image deleted");
-});
+
 
 // --- END OF PART 2 ---
 // --- PART 3 : Compass, GPS & Navigation ---
@@ -736,3 +736,4 @@ startGPS();
 
 // --- END OF PART 3 ---
 
+});
