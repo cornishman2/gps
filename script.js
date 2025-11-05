@@ -736,4 +736,79 @@ startGPS();
 
 // --- END OF PART 3 ---
 
+// --- PART 4 : Import / Export / Clear + Settings ---
+
+// Element references
+const btnExport = document.getElementById("btnExport");
+const btnImport = document.getElementById("btnImport");
+const importFileEl = document.getElementById("importFile");
+const btnClear = document.getElementById("btnClear");
+const detectoristNameEl = document.getElementById("detectoristName");
+const detectorUsedEl = document.getElementById("detectorUsed");
+
+// --- Export data ---
+btnExport.addEventListener("click", () => {
+  const txt = JSON.stringify(data, null, 2);
+  const blob = new Blob([txt], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `metal_finder_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 2000);
+  showToast("💾 Data exported");
 });
+
+// --- Import data ---
+btnImport.addEventListener("click", () => importFileEl.click());
+importFileEl.addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const txt = await f.text();
+    const obj = JSON.parse(txt);
+    if (obj && obj.surveys) {
+      if (!confirm("Import data? This will replace current data.")) return;
+      data = obj;
+      save();
+      renderSurveys();
+      showToast("✅ Data imported");
+    } else {
+      alert("Invalid data format");
+    }
+  } catch (err) {
+    alert("Import failed: " + err.message);
+  }
+});
+
+// --- Clear all data ---
+btnClear.addEventListener("click", () => {
+  if (!confirm("⚠️ Clear ALL data? This cannot be undone!")) return;
+  if (!confirm("Are you absolutely sure?")) return;
+  data = { surveys: [] };
+  save();
+  renderSurveys();
+  showToast("🗑️ All data cleared");
+});
+
+// --- Settings live save ---
+detectoristNameEl.value = data.detectoristName || "";
+detectorUsedEl.value = data.detectorUsed || "";
+detectoristNameEl.addEventListener("input", () => {
+  data.detectoristName = detectoristNameEl.value;
+  save();
+});
+detectorUsedEl.addEventListener("input", () => {
+  data.detectorUsed = detectorUsedEl.value;
+  save();
+});
+
+// --- Final initialisation ---
+showToast("✅ Metal Finder ready");
+}); // end DOMContentLoaded
+// --- END OF PART 4 ---
+
