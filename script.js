@@ -1,5 +1,3 @@
-// Metal Finder v5 — Single File (No Debug Panel)
-// All features in one file: navigation, surveys, targets, images, compass, GPS, import/export, settings.
 document.addEventListener("DOMContentLoaded", () => {
   const STORAGE_KEY = "metal_finder_v5_data";
   const NAV_INTERVAL_MS = 500;
