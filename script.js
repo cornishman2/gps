@@ -877,17 +877,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalConfirm = document.getElementById("modalConfirm");
 
   // Compass
-  const compassTargetName = document.getElementById("compassTargetName");
-  const headingEl = document.getElementById("heading");
-  const bearingEl = document.getElementById("bearing");
-  const bearingTextEl = document.getElementById("bearingText");
-  const arrowEl = document.getElementById("arrow");
-  const btnNextTarget = document.getElementById("btnNextTarget");
-  const btnPrevTarget = document.getElementById("btnPrevTarget");
-  const btnFirstTarget = document.getElementById("btnFirstTarget");
-  const btnLastTarget = document.getElementById("btnLastTarget");
-  const btnMarkFound = document.getElementById("btnMarkFound");
-
+ 
   // Settings + data I/O
   const btnExport = document.getElementById("btnExport");
   const btnImport = document.getElementById("btnImport");
