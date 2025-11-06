@@ -596,7 +596,6 @@ function updateNavImmediate(){
   else if(rel<-45&&rel>=-90)direction='Left';
   else if(rel<-10&&rel>=-45)direction='Slight left';
   bearingTextEl.textContent='${direction}.${Math.round(d)}m';
-  //bearingTextEl.textContent=`${direction} • ${Math.round(d)}m`;
   
   if(currentScreen==='compass'&&navigator.vibrate&&d<4&&!hasVibrated){
     navigator.vibrate([200,100,200]);
