@@ -65,7 +65,7 @@ let currentScreen='home';
 let currentLightboxImages=[];
 let currentLightboxIndex=0;
 let currentLightboxTarget=null;
-let compassInitialized=false;
+let compassInitialized=true; //temp fix, should be false
 
 function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('💾 Saved')}
