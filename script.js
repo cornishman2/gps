@@ -705,11 +705,11 @@ btnNewSurvey.onclick=()=>{
   const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
   if(!name)return;
   createSurvey(name);
-  showToast('✨ Survey created');
+  showToast(' Survey created');
 };
 
 btnNewSurveyAdd.onclick=()=>{
-  if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
+  if(!lastPosition){alert(' No GPS fix yet');return;}
   const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
   if(!name)return;
   const s=createSurvey(name);
