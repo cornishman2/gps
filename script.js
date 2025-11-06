@@ -466,7 +466,7 @@ btnAddTarget.onclick=()=>{
       <label style="display:block;margin-bottom:8px;color:var(--muted);font-size:14px">Description (optional)</label>
       <textarea id="newTargetDesc" placeholder="Add notes about this location..." style="width:100%"></textarea>
     </div>
-  };
+  ;
   
   modal.classList.add('active');
   
