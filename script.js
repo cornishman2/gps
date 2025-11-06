@@ -563,8 +563,9 @@ function handleOrientation(e){
   headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
   smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
   headingEl.textContent=Math.round(smoothedHeading);
+  // ADD THIS LINE:
+  document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
 }
-
 function throttledNavUpdate(){
   const now=Date.now();
   if(now-lastNav>=NAV_INTERVAL_MS){
