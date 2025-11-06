@@ -584,7 +584,7 @@ function updateNavImmediate(){
   bearingEl.textContent=Math.round(brg);
   compassTargetName.textContent=t.notes||'Target';
   const rel=((brg-smoothedHeading)+540)%360-180;
-  arrowEl.style.transform=`rotate(${rel}deg)`;
+  arrowEl.style.transform='rotate(${rel}deg)';
   
   let direction='';
   if(rel>=-10&&rel<=10)direction='Straight ahead';
