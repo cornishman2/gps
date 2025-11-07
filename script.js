@@ -554,8 +554,12 @@ function bearingTo(lat1,lon1,lat2,lon2){
 
 function handleOrientation(e){
   let head=null;
-  if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
-  else if(typeof e.alpha==='number')head=(360-e.alpha);
+  if(typeof e.webkitCompassHeading==='number'){
+    head=e.webkitCompassHeading;
+  }else if(typeof e.alpha==='number'){
+    // Try different formula for Android
+    head=e.alpha;
+  }
   if(head===null||isNaN(head))return;
   headingSamples.push((head+360)%360);
   if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
@@ -563,10 +567,10 @@ function handleOrientation(e){
   headingSamples.forEach(h=>{x+=Math.cos(toRad(h));y+=Math.sin(toRad(h));});
   smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
   headingEl.textContent=Math.round(smoothedHeading);
-  // ADD THIS LINE:
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
 }
-function throttledNavUpdate(){
+  
+  function throttledNavUpdate(){
   const now=Date.now();
   if(now-lastNav>=NAV_INTERVAL_MS){
     lastNav=now;
