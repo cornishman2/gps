@@ -83,8 +83,7 @@ async function initializeCompass(){
         permissionBanner.classList.remove('show');
 
         
-    window.addEventListener('deviceorientationabsolute',handleOrientation,true);
-
+       window.addEventListener('deviceorientation',handleOrientation,true);
         
         showToast('🧭 Compass enabled');
         return true;
@@ -99,7 +98,7 @@ async function initializeCompass(){
     }
   }else{
     compassInitialized=true;
-   window.addEventListener('deviceorientationabsolute',handleOrientation,true);
+window.addEventListener('deviceorientation',handleOrientation,true);
     return true;
   }
 }
