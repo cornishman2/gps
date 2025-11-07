@@ -20,8 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const surveyListEl = document.getElementById("surveyList");
   const btnNewSurvey = document.getElementById("btnNewSurvey");
   const btnNewSurveyAdd = document.getElementById("btnNewSurveyAdd");
-  const btnClose
-Survey = document.getElementById("btnCloseSurvey");
+  const btnCloseSurvey = document.getElementById("btnCloseSurvey");
 
 // --- State ---
 let data = load();
