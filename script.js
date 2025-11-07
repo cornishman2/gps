@@ -81,7 +81,11 @@ async function initializeCompass(){
       if(permission==='granted'){
         compassInitialized=true;
         permissionBanner.classList.remove('show');
-        window.addEventListener('deviceorientation',handleOrientation,true);
+
+        
+    window.addEventListener('deviceorientationabsolute',handleOrientation,true);
+
+        
         showToast('🧭 Compass enabled');
         return true;
       }else{
@@ -95,7 +99,7 @@ async function initializeCompass(){
     }
   }else{
     compassInitialized=true;
-    window.addEventListener('deviceorientation',handleOrientation,true);
+   window.addEventListener('deviceorientationabsolute',handleOrientation,true);
     return true;
   }
 }
@@ -554,12 +558,20 @@ function bearingTo(lat1,lon1,lat2,lon2){
 
 function handleOrientation(e){
   let head=null;
+  
+  // iOS devices use webkitCompassHeading
   if(typeof e.webkitCompassHeading==='number'){
     head=e.webkitCompassHeading;
-  }else if(typeof e.alpha==='number'){
-    // Android: reverse direction and adjust
-    head=(360-e.alpha)%360;
   }
+  // Android: Need to calculate from alpha with absolute reference
+  else if(e.absolute && typeof e.alpha==='number'){
+    head=e.alpha;
+  }
+  // Fallback: use alpha but note it may not be accurate
+  else if(typeof e.alpha==='number'){
+    head=e.alpha;
+  }
+  
   if(head===null||isNaN(head))return;
   headingSamples.push((head+360)%360);
   if(headingSamples.length>HEADING_SMOOTH)headingSamples.shift();
@@ -568,7 +580,7 @@ function handleOrientation(e){
   smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
   headingEl.textContent=Math.round(smoothedHeading);
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
-}  
+}
   
   function throttledNavUpdate(){
   const now=Date.now();
