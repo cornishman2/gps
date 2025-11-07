@@ -807,4 +807,5 @@ function startGPS(){
 
 renderSurveys();
 startGPS();
+initializeCompass();
 });
