@@ -557,8 +557,8 @@ function handleOrientation(e){
   if(typeof e.webkitCompassHeading==='number'){
     head=e.webkitCompassHeading;
   }else if(typeof e.alpha==='number'){
-    // Try different formula for Android
-    head=e.alpha;
+    // Android: reverse direction and adjust
+    head=(360-e.alpha)%360;
   }
   if(head===null||isNaN(head))return;
   headingSamples.push((head+360)%360);
@@ -568,7 +568,7 @@ function handleOrientation(e){
   smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
   headingEl.textContent=Math.round(smoothedHeading);
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
-}
+}  
   
   function throttledNavUpdate(){
   const now=Date.now();
