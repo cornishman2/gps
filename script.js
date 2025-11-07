@@ -563,13 +563,9 @@ function handleOrientation(e){
   if(typeof e.webkitCompassHeading==='number'){
     head=e.webkitCompassHeading;
   }
-  // Android: Need to calculate from alpha with absolute reference
-  else if(e.absolute && typeof e.alpha==='number'){
-    head=e.alpha;
-  }
-  // Fallback: use alpha but note it may not be accurate
+  // Android: reverse and add offset
   else if(typeof e.alpha==='number'){
-    head=e.alpha;
+    head=(360-e.alpha)%360;  // Added 60 degree offset
   }
   
   if(head===null||isNaN(head))return;
@@ -580,8 +576,8 @@ function handleOrientation(e){
   smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
   headingEl.textContent=Math.round(smoothedHeading);
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
-}
-  
+}  
+
   function throttledNavUpdate(){
   const now=Date.now();
   if(now-lastNav>=NAV_INTERVAL_MS){
