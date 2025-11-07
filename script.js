@@ -564,7 +564,7 @@ function handleOrientation(e){
   }
   // Android: reverse and add offset
   else if(typeof e.alpha==='number'){
-    head=(360-e.alpha)%360;  // Added 60 degree offset
+    head=(e.alpha-360)%360;  // Added 60 degree offset
   }
   
   if(head===null||isNaN(head))return;
