@@ -555,16 +555,28 @@ function bearingTo(lat1,lon1,lat2,lon2){
   return(toDeg(Math.atan2(y,x))+360)%360;
 }
 
-function handleOrientation(e){
+function getScreenRotationDeg() {
+  const a =
+    screen.orientation && typeof screen.orientation.angle === "number"
+      ? screen.orientation.angle
+      : typeof window.orientation === "number"
+      ? window.orientation
+      : 0;
+  return ((a % 360) + 360) % 360;
+}
+  
+  
+ function handleOrientation(e){
   let head=null;
   
   // iOS devices use webkitCompassHeading
   if(typeof e.webkitCompassHeading==='number'){
     head=e.webkitCompassHeading;
   }
-  // Android: reverse and add offset
+  // Android: adjust for screen rotation
   else if(typeof e.alpha==='number'){
-    head=(360-e.alpha)%360;  // Added 60 degree offset
+    const rot=getScreenRotationDeg();
+    head=(360-((e.alpha+rot)%360))%360;
   }
   
   if(head===null||isNaN(head))return;
@@ -575,8 +587,7 @@ function handleOrientation(e){
   smoothedHeading=(toDeg(Math.atan2(y,x))+360)%360;
   headingEl.textContent=Math.round(smoothedHeading);
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
-}  
-
+}
   function throttledNavUpdate(){
   const now=Date.now();
   if(now-lastNav>=NAV_INTERVAL_MS){
