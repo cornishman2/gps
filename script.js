@@ -566,7 +566,7 @@ function getScreenRotationDeg() {
 }
   
   
- function handleOrientation(e){
+function handleOrientation(e){
   let head=null;
   
   // iOS devices use webkitCompassHeading
@@ -588,14 +588,15 @@ function getScreenRotationDeg() {
   headingEl.textContent=Math.round(smoothedHeading);
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
 }
-  function throttledNavUpdate(){
+
+function throttledNavUpdate(){
   const now=Date.now();
   if(now-lastNav>=NAV_INTERVAL_MS){
     lastNav=now;
     updateNavImmediate();
   }
 }
-setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
+  setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
 
 function updateNavImmediate(){
   const open=getOpenSurvey();
