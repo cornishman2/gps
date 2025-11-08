@@ -565,7 +565,7 @@ function getScreenRotationDeg() {
   return ((a % 360) + 360) % 360;
 }
   
-  
+///  
 function handleOrientation(e){
   let head=null;
   
@@ -573,10 +573,9 @@ function handleOrientation(e){
   if(typeof e.webkitCompassHeading==='number'){
     head=e.webkitCompassHeading;
   }
-  // Android: adjust for screen rotation
+  // Android: simple formula
   else if(typeof e.alpha==='number'){
-    const rot=getScreenRotationDeg();
-    head=(360-((e.alpha+rot)%360))%360;
+    head=(360-e.alpha)%360;
   }
   
   if(head===null||isNaN(head))return;
@@ -588,7 +587,7 @@ function handleOrientation(e){
   headingEl.textContent=Math.round(smoothedHeading);
   document.getElementById('headingText').textContent=Math.round(smoothedHeading)+'°';
 }
-
+///
 function throttledNavUpdate(){
   const now=Date.now();
   if(now-lastNav>=NAV_INTERVAL_MS){
