@@ -594,7 +594,7 @@ function throttledNavUpdate(){
     lastNav=now;
     updateNavImmediate();
   }
-}
+
   setInterval(()=>{if(lastPosition)throttledNavUpdate()},NAV_INTERVAL_MS);
 
 function updateNavImmediate(){
