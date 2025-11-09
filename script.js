@@ -1,4 +1,5 @@
 // ===========================================================
+// ===========================================================
 //  METAL FINDER - CLEAN SINGLE-FILE BUILD (v5 Final)
 //  - Works with your existing index.html and styles.css
 //  - All Unicode normalized (no smart quotes)
