@@ -13,30 +13,15 @@ let appState = {
 const screens = document.querySelectorAll('.screen');
 const navItems = document.querySelectorAll('.nav-item');
 const toast = document.getElementById('toast');
+const targetListContainer = document.getElementById('targetsList'); 
+const surveyListContainer = document.getElementById('surveyList');  
 
-// === FIX: Correcting the DOM element IDs to match HTML IDs ===
-const targetListContainer = document.getElementById('targetsList'); // FIX: Corrected to targetsList
-const surveyListContainer = document.getElementById('surveyList');   // FIX: Corrected to surveyList
-// -------------------------------------------------------------
-
-// --- Global State for Gallery Modal ---
-const THUMBNAILS_PER_ROW = 2; 
-let activeGallery = {
-    targetId: null,
-    index: 0,
-    images: []
-};
-
-// Modal Elements
+// Modal Elements (Simplified for generic confirmation/prompt)
 const modal = document.getElementById('modal');
 const modalTitle = document.getElementById('modalTitle');
-const modalImage = document.getElementById('modalImage');
-const btnModalPrev = document.getElementById('btnModalPrev');
-const btnModalNext = document.getElementById('btnModalNext');
-const btnCloseModal = document.getElementById('btnCloseModal');
-const btnDeleteImage = document.getElementById('btnDeleteImage');
-const btnReplaceImage = document.getElementById('btnReplaceImage');
-const imageInput = document.getElementById('imageInput');
+const modalBody = document.getElementById('modalBody');
+const modalCancel = document.getElementById('modalCancel');
+const modalConfirm = document.getElementById('modalConfirm');
 
 
 // =======================================
@@ -77,7 +62,7 @@ function navigate(screenId) {
 
     if (screenId === 'screen-targets' && appState.activeSurveyId) {
         renderTargets();
-    } else if (screenId === 'screen-surveys') {
+    } else if (screenId === 'screen-home') {
         renderSurveys();
     }
 }
@@ -150,13 +135,13 @@ function renderSurveys() {
 }
 
 // =======================================
-// === TARGET MANAGEMENT (INCLUDING IMAGES) ===
+// === TARGET MANAGEMENT ===
 // =======================================
 
 function createTarget() {
     if (!appState.activeSurveyId) {
         showToast("Please select or create an active survey first.");
-        navigate('screen-home'); // Navigate to home screen where surveys are
+        navigate('screen-home'); 
         return;
     }
     const name = prompt("Enter new target name:");
@@ -167,7 +152,7 @@ function createTarget() {
             lat: 0, // Placeholder
             lon: 0, // Placeholder
             status: 'New',
-            images: [] // Image array stored here
+            // Removed 'images' array
         };
         const survey = appState.surveys.find(s => s.id === appState.activeSurveyId);
         survey.targets.push(newTarget);
@@ -184,7 +169,6 @@ function renderTargets() {
         return;
     }
 
-    // Update the open survey name display
     document.getElementById('openSurveyName').textContent = survey.name;
 
     targetListContainer.innerHTML = ''; // Clear existing targets
@@ -210,99 +194,13 @@ function renderTargets() {
                 <div class="badge badge-success">${target.status}</div>
             </div>
 
-            <div class="divider">Images (${target.images.length})</div>
-            <div id="gallery-${target.id}" class="image-gallery">
-                <div id="galleryGrid-${target.id}" class="image-gallery-grid">
-                    </div>
-                <button class="add-image-btn" onclick="triggerImageInput(${target.id})">
-                    + Add New Image
-                </button>
-            </div>
-
             <div class="item-actions">
                 <button class="btn btn-sm btn-primary" onclick="setTargetLocation(${target.id})">Get Current Location</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteTarget(${target.id})">Delete</button>
             </div>
         `;
         targetListContainer.appendChild(targetEl);
-        renderTargetImages(target.id, target.images);
     });
-}
-
-// --- Image Handling Functions ---
-
-function renderTargetImages(targetId, images) {
-    const gridEl = document.getElementById(`galleryGrid-${targetId}`);
-    if (!gridEl) return;
-
-    gridEl.innerHTML = ''; // Clear existing thumbnails
-
-    // Set the grid template based on the constant for visual alignment
-    gridEl.style.gridTemplateColumns = `repeat(${THUMBNAILS_PER_ROW}, 1fr)`;
-
-    images.forEach((base64Image, index) => {
-        const thumbnailEl = document.createElement('div');
-        thumbnailEl.className = 'image-thumbnail';
-        thumbnailEl.style.backgroundImage = `url(${base64Image})`;
-        
-        // Open modal on click
-        thumbnailEl.onclick = () => openGalleryModal(targetId, index, images);
-        gridEl.appendChild(thumbnailEl);
-    });
-}
-
-function triggerImageInput(targetId, isReplace = false, imageIndex = null) {
-    // Set global context for what the input is doing
-    imageInput.dataset.targetId = targetId;
-    imageInput.dataset.isReplace = isReplace;
-    imageInput.dataset.imageIndex = imageIndex;
-    imageInput.click();
-}
-
-imageInput.onchange = function(event) {
-    const file = event.target.files[0];
-    const targetId = parseInt(imageInput.dataset.targetId);
-    const isReplace = imageInput.dataset.isReplace === 'true';
-    const imageIndex = parseInt(imageInput.dataset.imageIndex);
-
-    if (file && targetId) {
-        const reader = new FileReader();
-        reader.onloadend = function() {
-            const base64Image = reader.result;
-            handleImageUpload(targetId, base64Image, isReplace, imageIndex);
-        };
-        reader.readAsDataURL(file);
-    }
-    // Reset the input field so the change event fires even if the same file is selected
-    imageInput.value = null;
-};
-
-function handleImageUpload(targetId, base64Image, isReplace, imageIndex) {
-    const survey = appState.surveys.find(s => s.id === appState.activeSurveyId);
-    const target = survey?.targets.find(t => t.id === targetId);
-
-    if (!target) return;
-
-    if (isReplace) {
-        // Replace existing image
-        if (imageIndex !== null && imageIndex >= 0 && imageIndex < target.images.length) {
-            target.images[imageIndex] = base64Image;
-            showToast('Image replaced successfully.');
-        }
-    } else {
-        // Add new image
-        target.images.push(base64Image);
-        showToast('Image added successfully.');
-    }
-
-    saveState();
-    renderTargets();
-
-    // If replacing inside the modal, update the modal immediately
-    if (modal.classList.contains('active') && isReplace) {
-        activeGallery.images = target.images;
-        updateGalleryModal();
-    }
 }
 
 // --- Location & Deletion Functions ---
@@ -351,108 +249,11 @@ function deleteTarget(targetId) {
 }
 
 // =======================================
-// === GALLERY MODAL LOGIC ===
+// === MODAL LOGIC (Simplified) ===
 // =======================================
 
-function openGalleryModal(targetId, index, images) {
-    const survey = appState.surveys.find(s => s.id === appState.activeSurveyId);
-    const target = survey?.targets.find(t => t.id === targetId);
-    if (!target || images.length === 0) return;
-
-    activeGallery = {
-        targetId: targetId,
-        index: index,
-        images: images 
-    };
-
-    modalTitle.textContent = target.name;
-    modal.classList.add('active');
-    updateGalleryModal();
-}
-
-function updateGalleryModal() {
-    const { index, images } = activeGallery;
-    const total = images.length;
-
-    if (total === 0) {
-        modal.classList.remove('active');
-        return;
-    }
-
-    // Update image source
-    modalImage.src = images[index];
-
-    // Update navigation buttons state
-    btnModalPrev.disabled = index === 0;
-    btnModalNext.disabled = index === total - 1;
-    
-    // Update delete button logic
-    btnDeleteImage.onclick = () => deleteImage(activeGallery.targetId, index);
-    
-    // Update replace button logic
-    btnReplaceImage.onclick = () => triggerImageInput(activeGallery.targetId, true, index);
-}
-
-function deleteImage(targetId, index) {
-    if (!confirm("Are you sure you want to delete this image?")) return;
-
-    const survey = appState.surveys.find(s => s.id === appState.activeSurveyId);
-    const target = survey?.targets.find(t => t.id === targetId);
-
-    if (target) {
-        target.images.splice(index, 1);
-        saveState();
-        renderTargets();
-        showToast('Image deleted.');
-        
-        // Re-evaluate gallery state after deletion
-        if (target.images.length === 0) {
-            modal.classList.remove('active'); // Close modal if no images remain
-        } else {
-            // Adjust index if the last item was deleted
-            activeGallery.index = Math.min(index, target.images.length - 1);
-            activeGallery.images = target.images;
-            updateGalleryModal();
-        }
-    }
-}
-
-// =======================================
-// === MODAL EVENT LISTENERS ===
-// =======================================
-
-// Close modal when clicking the close button
-btnCloseModal.addEventListener('click', () => {
-    modal.classList.remove('active');
-});
-
-// Close modal when pressing the ESC key
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal.classList.contains('active')) {
-        modal.classList.remove('active');
-    }
-});
-
-// Navigation buttons (with e parameter fix)
-btnModalPrev.addEventListener('click', (e) => {
-    // Defensive check for disabled state 
-    if (e.currentTarget.disabled) { 
-        return; 
-    }
-    
-    if (activeGallery.index > 0) {
-      activeGallery.index--;
-      updateGalleryModal();
-    }
-});
-
-btnModalNext.addEventListener('click', () => {
-    if (activeGallery.index < activeGallery.images.length - 1) {
-      activeGallery.index++;
-      updateGalleryModal();
-    }
-});
-
+// NOTE: We no longer need the complex Gallery modal functions here.
+// The default browser 'confirm' prompt is used for deletion.
 
 // =======================================
 // === APP STARTUP ===
@@ -461,7 +262,7 @@ btnModalNext.addEventListener('click', () => {
 function init() {
     loadState();
     renderSurveys();
-    // Start on the Targets screen if an active survey is set, otherwise Home
+    
     if (appState.activeSurveyId) {
         navigate('screen-targets');
     } else {
@@ -485,5 +286,3 @@ window.setActiveSurvey = setActiveSurvey;
 window.createTarget = createTarget;
 window.setTargetLocation = setTargetLocation;
 window.deleteTarget = deleteTarget;
-window.triggerImageInput = triggerImageInput;
-window.openGalleryModal = openGalleryModal; // Used by dynamically created thumbnails
