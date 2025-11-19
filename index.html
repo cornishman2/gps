@@ -1,162 +1,159 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Metal Finder v4</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Metal Finder v4</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="logo">
-    <div class="logo-icon">📍</div>
-    <div>
-      <h1>Chat - Metal Finder- Wednesday 15:04</h1>
-      <div class="version">v4.0 - Professional</div>
-    </div>
-  </div>
-  <div class="gps-info">
-    <div class="gps-status">
-      <div class="gps-label">
-        <span class="status-dot"></span>
-        <span>GPS: <strong id="gpsText">Searching...</strong></span>
-      </div>
-      <div>Accuracy: <strong id="accText">—</strong></div>
-    </div>
-  </div>
+  <div class="logo">
+    <div class="logo-icon">📍</div>
+    <div>
+      <h1>Chat - Metal Finder- Wednesday 15:13</h1>
+      <div class="version">v4.0 - Professional</div>
+    </div>
+  </div>
+  <div class="gps-info">
+    <div class="gps-status">
+      <div class="gps-label">
+        <span class="status-dot"></span>
+        <span>GPS: <strong id="gpsText">Searching...</strong></span>
+      </div>
+      <div>Accuracy: <strong id="accText">—</strong></div>
+    </div>
+  </div>
 </header>
 
 <main>
-  <section id="screen-home" class="screen">
-    <div class="card">
-      <div class="card-title">Settings</div>
-      <div class="row">
-        <input id="detectoristName" placeholder="Your name" />
-        <input id="detectorUsed" placeholder="Detector model" />
-      </div>
-    </div>
+  <section id="screen-home" class="screen">
+    <div class="card">
+      <div class="card-title">Settings</div>
+      <div class="row">
+        <input id="detectoristName" placeholder="Your name" />
+        <input id="detectorUsed" placeholder="Detector model" />
+      </div>
+    </div>
 
-    <div class="card">
-      <div class="card-title">Quick Actions</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
-        <button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
-        <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
-      </div>
-    </div>
+    <div class="card">
+      <div class="card-title">Quick Actions</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
+        <button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
+        <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
+      </div>
+    </div>
 
-    <div class="card">
-      <div class="card-title">Surveys</div>
-      <div class="list" id="surveyList"></div>
-    </div>
-  </section>
+    <div class="card">
+      <div class="card-title">Surveys</div>
+      <div class="list" id="surveyList"></div>
+    </div>
+  </section>
 
-  <section id="screen-targets" class="screen hidden">
-    <div class="card">
-      <div class="card-title">Targets</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
-        <button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
-      </div>
-      <div style="margin-top:12px;color:var(--muted);font-size:14px">
-        Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
-      </div>
-    </div>
-    <div class="list" id="targetsList"></div>
-  </section>
+  <section id="screen-targets" class="screen hidden">
+    <div class="card">
+      <div class="card-title">Targets</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
+        <button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
+      </div>
+      <div style="margin-top:12px;color:var(--muted);font-size:14px">
+        Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
+      </div>
+    </div>
+        <div class="list" id="target-list-container"></div>
+  </section>
 
-  <section id="screen-compass" class="screen hidden">
-    <div class="card compass-screen">
-      <div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
-      <div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
+  <section id="screen-compass" class="screen hidden">
+    <div class="card compass-screen">
+      <div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
+      <div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
 
-      <div class="compass-info">
-        <div class="compass-stat">
-          <div class="stat-label">Your Heading</div>
-          <div class="stat-value"><span id="heading">—</span>°</div>
-        </div>
-        <div class="compass-stat">
-          <div class="stat-label">Target Bearing</div>
-          <div class="stat-value"><span id="bearing">—</span>°</div>
-        </div>
-      </div>
+      <div class="compass-info">
+        <div class="compass-stat">
+          <div class="stat-label">Your Heading</div>
+          <div class="stat-value"><span id="heading">—</span>°</div>
+        </div>
+        <div class="compass-stat">
+          <div class="stat-label">Target Bearing</div>
+          <div class="stat-value"><span id="bearing">—</span>°</div>
+        </div>
+      </div>
 
-      <div class="direction-text" id="bearingText">—</div>
+      <div class="direction-text" id="bearingText">—</div>
 
-      <div class="arrow-container">
-        <div class="arrow" id="arrow">↑</div>
-      </div>
+      <div class="arrow-container">
+        <div class="arrow" id="arrow">↑</div>
+      </div>
 
-      <div class="compass-controls">
-        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
-        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
-        <button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
-        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
-        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
-      </div>
-    </div>
-  </section>
+      <div class="compass-controls">
+        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
+        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
+        <button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
+        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
+        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
+      </div>
+    </div>
+  </section>
 
-  <section id="screen-settings" class="screen hidden">
-    <div class="card">
-      <div class="card-title">Data Management</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnExport">💾 Export Data</button>
-        <button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
-      </div>
-      <div class="row">
-        <button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
-      </div>
-    </div>
-  </section>
+  <section id="screen-settings" class="screen hidden">
+    <div class="card">
+      <div class="card-title">Data Management</div>
+      <div class="row">
+        <button class="btn btn-primary" id="btnExport">💾 Export Data</button>
+        <button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+      </div>
+      <div class="row">
+        <button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
+      </div>
+    </div>
+  </section>
 </main>
 
-<div id="lightbox" class="lightbox">
-  <div class="lightbox-content">
-    <button class="lightbox-close" id="lightboxClose">×</button>
-    <button class="lightbox-nav lightbox-prev" id="lightboxPrev">‹</button>
-    <img id="lightboxImage" class="lightbox-image" src="" alt="Full size" />
-    <button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
-    <div class="lightbox-counter" id="lightboxCounter"></div>
-    <div class="lightbox-actions">
-      <button class="btn btn-secondary" id="lightboxChange">🔄 Change</button>
-      <button class="btn btn-danger" id="lightboxDelete">🗑️ Delete</button>
-    </div>
-  </div>
-</div>
+<input type="file" id="imageInput" accept="image/*" style="display:none" /> 
 
 <div id="modal" class="modal">
-  <div class="modal-content">
-    <div class="modal-title" id="modalTitle">Title</div>
-    <div id="modalBody"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" id="modalCancel">Cancel</button>
-      <button class="btn btn-primary" id="modalConfirm">Confirm</button>
-    </div>
-  </div>
+  <div class="modal-content">
+    <button class="close-btn" id="btnCloseModal">×</button>
+
+    <div class="modal-title" id="modalTitle">Image Gallery</div>
+
+    <div class="gallery-container">
+            <button class="gallery-nav prev" id="btnModalPrev">‹</button>
+      <button class="gallery-nav next" id="btnModalNext">›</button>
+
+            <img id="modalImage" class="gallery-image" src="" alt="Full screen target image" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btnReplaceImage">🔄 Replace Image</button>
+      <button class="btn btn-danger" id="btnDeleteImage">🗑️ Delete Image</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast" class="toast">Saved</div>
 
 <nav class="bottom-nav">
-  <div class="nav-item active" data-screen="home">
-    <div class="nav-icon">🏠</div>
-    <div>Home</div>
-  </div>
-  <div class="nav-item" data-screen="targets">
-    <div class="nav-icon">📍</div>
-    <div>Targets</div>
-  </div>
-  <div class="nav-item" data-screen="compass">
-    <div class="nav-icon">🧭</div>
-    <div>Compass</div>
-  </div>
-  <div class="nav-item" data-screen="settings">
-    <div class="nav-icon">⚙️</div>
-    <div>Settings</div>
-  </div>
+  <div class="nav-item active" data-screen="home">
+    <div class="nav-icon">🏠</div>
+    <div>Home</div>
+  </div>
+  <div class="nav-item" data-screen="targets">
+    <div class="nav-icon">📍</div>
+    <div>Targets</div>
+  </div>
+  <div class="nav-item" data-screen="compass">
+    <div class="nav-icon">🧭</div>
+    <div>Compass</div>
+  </div>
+  <div class="nav-item" data-screen="settings">
+    <div class="nav-icon">⚙️</div>
+    <div>Settings</div>
+  </div>
 </nav>
 </div>
 
