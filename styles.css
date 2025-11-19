@@ -117,3 +117,154 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
   padding:12px 24px;border-radius:12px;box-shadow:0 4px 20px var(--shadow);
   display:none;z-index:200;border:1px solid var(--accent);
   pointer-events : none }
+
+/* ======================================= */
+/* === NEW STYLES FOR IMAGE GALLERY (JS CHANGES) === */
+/* ======================================= */
+
+/* 1. Thumbnail Grid Layout (2 per row) */
+.image-gallery {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.image-gallery-grid {
+    display: grid;
+    gap: 8px; /* Spacing between thumbnails */
+    margin-top: 10px;
+}
+
+/* Style for each thumbnail image */
+.image-thumbnail {
+    width: 100%;
+    padding-bottom: 100%; /* Creates a square aspect ratio */
+    background-size: cover; 
+    background-position: center; 
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid var(--border-color, #e0e0e0); /* Use variable or fallback */
+    transition: transform 0.2s, opacity 0.2s;
+}
+.image-thumbnail:hover {
+    transform: scale(1.03);
+    opacity: 0.9;
+}
+
+/* Style for the button to add new images */
+.add-image-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-height: 40px;
+    margin-top: 10px;
+    border: 1px dashed var(--muted, #95a5a6);
+    color: var(--muted, #95a5a6);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* 2. Full-Screen Gallery Modal (Lightbox) */
+
+/* Modal Backdrop - Ensure .modal is set to display:none by default elsewhere */
+.modal.active {
+    display: flex; /* Displayed when image is clicked */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9); /* Dark, transparent background */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* Modal Content Container */
+.modal-content {
+    background: var(--bg-color-dark, #2c3e50); /* Dark background */
+    color: white;
+    width: 90%;
+    max-width: 800px;
+    height: 90%;
+    position: relative;
+    padding: 20px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header text for target name */
+.modal-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* Close button (top right) */
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 25px;
+    font-size: 30px;
+    font-weight: bold;
+    color: #fff;
+    cursor: pointer;
+    z-index: 1010;
+}
+
+/* 3. Image Display and Navigation */
+
+.gallery-container {
+    position: relative;
+    flex-grow: 1; 
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* The enlarged image element */
+.gallery-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; 
+}
+
+/* Navigation buttons (Prev/Next) */
+.gallery-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 15px 18px;
+    cursor: pointer;
+    font-size: 24px;
+    border-radius: 50%;
+    line-height: 1;
+    transition: background 0.2s;
+}
+.gallery-nav:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+.gallery-nav:disabled {
+    background: rgba(0, 0, 0, 0.3);
+    cursor: default;
+}
+
+.gallery-nav.prev { left: 10px; }
+.gallery-nav.next { right: 10px; }
+
+/* Modal action buttons (Delete/Replace) */
+.modal-actions {
+    display: flex;
+    justify-content: space-around;
+    padding-top: 15px;
+    gap: 10px;
+}
