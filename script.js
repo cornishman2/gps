@@ -5,6 +5,7 @@
   const STORAGE_KEY='metal_finder_v4_data';
   const NAV_INTERVAL_MS=500;
   const HEADING_SMOOTH=6;
+  const THUMBNAILS_PER_ROW=2; // New constant for thumbnail layout
 
   const $ = (sel,root=document)=>root.querySelector(sel);
   const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
@@ -36,7 +37,16 @@
   const bearingEl=$('#bearing');
   const bearingTextEl=$('#bearingText');
   const arrowEl=$('#arrow');
-
+  
+  // NEW Gallery Modal elements
+  const modal = $('#modal');
+  const modalImage = $('#modalImage');
+  const btnModalPrev = $('#btnModalPrev');
+  const btnModalNext = $('#btnModalNext');
+  const btnModalDelete = $('#btnModalDelete');
+  const btnModalReplace = $('#btnModalReplace');
+  const modalTargetName = $('#modalTargetName');
+  
   let data=load();
   data.surveys=data.surveys||[];
   let lastPosition=null;
@@ -46,6 +56,9 @@
   let smoothedHeading=0;
   let lastNav=0;
   let hasVibrated=false;
+  
+  // NEW Gallery state
+  let activeGallery={target:null, index:0}; // Tracks target and current image index in modal
 
   function uid(p='id'){return p+Math.random().toString(36).slice(2,9)}
   function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));showToast('💾 Saved')}
@@ -61,7 +74,7 @@
     if(name==='targets')renderTargets();
   }
 
-  // Nav delegation - RE-ADDED THIS CRITICAL BLOCK
+  // Nav delegation 
   document.addEventListener('click',(e)=>{
     const el=e.target.closest('.nav-item');
     if(el){ showScreen(el.dataset.screen); }
@@ -173,6 +186,17 @@
       const item=document.createElement('div');
       item.className='target-item';
       const foundBadge=t.found?`<span class="badge badge-success">✓ Found${t.foundNote?' - '+escapeHtml(t.foundNote):''}</span>`:'<span class="badge badge-muted">Not found</span>';
+      
+      // NEW: Generate thumbnail grid for the target
+      let thumbnailsHtml = '';
+      if(t.images && t.images.length > 0) {
+        thumbnailsHtml = '<div class="image-gallery-grid" style="grid-template-columns: repeat('+THUMBNAILS_PER_ROW+', 1fr);">';
+        t.images.forEach((img, index) => {
+          thumbnailsHtml += `<div class="image-thumbnail" data-action="view-image" data-target-id="${t.id}" data-index="${index}" style="background-image: url('${img}');"></div>`;
+        });
+        thumbnailsHtml += '</div>';
+      }
+
       item.innerHTML=`
         <div class="item-header">
           <div style="flex:1">
@@ -183,7 +207,7 @@
               <div class="coord-item"><div class="coord-label">Longitude</div><div class="coord-value">${t.lng.toFixed(6)}</div></div>
             </div>
             <div style="margin-top:8px">${foundBadge}</div>
-            <div class="image-gallery" id="gallery-${t.id}"></div>
+            <div class="image-gallery" id="gallery-${t.id}">${thumbnailsHtml}</div>
           </div>
         </div>
         <div class="item-actions">
@@ -193,17 +217,20 @@
         </div>
       `;
       targetsListEl.appendChild(item);
+      
+      // Re-add the '+' button logic for adding images
       const gallery=$('#gallery-'+t.id);
       const addBtn=document.createElement('div');
       addBtn.className='add-image-btn';
-      addBtn.textContent='+'; addBtn.dataset.target=t.id;
+      addBtn.textContent='📸 +'; 
+      addBtn.dataset.target=t.id;
       gallery.appendChild(addBtn);
     });
   }
   renderSurveys();
 
-  // Target list actions (goto, edit, delete, add image)
   targetsListEl.addEventListener('click',(e)=>{
+    // Handle button actions (goto, edit, delete)
     const btn=e.target.closest('button[data-action]');
     if(btn){
       const a=btn.dataset.action; const id=btn.dataset.id;
@@ -223,16 +250,28 @@
         save(); renderTargets(); showToast('🗑️ Deleted');
       }
     }
+    
+    // Handle clicking the '+' button to add images
     const add=e.target.closest('.add-image-btn');
     if(add){
       const open=getOpenSurvey();
       const target=open?.targets.find(t=>t.id===add.dataset.target);
       if(target) addImageToTarget(target);
     }
+    
+    // NEW: Handle clicking a thumbnail to view the gallery
+    const thumbnail = e.target.closest('.image-thumbnail');
+    if(thumbnail) {
+      const targetId = thumbnail.dataset.targetId;
+      const imageIndex = parseInt(thumbnail.dataset.index, 10);
+      const open = getOpenSurvey();
+      const target = open.targets.find(t => t.id === targetId);
+      if (target) showGallery(target, imageIndex);
+    }
   });
 
-  // REVISED btnAddTarget BLOCK
-  btnAddTarget.addEventListener('click',()=>{
+  // REVISED btnAddTarget BLOCK to include image prompt
+  btnAddTarget.addEventListener('click',async ()=>{
       const open=getOpenSurvey(); 
       if(!open){
           alert('⚠️ No open survey');
@@ -243,16 +282,16 @@
           return;
       }
       
-      // 1. Prompt for Target Name (Notes) - Defaulting to Date/Time
+      // 1. Prompt for Target Name (Notes)
       const defaultName = new Date().toLocaleString();
       const notes=prompt('Target Name (e.g., Target, Find, Signal):', defaultName);
-      if(notes===null) return; // User pressed Cancel
+      if(notes===null) return; 
       
       // 2. Prompt for Target Description
       const description=prompt('Target Description/Details (e.g., VDI, Depth, Ground Conditions):', '');
-      if(description===null) return; // User pressed Cancel
-
-      // Create the target with the captured notes and description
+      if(description===null) return; 
+      
+      // 3. Create initial target
       const t={
           id:uid('t_'),
           lat:lastPosition.coords.latitude,
@@ -264,11 +303,41 @@
           images:[]
       };
       
+      // 4. Prompt for images (non-blocking)
+      await new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file'; 
+        input.accept = 'image/*'; 
+        input.multiple = true; // Allow multiple files
+        
+        input.onchange = async (e) => {
+          for(const file of e.target.files) {
+            const base64 = await readFileAsBase64(file);
+            t.images.push(base64);
+          }
+          resolve();
+        };
+        input._resolve = resolve; // Save resolve for potential cancel
+        input.click();
+        // Note: Cannot easily detect file dialog cancellation in all browsers, 
+        // so we rely on the user confirming or just continuing with 0 files.
+      });
+
+      // 5. Save and render
       open.targets.push(t); 
       save(); 
-      renderTargets(); // This ensures the list updates automatically
+      renderTargets(); 
       showToast('✅ Target added');
   });
+  
+  // Utility to read file as Base64 (needed for the new async workflow)
+  function readFileAsBase64(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => resolve(event.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
 
   btnBatch.addEventListener('click',()=>{
     const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
@@ -288,14 +357,115 @@
   // Images
   function addImageToTarget(target){
     const input=document.createElement('input');
-    input.type='file'; input.accept='image/*'; input.onchange=(e)=>{
-      const f=e.target.files[0]; if(!f)return;
-      const r=new FileReader();
-      r.onload=(ev)=>{ if(!target.images) target.images=[]; target.images.push(ev.target.result); save(); renderTargets(); };
-      r.readAsDataURL(f);
+    input.type='file'; 
+    input.accept='image/*'; 
+    input.multiple = true; // Allow multiple files
+    
+    input.onchange=async (e)=>{
+      for(const file of e.target.files) {
+        const base64 = await readFileAsBase64(file);
+        if(!target.images) target.images=[]; 
+        target.images.push(base64); 
+      }
+      save(); renderTargets(); 
     };
     input.click();
   }
+  
+  // NEW: Gallery Modal Logic
+  function showGallery(target, index) {
+    if(!target || !target.images || target.images.length === 0) return;
+    
+    activeGallery.target = target;
+    activeGallery.index = index;
+    
+    updateGalleryModal();
+    modal.classList.add('active'); // Assume modal visibility is handled by CSS class 'active'
+  }
+  
+  function updateGalleryModal() {
+    const { target, index } = activeGallery;
+    if (!target || !target.images) return;
+    
+    const total = target.images.length;
+    const currentImage = target.images[index];
+
+    // Update image and counter
+    modalImage.src = currentImage;
+    modalTargetName.textContent = `${target.notes || 'Target'} (${index + 1} of ${total})`;
+
+    // Update navigation buttons state
+    btnModalPrev.disabled = index === 0;
+    btnModalNext.disabled = index === total - 1;
+    
+    // Ensure the modal is visible (using 'active' class from assumed CSS)
+    modal.style.display = 'flex'; 
+  }
+
+  // Modal close button listener (assuming #modalCancel is the close button)
+  $('#modalCancel').addEventListener('click', () => {
+    modal.classList.remove('active');
+    modal.style.display = 'none'; // Explicitly hide the modal
+    activeGallery.target = null;
+  });
+
+  // Modal navigation listeners
+  btnModalPrev.addEventListener('click', () => {
+    if (activeGallery.index > 0) {
+      activeGallery.index--;
+      updateGalleryModal();
+    }
+  });
+
+  btnModalNext.addEventListener('click', () => {
+    if (activeGallery.index < activeGallery.target.images.length - 1) {
+      activeGallery.index++;
+      updateGalleryModal();
+    }
+  });
+
+  // Modal delete listener
+  btnModalDelete.addEventListener('click', () => {
+    const { target, index } = activeGallery;
+    if (target && confirm('Are you sure you want to delete this picture?')) {
+      target.images.splice(index, 1);
+      save();
+      
+      if (target.images.length === 0) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      } else {
+        // Adjust index if necessary (e.g., delete last image)
+        activeGallery.index = Math.max(0, index - 1);
+        updateGalleryModal();
+      }
+      renderTargets(); // Update the target list view
+      showToast('🗑️ Picture deleted');
+    }
+  });
+  
+  // Modal replace listener
+  btnModalReplace.addEventListener('click', () => {
+    const { target, index } = activeGallery;
+    if (!target) return;
+    
+    const input = document.createElement('input');
+    input.type = 'file'; 
+    input.accept = 'image/*'; 
+    
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if(file) {
+        const base64 = await readFileAsBase64(file);
+        target.images[index] = base64; // Replace the image data
+        save();
+        updateGalleryModal();
+        renderTargets();
+        showToast('🔄 Picture replaced');
+      }
+    };
+    input.click();
+  });
 
   // Export/Import/Clear
   btnExport.addEventListener('click',()=>{
