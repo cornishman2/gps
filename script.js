@@ -234,7 +234,7 @@ btnAddTarget.addEventListener('click',()=>{
     const open=getOpenSurvey(); 
     if(!open){alert('⚠️ No open survey');return;}
     if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
-    
+    alert('Prompt');
     // 1. Prompt for Target Name (notes)
     const notes=prompt('Target Name (e.g., Coin, Ring, Iron):','');
     if(notes===null) return; // User pressed Cancel
