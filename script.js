@@ -229,13 +229,37 @@
     }
   });
 
-  btnAddTarget.addEventListener('click',()=>{
-    const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
+// Revised Code
+btnAddTarget.addEventListener('click',()=>{
+    const open=getOpenSurvey(); 
+    if(!open){alert('⚠️ No open survey');return;}
     if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
-    const t={id:uid('t_'),lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,notes:'',description:'',createdAt:Date.now(),found:false,images:[]};
-    open.targets.push(t); save(); renderTargets(); showToast('✅ Target added');
-  });
+    
+    // 1. Prompt for Target Name (notes)
+    const notes=prompt('Target Name (e.g., Coin, Ring, Iron):','');
+    if(notes===null) return; // User pressed Cancel
+    
+    // 2. Prompt for Target Description
+    const description=prompt('Target Description/Details:','');
+    if(description===null) return; // User pressed Cancel
 
+    // Create the target with the captured notes and description
+    const t={
+        id:uid('t_'),
+        lat:lastPosition.coords.latitude,
+        lng:lastPosition.coords.longitude,
+        notes:notes, // Use the user-provided name
+        description:description, // Use the user-provided description
+        createdAt:Date.now(),
+        found:false,
+        images:[]
+    };
+    
+    open.targets.push(t); 
+    save(); 
+    renderTargets(); 
+    showToast('✅ Target added');
+});
   btnBatch.addEventListener('click',()=>{
     const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
     if(!batchInterval){
