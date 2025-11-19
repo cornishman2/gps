@@ -61,7 +61,7 @@
     if(name==='targets')renderTargets();
   }
 
-  // Nav delegation
+  // Nav delegation - RE-ADDED THIS CRITICAL BLOCK
   document.addEventListener('click',(e)=>{
     const el=e.target.closest('.nav-item');
     if(el){ showScreen(el.dataset.screen); }
@@ -137,46 +137,3 @@
     if(a==='archive'){s.archived=true;s.status='Closed';save();renderSurveys();showToast('📦 Archived');}
     if(a==='restore'){s.archived=false;s.status='Closed';save();renderSurveys();showToast('✅ Restored');}
     if(a==='delete'){
-      if(!confirm('Delete this survey and all its targets? This cannot be undone.'))return;
-      data.surveys=data.surveys.filter(x=>x.id!==id);
-      save();renderSurveys();showToast('🗑️ Deleted');
-    }
-  });
-
-  // quick buttons
-  btnNewSurvey.addEventListener('click',()=>{
-    const name=prompt('Survey name:','Field '+new Date().toLocaleDateString());
-    if(!name)return; createSurvey(name); showToast('✨ Survey created');
-  });
-  btnNewSurveyAdd.addEventListener('click',()=>{
-    if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
-    const name=prompt('Survey name:','Field '+new Date().toLocaleDateString()); if(!name)return;
-    const s=createSurvey(name);
-    const note=prompt('First target name:','')||'';
-    s.targets.push({id:uid('t_'),lat:lastPosition.coords.latitude,lng:lastPosition.coords.longitude,notes:note,description:'',createdAt:Date.now(),found:false,images:[]});
-    save(); showToast('✅ Survey + target created');
-  });
-  btnCloseSurvey.addEventListener('click',()=>{
-    const o=getOpenSurvey(); if(!o){alert('⚠️ No open survey');return;}
-    if(!confirm('Close the current survey?'))return;
-    o.status='Closed'; save(); renderSurveys(); showToast('🔒 Survey closed');
-  });
-
-  // targets
-  function renderTargets(){
-    targetsListEl.innerHTML='';
-    const open=getOpenSurvey();
-    if(!open){ targetsListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No open survey.</div>'; openSurveyNameEl.textContent='None'; return; }
-    openSurveyNameEl.textContent=open.name;
-    if(!open.targets.length){ targetsListEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No targets yet.</div>'; return; }
-    open.targets.forEach(t=>{
-      const item=document.createElement('div');
-      item.className='target-item';
-      const foundBadge=t.found?`<span class="badge badge-success">✓ Found${t.foundNote?' - '+escapeHtml(t.foundNote):''}</span>`:'<span class="badge badge-muted">Not found</span>';
-      item.innerHTML=`
-        <div class="item-header">
-          <div style="flex:1">
-            <div class="item-title">${escapeHtml(t.notes||'Target')}</div>
-                <div style="font-size:13px; color:var(--muted); margin-top:4px">${escapeHtml(t.description||'No description provided.')}</div>
-            <div class="target-coords">
-              <div class="coord-item"><div
