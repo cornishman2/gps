@@ -1,4 +1,4 @@
-/* script.js - all logic with resilient event listeners */
+/* script.js - all logic with resilient event listeners - */
 (() => {
   'use strict';
 
