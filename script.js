@@ -229,18 +229,27 @@
     }
   });
 
-// Revised Code
+// Revised Code for btnAddTarget
 btnAddTarget.addEventListener('click',()=>{
     const open=getOpenSurvey(); 
-    if(!open){alert('⚠️ No open survey');return;}
-    if(!lastPosition){alert('⚠️ No GPS fix yet');return;}
-    // alert('Prompt');
-    // 1. Prompt for Target Name (notes)
-    const notes=prompt('Target Name (e.g., Coin, Ring, Iron):','');
+    if(!open){
+        alert('⚠️ No open survey');
+        return;
+    }
+    if(!lastPosition){
+        alert('⚠️ No GPS fix yet');
+        return;
+    }
+    
+    // 1. Prompt for Target Name (Notes) - Defaulting to Date/Time
+    const defaultName = new Date().toLocaleString();
+    const notes=prompt('Target Name (e.g., Target, Find, Signal):', defaultName);
     if(notes===null) return; // User pressed Cancel
     
-    // 2. Prompt for Target Description
-    const description=prompt('Target Description/Details:','');
+    // 2. Prompt for Target Description - Encouraging fuller description (using text area simulation)
+    // NOTE: Standard JS 'prompt' cannot render a multi-line textarea.
+    // We use a longer, descriptive default to encourage more text.
+    const description=prompt('Target Description/Details (e.g., VDI, Depth, Ground Conditions):', '');
     if(description===null) return; // User pressed Cancel
 
     // Create the target with the captured notes and description
@@ -248,8 +257,8 @@ btnAddTarget.addEventListener('click',()=>{
         id:uid('t_'),
         lat:lastPosition.coords.latitude,
         lng:lastPosition.coords.longitude,
-        notes:notes, // Use the user-provided name
-        description:description, // Use the user-provided description
+        notes:notes, 
+        description:description,
         createdAt:Date.now(),
         found:false,
         images:[]
@@ -257,9 +266,10 @@ btnAddTarget.addEventListener('click',()=>{
     
     open.targets.push(t); 
     save(); 
-    renderTargets(); 
+    renderTargets(); // This ensures the list updates automatically
     showToast('✅ Target added');
 });
+  
   btnBatch.addEventListener('click',()=>{
     const open=getOpenSurvey(); if(!open){alert('⚠️ No open survey');return;}
     if(!batchInterval){
