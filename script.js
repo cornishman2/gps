@@ -13,9 +13,11 @@ let appState = {
 const screens = document.querySelectorAll('.screen');
 const navItems = document.querySelectorAll('.nav-item');
 const toast = document.getElementById('toast');
-const compassScreen = document.getElementById('screen-compass');
-const targetListContainer = document.getElementById('target-list-container');
-const surveyListContainer = document.getElementById('survey-list-container');
+
+// === FIX: Correcting the DOM element IDs to match HTML ===
+const targetListContainer = document.getElementById('targetsList'); // FIX: Changed from 'target-list-container'
+const surveyListContainer = document.getElementById('surveyList');   // FIX: Changed from 'survey-list-container'
+// ---------------------------------------------------------
 
 // --- Global State for Gallery Modal ---
 const THUMBNAILS_PER_ROW = 2; // Used by CSS: grid-template-columns: 1fr 1fr;
@@ -182,7 +184,11 @@ function renderTargets() {
         return;
     }
 
-    targetListContainer.innerHTML = `<h2 class="card-title">${survey.name} Targets</h2>`;
+    // NOTE: This assumes an element exists in your HTML to display the survey name, 
+    // which it does: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
+    document.getElementById('openSurveyName').textContent = survey.name;
+
+    targetListContainer.innerHTML = ''; // Clear existing targets
 
     if (survey.targets.length === 0) {
         targetListContainer.innerHTML += '<p class="card">No targets in this survey.</p>';
@@ -430,7 +436,7 @@ document.addEventListener('keydown', (e) => {
 
 // Navigation buttons with the necessary console error fix (added 'e')
 btnModalPrev.addEventListener('click', (e) => {
-    // ⚠️ Defensive check for disabled state (fixes potential runtime issues)
+    // Defensive check for disabled state (fixes potential runtime issues)
     if (e.currentTarget.disabled) { 
         return; 
     }
@@ -460,7 +466,8 @@ function init() {
     if (appState.activeSurveyId) {
         navigate('screen-targets');
     } else {
-        navigate('screen-surveys');
+        // NOTE: Changed to 'screen-home' based on the HTML provided
+        navigate('screen-home'); 
     }
 }
 
