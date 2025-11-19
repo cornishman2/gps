@@ -14,13 +14,13 @@ const screens = document.querySelectorAll('.screen');
 const navItems = document.querySelectorAll('.nav-item');
 const toast = document.getElementById('toast');
 
-// === FIX: Correcting the DOM element IDs to match HTML ===
-const targetListContainer = document.getElementById('targetsList'); // FIX: Changed from 'target-list-container'
-const surveyListContainer = document.getElementById('surveyList');   // FIX: Changed from 'survey-list-container'
-// ---------------------------------------------------------
+// === FIX: Correcting the DOM element IDs to match HTML IDs ===
+const targetListContainer = document.getElementById('targetsList'); // FIX: Corrected to targetsList
+const surveyListContainer = document.getElementById('surveyList');   // FIX: Corrected to surveyList
+// -------------------------------------------------------------
 
 // --- Global State for Gallery Modal ---
-const THUMBNAILS_PER_ROW = 2; // Used by CSS: grid-template-columns: 1fr 1fr;
+const THUMBNAILS_PER_ROW = 2; 
 let activeGallery = {
     targetId: null,
     index: 0,
@@ -156,7 +156,7 @@ function renderSurveys() {
 function createTarget() {
     if (!appState.activeSurveyId) {
         showToast("Please select or create an active survey first.");
-        navigate('screen-surveys');
+        navigate('screen-home'); // Navigate to home screen where surveys are
         return;
     }
     const name = prompt("Enter new target name:");
@@ -184,14 +184,13 @@ function renderTargets() {
         return;
     }
 
-    // NOTE: This assumes an element exists in your HTML to display the survey name, 
-    // which it does: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
+    // Update the open survey name display
     document.getElementById('openSurveyName').textContent = survey.name;
 
     targetListContainer.innerHTML = ''; // Clear existing targets
 
     if (survey.targets.length === 0) {
-        targetListContainer.innerHTML += '<p class="card">No targets in this survey.</p>';
+        targetListContainer.innerHTML = '<p class="card">No targets in this survey.</p>';
         return;
     }
 
@@ -434,9 +433,9 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Navigation buttons with the necessary console error fix (added 'e')
+// Navigation buttons (with e parameter fix)
 btnModalPrev.addEventListener('click', (e) => {
-    // Defensive check for disabled state (fixes potential runtime issues)
+    // Defensive check for disabled state 
     if (e.currentTarget.disabled) { 
         return; 
     }
@@ -462,11 +461,10 @@ btnModalNext.addEventListener('click', () => {
 function init() {
     loadState();
     renderSurveys();
-    // Start on the Surveys screen if no active survey, otherwise Targets
+    // Start on the Targets screen if an active survey is set, otherwise Home
     if (appState.activeSurveyId) {
         navigate('screen-targets');
     } else {
-        // NOTE: Changed to 'screen-home' based on the HTML provided
         navigate('screen-home'); 
     }
 }
