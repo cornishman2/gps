@@ -1,23 +1,33 @@
 :root{
-  --bg:#0a0f1a;--card:#141b2d;--card-hover:#1a2333;--accent:#10b981;--accent-dark:#059669;
-  --muted:#6b7280;--text:#e5e7eb;--text-bright:#f9fafb;--danger:#ef4444;--warning:#f59e0b;
-  --glass:rgba(255,255,255,0.05);--border:rgba(255,255,255,0.1);--shadow:rgba(0,0,0,0.4)
+  --bg:#0a0f1a;
+  --card:#141b2d;
+  --card-hover:#1a2333;
+  --accent:#10b981;
+  --accent-dark:#059669;
+  --muted:#6b7280;
+  --text:#e5e7eb;
+  --text-bright:#f9fafb;
+  --danger:#ef4444;
+  --warning:#f59e0b;
+  --glass:rgba(255,255,255,0.05);
+  --border:rgba(255,255,255,0.1);
+  --shadow:rgba(0,0,0,0.4)
 }
 
-/* ADD THIS BLOCK to styles.css to hide the modal by default */
+/* Base Modal (Used by the Toast fix, but is also the base for the Gallery modal) */
 .modal {
-    display: none; /* <-- This is the fix! */
-    position: fixed; /* Ensures it covers the screen */
-    top: 0;
-    left: 0;
-    /* You may need more styles here to match your modal appearance, 
-       but `display: none;` is the primary fix. */
+    display: none; /* Hidden by default */
+    position: fixed; 
+    top: 0;
+    left: 0;
 }
 
+/* Base Styles */
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:var(--text);background:linear-gradient(135deg,#0a0f1a 0%,#1a1f2e 100%);-webkit-tap-highlight-color:transparent}
 .app{max-width:1200px;margin:0 auto;padding:20px 16px 100px;min-height:100vh}
 
+/* Header */
 header{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;background:var(--card);border-radius:16px;margin-bottom:24px;box-shadow:0 4px 20px var(--shadow)}
 .logo{display:flex;align-items:center;gap:12px}
 .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
@@ -29,6 +39,7 @@ h1{font-size:24px;font-weight:700;color:var(--text-bright)}
 .status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
+/* Cards and Inputs */
 .card{background:var(--card);border-radius:16px;padding:24px;margin-bottom:20px;box-shadow:0 2px 12px var(--shadow);transition:all 0.2s}
 .card:hover{background:var(--card-hover)}
 .card-title{font-size:20px;font-weight:600;margin-bottom:20px;color:var(--text-bright);display:flex;align-items:center;gap:10px}
@@ -38,6 +49,7 @@ input,textarea,select{padding:12px 16px;border-radius:12px;border:1px solid var(
 input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);background:rgba(16,185,129,0.05)}
 textarea{resize:vertical;min-height:80px;font-family:inherit}
 
+/* Buttons */
 .btn{padding:12px 20px;border-radius:12px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:white;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(16,185,129,0.4)}
@@ -49,6 +61,7 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 .row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 .row>*{flex:1;min-width:200px}
 
+/* Lists */
 .list{max-height:60vh;overflow-y:auto;padding-right:8px}
 .list::-webkit-scrollbar{width:6px}
 .list::-webkit-scrollbar-track{background:transparent}
@@ -74,27 +87,7 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 .coord-label{color:var(--muted);font-size:12px}
 .coord-value{color:var(--text-bright);font-family:monospace}
 
-.image-gallery{display:flex;gap:8px;margin-top:12px;overflow-x:auto;padding:4px 0}
-.image-gallery::-webkit-scrollbar{height:6px}
-.image-gallery::-webkit-scrollbar-track{background:transparent}
-.image-gallery::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.gallery-image-wrapper{position:relative;width:120px;height:120px;flex-shrink:0}
-.gallery-image{width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;display:block}
-.gallery-image:hover{transform:scale(1.05);border-color:var(--accent)}
-.add-image-btn{width:120px;height:120px;border-radius:8px;border:2px dashed var(--border);background:var(--glass);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--muted);cursor:pointer;transition:all 0.2s;flex-shrink:0}
-.add-image-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(16,185,129,0.05)}
-
-.lightbox{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
-.lightbox.active{display:flex}
-.lightbox-content{max-width:90vw;max-height:90vh;position:relative}
-.lightbox-image{max-width:100%;max-height:90vh;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.8)}
-.lightbox-close{position:absolute;top:-40px;right:0;background:none;border:none;color:white;font-size:32px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:all 0.2s}
-.lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.6);border:none;color:white;font-size:32px;cursor:pointer;width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.2s}
-.lightbox-prev{left:-60px}
-.lightbox-next{right:-60px}
-.lightbox-actions{display:flex;gap:12px;justify-content:center;margin-top:16px}
-.lightbox-counter{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);color:white;font-size:14px}
-
+/* COMPASS STYLES */
 .compass-screen{text-align:center}
 .compass-info{display:flex;justify-content:space-around;margin:20px 0;flex-wrap:wrap;gap:16px}
 .compass-stat{flex:1;min-width:150px}
@@ -104,158 +97,163 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 .arrow-container{width:200px;height:200px;margin:20px auto;border-radius:50%;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));display:flex;align-items:center;justify-content:center;box-shadow:inset 0 2px 12px rgba(0,0,0,0.3)}
 .arrow{font-size:80px;transition:transform 0.3s ease-out;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4))}
 
+/* Navigation */
 .bottom-nav{position:fixed;left:0;right:0;bottom:0;height:70px;background:rgba(20,27,45,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:100;box-shadow:0 -4px 20px var(--shadow)}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer;transition:all 0.2s;color:var(--muted);font-size:12px;font-weight:600;border-radius:12px;margin:0 4px}
 .nav-item.active{color:var(--accent)}
 
+/* Utility */
 .divider{border-top:1px solid var(--border);margin:20px 0;padding-top:12px;font-size:14px;color:var(--muted);font-weight:600}
-
 .hidden{display:none!important}
 
+/* Toast Notification (Fix for mobile taps) */
 .toast{
-  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card);color:var(--text-bright);
-  padding:12px 24px;border-radius:12px;box-shadow:0 4px 20px var(--shadow);
-  display:none;z-index:200;border:1px solid var(--accent);
-  pointer-events : none }
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--card);color:var(--text-bright);
+  padding:12px 24px;border-radius:12px;box-shadow:0 4px 20px var(--shadow);
+  display:none;z-index:200;border:1px solid var(--accent);
+  pointer-events : none /* CRITICAL FIX: Allows clicks to pass through */
+}
+
 
 /* ======================================= */
-/* === NEW STYLES FOR IMAGE GALLERY (JS CHANGES) === */
+/* === NEW STYLES FOR IMAGE GALLERY AND MODAL === */
 /* ======================================= */
 
 /* 1. Thumbnail Grid Layout (2 per row) */
 .image-gallery {
-    margin-top: 15px;
-    display: flex;
-    flex-direction: column;
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column; /* Stacks the grid and the '+' button */
 }
 
 .image-gallery-grid {
-    display: grid;
-    gap: 8px; /* Spacing between thumbnails */
-    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* FIX: Sets the required 2-in-a-row layout */
+    gap: 8px; 
+    margin-top: 10px;
 }
 
 /* Style for each thumbnail image */
 .image-thumbnail {
-    width: 100%;
-    padding-bottom: 100%; /* Creates a square aspect ratio */
-    background-size: cover; 
-    background-position: center; 
-    border-radius: 4px;
-    cursor: pointer;
-    border: 1px solid var(--border-color, #e0e0e0); /* Use variable or fallback */
-    transition: transform 0.2s, opacity 0.2s;
+    width: 100%;
+    padding-bottom: 100%; /* Creates a square aspect ratio */
+    background-size: cover; 
+    background-position: center; 
+    border-radius: 8px; /* Matched to existing card radius */
+    cursor: pointer;
+    border: 1px solid var(--border); 
+    transition: transform 0.2s, opacity 0.2s;
 }
 .image-thumbnail:hover {
-    transform: scale(1.03);
-    opacity: 0.9;
+    transform: scale(1.03);
+    opacity: 0.9;
 }
 
 /* Style for the button to add new images */
 .add-image-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    min-height: 40px;
-    margin-top: 10px;
-    border: 1px dashed var(--muted, #95a5a6);
-    color: var(--muted, #95a5a6);
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 14px;
-    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-height: 40px;
+    margin-top: 10px;
+    border: 1px dashed var(--muted);
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 14px;
+    text-align: center;
 }
 
 /* 2. Full-Screen Gallery Modal (Lightbox) */
 
-/* Modal Backdrop - Ensure .modal is set to display:none by default elsewhere */
+/* Modal Backdrop - shown when JS applies .active */
 .modal.active {
-    display: flex; /* Displayed when image is clicked */
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.9); /* Dark, transparent background */
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    display: flex; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9); 
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
 }
 
 /* Modal Content Container */
 .modal-content {
-    background: var(--bg-color-dark, #2c3e50); /* Dark background */
-    color: white;
-    width: 90%;
-    max-width: 800px;
-    height: 90%;
-    position: relative;
-    padding: 20px;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
+    background: var(--card); /* FIX: Uses your existing card background variable */
+    color: var(--text-bright);
+    width: 90%;
+    max-width: 800px;
+    height: 90%;
+    position: relative;
+    padding: 20px;
+    border-radius: 12px; /* Matched to your card radius */
+    display: flex;
+    flex-direction: column;
 }
 
 /* Header text for target name */
 .modal-title {
-    font-size: 1.2em;
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 10px;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 10px;
 }
 
 /* Close button (top right) */
 .close-btn {
-    position: absolute;
-    top: 10px;
-    right: 25px;
-    font-size: 30px;
-    font-weight: bold;
-    color: #fff;
-    cursor: pointer;
-    z-index: 1010;
+    position: absolute;
+    top: 10px;
+    right: 25px;
+    font-size: 30px;
+    font-weight: bold;
+    color: var(--text); /* Use text color */
+    cursor: pointer;
+    z-index: 1010;
 }
 
 /* 3. Image Display and Navigation */
 
 .gallery-container {
-    position: relative;
-    flex-grow: 1; 
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: relative;
+    flex-grow: 1; 
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 /* The enlarged image element */
 .gallery-image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain; 
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; 
 }
 
 /* Navigation buttons (Prev/Next) */
 .gallery-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0, 0, 0, 0.5);
-    color: white;
-    border: none;
-    padding: 15px 18px;
-    cursor: pointer;
-    font-size: 24px;
-    border-radius: 50%;
-    line-height: 1;
-    transition: background 0.2s;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 15px 18px;
+    cursor: pointer;
+    font-size: 24px;
+    border-radius: 50%;
+    line-height: 1;
+    transition: background 0.2s;
 }
 .gallery-nav:hover {
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.8);
 }
 .gallery-nav:disabled {
-    background: rgba(0, 0, 0, 0.3);
-    cursor: default;
+    background: rgba(0, 0, 0, 0.3);
+    cursor: default;
 }
 
 .gallery-nav.prev { left: 10px; }
@@ -263,8 +261,8 @@ textarea{resize:vertical;min-height:80px;font-family:inherit}
 
 /* Modal action buttons (Delete/Replace) */
 .modal-actions {
-    display: flex;
-    justify-content: space-around;
-    padding-top: 15px;
-    gap: 10px;
+    display: flex;
+    justify-content: space-around;
+    padding-top: 15px;
+    gap: 10px;
 }
