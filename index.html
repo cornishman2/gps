@@ -1,161 +1,1294 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Metal Finder v4</title>
-<link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metal Detecting Survey Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    
+    <style>
+        /* Custom colors using CSS variables for guaranteed consistency */
+        :root {
+            --color-primary: 29 78 216;      /* Blue (For contrast/borders) */
+            --color-secondary: 34 197 94;    /* Vibrant Green (For action buttons) */
+            --color-background: 243 244 246; /* Light Gray */
+            --color-card: 255 255 255;       /* White */
+        }
+
+        /* Configure Tailwind to use the custom variables (kept for other classes like text-primary) */
+        tailwind-config {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: 'rgb(var(--color-primary) / <alpha-value>)',
+                        secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+                        background: 'rgb(var(--color-background) / <alpha-value>)',
+                        card: 'rgb(var(--color-card) / <alpha-value>)',
+                    }
+                }
+            }
+        }
+
+        /* Basic App Styling */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: rgb(var(--color-background));
+        }
+
+        /* Ensure the modal is hidden by default and handles clicks outside */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 50;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        .modal-content {
+            margin: 10vh auto;
+            border-radius: 12px;
+            max-width: 500px;
+        }
+    </style>
 </head>
-<body>
-<div class="app">
-<header>
-<div class="logo">
-<div class="logo-icon">📍</div>
-<div>
-<h1>Metal Finder</h1>
-<div class="version">v4.0 - Professional</div>
-</div>
-</div>
-<div class="gps-info">
-<div class="gps-status">
-<div class="gps-label">
-<span class="status-dot"></span>
-<span>GPS: <strong id="gpsText">Searching...</strong></span>
-</div>
-<div>Accuracy: <strong id="accText">—</strong></div>
-</div>
-</div>
-</header>
+<body class="min-h-screen">
 
-<main>
-<section id="screen-home" class="screen">
-<div class="card">
-<div class="card-title">Settings</div>
-<div class="row">
-<input id="detectoristName" placeholder="Your name"/>
-<input id="detectorUsed" placeholder="Detector model"/>
-</div>
-</div>
+    <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
+        <div class="container mx-auto max-w-lg">
+            <div class="flex items-center justify-between p-4">
+                <h1 class="text-xl font-extrabold text-primary">GeoFind Log</h1>
+                <div class="flex space-x-2">
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Home">
+                        <i class="fas fa-home text-xl"></i>
+                    </button>
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Targets">
+                        <i class="fas fa-bullseye text-xl"></i>
+                    </button>
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Compass">
+                        <i class="fas fa-compass text-xl"></i>
+                    </button>
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Settings">
+                        <i class="fas fa-cog text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
 
-<div class="card">
-<div class="card-title">Quick Actions</div>
-<div class="row">
-<button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
-<button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
-<button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
-</div>
-</div>
+    <main id="app-content" class="container mx-auto max-w-lg pt-20 pb-4 min-h-screen"></main>
 
-<div class="card">
-<div class="card-title">Surveys</div>
-<div class="list" id="surveyList"></div>
-</div>
-</section>
+    <div id="message-toast" class="fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 opacity-0 pointer-events-none" style="min-width: 250px;"></div>
 
-<section id="screen-targets" class="screen hidden">
-<div class="card">
-<div class="card-title">Targets</div>
-<div class="row">
-<button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
-<button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
-</div>
-<div style="margin-top:12px;color:var(--muted);font-size:14px">
-Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
-</div>
-</div>
-<div class="list" id="targetsList"></div>
-</section>
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 id="confirm-title" class="text-xl font-bold text-red-600 mb-4">Confirmation</h3>
+            <p id="confirm-message" class="text-gray-700 mb-6"></p>
+            <div class="flex justify-end space-x-3">
+                <button id="confirm-no-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                <button id="confirm-yes-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold">Yes, Proceed</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="new-survey-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Create New Survey</h3>
+            <form id="new-survey-form">
+                <div class="mb-4">
+                    <label for="survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
+                    <input type="text" id="survey-name" name="surveyName" required 
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="mb-4">
+                    <label for="survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
+                    <textarea id="survey-description" name="surveyDescription" rows="3" 
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeNewSurveyModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Create & Open
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="new-target-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Log New Target</h3>
+            <form id="new-target-form">
+                
+                <div id="target-survey-display" class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
+                    Logging for: <span id="current-target-survey-name" class="text-primary">Loading...</span>
+                </div>
 
-<section id="screen-compass" class="screen hidden">
-<div class="card compass-screen">
-<div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
-<div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
-<div class="compass-info">
-<div class="compass-stat">
-<div class="stat-label">Your Heading</div>
-<div class="stat-value"><span id="heading">—</span>°</div>
-</div>
-<div class="compass-stat">
-<div class="stat-label">Target Bearing</div>
-<div class="stat-value"><span id="bearing">—</span>°</div>
-</div>
-</div>
-<div class="direction-text" id="bearingText">—</div>
-<div class="arrow-container">
-<div class="arrow" id="arrow">↑</div>
-</div>
-<div class="compass-controls">
-<button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
-<button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
-<button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
-<button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
-<button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
-</div>
-</div>
-</section>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="mb-4 col-span-2">
+                        <label for="target-description" class="block text-sm font-medium text-gray-700">Description / Find Name *</label>
+                        <input type="text" id="target-description" name="targetDescription" required 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4">
+                        <label for="target-vdi" class="block text-sm font-medium text-gray-700">VDI Reading</label>
+                        <input type="text" id="target-vdi" name="targetVDI" placeholder="e.g., 28" 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4">
+                        <label for="target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                        <input type="text" id="target-depth" name="targetDepth" placeholder="e.g., 6 inches"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
+                        <select id="target-type" name="targetType" required
+                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary bg-white">
+                            <option value="Coin">Coin</option>
+                            <option value="Relic">Relic</option>
+                            <option value="Jewelry">Jewelry</option>
+                            <option value="Modern Junk">Modern Junk</option>
+                            <option value="Iron Junk">Iron Junk</option>
+                            <option value="Unidentified">Unidentified</option>
+                        </select>
+                    </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="target-coords" class="block text-sm font-medium text-gray-700 flex items-center">
+                            GPS Coordinates
+                            <span id="gps-loading-indicator" class="ml-2 text-primary text-xs hidden">
+                                <i class="fas fa-spinner fa-spin mr-1"></i> Locating...
+                            </span>
+                        </label>
+                        <input type="text" id="target-coords" name="targetCoords" placeholder="Requesting location..." 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                </div>
 
-<section id="screen-settings" class="screen hidden">
-<div class="card">
-<div class="card-title">Data Management</div>
-<div class="row">
-<button class="btn btn-primary" id="btnExport">💾 Export Data</button>
-<button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
-<input id="importFile" type="file" accept="application/json" style="display:none"/>
-</div>
-<div class="row">
-<button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
-</div>
-</div>
-</section>
-</main>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeNewTargetModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Log Target
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-<div id="lightbox" class="lightbox">
-<div class="lightbox-content">
-<button class="lightbox-close" id="lightboxClose">×</button>
-<button class="lightbox-nav lightbox-prev" id="lightboxPrev">‹</button>
-<img id="lightboxImage" class="lightbox-image" src="" alt="Full size"/>
-<button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
-<div class="lightbox-counter" id="lightboxCounter"></div>
-<div class="lightbox-actions">
-<button class="btn btn-secondary" id="lightboxChange">🔄 Change</button>
-<button class="btn btn-danger" id="lightboxDelete">🗑️ Delete</button>
-</div>
-</div>
-</div>
+    <div id="edit-target-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Edit Target Details</h3>
+            <form id="edit-target-form">
+                <input type="hidden" id="edit-target-id" name="targetId">
+                <input type="hidden" id="edit-survey-id" name="surveyId">
 
-<div id="modal" class="modal">
-<div class="modal-content">
-<div class="modal-title" id="modalTitle">Title</div>
-<div id="modalBody"></div>
-<div class="modal-actions">
-<button class="btn btn-secondary" id="modalCancel">Cancel</button>
-<button class="btn btn-primary" id="modalConfirm">Confirm</button>
-</div>
-</div>
-</div>
+                <div id="edit-target-survey-display" class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
+                    Editing target in: <span id="current-edit-survey-name" class="text-primary">Loading...</span>
+                </div>
 
-<div id="toast" class="toast">Saved</div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="mb-4 col-span-2">
+                        <label for="edit-target-description" class="block text-sm font-medium text-gray-700">Description / Find Name *</label>
+                        <input type="text" id="edit-target-description" name="targetDescription" required 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4">
+                        <label for="edit-target-vdi" class="block text-sm font-medium text-gray-700">VDI Reading</label>
+                        <input type="text" id="edit-target-vdi" name="targetVDI" placeholder="e.g., 28" 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4">
+                        <label for="edit-target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                        <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
+                        <select id="edit-target-type" name="targetType" required
+                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary bg-white">
+                            <option value="Coin">Coin</option>
+                            <option value="Relic">Relic</option>
+                            <option value="Jewelry">Jewelry</option>
+                            <option value="Modern Junk">Modern Junk</option>
+                            <option value="Iron Junk">Iron Junk</option>
+                            <option value="Unidentified">Unidentified</option>
+                        </select>
+                    </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="edit-target-coords" class="block text-sm font-medium text-gray-700">GPS Coordinates</label>
+                        <input type="text" id="edit-target-coords" name="targetCoords" placeholder="e.g., 50.2568, -5.2345" 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                </div>
 
-<nav class="bottom-nav">
-<div class="nav-item active" data-screen="home">
-<div class="nav-icon">🏠</div>
-<div>Home</div>
-</div>
-<div class="nav-item" data-screen="targets">
-<div class="nav-icon">📍</div>
-<div>Targets</div>
-</div>
-<div class="nav-item" data-screen="compass">
-<div class="nav-icon">🧭</div>
-<div>Compass</div>
-</div>
-<div class="nav-item" data-screen="settings">
-<div class="nav-icon">⚙️</div>
-<div>Settings</div>
-</div>
-</nav>
-</div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeEditTargetModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Save Target Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="edit-profile-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Edit Detectorist Profile</h3>
+            <form id="edit-profile-form">
+                <div class="mb-4">
+                    <label for="profile-name" class="block text-sm font-medium text-gray-700">Detectorist Name *</label>
+                    <input type="text" id="profile-name" name="profileName" required 
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="mb-4">
+                    <label for="profile-detector" class="block text-sm font-medium text-gray-700">Detector Used</label>
+                    <input type="text" id="profile-detector" name="profileDetector" required
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-<script src="script.js"></script>
+
+    <script>
+        // --- GLOBAL STATE & INITIALIZATION ---
+        let surveys = [];
+        let currentPage = 'Home';
+        // Profile initialized with default data
+        let userProfile = {
+            name: "New User",
+            detector: "Default Machine"
+        };
+        let userId;
+
+        // --- HELPER FUNCTIONS ---
+
+        /** Generates a simple unique ID. */
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+        }
+
+        /** Formats a timestamp into a readable date string. */
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleDateString();
+        }
+
+        /** Saves the current surveys and profile data to Local Storage. */
+        function saveSurveysToLocalStorage() {
+            try {
+                localStorage.setItem('geoFindSurveys', JSON.stringify(surveys));
+                localStorage.setItem('geoFindProfile', JSON.stringify(userProfile));
+                localStorage.setItem('geoFindUserId', userId);
+            } catch (e) {
+                console.error("Error saving to Local Storage:", e);
+                showMessage("Error saving data locally.", 'error');
+            }
+        }
+
+        /** Loads data from Local Storage. Initializes if no data found. */
+        function loadDataFromLocalStorage() {
+            try {
+                const storedSurveys = localStorage.getItem('geoFindSurveys');
+                const storedProfile = localStorage.getItem('geoFindProfile');
+                const storedUserId = localStorage.getItem('geoFindUserId');
+
+                if (storedSurveys) {
+                    surveys = JSON.parse(storedSurveys);
+                } else {
+                    // Initialize with sample data if nothing is found
+                    surveys = [
+                        {
+                            id: generateId(),
+                            name: "Sample Grid Survey 2025",
+                            description: "Testing a 10x10 metre grid near the old oak tree.",
+                            status: 'Open',
+                            creationDate: Date.now(),
+                            dateLastChanged: Date.now(),
+                            targets: [
+                                { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.2568, -5.2345", user: userProfile.name, detector: userProfile.detector },
+                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.2567, -5.2348", user: userProfile.name, detector: userProfile.detector }
+                            ]
+                        }
+                    ];
+                }
+
+                if (storedProfile) {
+                    // Update userProfile only if storedProfile exists and is valid
+                    const tempProfile = JSON.parse(storedProfile);
+                    if (tempProfile && tempProfile.name && tempProfile.detector) {
+                         userProfile = tempProfile;
+                    }
+                } else {
+                    // Re-initialize sample profile if needed
+                    userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox" };
+                }
+
+                if (storedUserId) {
+                    userId = storedUserId;
+                } else {
+                    userId = generateId();
+                }
+
+                saveSurveysToLocalStorage(); // Ensure initial data and ID are saved
+            } catch (e) {
+                console.error("Error loading from Local Storage:", e);
+                showMessage("Error loading data. Data may be reset.", 'error');
+            }
+        }
+
+        /** Renders the current page content into the main container. */
+        function render() {
+            const appContent = document.getElementById('app-content');
+            let contentHtml = '';
+
+            // Update navigation button styles
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                if (btn.dataset.page === currentPage) {
+                    btn.classList.add('text-primary', 'bg-gray-100');
+                    btn.classList.remove('text-gray-500', 'hover:text-primary');
+                } else {
+                    btn.classList.remove('text-primary', 'bg-gray-100');
+                    btn.classList.add('text-gray-500', 'hover:text-primary');
+                }
+            });
+
+            switch (currentPage) {
+                case 'Home':
+                    contentHtml = renderHomePage();
+                    break;
+                case 'Targets':
+                    contentHtml = renderTargetsPage();
+                    break;
+                case 'Compass':
+                    contentHtml = renderCompassPage();
+                    break;
+                case 'Settings':
+                    contentHtml = renderSettingsPage();
+                    break;
+                default:
+                    contentHtml = `<div class="p-4 text-center">Page Not Found</div>`;
+            }
+
+            appContent.innerHTML = contentHtml;
+            // Re-attach event listeners specific to the rendered page
+            attachPageEventListeners();
+        }
+
+        /** Attaches event listeners for dynamically rendered elements */
+        function attachPageEventListeners() {
+            // For Home Page (New Survey Button)
+            const newSurveyBtn = document.getElementById('new-survey-btn');
+            if (newSurveyBtn) {
+                newSurveyBtn.addEventListener('click', showNewSurveyModal);
+            }
+            // For Targets Page (Log New Target Button)
+            const addTargetBtn = document.getElementById('add-target-btn');
+            if (addTargetBtn) {
+                addTargetBtn.addEventListener('click', showNewTargetModal);
+            }
+            // For Settings Page (Export/Import Buttons)
+            const exportBtn = document.getElementById('export-data-btn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', exportData);
+            }
+            const importBtn = document.getElementById('import-data-btn');
+            if (importBtn) {
+                importBtn.addEventListener('click', importData);
+            }
+        }
+
+        // --- GPS GEOLOCATION FUNCTIONS (NEW) ---
+        
+        /** Safely requests and handles GPS coordinates. */
+        function getCurrentPosition() {
+            const coordsInput = document.getElementById('target-coords');
+            const loadingIndicator = document.getElementById('gps-loading-indicator');
+            
+            // 1. Reset field and show loading
+            coordsInput.value = '';
+            coordsInput.placeholder = 'Requesting location...';
+            coordsInput.disabled = true; // Prevent manual typing while loading
+            loadingIndicator.classList.remove('hidden');
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude.toFixed(6);
+                        const lon = position.coords.longitude.toFixed(6);
+                        const coordinates = `${lat}, ${lon}`;
+                        
+                        coordsInput.value = coordinates;
+                        coordsInput.placeholder = 'GPS Found';
+                        coordsInput.disabled = false;
+                        loadingIndicator.classList.add('hidden');
+                        showMessage('GPS location found and filled.', 'info');
+                    },
+                    (error) => {
+                        // Handle errors (permission denied, position unavailable, timeout)
+                        coordsInput.value = '';
+                        coordsInput.placeholder = 'No GPS logged (tap to enter manually)';
+                        coordsInput.disabled = false;
+                        loadingIndicator.classList.add('hidden');
+
+                        let errorMessage = 'GPS error: Unable to retrieve location.';
+                        if (error.code === error.PERMISSION_DENIED) {
+                            errorMessage = 'GPS permission denied. Please enable location services for this site.';
+                        } else if (error.code === error.TIMEOUT) {
+                            errorMessage = 'GPS timeout. Try moving to an area with better signal.';
+                        }
+                        
+                        showMessage(errorMessage, 'warning');
+                        console.error('Geolocation Error:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                coordsInput.value = '';
+                coordsInput.placeholder = 'Geolocation not supported by this browser.';
+                coordsInput.disabled = false;
+                loadingIndicator.classList.add('hidden');
+                showMessage('Geolocation is not supported on this device.', 'error');
+            }
+        }
+
+        // --- MODAL & TOAST FUNCTIONS ---
+
+        /** Shows a temporary notification toast. */
+        function showMessage(message, type = 'info') {
+            const toast = document.getElementById('message-toast');
+            toast.textContent = message;
+
+            let bgColor = 'bg-gray-700'; // Default info
+            if (type === 'success') {
+                bgColor = 'bg-secondary';
+            } else if (type === 'error') {
+                bgColor = 'bg-red-600';
+            } else if (type === 'warning') {
+                bgColor = 'bg-yellow-500';
+            }
+
+            toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 opacity-100 ${bgColor}`;
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        /** Shows the generic confirmation modal. */
+        function showConfirmationModal(title, message, onConfirmCallback) {
+            const modal = document.getElementById('confirmation-modal');
+            document.getElementById('confirm-title').innerHTML = title;
+            document.getElementById('confirm-message').innerHTML = message;
+            
+            const yesBtn = document.getElementById('confirm-yes-btn');
+            const noBtn = document.getElementById('confirm-no-btn');
+
+            const handleYes = () => {
+                onConfirmCallback();
+                closeConfirmationModal();
+                yesBtn.removeEventListener('click', handleYes);
+            };
+
+            yesBtn.onclick = handleYes;
+            noBtn.onclick = closeConfirmationModal;
+            
+            modal.style.display = 'block';
+        }
+
+        /** Closes the generic confirmation modal. */
+        function closeConfirmationModal() {
+            document.getElementById('confirmation-modal').style.display = 'none';
+        }
+
+        /** Shows the New Survey Modal and attaches the submit listener. */
+        function showNewSurveyModal() {
+            // Reset the form whenever the modal is opened
+            document.getElementById('new-survey-form').reset();
+            document.getElementById('new-survey-modal').style.display = 'block';
+
+            // Ensure the submit listener is attached only once
+            const form = document.getElementById('new-survey-form');
+            // Remove previous listener to prevent multiple submissions
+            form.removeEventListener('submit', handleNewSurveySubmit); 
+            form.addEventListener('submit', handleNewSurveySubmit); 
+        }
+
+        /** Closes the New Survey Modal. */
+        function closeNewSurveyModal() {
+            document.getElementById('new-survey-modal').style.display = 'none';
+        }
+
+        /** Handles the submission of the New Survey form. */
+        function handleNewSurveySubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const name = form['surveyName'].value.trim();
+            const description = form['surveyDescription'].value.trim() || 'No description provided.';
+            const now = Date.now();
+
+            if (!name) {
+                showMessage('Survey Name is required.', 'error');
+                return;
+            }
+
+            // 1. Close any currently open survey
+            surveys.forEach(s => {
+                if (s.status === 'Open') {
+                    s.status = 'Active';
+                    s.dateLastChanged = now;
+                }
+            });
+
+            // 2. Create the new survey object
+            const newSurvey = {
+                id: generateId(),
+                name: name,
+                description: description,
+                status: 'Open', // Automatically opens the new survey
+                creationDate: now,
+                dateLastChanged: now,
+                targets: []
+            };
+
+            // 3. Add the new survey to the start of the list
+            surveys.unshift(newSurvey);
+
+            // 4. Save and re-render
+            saveSurveysToLocalStorage();
+            closeNewSurveyModal();
+            showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
+            render();
+        }
+
+        /** Shows the New Target Modal. (Updated to include GPS) */
+        function showNewTargetModal() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (!openSurvey) {
+                return showMessage('Cannot log target. Please open a survey first on the Home page.', 'warning');
+            }
+
+            // 1. Set survey name in the modal header
+            document.getElementById('current-target-survey-name').textContent = openSurvey.name;
+            
+            // 2. Reset the form
+            document.getElementById('new-target-form').reset();
+            
+            // 3. Request GPS location
+            getCurrentPosition();
+            
+            // 4. Display modal
+            document.getElementById('new-target-modal').style.display = 'block';
+
+            // 5. Attach the submit listener
+            const form = document.getElementById('new-target-form');
+            form.removeEventListener('submit', handleNewTargetSubmit); 
+            form.addEventListener('submit', handleNewTargetSubmit); 
+        }
+
+        /** Closes the New Target Modal. */
+        function closeNewTargetModal() {
+            document.getElementById('new-target-modal').style.display = 'none';
+        }
+
+        /** Handles the submission of the New Target form. */
+        function handleNewTargetSubmit(event) {
+            event.preventDefault();
+
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (!openSurvey) {
+                showMessage('Error: No open survey found to log the target against.', 'error');
+                return;
+            }
+
+            const form = event.target;
+            const description = form['targetDescription'].value.trim();
+            const vdi = form['targetVDI'].value.trim() || 'N/A';
+            const depth = form['targetDepth'].value.trim() || 'Unknown';
+            const type = form['targetType'].value;
+            const coords = form['targetCoords'].value.trim() || 'No GPS logged';
+            const now = Date.now();
+
+            if (!description) {
+                showMessage('A description is required for the target.', 'error');
+                return;
+            }
+
+            // Create the new target object
+            const newTarget = {
+                id: generateId(),
+                description: description,
+                vdi: vdi,
+                depth: depth,
+                type: type,
+                status: 'Signal Detected', // Initial status
+                time: now,
+                coordinates: coords,
+                user: userProfile.name,      // Pulled from userProfile state
+                detector: userProfile.detector // Pulled from userProfile state
+            };
+
+            // 1. Add the new target to the open survey (at the beginning of the array for reverse chronological view)
+            openSurvey.targets.unshift(newTarget);
+            openSurvey.dateLastChanged = now;
+
+            // 2. Save and re-render
+            saveSurveysToLocalStorage();
+            closeNewTargetModal();
+            showMessage(`Target '${description}' successfully logged in ${openSurvey.name}.`, 'success');
+            
+            // Switch to Targets page automatically to view the new entry
+            currentPage = 'Targets'; 
+            render();
+        }
+
+        /** Shows the Edit Target Modal and loads current data. */
+        function showEditTargetModal(targetId, surveyId) {
+            const survey = surveys.find(s => s.id === surveyId);
+            if (!survey) return showMessage('Error: Survey not found.', 'error');
+            
+            const target = survey.targets.find(t => t.id === targetId);
+            if (!target) return showMessage('Error: Target not found.', 'error');
+
+            // 1. Populate the form
+            document.getElementById('edit-target-id').value = target.id;
+            document.getElementById('edit-survey-id').value = survey.id;
+            document.getElementById('current-edit-survey-name').textContent = survey.name;
+            
+            document.getElementById('edit-target-description').value = target.description;
+            document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
+            document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
+            document.getElementById('edit-target-type').value = target.type;
+            document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
+
+
+            // 2. Display the modal
+            const modal = document.getElementById('edit-target-modal');
+            modal.style.display = 'block';
+
+            // 3. Attach the submit listener
+            const form = document.getElementById('edit-target-form');
+            form.removeEventListener('submit', handleEditTargetSubmit); 
+            form.addEventListener('submit', handleEditTargetSubmit); 
+            
+            showMessage(`Editing target: ${target.description}`, 'info');
+        }
+        
+        /** Closes the Edit Target Modal. */
+        function closeEditTargetModal() {
+            document.getElementById('edit-target-modal').style.display = 'none';
+        }
+
+        /** Handles the submission of the Edit Target form. */
+        function handleEditTargetSubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const targetId = form['targetId'].value;
+            const surveyId = form['surveyId'].value;
+            
+            const newDescription = form['targetDescription'].value.trim();
+            const newVdi = form['targetVDI'].value.trim() || 'N/A';
+            const newDepth = form['targetDepth'].value.trim() || 'Unknown';
+            const newType = form['targetType'].value;
+            const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
+
+            if (!newDescription) {
+                showMessage('A description is required for the target.', 'error');
+                return;
+            }
+
+            const survey = surveys.find(s => s.id === surveyId);
+            const targetIndex = survey.targets.findIndex(t => t.id === targetId);
+
+            if (survey && targetIndex !== -1) {
+                // Update the target object in the array
+                survey.targets[targetIndex].description = newDescription;
+                survey.targets[targetIndex].vdi = newVdi;
+                survey.targets[targetIndex].depth = newDepth;
+                survey.targets[targetIndex].type = newType;
+                survey.targets[targetIndex].coordinates = newCoords;
+                
+                survey.dateLastChanged = Date.now(); // Update survey's last modified time
+
+                // Save and re-render
+                saveSurveysToLocalStorage();
+                closeEditTargetModal();
+                showMessage(`Target '${newDescription}' updated successfully!`, 'success');
+                render();
+            } else {
+                 showMessage('Error: Target or Survey not found during submission.', 'error');
+            }
+        }
+
+
+        /** Shows the Edit Profile Modal and loads current data. */
+        function showEditProfileModal() {
+            const modal = document.getElementById('edit-profile-modal');
+            
+            // Pre-fill the form with current profile data
+            document.getElementById('profile-name').value = userProfile.name;
+            document.getElementById('profile-detector').value = userProfile.detector;
+
+            modal.style.display = 'block';
+
+            // Attach the submit listener
+            const form = document.getElementById('edit-profile-form');
+            form.removeEventListener('submit', handleEditProfileSubmit); 
+            form.addEventListener('submit', handleEditProfileSubmit); 
+            
+            showMessage("Edit Profile modal opened. Please enter your name and detector and click 'Save Changes'.", 'info');
+        }
+
+        /** Closes the Edit Profile Modal. */
+        function closeEditProfileModal() {
+            document.getElementById('edit-profile-modal').style.display = 'none';
+        }
+
+        /** Handles the submission of the Edit Profile form. */
+        function handleEditProfileSubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const newName = form['profileName'].value.trim();
+            const newDetector = form['profileDetector'].value.trim();
+
+            if (!newName || !newDetector) {
+                showMessage('Both Name and Detector are required.', 'error');
+                return;
+            }
+
+            // Update global state
+            userProfile.name = newName;
+            userProfile.detector = newDetector;
+
+            // Save and re-render
+            saveSurveysToLocalStorage();
+            closeEditProfileModal();
+            showMessage(`Profile updated to "${newName}" using "${newDetector}" successfully!`, 'success');
+            
+            // Re-render the current page (Settings) to reflect the new profile data
+            render();
+        }
+
+
+        // --- SURVEY & TARGET LOGIC (Action Handlers) ---
+
+        /** Handles actions like 'open', 'close', 'archive', 'restore', 'delete'. */
+        function handleSurveyAction(button) {
+            const id = button.dataset.id;
+            const action = button.dataset.action;
+            const name = button.dataset.name;
+            const survey = surveys.find(s => s.id === id);
+
+            if (!survey) return;
+
+            const executeAction = () => {
+                switch (action) {
+                    case 'open':
+                        // Close any currently open survey
+                        surveys.forEach(s => {
+                            if (s.status === 'Open') s.status = 'Active';
+                        });
+                        survey.status = 'Open';
+                        showMessage(`Survey '${name}' is now OPEN.`, 'success');
+                        break;
+                    case 'close':
+                        survey.status = 'Active';
+                        showMessage(`Survey '${name}' is now Closed (Active).`, 'warning');
+                        break;
+                    case 'archive':
+                        survey.status = 'Archived';
+                        showMessage(`Survey '${name}' has been Archived.`, 'warning');
+                        break;
+                    case 'restore':
+                        survey.status = 'Active';
+                        showMessage(`Survey '${name}' restored to Active status.`, 'success');
+                        break;
+                    case 'delete':
+                        // Remove from the array
+                        surveys = surveys.filter(s => s.id !== id);
+                        showMessage(`Survey '${name}' permanently deleted.`, 'error');
+                        break;
+                }
+                survey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                render();
+            };
+
+            if (action === 'delete') {
+                showConfirmationModal(
+                    `Confirm Deletion: ${name}`,
+                    `Are you sure you want to PERMANENTLY delete the survey **${name}** and all its ${survey.targets.length} targets? This cannot be undone.`,
+                    executeAction
+                );
+            } else if (action === 'archive') {
+                showConfirmationModal(
+                    `Confirm Archive: ${name}`,
+                    `Are you sure you want to Archive the survey **${name}**? You can restore it later.`,
+                    executeAction
+                );
+            } else {
+                executeAction();
+            }
+        }
+
+        /** Handles actions on individual targets. */
+        function handleTargetAction(element) {
+            const action = element.dataset.action;
+            const targetId = element.dataset.id;
+            const surveyId = element.dataset.surveyId;
+            const survey = surveys.find(s => s.id === surveyId);
+
+            if (!survey) return;
+            const target = survey.targets.find(t => t.id === targetId);
+            if (!target) return;
+
+            if (action === 'edit') {
+                // Special case: open the edit modal
+                showEditTargetModal(targetId, surveyId);
+                return;
+            }
+
+            const executeAction = () => {
+                switch (action) {
+                    case 'setStatus':
+                        const newStatus = element.dataset.status;
+                        target.status = newStatus;
+                        showMessage(`Target status updated to: ${newStatus}`, 'success');
+                        break;
+                    case 'delete':
+                        survey.targets = survey.targets.filter(t => t.id !== targetId);
+                        showMessage(`Target deleted.`, 'error');
+                        break;
+                }
+                survey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                render();
+            };
+
+            if (action === 'delete') {
+                showConfirmationModal(
+                    `Confirm Delete Target: ${target.description}`,
+                    `Are you sure you want to permanently delete this target?`,
+                    executeAction
+                );
+            } else {
+                executeAction();
+            }
+        }
+
+
+        // --- PAGE RENDER FUNCTIONS ---
+
+        /** Renders the content for the Home page. */
+        function renderHomePage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            const activeSurveys = surveys.filter(s => s.status === 'Active');
+            const archivedSurveys = surveys.filter(s => s.status === 'Archived');
+
+            const renderSurveyList = (list) => {
+                if (list.length === 0) {
+                    return `<p class="text-gray-500 italic p-4">No surveys in this section.</p>`;
+                }
+                return list.map(s => renderSurveyCard(s, s.id === (openSurvey ? openSurvey.id : null))).join('');
+            };
+
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
+
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center mb-2">
+                            <i class="fas fa-user-circle text-xl mr-2 text-yellow-500"></i> Active Detectorist Profile
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <strong class="text-gray-500">Name:</strong> 
+                                <span class="font-semibold text-gray-800">${userProfile.name}</span>
+                            </div>
+                            <div>
+                                <strong class="text-gray-500">Detector:</strong> 
+                                <span class="font-semibold text-gray-800">${userProfile.detector}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-card p-4 rounded-xl shadow-lg mb-6 border border-primary/20">
+                        <h3 class="text-xl font-bold text-primary mb-3 flex items-center">
+                            <i class="fas fa-layer-group mr-2"></i> Current OPEN Survey
+                        </h3>
+                        ${openSurvey 
+                            ? renderSurveyCard(openSurvey, true)
+                            : `<p class="text-gray-600 italic">No survey is currently open. Open an active survey below to start logging targets.</p>`
+                        }
+                    </div>
+
+                    <button id="new-survey-btn" 
+                        class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 flex items-center justify-center mb-6"
+                        style="background-color: rgb(var(--color-secondary));">
+                        <i class="fas fa-plus-circle mr-2"></i> Create New Survey
+                    </button>
+
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Active/Closed Surveys (${activeSurveys.length})</h3>
+                    <div id="active-surveys-list" class="space-y-4 mb-8">
+                        ${renderSurveyList(activeSurveys)}
+                    </div>
+
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Archived Surveys (${archivedSurveys.length})</h3>
+                    <div id="archived-surveys-list" class="space-y-4">
+                        ${renderSurveyList(archivedSurveys)}
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders a single survey card with action buttons based on status. */
+        function renderSurveyCard(survey, isOpen = false) {
+            let actions = '';
+            let statusBadge = '';
+
+            // Get the secondary color variable for inline styles
+            const secondaryColor = 'rgb(var(--color-secondary))';
+
+            switch (survey.status) {
+                case 'Open':
+                    statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
+                    // 'Close' button is yellow
+                    actions = `
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                    `;
+                    break;
+                case 'Active': // Active but Closed
+                    statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
+                    // 'Open' button uses the secondary (green) color via inline style
+                    actions = `
+                        <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}" style="background-color: ${secondaryColor};">Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                    `;
+                    break;
+                case 'Archived':
+                    statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
+                    // 'Restore' button uses the secondary (green) color via inline style
+                    actions = `
+                        <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" style="background-color: ${secondaryColor};">Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                    `;
+                    break;
+            }
+
+            return `
+                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-green-500' : 'border-primary'}">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-lg font-bold text-gray-800">${statusBadge} ${survey.name}</h3>
+                        <div class="text-right text-sm text-gray-500">
+                            <p>Created: ${formatDate(survey.creationDate)}</p>
+                            <p>Updated: ${formatDate(survey.dateLastChanged)}</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">${survey.description}</p>
+                    <p class="text-sm font-semibold text-gray-700">Targets Logged: ${survey.targets ? survey.targets.length : 0}</p>
+                    
+                    <div class="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                        ${actions}
+                    </div>
+                </div>
+            `;
+        }
+        
+        /** Renders a single target card with status and actions. */
+        function renderTargetCard(target, surveyId) {
+            // Define status styles
+            let statusClass = 'bg-gray-100 text-gray-800';
+            let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+
+            switch (target.status) {
+                case 'Hole Dug':
+                    statusClass = 'bg-yellow-100 text-yellow-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
+                    break;
+                case 'Hole Refilled':
+                    statusClass = 'bg-secondary/10 text-secondary';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3m-3 3l-6 6"></path></svg>`;
+                    break;
+                case 'Signal Ignored':
+                    statusClass = 'bg-red-100 text-red-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                    break;
+                case 'Signal Detected':
+                default:
+                    statusClass = 'bg-blue-100 text-blue-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3-.895-3-2 1.343-2 3-2zM12 20s-7-12-7-15a7 7 0 0114 0c0 3-7 15-7 15z"></path></svg>`;
+                    break;
+            }
+
+            const typeBadgeClass = target.type.toLowerCase().includes('junk') ? 'bg-red-200 text-red-900' : 'bg-primary/10 text-primary';
+            
+            // Status Action Dropdown
+            const statusOptions = ['Signal Detected', 'Hole Dug', 'Hole Refilled', 'Signal Ignored'];
+            const actionDropdown = statusOptions.filter(s => s !== target.status).map(status => `
+                <li>
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="${status}" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Set to ${status}
+                    </a>
+                </li>
+            `).join('');
+
+            return `
+                <div class="bg-card p-4 rounded-xl shadow-md border-l-4 border-gray-200">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex flex-col">
+                            <h4 class="text-xl font-bold text-gray-800">${target.description}</h4>
+                            <span class="${typeBadgeClass} text-xs font-semibold px-2.5 py-0.5 rounded">${target.type}</span>
+                        </div>
+                        
+                        <div class="relative inline-block text-left group">
+                            <button id="dropdownMenuButton-${target.id}" class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary" aria-expanded="true" aria-haspopup="true">
+                                Actions
+                                <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            
+                            <div class="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block z-10">
+                                <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownMenuButton-${target.id}">
+                                    ${actionDropdown}
+                                    <div class="border-t border-gray-100"></div>
+                                    <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        Edit Details
+                                    </a>
+                                    <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                        Delete Target
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center ${statusClass}">
+                        ${statusIcon} ${target.status}
+                    </p>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t border-gray-100">
+                        <div>
+                            <strong class="text-gray-500">VDI:</strong> <span class="text-gray-800">${target.vdi}</span>
+                        </div>
+                        <div>
+                            <strong class="text-gray-500">Depth:</strong> <span class="text-gray-800">${target.depth}</span>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <strong class="text-gray-500">Location:</strong> <span class="text-gray-800 break-all">${target.coordinates}</span>
+                        </div>
+                        <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
+                            Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders the content for the Targets page. */
+        function renderTargetsPage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            const targets = openSurvey ? openSurvey.targets : [];
+            const surveyId = openSurvey ? openSurvey.id : null;
+            const secondaryColor = 'rgb(var(--color-secondary))';
+
+            let targetsListHtml = '';
+            if (targets.length === 0) {
+                targetsListHtml = `<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No targets logged in this survey yet. Click 'Log New Target' to record your first find!</p>`;
+            } else {
+                targetsListHtml = targets.map(t => renderTargetCard(t, surveyId)).join('');
+            }
+            
+            const isButtonDisabled = !openSurvey;
+            // Determine button styling based on disabled state
+            const buttonStyle = isButtonDisabled
+                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed border border-gray-400'
+                : 'text-white hover:opacity-90';
+            const buttonInlineStyle = isButtonDisabled ? '' : `background-color: ${secondaryColor};`;
+
+
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Log</h2>
+
+                    <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
+                        <h3 class="text-xl font-semibold mb-2 text-gray-700">
+                            Current Survey: ${openSurvey ? openSurvey.name : '<span class="text-red-500">None Open</span>'}
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-4">
+                            ${openSurvey ? openSurvey.description : 'Open a survey on the Home page to start logging finds.'}
+                        </p>
+
+                        <button id="add-target-btn" 
+                            class="w-full font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center ${buttonStyle}" 
+                            style="${buttonInlineStyle}"
+                            ${isButtonDisabled ? 'disabled' : ''}>
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Log New Target
+                        </button>
+                    </div>
+                    
+                    <h3 class="text-2xl font-bold text-primary mb-3">Survey Targets (${targets.length})</h3>
+                    <div id="targets-list" class="space-y-4">
+                        ${targetsListHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders the content for the Compass page. */
+        function renderCompassPage() {
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Compass/GPS Page</h2>
+                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <p class="text-gray-700">This page would typically show a compass or map interface to help you log target locations using device GPS. (Functionality coming soon)</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- DATA EXPORT/IMPORT FUNCTIONS ---
+
+        /** Generates and displays the JSON data for export. */
+        function exportData() {
+            const dataToExport = { surveys, userProfile, userId, timestamp: new Date().toISOString() };
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            document.getElementById('export-data-area').value = jsonString;
+            showMessage("Data export generated. Copy the text below.", 'success');
+        }
+
+        /** Imports data from the textarea and overwrites local data. */
+        function importData() {
+            const importArea = document.getElementById('import-data-area');
+            const jsonString = importArea.value.trim();
+
+            if (!jsonString) {
+                return showMessage("Please paste JSON data into the box first.", 'error');
+            }
+
+            showConfirmationModal(
+                'Confirm Data Import & OVERWRITE',
+                "Are you absolutely sure you want to import this data? It will **permanently overwrite** all your existing local survey data.",
+                // Confirmation callback (YES)
+                () => {
+                    try {
+                        const importedData = JSON.parse(jsonString);
+                        
+                        // Basic validation
+                        if (!importedData.surveys || !Array.isArray(importedData.surveys)) {
+                            throw new Error("Invalid import structure. Missing 'surveys' array.");
+                        }
+
+                        // Overwrite global state
+                        surveys = importedData.surveys;
+                        userProfile = importedData.userProfile || { name: "Imported User", detector: "Imported Machine" };
+                        userId = importedData.userId || generateId(); // Keep old ID if present, otherwise generate new
+
+                        saveSurveysToLocalStorage();
+                        loadDataFromLocalStorage();
+                        showMessage("Data import successful! Local data has been overwritten.", 'success');
+                        importArea.value = ''; // Clear input after successful import
+                        render();
+                    } catch (e) {
+                        showMessage(`Import Failed: ${e.message}`, 'error');
+                        console.error("Import Error:", e);
+                    }
+                }
+            );
+        }
+
+        /** Renders the content for the Settings page. */
+        function renderSettingsPage() {
+            // Get the secondary color variable for inline styles
+            const secondaryColor = 'rgb(var(--color-secondary))';
+            
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Settings & Local Data Management</h2>
+
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border border-gray-100">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Your Profile</h3>
+                        <p class="text-md text-gray-800 mb-1"><strong>Name:</strong> ${userProfile.name}</p>
+                        <p class="text-md text-gray-800 mb-4"><strong>Detector:</strong> ${userProfile.detector}</p>
+                        
+                        <div class="mt-4 pt-3 border-t border-gray-100">
+                            <button onclick="showEditProfileModal()" 
+                                class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150 shadow-md"
+                                style="background-color: ${secondaryColor};">
+                                <i class="fas fa-pencil-alt mr-1"></i> Edit Profile
+                            </button>
+                        </div>
+                        <hr class="my-4"/>
+                        <p class="text-lg font-semibold text-gray-700">Your Local User ID</p>
+                        <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
+                        <p class="text-xs text-red-500 mt-2">🛑 WARNING: This data is stored locally in your browser and is NOT synced to the cloud.</p>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border border-gray-100">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Export Data (Backup / Manual Transfer)</h3>
+                        <p class="text-sm text-gray-600 mb-3">Click the button to generate a complete JSON backup of all your surveys and profile data. Copy this text and save it elsewhere.</p>
+                        
+                        <button id="export-data-btn" class="w-full bg-primary text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150 mb-4">
+                            Generate Export JSON
+                        </button>
+                        <textarea id="export-data-area" rows="10" readonly class="w-full p-2 border border-gray-300 rounded-md bg-gray-50 text-xs font-mono"></textarea>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Import Data (Restore / Manual Transfer)</h3>
+                        <p class="text-sm text-gray-600 mb-3">Paste the exported JSON text here and click Import. **Warning:** This will overwrite any existing local data on this device.</p>
+                        
+                        <textarea id="import-data-area" rows="10" placeholder="Paste your exported JSON data here..." class="w-full p-2 border border-yellow-500 rounded-md font-mono text-xs mb-4"></textarea>
+                        <button id="import-data-btn" class="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-150">
+                            Import & Overwrite Local Data
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+
+        // --- INITIALIZATION & EVENT LISTENERS ---
+
+        // Event listener for navigation buttons
+        document.querySelectorAll('.nav-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const targetPage = e.currentTarget.dataset.page;
+                if (targetPage && targetPage !== currentPage) {
+                    currentPage = targetPage;
+                    render();
+                }
+            });
+        });
+        
+        // 1. Load data first
+        loadDataFromLocalStorage();
+        showMessage("Data loaded instantly from local storage.", 'success'); // Show initial load message
+
+        // 2. Initial render call
+        render();
+
+    </script>
 </body>
 </html>
