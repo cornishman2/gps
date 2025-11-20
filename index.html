@@ -1,161 +1,538 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Metal Finder v4</title>
-<link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dig It! Metal Detecting App</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font and some custom colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4F46E5', // Indigo 600
+                        'secondary': '#10B981', // Emerald 500
+                        'background': '#F9FAFB', // Gray 50
+                        'card': '#FFFFFF',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Base styles for Inter font and full screen height */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F9FAFB;
+        }
+        /* Fix the content area height, accounting for the bottom nav */
+        .content-area {
+            min-height: calc(100vh - 4rem); /* 100vh minus the height of the bottom nav (h-16) */
+            padding-bottom: 4rem; /* Ensure content doesn't get hidden behind the fixed footer */
+        }
+        /* Style for the active navigation button */
+        .nav-btn.active {
+            color: #4F46E5; /* Primary color */
+            font-weight: 600;
+        }
+    </style>
 </head>
-<body>
-<div class="app">
-<header>
-<div class="logo">
-<div class="logo-icon">📍</div>
-<div>
-<h1>Metal Finder</h1>
-<div class="version">v4.0 - Professional</div>
-</div>
-</div>
-<div class="gps-info">
-<div class="gps-status">
-<div class="gps-label">
-<span class="status-dot"></span>
-<span>GPS: <strong id="gpsText">Searching...</strong></span>
-</div>
-<div>Accuracy: <strong id="accText">—</strong></div>
-</div>
-</div>
-</header>
+<body class="min-h-screen antialiased">
 
-<main>
-<section id="screen-home" class="screen">
-<div class="card">
-<div class="card-title">Settings</div>
-<div class="row">
-<input id="detectoristName" placeholder="Your name"/>
-<input id="detectorUsed" placeholder="Detector model"/>
-</div>
-</div>
+    <!-- Main Application Container -->
+    <div id="app" class="max-w-3xl mx-auto shadow-xl bg-background">
+        
+        <!-- Header / Page Title -->
+        <header class="p-4 bg-white border-b border-gray-200">
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It!</h1>
+        </header>
 
-<div class="card">
-<div class="card-title">Quick Actions</div>
-<div class="row">
-<button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
-<button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
-<button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
-</div>
-</div>
+        <!-- Main Content Area -->
+        <main id="content-area" class="content-area p-4 overflow-y-auto">
+            <!-- This is where page content will be rendered -->
+        </main>
 
-<div class="card">
-<div class="card-title">Surveys</div>
-<div class="list" id="surveyList"></div>
-</div>
-</section>
+        <!-- Persistent Bottom Navigation -->
+        <footer class="fixed inset-x-0 bottom-0 bg-white border-t border-gray-200 shadow-xl">
+            <nav class="flex justify-around items-center h-16 max-w-3xl mx-auto">
+                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200 active" data-page="home">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-10l-2-2m2 2v10a1 1 0 00-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                    <span class="text-xs mt-1">Home</span>
+                </button>
+                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200" data-page="targets">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3-.895-3-2 1.343-2 3-2zM18.823 6.177A12.016 12.016 0 0012 3C6.477 3 2 7.477 2 13s4.477 10 10 10 10-4.477 10-10a12.016 12.016 0 00-3.177-6.823z"></path></svg>
+                    <span class="text-xs mt-1">Targets</span>
+                </button>
+                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200" data-page="compass">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M16 4h2a2 2 0 012 2v6m-4-2H5a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2v-6a2 2 0 00-2-2h-3m-4 0a3 3 0 01-3-3V5h6v4a3 3 0 01-3 3z"></path></svg>
+                    <span class="text-xs mt-1">Compass</span>
+                </button>
+                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200" data-page="settings">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.82 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.82 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.82-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.82-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span class="text-xs mt-1">Settings</span>
+                </button>
+            </nav>
+        </footer>
+    </div>
 
-<section id="screen-targets" class="screen hidden">
-<div class="card">
-<div class="card-title">Targets</div>
-<div class="row">
-<button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
-<button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
-</div>
-<div style="margin-top:12px;color:var(--muted);font-size:14px">
-Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
-</div>
-</div>
-<div class="list" id="targetsList"></div>
-</section>
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, doc, setDoc, onSnapshot, collection, query, where, getDocs, updateDoc, deleteDoc, addDoc, serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Setting Firebase log level for debugging
+        setLogLevel('Debug');
 
-<section id="screen-compass" class="screen hidden">
-<div class="card compass-screen">
-<div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
-<div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
-<div class="compass-info">
-<div class="compass-stat">
-<div class="stat-label">Your Heading</div>
-<div class="stat-value"><span id="heading">—</span>°</div>
-</div>
-<div class="compass-stat">
-<div class="stat-label">Target Bearing</div>
-<div class="stat-value"><span id="bearing">—</span>°</div>
-</div>
-</div>
-<div class="direction-text" id="bearingText">—</div>
-<div class="arrow-container">
-<div class="arrow" id="arrow">↑</div>
-</div>
-<div class="compass-controls">
-<button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
-<button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
-<button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
-<button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
-<button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
-</div>
-</div>
-</section>
+        // --- GLOBAL STATE & FIREBASE SETUP ---
+        let db;
+        let auth;
+        let userId = null;
+        let surveys = []; // Array to hold all survey documents from Firestore
+        let userProfile = {}; // Object to hold user's name and detector
+        let currentPage = 'home'; // Tracks the current visible page
+        
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-<section id="screen-settings" class="screen hidden">
-<div class="card">
-<div class="card-title">Data Management</div>
-<div class="row">
-<button class="btn btn-primary" id="btnExport">💾 Export Data</button>
-<button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
-<input id="importFile" type="file" accept="application/json" style="display:none"/>
-</div>
-<div class="row">
-<button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
-</div>
-</div>
-</section>
-</main>
+        if (firebaseConfig) {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
 
-<div id="lightbox" class="lightbox">
-<div class="lightbox-content">
-<button class="lightbox-close" id="lightboxClose">×</button>
-<button class="lightbox-nav lightbox-prev" id="lightboxPrev">‹</button>
-<img id="lightboxImage" class="lightbox-image" src="" alt="Full size"/>
-<button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
-<div class="lightbox-counter" id="lightboxCounter"></div>
-<div class="lightbox-actions">
-<button class="btn btn-secondary" id="lightboxChange">🔄 Change</button>
-<button class="btn btn-danger" id="lightboxDelete">🗑️ Delete</button>
-</div>
-</div>
-</div>
+            // 1. Handle Authentication
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("User signed in:", userId);
+                    // Start listening for data once authenticated
+                    setupFirestoreListeners();
+                } else {
+                    // Sign in using the custom token or anonymously if the token is not available
+                    try {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            // Anonymous sign-in if no token is available
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication failed:", error);
+                        // Fallback: use a random ID if sign-in fails, but data won't persist securely
+                        userId = crypto.randomUUID();
+                        console.warn("Using temporary local ID:", userId);
+                        render(); // Render with temporary ID
+                    }
+                }
+            });
+        } else {
+            console.error("Firebase configuration is missing.");
+            // Fallback: use a random ID if no Firebase config
+            userId = crypto.randomUUID();
+            console.warn("Using temporary local ID:", userId);
+            render(); // Render with temporary ID
+        }
 
-<div id="modal" class="modal">
-<div class="modal-content">
-<div class="modal-title" id="modalTitle">Title</div>
-<div id="modalBody"></div>
-<div class="modal-actions">
-<button class="btn btn-secondary" id="modalCancel">Cancel</button>
-<button class="btn btn-primary" id="modalConfirm">Confirm</button>
-</div>
-</div>
-</div>
+        // --- FIRESTORE HELPERS ---
 
-<div id="toast" class="toast">Saved</div>
+        /** Gets the document reference for the user's private profile data. */
+        const getUserProfileRef = () => {
+            if (!userId) throw new Error("User ID is not set for profile access.");
+            // Path: /artifacts/{appId}/users/{userId}/profile/data
+            return doc(db, `artifacts/${appId}/users/${userId}/profile/data`);
+        };
 
-<nav class="bottom-nav">
-<div class="nav-item active" data-screen="home">
-<div class="nav-icon">🏠</div>
-<div>Home</div>
-</div>
-<div class="nav-item" data-screen="targets">
-<div class="nav-icon">📍</div>
-<div>Targets</div>
-</div>
-<div class="nav-item" data-screen="compass">
-<div class="nav-icon">🧭</div>
-<div>Compass</div>
-</div>
-<div class="nav-item" data-screen="settings">
-<div class="nav-icon">⚙️</div>
-<div>Settings</div>
-</div>
-</nav>
-</div>
+        /** Gets the collection reference for the user's private surveys. */
+        const getSurveysCollectionRef = () => {
+            if (!userId) throw new Error("User ID is not set for surveys access.");
+            // Path: /artifacts/{appId}/users/{userId}/surveys
+            return collection(db, `artifacts/${appId}/users/${userId}/surveys`);
+        };
 
-<script src="script.js"></script>
+        /** Sets up real-time listeners for user profile and surveys. */
+        function setupFirestoreListeners() {
+            if (!db || !userId) return;
+
+            // Listener for User Profile (Name/Detector)
+            onSnapshot(getUserProfileRef(), (docSnapshot) => {
+                userProfile = docSnapshot.exists() ? docSnapshot.data() : {};
+                render();
+            }, (error) => {
+                console.error("Error listening to user profile:", error);
+            });
+
+            // Listener for Surveys
+            onSnapshot(getSurveysCollectionRef(), (querySnapshot) => {
+                surveys = [];
+                querySnapshot.forEach((doc) => {
+                    // Extract data and add the document ID
+                    const data = doc.data();
+                    // Ensure the targets array exists, defaulting to empty
+                    const survey = { id: doc.id, targets: [], ...data };
+                    // Convert Firestore Timestamps to JavaScript Date objects for display
+                    if (data.creationDate) survey.creationDate = data.creationDate.toDate().toLocaleDateString();
+                    if (data.dateLastChanged) survey.dateLastChanged = data.dateLastChanged.toDate().toLocaleDateString();
+                    surveys.push(survey);
+                });
+                // Sort by creation date (newest first)
+                surveys.sort((a, b) => new Date(b.creationDate) - new Date(a.creationDate));
+                render();
+            }, (error) => {
+                console.error("Error listening to surveys:", error);
+            });
+        }
+        
+        // --- DATA MANIPULATION FUNCTIONS ---
+
+        /** Saves the user's name and detector to Firestore. */
+        async function saveUserProfile(e) {
+            if (!db || !userId) return console.error("Database not ready.");
+
+            const nameInput = document.getElementById('name-input').value.trim();
+            const detectorInput = document.getElementById('detector-input').value.trim();
+            
+            try {
+                // Use setDoc to overwrite or create the single profile document
+                await setDoc(getUserProfileRef(), {
+                    name: nameInput,
+                    detector: detectorInput,
+                }, { merge: true });
+                console.log("Profile saved successfully.");
+            } catch (error) {
+                console.error("Error saving profile:", error);
+            }
+        }
+        
+        /** Creates a new survey, automatically setting its status to 'Open'. */
+        async function createNewSurvey() {
+            if (!db || !userId) return console.error("Database not ready.");
+
+            // Check if an 'Open' survey already exists
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (openSurvey) {
+                // In a real app, we'd use a modal/dialog. Here, we'll log an error and update the UI message.
+                const messageBox = document.getElementById('home-message-box');
+                messageBox.textContent = `Error: Please Close or Archive the current Open survey ('${openSurvey.name}') before creating a new one.`;
+                messageBox.classList.remove('hidden', 'bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+                return;
+            }
+
+            const surveyName = prompt("Enter a name for the new survey (e.g., 'West Field Day 3'):");
+            if (!surveyName || surveyName.trim() === '') return;
+
+            const description = prompt(`Enter a brief description for '${surveyName}':`);
+
+            try {
+                // Add the new document to the surveys collection
+                await addDoc(getSurveysCollectionRef(), {
+                    name: surveyName.trim(),
+                    description: description || 'No description provided.',
+                    status: 'Open', // Only one can be 'Open' at a time
+                    creationDate: serverTimestamp(),
+                    dateLastChanged: serverTimestamp(),
+                    targets: [] // Initialize an empty array for targets
+                });
+                console.log("New survey created.");
+            } catch (error) {
+                console.error("Error creating new survey:", error);
+            }
+        }
+
+        /** Updates a survey's status and dateLastChanged. */
+        async function updateSurveyStatus(surveyId, newStatus) {
+            if (!db || !userId) return console.error("Database not ready.");
+
+            const surveyRef = doc(getSurveysCollectionRef(), surveyId);
+
+            // Special handling for 'Open': ensure no other survey is open
+            if (newStatus === 'Open') {
+                const openSurvey = surveys.find(s => s.status === 'Open' && s.id !== surveyId);
+                if (openSurvey) {
+                    const messageBox = document.getElementById('home-message-box');
+                    messageBox.textContent = `Error: Cannot open this survey. Please Close or Archive the current Open survey ('${openSurvey.name}') first.`;
+                    messageBox.classList.remove('hidden', 'bg-secondary/10', 'text-secondary-800');
+                    messageBox.classList.add('bg-red-100', 'text-red-800');
+                    return;
+                }
+            }
+
+            try {
+                await updateDoc(surveyRef, {
+                    status: newStatus,
+                    dateLastChanged: serverTimestamp()
+                });
+                console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
+            } catch (error) {
+                console.error("Error updating survey status:", error);
+            }
+        }
+
+        /** Deletes a survey document. */
+        async function deleteSurvey(surveyId, surveyName) {
+            if (!db || !userId) return console.error("Database not ready.");
+
+            // Use a custom confirmation dialog structure instead of alert/confirm
+            const confirmed = window.prompt(`Type 'DELETE ${surveyName}' to confirm deletion of this survey:`);
+
+            if (confirmed === `DELETE ${surveyName}`) {
+                try {
+                    const surveyRef = doc(getSurveysCollectionRef(), surveyId);
+                    await deleteDoc(surveyRef);
+                    console.log(`Survey ${surveyId} deleted.`);
+                } catch (error) {
+                    console.error("Error deleting survey:", error);
+                }
+            } else {
+                console.log("Deletion cancelled.");
+            }
+        }
+
+        // --- UI RENDER FUNCTIONS ---
+
+        /** Main render function, called whenever state changes. */
+        function render() {
+            const contentArea = document.getElementById('content-area');
+            const navButtons = document.querySelectorAll('.nav-btn');
+
+            // Update active navigation button style
+            navButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.page === currentPage);
+                btn.classList.remove('text-gray-500');
+                btn.classList.add(btn.dataset.page === currentPage ? 'text-primary' : 'text-gray-500');
+            });
+
+            // Clear and render the current page content
+            contentArea.innerHTML = '';
+            switch (currentPage) {
+                case 'home':
+                    contentArea.innerHTML = renderHomePage();
+                    // Attach event listeners for the Home page elements
+                    document.getElementById('name-input')?.addEventListener('blur', saveUserProfile);
+                    document.getElementById('detector-input')?.addEventListener('blur', saveUserProfile);
+                    document.getElementById('create-survey-btn')?.addEventListener('click', createNewSurvey);
+                    // Re-attach survey action listeners (must be done after innerHTML update)
+                    attachSurveyActionListeners(); 
+                    break;
+                case 'targets':
+                    contentArea.innerHTML = renderTargetsPage();
+                    break;
+                case 'compass':
+                    contentArea.innerHTML = renderCompassPage();
+                    break;
+                case 'settings':
+                    contentArea.innerHTML = renderSettingsPage();
+                    break;
+            }
+        }
+
+        /** Attaches event listeners to all dynamically generated survey action buttons. */
+        function attachSurveyActionListeners() {
+            // Re-select all buttons after the page is rendered
+            document.querySelectorAll('.survey-action-btn').forEach(button => {
+                button.removeEventListener('click', handleSurveyAction); // Prevent double-listening
+                button.addEventListener('click', handleSurveyAction);
+            });
+        }
+
+        /** Handles all survey button clicks based on data attributes. */
+        function handleSurveyAction(e) {
+            const button = e.currentTarget;
+            const action = button.dataset.action;
+            const surveyId = button.dataset.id;
+            const surveyName = button.dataset.name;
+
+            switch (action) {
+                case 'close':
+                    updateSurveyStatus(surveyId, 'Active'); // Active but closed
+                    break;
+                case 'archive':
+                    updateSurveyStatus(surveyId, 'Archived'); // Archive (automatically closes)
+                    break;
+                case 'open':
+                    updateSurveyStatus(surveyId, 'Open');
+                    break;
+                case 'delete':
+                    deleteSurvey(surveyId, surveyName);
+                    break;
+                case 'restore':
+                    updateSurveyStatus(surveyId, 'Active'); // Restore to Active/Closed
+                    break;
+                default:
+                    console.error("Unknown survey action:", action);
+            }
+        }
+
+        /** Renders the content for the Home page. */
+        function renderHomePage() {
+            // Separate surveys by status
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            const activeSurveys = surveys.filter(s => s.status === 'Active');
+            const archivedSurveys = surveys.filter(s => s.status === 'Archived');
+            
+            return `
+                <div id="home-message-box" class="hidden p-3 mb-4 rounded-lg text-sm bg-secondary/10 text-secondary-800">
+                    Your data is automatically saving to the cloud.
+                </div>
+
+                <!-- Create New Survey Button -->
+                <button id="create-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 mb-6 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Create New Survey
+                </button>
+
+                <!-- User Profile Inputs -->
+                <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
+                    <h2 class="text-xl font-semibold mb-3 text-gray-700">My Gear</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="name-input" class="block text-sm font-medium text-gray-700">Your Name</label>
+                            <input type="text" id="name-input" value="${userProfile.name || ''}" placeholder="Enter your name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
+                        </div>
+                        <div>
+                            <label for="detector-input" class="block text-sm font-medium text-gray-700">Metal Detector Used</label>
+                            <input type="text" id="detector-input" value="${userProfile.detector || ''}" placeholder="e.g., Minelab Equinox 800" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Changes are saved automatically when you click outside the box.</p>
+                    </div>
+                </div>
+
+                <!-- Open Survey Section -->
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-primary mb-3">Open Survey (1/1)</h2>
+                    <div id="open-survey-list" class="space-y-4">
+                        ${openSurvey ? renderSurveyCard(openSurvey, true) : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No survey is currently open and recording targets.</p>'}
+                    </div>
+                </div>
+
+                <!-- Active Surveys Section -->
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-primary mb-3">Active (Closed) Surveys</h2>
+                    <div id="active-survey-list" class="space-y-4">
+                        ${activeSurveys.length > 0 ? activeSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No active, closed surveys. They are ready to be opened again.</p>'}
+                    </div>
+                </div>
+
+                <!-- Archived Surveys Section -->
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-primary mb-3">Archived Surveys</h2>
+                    <div id="archived-survey-list" class="space-y-4">
+                        ${archivedSurveys.length > 0 ? archivedSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No archived surveys yet. Great way to tidy up old data!</p>'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        /** Renders a single survey card with action buttons based on status. */
+        function renderSurveyCard(survey, isOpen = false) {
+            let actions = '';
+            let statusBadge = '';
+
+            switch (survey.status) {
+                case 'Open':
+                    statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
+                    actions = `
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                    `;
+                    break;
+                case 'Active': // Active but Closed
+                    statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
+                    actions = `
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                    `;
+                    break;
+                case 'Archived':
+                    statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
+                    actions = `
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                    `;
+                    break;
+            }
+
+            return `
+                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-green-500' : 'border-primary'}">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-lg font-bold text-gray-800">${statusBadge} ${survey.name}</h3>
+                        <div class="text-right text-sm text-gray-500">
+                            <p>Created: ${survey.creationDate || 'N/A'}</p>
+                            <p>Updated: ${survey.dateLastChanged || 'N/A'}</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">${survey.description}</p>
+                    <p class="text-sm font-semibold text-gray-700">Targets Logged: ${survey.targets ? survey.targets.length : 0}</p>
+                    
+                    <div class="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                        ${actions}
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders the content for the Targets page. */
+        function renderTargetsPage() {
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Page</h2>
+                    <p class="text-gray-700">This page will eventually list all targets for the currently open or selected survey, and allow you to add new ones. We will build this out in the next step!</p>
+                    <div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg">
+                        **Current Open Survey:** ${surveys.find(s => s.status === 'Open')?.name || 'None'}
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders the content for the Compass page. */
+        function renderCompassPage() {
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Compass/GPS Page</h2>
+                    <p class="text-gray-700">This page would typically show a compass or map interface to help you log target locations using device GPS. (Functionality coming soon)</p>
+                </div>
+            `;
+        }
+
+        /** Renders the content for the Settings page. */
+        function renderSettingsPage() {
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Settings Page</h2>
+                    <p class="text-gray-700">This page is for general app settings. Currently, your User ID is: </p>
+                    <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Loading...'}</p>
+                    <p class="text-sm text-gray-500 mt-2">This ID is used to securely store your data in the cloud.</p>
+                </div>
+            `;
+        }
+
+        // --- EVENT LISTENERS ---
+
+        // Event listener for navigation buttons
+        document.querySelectorAll('.nav-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const targetPage = e.currentTarget.dataset.page;
+                if (targetPage && targetPage !== currentPage) {
+                    currentPage = targetPage;
+                    render();
+                }
+            });
+        });
+
+        // Initial render call (will be re-called when auth/data loads)
+        render();
+
+    </script>
 </body>
 </html>
