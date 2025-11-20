@@ -49,7 +49,7 @@
         
         <!-- Header / Page Title -->
         <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:31</h1>
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:37</h1>
         </header>
 
         <!-- Main Content Area -->
@@ -80,31 +80,70 @@
         </footer>
     </div>
 
-    <!-- Firebase Imports -->
+    <!-- Local Storage Application Logic -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, doc, setDoc, onSnapshot, collection, query, where, getDocs, updateDoc, deleteDoc, addDoc, serverTimestamp 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // --- GLOBAL STATE & LOCAL STORAGE SETUP ---
+        const LS_KEY_PROFILE = 'dig_it_user_profile';
+        const LS_KEY_SURVEYS = 'dig_it_surveys';
+        const LS_KEY_USER_ID = 'dig_it_user_id';
         
-        // Setting Firebase log level for debugging
-        setLogLevel('Debug');
-
-        // --- GLOBAL STATE & FIREBASE SETUP ---
-        let db;
-        let auth;
-        let userId = null;
-        let isDataReady = false; // New flag to track when initial auth and listeners are complete
-        let surveys = []; // Array to hold all survey documents from Firestore
+        let userId = null; // Used for display, but technically not needed for local storage
+        let surveys = []; // Array to hold all survey documents from localStorage
         let userProfile = {}; // Object to hold user's name and detector
         let currentPage = 'home'; // Tracks the current visible page
         
-        // Global variables provided by the Canvas environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // --- DATA HELPERS ---
+
+        /** Generates a simple, unique ID. */
+        function generateId() {
+            return crypto.randomUUID();
+        }
+
+        /** Saves the current surveys array to localStorage. */
+        function saveSurveysToLocalStorage() {
+            try {
+                localStorage.setItem(LS_KEY_SURVEYS, JSON.stringify(surveys));
+                console.log("Surveys saved to local storage.");
+            } catch (error) {
+                console.error("Error saving surveys to local storage:", error);
+            }
+        }
+
+        /** Loads all data from localStorage. */
+        function loadDataFromLocalStorage() {
+            // 1. User ID (For display consistency, use a sticky ID)
+            userId = localStorage.getItem(LS_KEY_USER_ID);
+            if (!userId) {
+                userId = generateId();
+                localStorage.setItem(LS_KEY_USER_ID, userId);
+            }
+
+            // 2. User Profile
+            try {
+                const profileJson = localStorage.getItem(LS_KEY_PROFILE);
+                userProfile = profileJson ? JSON.parse(profileJson) : {};
+            } catch (e) {
+                console.error("Error parsing user profile from local storage, starting fresh.", e);
+                userProfile = {};
+            }
+
+            // 3. Surveys
+            try {
+                const surveysJson = localStorage.getItem(LS_KEY_SURVEYS);
+                // Parse and ensure targets property exists (for safety)
+                surveys = surveysJson ? JSON.parse(surveysJson).map(s => ({ ...s, targets: s.targets || [] })) : [];
+            } catch (e) {
+                console.error("Error parsing surveys from local storage, starting fresh.", e);
+                surveys = [];
+            }
+            
+            // Sort by creation date (newest first)
+            surveys.sort((a, b) => new Date(b.creationDate) - new Date(a.creationDate));
+
+            console.log("All data loaded from local storage.");
+            showMessage("Data loaded instantly from local storage.", 'success');
+        }
+
 
         /** Helper function to manage status messages in the UI. */
         function showMessage(text, type = 'info') {
@@ -129,127 +168,31 @@
             }
         }
         
-        if (firebaseConfig) {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            console.log("Firebase services initialized (db, auth).");
-            showMessage("Connecting to cloud services...", 'info');
+        // --- DATA MANIPULATION FUNCTIONS (LOCAL STORAGE CRUD) ---
 
-            // 1. Handle Authentication
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    userId = user.uid;
-                    showMessage("User authenticated successfully. Loading data...", 'info');
-                    setupFirestoreListeners();
-                } else {
-                    // Sign in using the custom token or anonymously if the token is not available
-                    try {
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            // Anonymous sign-in if no token is available
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) {
-                        console.error("Authentication failed:", error);
-                        // Fallback: use a random ID if sign-in fails
-                        userId = crypto.randomUUID();
-                        showMessage("Authentication failed. Using temporary ID (data will persist only for this session).", 'error');
-                        isDataReady = true;
-                        render();
-                    }
-                }
-            });
-        } else {
-            console.error("Firebase configuration is missing.");
-            userId = crypto.randomUUID();
-            showMessage("FATAL ERROR: Firebase configuration is missing. Using temporary ID.", 'error');
-            isDataReady = true;
-            render();
-        }
-
-        // --- FIRESTORE HELPERS ---
-
-        /** Gets the document reference for the user's private profile data. */
-        const getUserProfileRef = () => {
-            if (!userId) throw new Error("User ID is not set for profile access.");
-            // Path: /artifacts/{appId}/users/{userId}/profile/data
-            return doc(db, `artifacts/${appId}/users/${userId}/profile/data`);
-        };
-
-        /** Gets the collection reference for the user's private surveys. */
-        const getSurveysCollectionRef = () => {
-            if (!userId) throw new Error("User ID is not set for surveys access.");
-            // Path: /artifacts/{appId}/users/{userId}/surveys
-            return collection(db, `artifacts/${appId}/users/${userId}/surveys`);
-        };
-
-        /** Sets up real-time listeners for user profile and surveys. */
-        function setupFirestoreListeners() {
-            if (!db || !userId) return;
-
-            // Listener for User Profile (Name/Detector)
-            onSnapshot(getUserProfileRef(), (docSnapshot) => {
-                userProfile = docSnapshot.exists() ? docSnapshot.data() : {};
-                isDataReady = true;
-                showMessage("Data loaded and listening for changes.", 'success');
-                render();
-            }, (error) => {
-                console.error("Error listening to user profile:", error);
-                showMessage(`Error loading profile data: ${error.message}`, 'error');
-                isDataReady = true; // Still ready to proceed, just with empty profile
-                render();
-            });
-
-            // Listener for Surveys
-            onSnapshot(getSurveysCollectionRef(), (querySnapshot) => {
-                surveys = [];
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const survey = { id: doc.id, targets: [], ...data };
-                    // Convert Firestore Timestamps to JavaScript Date objects for display
-                    if (data.creationDate) survey.creationDate = data.creationDate.toDate().toLocaleDateString();
-                    if (data.dateLastChanged) survey.dateLastChanged = data.dateLastChanged.toDate().toLocaleDateString();
-                    surveys.push(survey);
-                });
-                // Sort by creation date (newest first)
-                surveys.sort((a, b) => new Date(b.creationDate) - new Date(a.creationDate));
-                render();
-            }, (error) => {
-                console.error("Error listening to surveys:", error);
-                showMessage(`Error loading surveys: ${error.message}`, 'error');
-            });
-        }
-        
-        // --- DATA MANIPULATION FUNCTIONS ---
-
-        /** Saves the user's name and detector to Firestore. */
-        async function saveUserProfile(e) {
-            if (!db || !userId) return showMessage("Database not ready. Please wait for the app to fully load.", 'error');
-
+        /** Saves the user's name and detector to localStorage. */
+        function saveUserProfile() {
             const nameInput = document.getElementById('name-input').value.trim();
             const detectorInput = document.getElementById('detector-input').value.trim();
             
+            userProfile = {
+                name: nameInput,
+                detector: detectorInput,
+            };
+
             try {
-                await setDoc(getUserProfileRef(), {
-                    name: nameInput,
-                    detector: detectorInput,
-                }, { merge: true });
-                console.log("Profile saved successfully.");
-                showMessage("Profile updated automatically.", 'info');
+                localStorage.setItem(LS_KEY_PROFILE, JSON.stringify(userProfile));
+                console.log("Profile saved successfully to local storage.");
+                showMessage("Profile updated automatically (saved locally).", 'info');
+                render();
             } catch (error) {
                 console.error("Error saving profile:", error);
-                showMessage(`Error saving profile: ${error.message}`, 'error');
+                showMessage(`Error saving profile locally: ${error.message}`, 'error');
             }
         }
         
         /** Creates a new survey, automatically setting its status to 'Open'. */
-        async function createNewSurvey() {
-            if (!db || !userId || !isDataReady) {
-                return showMessage("Database not ready or data is still loading. Please wait for the 'Data loaded' message.", 'error');
-            }
-
+        function createNewSurvey() {
             // Check if an 'Open' survey already exists
             const openSurvey = surveys.find(s => s.status === 'Open');
             if (openSurvey) {
@@ -269,32 +212,33 @@
 
             // Get the description
             const description = prompt(`Enter a brief description for '${surveyName}':`);
+            
+            const timestamp = new Date().toISOString();
 
-            try {
-                await addDoc(getSurveysCollectionRef(), {
-                    name: surveyName.trim(),
-                    description: description || 'No description provided.',
-                    status: 'Open', 
-                    creationDate: serverTimestamp(),
-                    dateLastChanged: serverTimestamp(),
-                    targets: [] 
-                });
-                
-                showMessage(`Success: New survey '${surveyName.trim()}' created and set to Open.`, 'success');
-                console.log("New survey created.");
-
-            } catch (error) {
-                showMessage(`Error creating survey: ${error.message}.`, 'error');
-                console.error("Error creating new survey:", error);
-            }
+            const newSurvey = {
+                id: generateId(),
+                name: surveyName.trim(),
+                description: description || 'No description provided.',
+                status: 'Open', 
+                creationDate: timestamp,
+                dateLastChanged: timestamp,
+                targets: [] 
+            };
+            
+            surveys.push(newSurvey);
+            saveSurveysToLocalStorage();
+            loadDataFromLocalStorage(); // Reload and sort
+            
+            showMessage(`Success: New survey '${surveyName.trim()}' created and set to Open.`, 'success');
+            console.log("New survey created locally.");
         }
 
         /** Updates a survey's status and dateLastChanged. */
-        async function updateSurveyStatus(surveyId, newStatus) {
-            if (!db || !userId) return showMessage("Database not ready. Please wait for the app to fully load.", 'error');
+        function updateSurveyStatus(surveyId, newStatus) {
+            const surveyIndex = surveys.findIndex(s => s.id === surveyId);
+            if (surveyIndex === -1) return showMessage("Survey not found.", 'error');
 
-            const surveyRef = doc(getSurveysCollectionRef(), surveyId);
-            const surveyName = surveys.find(s => s.id === surveyId)?.name || 'this survey';
+            const surveyName = surveys[surveyIndex].name;
 
             // Special handling for 'Open': ensure no other survey is open
             if (newStatus === 'Open') {
@@ -305,39 +249,28 @@
                 }
             }
 
-            try {
-                await updateDoc(surveyRef, {
-                    status: newStatus,
-                    dateLastChanged: serverTimestamp()
-                });
-                
-                showMessage(`Success: Survey '${surveyName}' status updated to '${newStatus}'.`, 'success');
-                console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
-            } catch (error) {
-                showMessage(`Error updating survey status: ${error.message}.`, 'error');
-                console.error("Error updating survey status:", error);
-            }
+            surveys[surveyIndex].status = newStatus;
+            surveys[surveyIndex].dateLastChanged = new Date().toISOString();
+            
+            saveSurveysToLocalStorage();
+            loadDataFromLocalStorage(); // Reload and sort
+            
+            showMessage(`Success: Survey '${surveyName}' status updated to '${newStatus}'.`, 'success');
+            console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
         }
 
         /** Deletes a survey document. */
-        async function deleteSurvey(surveyId, surveyName) {
-            if (!db || !userId) return showMessage("Database not ready. Please wait for the app to fully load.", 'error');
-
+        function deleteSurvey(surveyId, surveyName) {
             // Use a custom confirmation dialog structure instead of alert/confirm
-            const confirmed = window.prompt(`Type 'DELETE ${surveyName}' to confirm deletion of this survey:`);
+            const confirmed = window.prompt(`Type 'DELETE ${surveyName}' to confirm permanent deletion of this survey (Local data will be lost):`);
 
             if (confirmed === `DELETE ${surveyName}`) {
-                try {
-                    const surveyRef = doc(getSurveysCollectionRef(), surveyId);
-                    await deleteDoc(surveyRef);
-                    
-                    showMessage(`Success: Survey '${surveyName}' was deleted.`, 'success');
-                    console.log(`Survey ${surveyId} deleted.`);
-
-                } catch (error) {
-                    showMessage(`Error deleting survey: ${error.message}.`, 'error');
-                    console.error("Error deleting survey:", error);
-                }
+                surveys = surveys.filter(s => s.id !== surveyId);
+                saveSurveysToLocalStorage();
+                loadDataFromLocalStorage(); // Reload and sort
+                
+                showMessage(`Success: Survey '${surveyName}' was permanently deleted.`, 'success');
+                console.log(`Survey ${surveyId} deleted locally.`);
             } else {
                 showMessage(`Deletion of survey '${surveyName}' cancelled.`, 'info');
                 console.log("Deletion cancelled.");
@@ -380,11 +313,6 @@
                     contentArea.innerHTML = renderSettingsPage();
                     break;
             }
-            // Re-apply message logic if render happened on home page
-            if (currentPage === 'home' && !isDataReady) {
-                 // Re-display loading message if data isn't ready, overriding whatever renderHomePage set
-                 showMessage("Connecting to cloud services...", 'info');
-            }
         }
 
         /** Attaches event listeners to all dynamically generated survey action buttons. */
@@ -424,6 +352,16 @@
             }
         }
 
+        /** Helper to format ISO date string to a readable format. */
+        function formatDate(isoString) {
+            if (!isoString) return 'N/A';
+            try {
+                return new Date(isoString).toLocaleDateString();
+            } catch (e) {
+                return 'Invalid Date';
+            }
+        }
+
         /** Renders the content for the Home page. */
         function renderHomePage() {
             // Separate surveys by status
@@ -434,11 +372,11 @@
             return `
                 <!-- Message Box: The helper function showMessage manages the content and color -->
                 <div id="home-message-box" class="p-3 mb-4 rounded-lg text-sm bg-secondary/10 text-secondary-800">
-                    Connecting to cloud services...
+                    Data loaded instantly from local storage.
                 </div>
 
                 <!-- Create New Survey Button -->
-                <button id="create-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 mb-6 flex items-center justify-center ${!isDataReady ? 'opacity-50 cursor-not-allowed' : ''}" ${!isDataReady ? 'disabled' : ''}>
+                <button id="create-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 mb-6 flex items-center justify-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     Create New Survey
                 </button>
@@ -449,11 +387,11 @@
                     <div class="space-y-4">
                         <div>
                             <label for="name-input" class="block text-sm font-medium text-gray-700">Your Name</label>
-                            <input type="text" id="name-input" value="${userProfile.name || ''}" placeholder="Enter your name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border" ${!isDataReady ? 'disabled' : ''}>
+                            <input type="text" id="name-input" value="${userProfile.name || ''}" placeholder="Enter your name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
                         </div>
                         <div>
                             <label for="detector-input" class="block text-sm font-medium text-gray-700">Metal Detector Used</label>
-                            <input type="text" id="detector-input" value="${userProfile.detector || ''}" placeholder="e.g., Minelab Equinox 800" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border" ${!isDataReady ? 'disabled' : ''}>
+                            <input type="text" id="detector-input" value="${userProfile.detector || ''}" placeholder="e.g., Minelab Equinox 800" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
                         </div>
                         <p class="text-xs text-gray-500 mt-2">Changes are saved automatically when you click outside the box.</p>
                     </div>
@@ -463,7 +401,7 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-primary mb-3">Open Survey (1/1)</h2>
                     <div id="open-survey-list" class="space-y-4">
-                        ${isDataReady ? (openSurvey ? renderSurveyCard(openSurvey, true) : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No survey is currently open and recording targets.</p>') : renderLoadingCard()}
+                        ${openSurvey ? renderSurveyCard(openSurvey, true) : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No survey is currently open and recording targets.</p>'}
                     </div>
                 </div>
 
@@ -471,7 +409,7 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-primary mb-3">Active (Closed) Surveys</h2>
                     <div id="active-survey-list" class="space-y-4">
-                        ${isDataReady ? (activeSurveys.length > 0 ? activeSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No active, closed surveys. They are ready to be opened again.</p>') : renderLoadingCard()}
+                        ${activeSurveys.length > 0 ? activeSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No active, closed surveys. They are ready to be opened again.</p>'}
                     </div>
                 </div>
 
@@ -479,21 +417,7 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-primary mb-3">Archived Surveys</h2>
                     <div id="archived-survey-list" class="space-y-4">
-                        ${isDataReady ? (archivedSurveys.length > 0 ? archivedSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No archived surveys yet. Great way to tidy up old data!</p>') : renderLoadingCard()}
-                    </div>
-                </div>
-            `;
-        }
-
-        /** Renders a skeleton loading card while data is fetched. */
-        function renderLoadingCard() {
-            return `
-                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-gray-300 animate-pulse">
-                    <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                    <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
-                    <div class="mt-4 pt-3 border-t border-gray-100 flex gap-2">
-                        <div class="h-8 bg-gray-200 rounded-md w-20"></div>
-                        <div class="h-8 bg-gray-200 rounded-md w-20"></div>
+                        ${archivedSurveys.length > 0 ? archivedSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No archived surveys yet. Great way to tidy up old data!</p>'}
                     </div>
                 </div>
             `;
@@ -501,11 +425,11 @@
         
         /** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
-            // ... (renderSurveyCard function remains mostly the same, ensuring buttons respect isDataReady)
             let actions = '';
             let statusBadge = '';
-            const disabledAttr = isDataReady ? '' : 'disabled';
-            const disabledClass = isDataReady ? '' : 'opacity-50 cursor-not-allowed';
+            // Since data is local, all buttons are always enabled
+            const disabledAttr = '';
+            const disabledClass = '';
 
             switch (survey.status) {
                 case 'Open':
@@ -537,8 +461,8 @@
                     <div class="flex justify-between items-start mb-2">
                         <h3 class="text-lg font-bold text-gray-800">${statusBadge} ${survey.name}</h3>
                         <div class="text-right text-sm text-gray-500">
-                            <p>Created: ${survey.creationDate || 'N/A'}</p>
-                            <p>Updated: ${survey.dateLastChanged || 'N/A'}</p>
+                            <p>Created: ${formatDate(survey.creationDate)}</p>
+                            <p>Updated: ${formatDate(survey.dateLastChanged)}</p>
                         </div>
                     </div>
                     <p class="text-sm text-gray-600 mb-3">${survey.description}</p>
@@ -579,14 +503,14 @@
             return `
                 <div class="p-4">
                     <h2 class="text-3xl font-bold text-primary mb-6">Settings Page</h2>
-                    <p class="text-gray-700">This page is for general app settings. Currently, your User ID is: </p>
-                    <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Loading...'}</p>
-                    <p class="text-sm text-gray-500 mt-2">This ID is used to securely store your data in the cloud.</p>
+                    <p class="text-gray-700">Your local User ID (used for this browser instance) is: </p>
+                    <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
+                    <p class="text-sm text-gray-500 mt-2">This ID ties your data to this browser/device only. If you clear your browser cache, this data will be lost.</p>
                 </div>
             `;
         }
 
-        // --- EVENT LISTENERS ---
+        // --- INITIALIZATION & EVENT LISTENERS ---
 
         // Event listener for navigation buttons
         document.querySelectorAll('.nav-btn').forEach(button => {
@@ -599,7 +523,10 @@
             });
         });
 
-        // Initial render call (will be re-called when auth/data loads)
+        // 1. Load data first
+        loadDataFromLocalStorage();
+
+        // 2. Initial render call
         render();
 
     </script>
