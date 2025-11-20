@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Green - Dig It! Survey Logger (Local App)</title>
+    <title>Latest - Dig It! Survey Logger (Local App)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom Tailwind Configuration */
@@ -549,7 +549,7 @@
                         <p class="text-sm text-gray-600 mb-4">
                             ${openSurvey ? `Targets Logged: ${openSurvey.targets.length}` : 'Click "New Survey" to start a new logging session.'}
                         </p>
-                        <button id="create-survey-btn" class="w-full bg-primary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150 flex items-center justify-center">
+                        <button id="create-survey-btn" class="w-full bg-primary text-black font-bold py-3 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150 flex items-center justify-center border border-primary/80">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             New Survey
                         </button>
@@ -571,24 +571,25 @@
             switch (survey.status) {
                 case 'Open':
                     statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
+                    // FIX 3: Changed text-white to text-black for guaranteed visibility
                     actions = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
                     `;
                     break;
-                case 'Active': // Active but Closed ⬅️ FIX: Ensure Open button is correctly visible and green
+                case 'Active': // Active but Closed ⬅️ FIX 3: Changed text-white to text-black for guaranteed visibility
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
-                case 'Archived':
+                case 'Archived': // ⬅️ FIX 3: Changed text-white to text-black for guaranteed visibility
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
             }
@@ -728,10 +729,10 @@
                             ${openSurvey ? openSurvey.description : 'Open a survey on the Home page to start logging finds.'}
                         </p>
 
-                        <button id="add-target-btn" class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center 
+                        <button id="add-target-btn" class="w-full font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center 
                             ${isButtonDisabled 
-                                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed'
-                                : 'bg-secondary hover:bg-secondary/90'}" 
+                                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed border border-gray-400'
+                                : 'bg-secondary hover:bg-secondary/90 text-black border border-secondary/80'}" 
                             ${isButtonDisabled ? 'disabled' : ''}>
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             Log New Target
