@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>+++More Debug - Metal Detecting Survey Log</title>
+    <title>---More Debug - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1219,12 +1219,11 @@
             // Limit to the first 10 targets for reliable URL construction
             const mapTargets = targets.slice(0, 10);
             
-            // --- GOOGLE MAPS CONSTRUCTION (CONCATENATION FIX) ---
+            // --- GOOGLE MAPS CONSTRUCTION (FINAL FIX) ---
             
             // 1. Collect all coordinate strings (lat,lon)
             const mapPins = mapTargets.map((t) => {
                 const parts = t.coordinates.split(',');
-                // Ensure coordinates are trimmed and formatted as lat,lon without spaces
                 return parts[0].trim() + ',' + parts[1].trim();
             }); 
             
@@ -1233,50 +1232,38 @@
             const centerLat = parts[0].trim();
             const centerLon = parts[1].trim();
 
-            // 3. Create the robust Google Maps URL using string concatenation (+)
-            // The 'query' parameter is the pipe-separated, URL-encoded list of pins.
+            // 3. Create the robust Google Maps URL using the correct 'center' parameter
+            // The format is: .../search/?api=1&query={pipe_separated_pins}&center={lat},{lon}&zoom=14
             const pinQuery = mapPins.join('|');
             const encodedPinQuery = encodeURIComponent(pinQuery);
             
-            // Using the standard Google Maps search URL which is highly reliable for multi-pins
-            // Format: https://www.google.com/maps/search/?api=1&query=lat,lon|lat,lon...
-            const googleMapsUrl = 'https://maps.google.com3' +
-                                  encodedPinQuery +
-                                  '&center=' + centerLat + ',' + centerLon +
-                                  '&zoom=14';
+            const googleMapsUrl = `https://maps.google.com/maps/search/?api=1&query=${encodedPinQuery}&center=${centerLat},${centerLon}&zoom=14`;
             
-            // --- OPENSTREETMAP CONSTRUCTION (CONCATENATION FIX) ---
+            // --- OPENSTREETMAP CONSTRUCTION ---
             
-            // OpenStreetMap link (still centered on the first target)
-            const osmUrl = 'https://www.openstreetmap.org/?mlat=' + centerLat + 
-                           '&mlon=' + centerLon + 
-                           '#map=16/' + centerLat + '/' + centerLon;
+            const osmUrl = `https://www.openstreetmap.org/?mlat=${centerLat}&mlon=${centerLon}#map=16/${centerLat}/${centerLon}`;
 
 
-            return (
-                '<div class="space-y-3">' +
-                    '<a href="' + googleMapsUrl + '" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">' +
-                        '<i class="fab fa-google mr-2"></i> Open in Google Maps (Multi-Pin)' +
-                    '</a>' +
+            // Use template literal for cleaner HTML output now that the JS variable interpolation is verified
+            return `
+                <div class="space-y-3">
+                    <a href="${googleMapsUrl}" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
+                        <i class="fab fa-google mr-2"></i> Open in Google Maps (Multi-Pin)
+                    </a>
                     
-                    '' +
-                    '<div class="mt-2">' +
-                        '<label for="map-string-display" class="block text-xs font-medium text-gray-500 mb-1">' +
-                            'Raw Google Maps URL for Debugging:' +
-                        '</label>' +
-                        '<textarea id="map-string-display" rows="3" readonly ' +
-                                  'class="w-full p-2 border border-yellow-500 rounded-md bg-gray-50 text-xs font-mono break-all">' + googleMapsUrl + '</textarea>' +
-                    '</div>' +
-                    '' +
-                    
-                    '<a href="' + osmUrl + '" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">' +
-                        '<i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)' +
-                    '</a>' +
-                '</div>'
-            );
-        } 
-        
-        /** * Finds user location and calculates bearing and distance to the closest target.
+                    <div class="mt-2">
+                        <label for="map-string-display" class="block text-xs font-medium text-gray-500 mb-1">
+                            Raw Google Maps URL for Debugging:
+                        </label>
+                        <textarea id="map-string-display" rows="3" readonly 
+                                  class="w-full p-2 border border-yellow-500 rounded-md bg-gray-50 text-xs font-mono break-all">${googleMapsUrl}</textarea>
+                    </div>
+                    <a href="${osmUrl}" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">
+                        <i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)
+                    </a>
+                </div>
+            `;
+        }        /** * Finds user location and calculates bearing and distance to the closest target.
          * Displays the results in the modal.
          */
 /** * Finds user location and calculates bearing and distance to the closest target.
