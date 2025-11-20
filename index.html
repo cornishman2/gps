@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map - Metal Detecting Survey Log</title>
+    <title>Correct Map - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1213,6 +1213,7 @@
         }
         
     /** Creates HTML for map links using the coordinates of all targets. */
+/** Creates HTML for map links using the coordinates of all targets. */
         function createMapLinkHtml(targets) {
             if (targets.length === 0) return '';
             
@@ -1222,26 +1223,25 @@
             // --- GOOGLE MAPS CONSTRUCTION ---
             
             // 1. Create the pipe-separated string of coordinates (lat1,lon1|lat2,lon2|...)
-            const mapPins = mapTargets.map((t, index) => {
-                // Sanitize coordinates and extract lat/lon. Ensure no spaces are in the final coordinate string.
+            const mapPins = mapTargets.map((t) => {
+                // Ensure coordinates are trimmed and formatted as lat,lon without spaces
                 const [lat, lon] = t.coordinates.split(',').map(c => c.trim());
-                // For robustness, we don't include the label in this basic URL format
                 return `${lat},${lon}`;
             }).join('|');
             
-            // 2. Center the map on the first target's coordinates (required for the URL to know where to look)
+            // 2. Center the map on the first target's coordinates
             const [centerLat, centerLon] = mapTargets[0].coordinates.split(',').map(c => c.trim());
 
-            // Constructing the final Google Maps URL using the 'api=1' structure, which is very robust for mobile devices.
-            // We use the 'center' parameter to ensure the map is centered correctly, and the 'markers' parameter handles all the pins.
-            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLon}&markers=${mapPins}`;
+            // Constructing the final Google Maps URL using the specific 'api' and 'query' parameters.
+            // Using a basic search query centered on the first point and using the 'markers' list for the rest.
+            // Note the use of encodeURIComponent for safety, though basic coordinates are usually safe.
+            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLon}&markers=${encodeURIComponent(mapPins)}`;
             
             // --- OPENSTREETMAP CONSTRUCTION ---
             
             // OpenStreetMap link (simpler, usually only supports one marker easily, but we'll center it)
             const osmCenterLat = centerLat;
             const osmCenterLon = centerLon;
-            // Zoom level 16 is good for field work
             const osmUrl = `https://www.openstreetmap.org/?mlat=${osmCenterLat}&mlon=${osmCenterLon}#map=16/${osmCenterLat}/${osmCenterLon}`;
 
 
@@ -1255,7 +1255,7 @@
                     </a>
                 </div>
             `;
-        }    /** * Finds user location and calculates bearing and distance to the closest target.
+        }        }    /** * Finds user location and calculates bearing and distance to the closest target.
          * Displays the results in the modal.
          */
         function findAndDisplayClosestTarget(targets) {
