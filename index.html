@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dectector - Metal Detecting Survey Log</title>
+    <title>Gemini - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -264,7 +264,11 @@
                 }
 
                 if (storedProfile) {
-                    userProfile = JSON.parse(storedProfile);
+                    // Update userProfile only if storedProfile exists and is valid
+                    const tempProfile = JSON.parse(storedProfile);
+                    if (tempProfile && tempProfile.name && tempProfile.detector) {
+                         userProfile = tempProfile;
+                    }
                 } else {
                     // Re-initialize sample profile if needed
                     userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox" };
@@ -531,7 +535,7 @@
             render();
         }
 
-        /** Shows the Edit Profile Modal and loads current data. (NEW) */
+        /** Shows the Edit Profile Modal and loads current data. */
         function showEditProfileModal() {
             const modal = document.getElementById('edit-profile-modal');
             
@@ -547,12 +551,12 @@
             form.addEventListener('submit', handleEditProfileSubmit); 
         }
 
-        /** Closes the Edit Profile Modal. (NEW) */
+        /** Closes the Edit Profile Modal. */
         function closeEditProfileModal() {
             document.getElementById('edit-profile-modal').style.display = 'none';
         }
 
-        /** Handles the submission of the Edit Profile form. (NEW) */
+        /** Handles the submission of the Edit Profile form. */
         function handleEditProfileSubmit(event) {
             event.preventDefault();
 
@@ -573,6 +577,8 @@
             saveSurveysToLocalStorage();
             closeEditProfileModal();
             showMessage(`Profile updated successfully!`, 'success');
+            
+            // Re-render the current page to reflect the new profile data (especially useful for Home/Settings)
             render();
         }
 
