@@ -49,7 +49,7 @@
         
         <!-- Header / Page Title -->
         <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:23</h1>
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:31</h1>
         </header>
 
         <!-- Main Content Area -->
@@ -96,6 +96,7 @@
         let db;
         let auth;
         let userId = null;
+        let isDataReady = false; // New flag to track when initial auth and listeners are complete
         let surveys = []; // Array to hold all survey documents from Firestore
         let userProfile = {}; // Object to hold user's name and detector
         let currentPage = 'home'; // Tracks the current visible page
@@ -105,17 +106,41 @@
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
+        /** Helper function to manage status messages in the UI. */
+        function showMessage(text, type = 'info') {
+            const messageBox = document.getElementById('home-message-box');
+            if (!messageBox) return; // Guard if not on home page yet
+
+            messageBox.textContent = text;
+            // Reset colors
+            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800', 'bg-secondary/10', 'text-secondary-800');
+            
+            switch (type) {
+                case 'success':
+                    messageBox.classList.add('bg-green-100', 'text-green-800');
+                    break;
+                case 'error':
+                    messageBox.classList.add('bg-red-100', 'text-red-800');
+                    break;
+                case 'info':
+                default:
+                    messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
+                    break;
+            }
+        }
+        
         if (firebaseConfig) {
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
+            console.log("Firebase services initialized (db, auth).");
+            showMessage("Connecting to cloud services...", 'info');
 
             // 1. Handle Authentication
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     userId = user.uid;
-                    console.log("User signed in:", userId);
-                    // Start listening for data once authenticated
+                    showMessage("User authenticated successfully. Loading data...", 'info');
                     setupFirestoreListeners();
                 } else {
                     // Sign in using the custom token or anonymously if the token is not available
@@ -128,19 +153,20 @@
                         }
                     } catch (error) {
                         console.error("Authentication failed:", error);
-                        // Fallback: use a random ID if sign-in fails, but data won't persist securely
+                        // Fallback: use a random ID if sign-in fails
                         userId = crypto.randomUUID();
-                        console.warn("Using temporary local ID:", userId);
-                        render(); // Render with temporary ID
+                        showMessage("Authentication failed. Using temporary ID (data will persist only for this session).", 'error');
+                        isDataReady = true;
+                        render();
                     }
                 }
             });
         } else {
             console.error("Firebase configuration is missing.");
-            // Fallback: use a random ID if no Firebase config
             userId = crypto.randomUUID();
-            console.warn("Using temporary local ID:", userId);
-            render(); // Render with temporary ID
+            showMessage("FATAL ERROR: Firebase configuration is missing. Using temporary ID.", 'error');
+            isDataReady = true;
+            render();
         }
 
         // --- FIRESTORE HELPERS ---
@@ -166,18 +192,21 @@
             // Listener for User Profile (Name/Detector)
             onSnapshot(getUserProfileRef(), (docSnapshot) => {
                 userProfile = docSnapshot.exists() ? docSnapshot.data() : {};
+                isDataReady = true;
+                showMessage("Data loaded and listening for changes.", 'success');
                 render();
             }, (error) => {
                 console.error("Error listening to user profile:", error);
+                showMessage(`Error loading profile data: ${error.message}`, 'error');
+                isDataReady = true; // Still ready to proceed, just with empty profile
+                render();
             });
 
             // Listener for Surveys
             onSnapshot(getSurveysCollectionRef(), (querySnapshot) => {
                 surveys = [];
                 querySnapshot.forEach((doc) => {
-                    // Extract data and add the document ID
                     const data = doc.data();
-                    // Ensure the targets array exists, defaulting to empty
                     const survey = { id: doc.id, targets: [], ...data };
                     // Convert Firestore Timestamps to JavaScript Date objects for display
                     if (data.creationDate) survey.creationDate = data.creationDate.toDate().toLocaleDateString();
@@ -189,6 +218,7 @@
                 render();
             }, (error) => {
                 console.error("Error listening to surveys:", error);
+                showMessage(`Error loading surveys: ${error.message}`, 'error');
             });
         }
         
@@ -196,49 +226,34 @@
 
         /** Saves the user's name and detector to Firestore. */
         async function saveUserProfile(e) {
-            if (!db || !userId) return console.error("Database not ready.");
+            if (!db || !userId) return showMessage("Database not ready. Please wait for the app to fully load.", 'error');
 
             const nameInput = document.getElementById('name-input').value.trim();
             const detectorInput = document.getElementById('detector-input').value.trim();
             
             try {
-                // Use setDoc to overwrite or create the single profile document
                 await setDoc(getUserProfileRef(), {
                     name: nameInput,
                     detector: detectorInput,
                 }, { merge: true });
                 console.log("Profile saved successfully.");
+                showMessage("Profile updated automatically.", 'info');
             } catch (error) {
                 console.error("Error saving profile:", error);
+                showMessage(`Error saving profile: ${error.message}`, 'error');
             }
         }
         
         /** Creates a new survey, automatically setting its status to 'Open'. */
         async function createNewSurvey() {
-            // --- DIAGNOSTIC LOG ---
-            console.log("Create New Survey button clicked.");
-
-            // Reset message box state before showing a new status/error
-            const messageBox = document.getElementById('home-message-box');
-            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
-            messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
-            messageBox.textContent = 'Your data is automatically saving to the cloud.'; // Default status
-
-            if (!db || !userId) {
-                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                messageBox.classList.add('bg-red-100', 'text-red-800');
-                messageBox.textContent = `Error: Authentication or database not ready. Please wait a moment for data loading to complete.`;
-                console.error("Database or user ID not ready.");
-                return;
+            if (!db || !userId || !isDataReady) {
+                return showMessage("Database not ready or data is still loading. Please wait for the 'Data loaded' message.", 'error');
             }
 
             // Check if an 'Open' survey already exists
             const openSurvey = surveys.find(s => s.status === 'Open');
             if (openSurvey) {
-                // Show error in the message box
-                messageBox.textContent = `Error: Please Close or Archive the current Open survey ('${openSurvey.name}') before creating a new one.`;
-                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                messageBox.classList.add('bg-red-100', 'text-red-800');
+                showMessage(`Error: Please Close or Archive the current Open survey ('${openSurvey.name}') before creating a new one.`, 'error');
                 return;
             }
             
@@ -256,52 +271,36 @@
             const description = prompt(`Enter a brief description for '${surveyName}':`);
 
             try {
-                // Add the new document to the surveys collection
                 await addDoc(getSurveysCollectionRef(), {
                     name: surveyName.trim(),
                     description: description || 'No description provided.',
-                    status: 'Open', // Set status to 'Open' as per the "only one open" rule
+                    status: 'Open', 
                     creationDate: serverTimestamp(),
                     dateLastChanged: serverTimestamp(),
-                    targets: [] // Initialize an empty array for targets
+                    targets: [] 
                 });
                 
-                // Show success in the message box
-                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                messageBox.classList.add('bg-green-100', 'text-green-800');
-                messageBox.textContent = `Success: New survey '${surveyName.trim()}' created and set to Open.`;
+                showMessage(`Success: New survey '${surveyName.trim()}' created and set to Open.`, 'success');
                 console.log("New survey created.");
 
             } catch (error) {
-                // Show database write error
-                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                messageBox.classList.add('bg-red-100', 'text-red-800');
-                messageBox.textContent = `Error creating survey: ${error.message}.`;
+                showMessage(`Error creating survey: ${error.message}.`, 'error');
                 console.error("Error creating new survey:", error);
             }
         }
 
         /** Updates a survey's status and dateLastChanged. */
         async function updateSurveyStatus(surveyId, newStatus) {
-            if (!db || !userId) return console.error("Database not ready.");
-
-            // Reset message box state before showing a new status/error
-            const messageBox = document.getElementById('home-message-box');
-            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
-            messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
-            messageBox.textContent = 'Your data is automatically saving to the cloud.';
+            if (!db || !userId) return showMessage("Database not ready. Please wait for the app to fully load.", 'error');
 
             const surveyRef = doc(getSurveysCollectionRef(), surveyId);
             const surveyName = surveys.find(s => s.id === surveyId)?.name || 'this survey';
-
 
             // Special handling for 'Open': ensure no other survey is open
             if (newStatus === 'Open') {
                 const openSurvey = surveys.find(s => s.status === 'Open' && s.id !== surveyId);
                 if (openSurvey) {
-                    messageBox.textContent = `Error: Cannot open this survey. Please Close or Archive the current Open survey ('${openSurvey.name}') first.`;
-                    messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                    messageBox.classList.add('bg-red-100', 'text-red-800');
+                    showMessage(`Error: Cannot open this survey. Please Close or Archive the current Open survey ('${openSurvey.name}') first.`, 'error');
                     return;
                 }
             }
@@ -312,28 +311,17 @@
                     dateLastChanged: serverTimestamp()
                 });
                 
-                // Show success
-                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                messageBox.classList.add('bg-green-100', 'text-green-800');
-                messageBox.textContent = `Success: Survey '${surveyName}' status updated to '${newStatus}'.`;
+                showMessage(`Success: Survey '${surveyName}' status updated to '${newStatus}'.`, 'success');
                 console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
             } catch (error) {
-                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                messageBox.classList.add('bg-red-100', 'text-red-800');
-                messageBox.textContent = `Error updating survey status: ${error.message}.`;
+                showMessage(`Error updating survey status: ${error.message}.`, 'error');
                 console.error("Error updating survey status:", error);
             }
         }
 
         /** Deletes a survey document. */
         async function deleteSurvey(surveyId, surveyName) {
-            if (!db || !userId) return console.error("Database not ready.");
-
-            // Reset message box state before showing a new status/error
-            const messageBox = document.getElementById('home-message-box');
-            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
-            messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
-            messageBox.textContent = 'Your data is automatically saving to the cloud.';
+            if (!db || !userId) return showMessage("Database not ready. Please wait for the app to fully load.", 'error');
 
             // Use a custom confirmation dialog structure instead of alert/confirm
             const confirmed = window.prompt(`Type 'DELETE ${surveyName}' to confirm deletion of this survey:`);
@@ -343,20 +331,15 @@
                     const surveyRef = doc(getSurveysCollectionRef(), surveyId);
                     await deleteDoc(surveyRef);
                     
-                    // Show success
-                    messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                    messageBox.classList.add('bg-green-100', 'text-green-800');
-                    messageBox.textContent = `Success: Survey '${surveyName}' was deleted.`;
+                    showMessage(`Success: Survey '${surveyName}' was deleted.`, 'success');
                     console.log(`Survey ${surveyId} deleted.`);
 
                 } catch (error) {
-                    messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
-                    messageBox.classList.add('bg-red-100', 'text-red-800');
-                    messageBox.textContent = `Error deleting survey: ${error.message}.`;
+                    showMessage(`Error deleting survey: ${error.message}.`, 'error');
                     console.error("Error deleting survey:", error);
                 }
             } else {
-                messageBox.textContent = `Deletion of survey '${surveyName}' cancelled.`;
+                showMessage(`Deletion of survey '${surveyName}' cancelled.`, 'info');
                 console.log("Deletion cancelled.");
             }
         }
@@ -396,6 +379,11 @@
                 case 'settings':
                     contentArea.innerHTML = renderSettingsPage();
                     break;
+            }
+            // Re-apply message logic if render happened on home page
+            if (currentPage === 'home' && !isDataReady) {
+                 // Re-display loading message if data isn't ready, overriding whatever renderHomePage set
+                 showMessage("Connecting to cloud services...", 'info');
             }
         }
 
@@ -444,13 +432,13 @@
             const archivedSurveys = surveys.filter(s => s.status === 'Archived');
             
             return `
-                <!-- Message Box: Removed 'hidden' class for continuous status feedback -->
+                <!-- Message Box: The helper function showMessage manages the content and color -->
                 <div id="home-message-box" class="p-3 mb-4 rounded-lg text-sm bg-secondary/10 text-secondary-800">
-                    Your data is automatically saving to the cloud.
+                    Connecting to cloud services...
                 </div>
 
                 <!-- Create New Survey Button -->
-                <button id="create-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 mb-6 flex items-center justify-center">
+                <button id="create-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 mb-6 flex items-center justify-center ${!isDataReady ? 'opacity-50 cursor-not-allowed' : ''}" ${!isDataReady ? 'disabled' : ''}>
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     Create New Survey
                 </button>
@@ -461,11 +449,11 @@
                     <div class="space-y-4">
                         <div>
                             <label for="name-input" class="block text-sm font-medium text-gray-700">Your Name</label>
-                            <input type="text" id="name-input" value="${userProfile.name || ''}" placeholder="Enter your name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
+                            <input type="text" id="name-input" value="${userProfile.name || ''}" placeholder="Enter your name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border" ${!isDataReady ? 'disabled' : ''}>
                         </div>
                         <div>
                             <label for="detector-input" class="block text-sm font-medium text-gray-700">Metal Detector Used</label>
-                            <input type="text" id="detector-input" value="${userProfile.detector || ''}" placeholder="e.g., Minelab Equinox 800" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
+                            <input type="text" id="detector-input" value="${userProfile.detector || ''}" placeholder="e.g., Minelab Equinox 800" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border" ${!isDataReady ? 'disabled' : ''}>
                         </div>
                         <p class="text-xs text-gray-500 mt-2">Changes are saved automatically when you click outside the box.</p>
                     </div>
@@ -475,7 +463,7 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-primary mb-3">Open Survey (1/1)</h2>
                     <div id="open-survey-list" class="space-y-4">
-                        ${openSurvey ? renderSurveyCard(openSurvey, true) : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No survey is currently open and recording targets.</p>'}
+                        ${isDataReady ? (openSurvey ? renderSurveyCard(openSurvey, true) : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No survey is currently open and recording targets.</p>') : renderLoadingCard()}
                     </div>
                 </div>
 
@@ -483,7 +471,7 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-primary mb-3">Active (Closed) Surveys</h2>
                     <div id="active-survey-list" class="space-y-4">
-                        ${activeSurveys.length > 0 ? activeSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No active, closed surveys. They are ready to be opened again.</p>'}
+                        ${isDataReady ? (activeSurveys.length > 0 ? activeSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No active, closed surveys. They are ready to be opened again.</p>') : renderLoadingCard()}
                     </div>
                 </div>
 
@@ -491,7 +479,21 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold text-primary mb-3">Archived Surveys</h2>
                     <div id="archived-survey-list" class="space-y-4">
-                        ${archivedSurveys.length > 0 ? archivedSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No archived surveys yet. Great way to tidy up old data!</p>'}
+                        ${isDataReady ? (archivedSurveys.length > 0 ? archivedSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No archived surveys yet. Great way to tidy up old data!</p>') : renderLoadingCard()}
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders a skeleton loading card while data is fetched. */
+        function renderLoadingCard() {
+            return `
+                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-gray-300 animate-pulse">
+                    <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div class="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
+                    <div class="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                        <div class="h-8 bg-gray-200 rounded-md w-20"></div>
+                        <div class="h-8 bg-gray-200 rounded-md w-20"></div>
                     </div>
                 </div>
             `;
@@ -499,30 +501,33 @@
         
         /** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
+            // ... (renderSurveyCard function remains mostly the same, ensuring buttons respect isDataReady)
             let actions = '';
             let statusBadge = '';
+            const disabledAttr = isDataReady ? '' : 'disabled';
+            const disabledClass = isDataReady ? '' : 'opacity-50 cursor-not-allowed';
 
             switch (survey.status) {
                 case 'Open':
                     statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="close" data-name="${survey.name}" ${disabledAttr}>Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
                     `;
                     break;
                 case 'Active': // Active but Closed
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="open" data-name="${survey.name}" ${disabledAttr}>Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
                     `;
                     break;
                 case 'Archived':
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" ${disabledAttr}>Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
                     `;
                     break;
             }
