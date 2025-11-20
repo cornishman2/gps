@@ -40,6 +40,19 @@
             color: #4F46E5; /* Primary color */
             font-weight: 600;
         }
+        /* Modal Backdrop */
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.75);
+            transition: opacity 0.3s ease-in-out;
+        }
+        /* Modal Dialog */
+        .modal-dialog {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        .hidden .modal-dialog {
+            transform: scale(0.95);
+            opacity: 0;
+        }
     </style>
 </head>
 <body class="min-h-screen antialiased">
@@ -49,7 +62,7 @@
         
         <!-- Header / Page Title -->
         <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 12:10</h1>
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 12:18</h1>
         </header>
 
         <!-- Main Content Area -->
@@ -80,6 +93,22 @@
         </footer>
     </div>
 
+    <!-- CUSTOM CONFIRMATION MODAL -->
+    <div id="confirmation-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="modal-dialog bg-white w-full max-w-sm mx-auto rounded-xl shadow-2xl p-6 transform">
+            <h3 id="modal-title" class="text-xl font-bold text-red-600 mb-3">Confirm Deletion</h3>
+            <p id="modal-message" class="text-gray-700 mb-6">Are you sure you want to proceed?</p>
+            <div class="flex justify-end space-x-3">
+                <button id="modal-cancel-btn" class="px-4 py-2 text-sm font-medium rounded-lg text-gray-700 bg-gray-200 hover:bg-gray-300 transition duration-150" onclick="handleModalCancel()">
+                    Cancel
+                </button>
+                <button id="modal-confirm-btn" class="px-4 py-2 text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 transition duration-150" onclick="handleModalConfirm()">
+                    Yes, Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Local Storage Application Logic -->
     <script type="module">
         // --- GLOBAL STATE & LOCAL STORAGE SETUP ---
@@ -92,6 +121,9 @@
         let userProfile = {}; 
         let currentPage = 'home'; 
         
+        // Modal logic globals
+        let modalActionCallback = null;
+
         // --- DATA HELPERS ---
 
         /** Generates a simple, unique ID. */
@@ -165,6 +197,39 @@
                     messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
                     break;
             }
+        }
+
+        // --- CUSTOM MODAL LOGIC ---
+        
+        /** Displays the confirmation modal and sets up the action callbacks. */
+        function showConfirmationModal(title, message, confirmCallback) {
+            const modal = document.getElementById('confirmation-modal');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            
+            modalActionCallback = confirmCallback;
+            
+            modal.classList.remove('hidden');
+        }
+
+        /** Hides the confirmation modal. */
+        function hideConfirmationModal() {
+            document.getElementById('confirmation-modal').classList.add('hidden');
+            modalActionCallback = null;
+        }
+
+        /** Handles the 'Yes, Delete' button click inside the modal. */
+        window.handleModalConfirm = function() {
+            if (modalActionCallback) {
+                modalActionCallback(); // Execute the stored action
+            }
+            hideConfirmationModal();
+        }
+
+        /** Handles the 'Cancel' button click inside the modal. */
+        window.handleModalCancel = function() {
+            hideConfirmationModal();
+            showMessage("Deletion cancelled.", 'info');
         }
         
         // --- DATA MANIPULATION FUNCTIONS (LOCAL STORAGE CRUD) ---
@@ -264,25 +329,24 @@
             render();
         }
 
-        /** Deletes a survey document. */
+        /** Triggers the custom modal for survey deletion. */
         function deleteSurvey(surveyId, surveyName) {
-            // Use a custom confirmation dialog structure instead of alert/confirm
-            const confirmed = window.prompt(`Type 'DELETE ${surveyName}' to confirm permanent deletion of this survey (Local data will be lost):`);
-
-            if (confirmed === `DELETE ${surveyName}`) {
-                surveys = surveys.filter(s => s.id !== surveyId);
-                saveSurveysToLocalStorage();
-                loadDataFromLocalStorage(); // Reload and sort
-                
-                showMessage(`Success: Survey '${surveyName}' was permanently deleted.`, 'success');
-                console.log(`Survey ${surveyId} deleted locally.`);
-                
-                // CRUCIAL: Explicitly call render() to refresh the UI and remove the card.
-                render();
-            } else {
-                showMessage(`Deletion of survey '${surveyName}' cancelled.`, 'info');
-                console.log("Deletion cancelled.");
-            }
+            showConfirmationModal(
+                'Confirm Permanent Deletion',
+                `Are you sure you want to permanently delete the survey: "${surveyName}"? This action cannot be undone and local data will be lost.`,
+                // Confirmation callback (YES)
+                () => {
+                    surveys = surveys.filter(s => s.id !== surveyId);
+                    saveSurveysToLocalStorage();
+                    loadDataFromLocalStorage(); 
+                    
+                    showMessage(`Success: Survey '${surveyName}' was permanently deleted.`, 'success');
+                    console.log(`Survey ${surveyId} deleted locally.`);
+                    
+                    // Crucial: Explicitly call render() to refresh the UI and remove the card.
+                    render();
+                }
+            );
         }
 
         /** Exports all application data into a JSON string. */
@@ -485,7 +549,6 @@
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
             let statusBadge = '';
-            // Since data is local, all buttons are always enabled
             const disabledAttr = '';
             const disabledClass = '';
 
