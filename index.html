@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude - Metal Detecting Survey Log</title>
+    <title>Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -157,8 +157,13 @@
                         </select>
                     </div>
                     <div class="mb-4 col-span-2">
-                        <label for="target-coords" class="block text-sm font-medium text-gray-700">GPS Coordinates (Auto-fill required later)</label>
-                        <input type="text" id="target-coords" name="targetCoords" placeholder="e.g., 50.2568, -5.2345" 
+                        <label for="target-coords" class="block text-sm font-medium text-gray-700 flex items-center">
+                            GPS Coordinates
+                            <span id="gps-loading-indicator" class="ml-2 text-primary text-xs hidden">
+                                <i class="fas fa-spinner fa-spin mr-1"></i> Locating...
+                            </span>
+                        </label>
+                        <input type="text" id="target-coords" name="targetCoords" placeholder="Requesting location..." 
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
                 </div>
@@ -314,7 +319,7 @@
                             dateLastChanged: Date.now(),
                             targets: [
                                 { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.2568, -5.2345", user: userProfile.name, detector: userProfile.detector },
-                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.2567, -5.2348", user: userProfile.name, detector: userProfile.detector }
+                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.2567, -5.2348", user: userProfile.name, detector: userProfile.detector }
                             ]
                         }
                     ];
@@ -402,6 +407,64 @@
             const importBtn = document.getElementById('import-data-btn');
             if (importBtn) {
                 importBtn.addEventListener('click', importData);
+            }
+        }
+
+        // --- GPS GEOLOCATION FUNCTIONS (NEW) ---
+        
+        /** Safely requests and handles GPS coordinates. */
+        function getCurrentPosition() {
+            const coordsInput = document.getElementById('target-coords');
+            const loadingIndicator = document.getElementById('gps-loading-indicator');
+            
+            // 1. Reset field and show loading
+            coordsInput.value = '';
+            coordsInput.placeholder = 'Requesting location...';
+            coordsInput.disabled = true; // Prevent manual typing while loading
+            loadingIndicator.classList.remove('hidden');
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude.toFixed(6);
+                        const lon = position.coords.longitude.toFixed(6);
+                        const coordinates = `${lat}, ${lon}`;
+                        
+                        coordsInput.value = coordinates;
+                        coordsInput.placeholder = 'GPS Found';
+                        coordsInput.disabled = false;
+                        loadingIndicator.classList.add('hidden');
+                        showMessage('GPS location found and filled.', 'info');
+                    },
+                    (error) => {
+                        // Handle errors (permission denied, position unavailable, timeout)
+                        coordsInput.value = '';
+                        coordsInput.placeholder = 'No GPS logged (tap to enter manually)';
+                        coordsInput.disabled = false;
+                        loadingIndicator.classList.add('hidden');
+
+                        let errorMessage = 'GPS error: Unable to retrieve location.';
+                        if (error.code === error.PERMISSION_DENIED) {
+                            errorMessage = 'GPS permission denied. Please enable location services for this site.';
+                        } else if (error.code === error.TIMEOUT) {
+                            errorMessage = 'GPS timeout. Try moving to an area with better signal.';
+                        }
+                        
+                        showMessage(errorMessage, 'warning');
+                        console.error('Geolocation Error:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                coordsInput.value = '';
+                coordsInput.placeholder = 'Geolocation not supported by this browser.';
+                coordsInput.disabled = false;
+                loadingIndicator.classList.add('hidden');
+                showMessage('Geolocation is not supported on this device.', 'error');
             }
         }
 
@@ -516,21 +579,26 @@
             render();
         }
 
-        /** Shows the New Target Modal. */
+        /** Shows the New Target Modal. (Updated to include GPS) */
         function showNewTargetModal() {
             const openSurvey = surveys.find(s => s.status === 'Open');
             if (!openSurvey) {
                 return showMessage('Cannot log target. Please open a survey first on the Home page.', 'warning');
             }
 
-            // Set survey name in the modal header
+            // 1. Set survey name in the modal header
             document.getElementById('current-target-survey-name').textContent = openSurvey.name;
             
-            // Reset the form
+            // 2. Reset the form
             document.getElementById('new-target-form').reset();
+            
+            // 3. Request GPS location
+            getCurrentPosition();
+            
+            // 4. Display modal
             document.getElementById('new-target-modal').style.display = 'block';
 
-            // Attach the submit listener
+            // 5. Attach the submit listener
             const form = document.getElementById('new-target-form');
             form.removeEventListener('submit', handleNewTargetSubmit); 
             form.addEventListener('submit', handleNewTargetSubmit); 
