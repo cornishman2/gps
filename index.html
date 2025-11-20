@@ -1212,33 +1212,35 @@
             `;
         }
         
-        /** Creates HTML for map links using the coordinates of all targets. */
+     /** Creates HTML for map links using the coordinates of all targets. */
         function createMapLinkHtml(targets) {
             if (targets.length === 0) return '';
             
             // Limit to the first 10 targets for simple URL construction
             const mapTargets = targets.slice(0, 10);
             
-            // Google Maps Format: marker_label,lat,lon
+            // --- GOOGLE MAPS CONSTRUCTION ---
+            
+            // Google Maps Format for a multi-pin URL uses 'markers=lat,lon|lat,lon|...'
+            // We use the 'q' parameter to set a general center point and add markers separately.
             const mapPins = mapTargets.map((t, index) => {
                 // Sanitize coordinates and extract lat/lon
                 const [lat, lon] = t.coordinates.split(',').map(c => c.trim());
-                // Simple marker label 'T1', 'T2', etc.
-                const label = `T${index + 1}`; 
-                return `${label},${lat},${lon}`;
+                return `${lat},${lon}`;
             }).join('|');
             
-            // Center the map on the first target
-            const mapCenter = mapTargets[0].coordinates.split(',').map(c => c.trim()).join(',');
+            // Center the map on the first target's coordinates (required for the URL to know where to look)
+            const [centerLat, centerLon] = mapTargets[0].coordinates.split(',').map(c => c.trim());
 
-            // Google Maps URL with multiple markers. Using the query parameter 'q' for the center point and the 'markers' parameter for the pins.
-            // NOTE: Using 'q' in this manner (with a value like 50.25,-5.23) is a robust way to center the map when using 'markers'.
-            // The &markers=... parameter is the key to multi-pin viewing.
-            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapCenter}&markers=${mapPins}&z=16`;
+            // Constructing the final Google Maps URL
+            // Using a generic search/data URL format which is very robust for mobiles.
+            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLon}&markers=${mapPins}`;
+            
+            // --- OPENSTREETMAP CONSTRUCTION ---
             
             // OpenStreetMap link (simpler, usually only supports one marker easily, but we'll center it)
-            const osmCenterLat = mapTargets[0].coordinates.split(',')[0].trim();
-            const osmCenterLon = mapTargets[0].coordinates.split(',')[1].trim();
+            const osmCenterLat = centerLat;
+            const osmCenterLon = centerLon;
             // Zoom level 16 is good for field work
             const osmUrl = `https://www.openstreetmap.org/?mlat=${osmCenterLat}&mlon=${osmCenterLon}#map=16/${osmCenterLat}/${osmCenterLon}`;
 
@@ -1253,8 +1255,7 @@
                     </a>
                 </div>
             `;
-        }
-        
+        }   
         /** * Finds user location and calculates bearing and distance to the closest target.
          * Displays the results in the modal.
          */
