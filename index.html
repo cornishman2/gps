@@ -62,7 +62,7 @@
         
         <!-- Header / Page Title -->
         <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 12:26</h1>
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 12:31</h1>
         </header>
 
         <!-- Main Content Area -->
@@ -395,6 +395,56 @@
                 showMessage(`Import failed: Invalid JSON format. Please check the pasted text.`, 'error');
             }
         }
+        
+        /** Adds a new target to the survey currently marked as 'Open'. */
+        function addTargetToOpenSurvey() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (!openSurvey) {
+                showMessage("Error: No survey is currently Open. Please open a survey on the Home page first.", 'error');
+                return;
+            }
+
+            // --- Simplified Target Data Collection via Prompts ---
+            const type = prompt("Enter Target Type (e.g., Coin, Relic, Junk):");
+            if (!type) { showMessage("Target logging cancelled.", 'info'); return; }
+
+            const description = prompt("Enter Description (e.g., 1901 Penny, Iron Nail):");
+            if (!description) { showMessage("Target logging cancelled.", 'info'); return; }
+
+            const vdi = prompt("Enter VDI Reading (e.g., 12, 8-10):", "N/A");
+            const depth = prompt("Enter Depth (e.g., 6 inches, 15 cm):", "Unknown");
+            const coordinates = prompt("Enter GPS Coordinates (e.g., 50.123, -5.456):", "N/A - Manual Log");
+            // ---------------------------------------------------
+
+            const newTarget = {
+                id: generateId(),
+                time: new Date().toISOString(),
+                type: type.trim(),
+                description: description.trim(),
+                coordinates: coordinates.trim(),
+                depth: depth.trim(),
+                vdi: vdi.trim(),
+                // Include user/gear data for context
+                user: userProfile.name || 'Unknown Digger',
+                detector: userProfile.detector || 'Unknown Machine'
+            };
+
+            // Find the index to update the survey directly
+            const surveyIndex = surveys.findIndex(s => s.id === openSurvey.id);
+            if (surveyIndex !== -1) {
+                // Add the new target to the start of the targets array (newest first)
+                surveys[surveyIndex].targets.unshift(newTarget); 
+                surveys[surveyIndex].dateLastChanged = new Date().toISOString();
+                
+                saveSurveysToLocalStorage();
+                loadDataFromLocalStorage(); // Reload and sort
+                
+                showMessage(`Success: New target '${newTarget.type}' logged to survey '${openSurvey.name}'.`, 'success');
+                render(); // Re-render the Targets page
+            } else {
+                showMessage("Error: Open survey state mismatch during target logging.", 'error');
+            }
+        }
 
 
         // --- UI RENDER FUNCTIONS ---
@@ -425,6 +475,8 @@
                     break;
                 case 'targets':
                     contentArea.innerHTML = renderTargetsPage();
+                    // Attach listener for the new target button
+                    document.getElementById('add-target-btn')?.addEventListener('click', addTargetToOpenSurvey);
                     break;
                 case 'compass':
                     contentArea.innerHTML = renderCompassPage();
@@ -598,12 +650,54 @@
 
         /** Renders the content for the Targets page. */
         function renderTargetsPage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            const targets = openSurvey ? openSurvey.targets : [];
+
+            let targetsListHtml = '';
+            if (targets.length === 0) {
+                targetsListHtml = `<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No targets logged in this survey yet. Click 'Log New Target' to record your first find!</p>`;
+            } else {
+                targetsListHtml = targets.map(t => `
+                    <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-secondary">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="text-lg font-bold text-gray-800">${t.type} <span class="text-sm font-normal text-gray-500 ml-2">(${t.description})</span></h4>
+                            <span class="text-xs text-gray-500">${new Date(t.time).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-2">
+                            <div><strong>VDI:</strong> ${t.vdi}</div>
+                            <div><strong>Depth:</strong> ${t.depth}</div>
+                            <div class="col-span-2"><strong>Location:</strong> ${t.coordinates}</div>
+                        </div>
+                        <p class="text-xs text-gray-400">Logged by: ${t.user} (${t.detector})</p>
+                    </div>
+                `).join('');
+            }
+            
+            const isButtonDisabled = !openSurvey;
+
             return `
                 <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Page</h2>
-                    <p class="text-gray-700">This page will eventually list all targets for the currently open or selected survey, and allow you to add new ones. We will build this out in the next step!</p>
-                    <div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg">
-                        **Current Open Survey:** ${surveys.find(s => s.status === 'Open')?.name || 'None'}
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Log</h2>
+
+                    <!-- Current Status & Add Button -->
+                    <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
+                        <h3 class="text-xl font-semibold mb-2 text-gray-700">
+                            Current Survey: ${openSurvey ? openSurvey.name : '<span class="text-red-500">None Open</span>'}
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-4">
+                            ${openSurvey ? openSurvey.description : 'Open a survey on the Home page to start logging finds.'}
+                        </p>
+
+                        <button id="add-target-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 flex items-center justify-center ${isButtonDisabled ? 'opacity-50 cursor-not-allowed bg-gray-400 hover:bg-gray-400' : ''}" ${isButtonDisabled ? 'disabled' : ''}>
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Log New Target
+                        </button>
+                    </div>
+                    
+                    <!-- Targets List -->
+                    <h3 class="text-2xl font-bold text-primary mb-3">Survey Targets (${targets.length})</h3>
+                    <div id="targets-list" class="space-y-4">
+                        ${targetsListHtml}
                     </div>
                 </div>
             `;
