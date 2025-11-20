@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Green - Metal Detecting Survey Log</title>
+    <title>Latest - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -16,9 +16,7 @@
             --color-card: 255 255 255;       /* White */
         }
 
-        /* Configure Tailwind to use the custom variables */
-        /* NOTE: We are using direct inline styles on buttons for guaranteed color rendering,
-           but keeping this Tailwind config for other classes (e.g., text-primary, bg-primary/20) */
+        /* Configure Tailwind to use the custom variables (kept for other classes like text-primary) */
         tailwind-config {
             theme: {
                 extend: {
@@ -98,11 +96,81 @@
     
     <div id="new-survey-modal" class="modal">
         <div class="modal-content bg-white p-6 shadow-2xl">
-            <h3 class="text-xl font-bold text-primary mb-4">New Survey</h3>
-            <p class="text-gray-700">The form for creating a new survey would go here.</p>
-            <div class="flex justify-end space-x-3 mt-4">
-                <button onclick="closeNewSurveyModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Close</button>
-            </div>
+            <h3 class="text-xl font-bold text-primary mb-4">Create New Survey</h3>
+            <form id="new-survey-form">
+                <div class="mb-4">
+                    <label for="survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
+                    <input type="text" id="survey-name" name="surveyName" required 
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="mb-4">
+                    <label for="survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
+                    <textarea id="survey-description" name="surveyDescription" rows="3" 
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeNewSurveyModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Create & Open
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="new-target-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Log New Target</h3>
+            <form id="new-target-form">
+                
+                <div id="target-survey-display" class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
+                    Logging for: <span id="current-target-survey-name" class="text-primary">Loading...</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="mb-4 col-span-2">
+                        <label for="target-description" class="block text-sm font-medium text-gray-700">Description / Find Name *</label>
+                        <input type="text" id="target-description" name="targetDescription" required 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4">
+                        <label for="target-vdi" class="block text-sm font-medium text-gray-700">VDI Reading</label>
+                        <input type="text" id="target-vdi" name="targetVDI" placeholder="e.g., 28" 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4">
+                        <label for="target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                        <input type="text" id="target-depth" name="targetDepth" placeholder="e.g., 6 inches"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
+                        <select id="target-type" name="targetType" required
+                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary bg-white">
+                            <option value="Coin">Coin</option>
+                            <option value="Relic">Relic</option>
+                            <option value="Jewelry">Jewelry</option>
+                            <option value="Modern Junk">Modern Junk</option>
+                            <option value="Iron Junk">Iron Junk</option>
+                            <option value="Unidentified">Unidentified</option>
+                        </select>
+                    </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="target-coords" class="block text-sm font-medium text-gray-700">GPS Coordinates (Auto-fill required later)</label>
+                        <input type="text" id="target-coords" name="targetCoords" placeholder="e.g., 50.2568, -5.2345" 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeNewTargetModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Log Target
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -297,22 +365,145 @@
             document.getElementById('confirmation-modal').style.display = 'none';
         }
 
-        /** Placeholder for showing New Survey Modal */
+        /** Shows the New Survey Modal and attaches the submit listener. */
         function showNewSurveyModal() {
+            // Reset the form whenever the modal is opened
+            document.getElementById('new-survey-form').reset();
             document.getElementById('new-survey-modal').style.display = 'block';
-            // TODO: Implement form logic here
+
+            // Ensure the submit listener is attached only once
+            const form = document.getElementById('new-survey-form');
+            // Remove previous listener to prevent multiple submissions
+            form.removeEventListener('submit', handleNewSurveySubmit); 
+            form.addEventListener('submit', handleNewSurveySubmit); 
         }
+
+        /** Closes the New Survey Modal. */
         function closeNewSurveyModal() {
             document.getElementById('new-survey-modal').style.display = 'none';
         }
 
-        /** Placeholder for showing New Target Modal */
-        function showNewTargetModal() {
-            showMessage("New Target Form coming soon!", 'info');
-            // TODO: Implement the actual modal/form here
+        /** Handles the submission of the New Survey form. */
+        function handleNewSurveySubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const name = form['surveyName'].value.trim();
+            const description = form['surveyDescription'].value.trim() || 'No description provided.';
+            const now = Date.now();
+
+            if (!name) {
+                showMessage('Survey Name is required.', 'error');
+                return;
+            }
+
+            // 1. Close any currently open survey
+            surveys.forEach(s => {
+                if (s.status === 'Open') {
+                    s.status = 'Active';
+                    s.dateLastChanged = now;
+                }
+            });
+
+            // 2. Create the new survey object
+            const newSurvey = {
+                id: generateId(),
+                name: name,
+                description: description,
+                status: 'Open', // Automatically opens the new survey
+                creationDate: now,
+                dateLastChanged: now,
+                targets: []
+            };
+
+            // 3. Add the new survey to the start of the list
+            surveys.unshift(newSurvey);
+
+            // 4. Save and re-render
+            saveSurveysToLocalStorage();
+            closeNewSurveyModal();
+            showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
+            render();
         }
 
-        // --- SURVEY & TARGET LOGIC ---
+        /** Shows the New Target Modal. */
+        function showNewTargetModal() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (!openSurvey) {
+                return showMessage('Cannot log target. Please open a survey first on the Home page.', 'warning');
+            }
+
+            // Set survey name in the modal header
+            document.getElementById('current-target-survey-name').textContent = openSurvey.name;
+            
+            // Reset the form
+            document.getElementById('new-target-form').reset();
+            document.getElementById('new-target-modal').style.display = 'block';
+
+            // Attach the submit listener
+            const form = document.getElementById('new-target-form');
+            form.removeEventListener('submit', handleNewTargetSubmit); 
+            form.addEventListener('submit', handleNewTargetSubmit); 
+        }
+
+        /** Closes the New Target Modal. */
+        function closeNewTargetModal() {
+            document.getElementById('new-target-modal').style.display = 'none';
+        }
+
+        /** Handles the submission of the New Target form. */
+        function handleNewTargetSubmit(event) {
+            event.preventDefault();
+
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (!openSurvey) {
+                showMessage('Error: No open survey found to log the target against.', 'error');
+                return;
+            }
+
+            const form = event.target;
+            const description = form['targetDescription'].value.trim();
+            const vdi = form['targetVDI'].value.trim() || 'N/A';
+            const depth = form['targetDepth'].value.trim() || 'Unknown';
+            const type = form['targetType'].value;
+            const coords = form['targetCoords'].value.trim() || 'No GPS logged';
+            const now = Date.now();
+
+            if (!description) {
+                showMessage('A description is required for the target.', 'error');
+                return;
+            }
+
+            // Create the new target object
+            const newTarget = {
+                id: generateId(),
+                description: description,
+                vdi: vdi,
+                depth: depth,
+                type: type,
+                status: 'Signal Detected', // Initial status
+                time: now,
+                coordinates: coords,
+                user: userProfile.name,      // Pulled from userProfile state
+                detector: userProfile.detector // Pulled from userProfile state
+            };
+
+            // 1. Add the new target to the open survey (at the beginning of the array for reverse chronological view)
+            openSurvey.targets.unshift(newTarget);
+            openSurvey.dateLastChanged = now;
+
+            // 2. Save and re-render
+            saveSurveysToLocalStorage();
+            closeNewTargetModal();
+            showMessage(`Target '${description}' successfully logged in ${openSurvey.name}.`, 'success');
+            
+            // Switch to Targets page automatically to view the new entry
+            currentPage = 'Targets'; 
+            render();
+        }
+
+
+        // --- SURVEY & TARGET LOGIC (Action Handlers) ---
 
         /** Handles actions like 'open', 'close', 'archive', 'restore', 'delete'. */
         function handleSurveyAction(button) {
