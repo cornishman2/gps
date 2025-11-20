@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Latest - Metal Detecting Survey Log</title>
+    <title>Green - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
     <style>
-        /* Custom colors using CSS variables for Tailwind */
+        /* Custom colors using CSS variables for guaranteed consistency */
         :root {
             --color-primary: 29 78 216;      /* Blue (For contrast/borders) */
             --color-secondary: 34 197 94;    /* Vibrant Green (For action buttons) */
@@ -17,6 +17,8 @@
         }
 
         /* Configure Tailwind to use the custom variables */
+        /* NOTE: We are using direct inline styles on buttons for guaranteed color rendering,
+           but keeping this Tailwind config for other classes (e.g., text-primary, bg-primary/20) */
         tailwind-config {
             theme: {
                 extend: {
@@ -445,7 +447,9 @@
                         }
                     </div>
 
-                    <button id="new-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 flex items-center justify-center mb-6">
+                    <button id="new-survey-btn" 
+                        class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 flex items-center justify-center mb-6"
+                        style="background-color: rgb(var(--color-secondary));">
                         <i class="fas fa-plus-circle mr-2"></i> Create New Survey
                     </button>
 
@@ -467,10 +471,13 @@
             let actions = '';
             let statusBadge = '';
 
+            // Get the secondary color variable for inline styles
+            const secondaryColor = 'rgb(var(--color-secondary))';
+
             switch (survey.status) {
                 case 'Open':
                     statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
-                    // Green button requested is the secondary color.
+                    // 'Close' button is yellow
                     actions = `
                         <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
                         <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
@@ -478,18 +485,18 @@
                     break;
                 case 'Active': // Active but Closed
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
-                    // Button to Open uses the secondary (green) color
+                    // 'Open' button uses the secondary (green) color via inline style
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
+                        <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}" style="background-color: ${secondaryColor};">Open</button>
                         <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
                         <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
                 case 'Archived':
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
-                    // Button to Restore uses the secondary (green) color
+                    // 'Restore' button uses the secondary (green) color via inline style
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
+                        <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" style="background-color: ${secondaryColor};">Restore to Active</button>
                         <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
@@ -608,6 +615,7 @@
             const openSurvey = surveys.find(s => s.status === 'Open');
             const targets = openSurvey ? openSurvey.targets : [];
             const surveyId = openSurvey ? openSurvey.id : null;
+            const secondaryColor = 'rgb(var(--color-secondary))';
 
             let targetsListHtml = '';
             if (targets.length === 0) {
@@ -617,6 +625,12 @@
             }
             
             const isButtonDisabled = !openSurvey;
+            // Determine button styling based on disabled state
+            const buttonStyle = isButtonDisabled
+                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed border border-gray-400'
+                : 'text-white hover:opacity-90';
+            const buttonInlineStyle = isButtonDisabled ? '' : `background-color: ${secondaryColor};`;
+
 
             return `
                 <div class="p-4">
@@ -630,10 +644,9 @@
                             ${openSurvey ? openSurvey.description : 'Open a survey on the Home page to start logging finds.'}
                         </p>
 
-                        <button id="add-target-btn" class="w-full font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center 
-                            ${isButtonDisabled 
-                                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed border border-gray-400'
-                                : 'bg-secondary hover:bg-secondary/90 text-white'}" 
+                        <button id="add-target-btn" 
+                            class="w-full font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center ${buttonStyle}" 
+                            style="${buttonInlineStyle}"
                             ${isButtonDisabled ? 'disabled' : ''}>
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             Log New Target
