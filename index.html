@@ -49,7 +49,7 @@
         
         <!-- Header / Page Title -->
         <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! - 9:20</h1>
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:23</h1>
         </header>
 
         <!-- Main Content Area -->
@@ -215,15 +215,29 @@
         
         /** Creates a new survey, automatically setting its status to 'Open'. */
         async function createNewSurvey() {
-            if (!db || !userId) return console.error("Database not ready.");
+            // --- DIAGNOSTIC LOG ---
+            console.log("Create New Survey button clicked.");
+
+            // Reset message box state before showing a new status/error
+            const messageBox = document.getElementById('home-message-box');
+            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+            messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
+            messageBox.textContent = 'Your data is automatically saving to the cloud.'; // Default status
+
+            if (!db || !userId) {
+                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+                messageBox.textContent = `Error: Authentication or database not ready. Please wait a moment for data loading to complete.`;
+                console.error("Database or user ID not ready.");
+                return;
+            }
 
             // Check if an 'Open' survey already exists
             const openSurvey = surveys.find(s => s.status === 'Open');
             if (openSurvey) {
-                // In a real app, we'd use a modal/dialog. Here, we'll log an error and update the UI message.
-                const messageBox = document.getElementById('home-message-box');
+                // Show error in the message box
                 messageBox.textContent = `Error: Please Close or Archive the current Open survey ('${openSurvey.name}') before creating a new one.`;
-                messageBox.classList.remove('hidden', 'bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
                 messageBox.classList.add('bg-red-100', 'text-red-800');
                 return;
             }
@@ -251,8 +265,18 @@
                     dateLastChanged: serverTimestamp(),
                     targets: [] // Initialize an empty array for targets
                 });
+                
+                // Show success in the message box
+                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+                messageBox.textContent = `Success: New survey '${surveyName.trim()}' created and set to Open.`;
                 console.log("New survey created.");
+
             } catch (error) {
+                // Show database write error
+                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+                messageBox.textContent = `Error creating survey: ${error.message}.`;
                 console.error("Error creating new survey:", error);
             }
         }
@@ -261,15 +285,22 @@
         async function updateSurveyStatus(surveyId, newStatus) {
             if (!db || !userId) return console.error("Database not ready.");
 
+            // Reset message box state before showing a new status/error
+            const messageBox = document.getElementById('home-message-box');
+            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+            messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
+            messageBox.textContent = 'Your data is automatically saving to the cloud.';
+
             const surveyRef = doc(getSurveysCollectionRef(), surveyId);
+            const surveyName = surveys.find(s => s.id === surveyId)?.name || 'this survey';
+
 
             // Special handling for 'Open': ensure no other survey is open
             if (newStatus === 'Open') {
                 const openSurvey = surveys.find(s => s.status === 'Open' && s.id !== surveyId);
                 if (openSurvey) {
-                    const messageBox = document.getElementById('home-message-box');
                     messageBox.textContent = `Error: Cannot open this survey. Please Close or Archive the current Open survey ('${openSurvey.name}') first.`;
-                    messageBox.classList.remove('hidden', 'bg-secondary/10', 'text-secondary-800');
+                    messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
                     messageBox.classList.add('bg-red-100', 'text-red-800');
                     return;
                 }
@@ -280,8 +311,16 @@
                     status: newStatus,
                     dateLastChanged: serverTimestamp()
                 });
+                
+                // Show success
+                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+                messageBox.textContent = `Success: Survey '${surveyName}' status updated to '${newStatus}'.`;
                 console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
             } catch (error) {
+                messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+                messageBox.textContent = `Error updating survey status: ${error.message}.`;
                 console.error("Error updating survey status:", error);
             }
         }
@@ -290,6 +329,12 @@
         async function deleteSurvey(surveyId, surveyName) {
             if (!db || !userId) return console.error("Database not ready.");
 
+            // Reset message box state before showing a new status/error
+            const messageBox = document.getElementById('home-message-box');
+            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+            messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
+            messageBox.textContent = 'Your data is automatically saving to the cloud.';
+
             // Use a custom confirmation dialog structure instead of alert/confirm
             const confirmed = window.prompt(`Type 'DELETE ${surveyName}' to confirm deletion of this survey:`);
 
@@ -297,11 +342,21 @@
                 try {
                     const surveyRef = doc(getSurveysCollectionRef(), surveyId);
                     await deleteDoc(surveyRef);
+                    
+                    // Show success
+                    messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                    messageBox.classList.add('bg-green-100', 'text-green-800');
+                    messageBox.textContent = `Success: Survey '${surveyName}' was deleted.`;
                     console.log(`Survey ${surveyId} deleted.`);
+
                 } catch (error) {
+                    messageBox.classList.remove('bg-secondary/10', 'text-secondary-800');
+                    messageBox.classList.add('bg-red-100', 'text-red-800');
+                    messageBox.textContent = `Error deleting survey: ${error.message}.`;
                     console.error("Error deleting survey:", error);
                 }
             } else {
+                messageBox.textContent = `Deletion of survey '${surveyName}' cancelled.`;
                 console.log("Deletion cancelled.");
             }
         }
@@ -389,7 +444,8 @@
             const archivedSurveys = surveys.filter(s => s.status === 'Archived');
             
             return `
-                <div id="home-message-box" class="hidden p-3 mb-4 rounded-lg text-sm bg-secondary/10 text-secondary-800">
+                <!-- Message Box: Removed 'hidden' class for continuous status feedback -->
+                <div id="home-message-box" class="p-3 mb-4 rounded-lg text-sm bg-secondary/10 text-secondary-800">
                     Your data is automatically saving to the cloud.
                 </div>
 
