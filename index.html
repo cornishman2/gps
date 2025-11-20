@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Latest - Dig It! Survey Logger (Local App)</title>
+    <title>Green - Dig It! Survey Logger (Local App)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom Tailwind Configuration */
@@ -567,30 +567,28 @@
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
             let statusBadge = '';
-            const disabledAttr = '';
-            const disabledClass = '';
 
             switch (survey.status) {
                 case 'Open':
                     statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}" ${disabledAttr}>Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
                     `;
                     break;
-                case 'Active': // Active but Closed
+                case 'Active': // Active but Closed ⬅️ FIX: Ensure Open button is correctly visible and green
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}" ${disabledAttr}>Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
                 case 'Archived':
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" ${disabledAttr}>Restore to Active</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
             }
@@ -732,7 +730,7 @@
 
                         <button id="add-target-btn" class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center 
                             ${isButtonDisabled 
-                                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed' // ⬅️ FIX APPLIED HERE
+                                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed'
                                 : 'bg-secondary hover:bg-secondary/90'}" 
                             ${isButtonDisabled ? 'disabled' : ''}>
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
