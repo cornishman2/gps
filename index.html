@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metal Detecting Survey Log</title>
+    <title>Map - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -273,6 +273,60 @@
         };
         let userId;
 
+        // --- GEOGRAPHY HELPER FUNCTIONS ---
+
+        /** Converts degrees to radians. */
+        function toRad(degrees) {
+            return degrees * (Math.PI / 180);
+        }
+
+        /** Converts radians to degrees. */
+        function toDeg(radians) {
+            return radians * (180 / Math.PI);
+        }
+
+        /** * Calculates the distance between two GPS points using the Haversine formula.
+         * Returns distance in meters.
+         */
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth's radius in meters
+            const phi1 = toRad(lat1);
+            const phi2 = toRad(lat2);
+            const deltaPhi = toRad(lat2 - lat1);
+            const deltaLambda = toRad(lon2 - lon1);
+
+            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c; // Distance in meters
+        }
+
+        /**
+         * Calculates the initial bearing (in degrees) from point 1 to point 2.
+         * Returns bearing in degrees (0 to 360).
+         */
+        function getBearing(lat1, lon1, lat2, lon2) {
+            const phi1 = toRad(lat1);
+            const phi2 = toRad(lat2);
+            const lambda1 = toRad(lon1);
+            const lambda2 = toRad(lon2);
+            const deltaLambda = lambda2 - lambda1;
+
+            const y = Math.sin(deltaLambda) * Math.cos(phi2);
+            const x = Math.cos(phi1) * Math.sin(phi2) -
+                      Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+            
+            let bearing = toDeg(Math.atan2(y, x));
+            
+            // Convert to 0-360 degrees
+            return (bearing + 360) % 360; 
+        }
+
+        // --- END GEOGRAPHY HELPER FUNCTIONS ---
+
+
         // --- HELPER FUNCTIONS ---
 
         /** Generates a simple unique ID. */
@@ -318,8 +372,10 @@
                             creationDate: Date.now(),
                             dateLastChanged: Date.now(),
                             targets: [
-                                { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.2568, -5.2345", user: userProfile.name, detector: userProfile.detector },
-                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.2567, -5.2348", user: userProfile.name, detector: userProfile.detector }
+                                // Sample targets with valid coordinates for mapping
+                                { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.256800, -5.234500", user: userProfile.name, detector: userProfile.detector },
+                                { id: generateId(), description: "Lead Button", vdi: "30", depth: "6in", type: "Relic", status: "Signal Detected", time: Date.now() - 100000, coordinates: "50.257000, -5.234100", user: userProfile.name, detector: userProfile.detector },
+                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.256700, -5.234800", user: userProfile.name, detector: userProfile.detector }
                             ]
                         }
                     ];
@@ -410,7 +466,7 @@
             }
         }
 
-        // --- GPS GEOLOCATION FUNCTIONS (NEW) ---
+        // --- GPS GEOLOCATION FUNCTIONS ---
         
         /** Safely requests and handles GPS coordinates. */
         function getCurrentPosition() {
@@ -579,7 +635,7 @@
             render();
         }
 
-        /** Shows the New Target Modal. (Updated to include GPS) */
+        /** Shows the New Target Modal. */
         function showNewTargetModal() {
             const openSurvey = surveys.find(s => s.status === 'Open');
             if (!openSurvey) {
@@ -1155,67 +1211,218 @@
                 </div>
             `;
         }
+        
+        /** Creates HTML for map links using the coordinates of all targets. */
+        function createMapLinkHtml(targets) {
+            if (targets.length === 0) return '';
+            
+            // Limit to the first 10 targets for simple URL construction
+            const mapTargets = targets.slice(0, 10);
+            
+            // Google Maps Format: marker_label,lat,lon
+            const mapPins = mapTargets.map((t, index) => {
+                // Sanitize coordinates and extract lat/lon
+                const [lat, lon] = t.coordinates.split(',').map(c => c.trim());
+                // Simple marker label 'T1', 'T2', etc.
+                const label = `T${index + 1}`; 
+                return `${label},${lat},${lon}`;
+            }).join('|');
+            
+            // Center the map on the first target
+            const mapCenter = mapTargets[0].coordinates.split(',').map(c => c.trim()).join(',');
 
-        /** Renders the content for the Compass page. */
-        function renderCompassPage() {
+            // Google Maps URL with multiple markers. Using the query parameter 'q' for the center point and the 'markers' parameter for the pins.
+            // NOTE: Using 'q' in this manner (with a value like 50.25,-5.23) is a robust way to center the map when using 'markers'.
+            // The &markers=... parameter is the key to multi-pin viewing.
+            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapCenter}&markers=${mapPins}&z=16`;
+            
+            // OpenStreetMap link (simpler, usually only supports one marker easily, but we'll center it)
+            const osmCenterLat = mapTargets[0].coordinates.split(',')[0].trim();
+            const osmCenterLon = mapTargets[0].coordinates.split(',')[1].trim();
+            // Zoom level 16 is good for field work
+            const osmUrl = `https://www.openstreetmap.org/?mlat=${osmCenterLat}&mlon=${osmCenterLon}#map=16/${osmCenterLat}/${osmCenterLon}`;
+
+
             return `
-                <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Compass/GPS Page</h2>
-                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                        <p class="text-gray-700">This page would typically show a compass or map interface to help you log target locations using device GPS. (Functionality coming soon)</p>
-                    </div>
+                <div class="space-y-3">
+                    <a href="${googleMapsUrl}" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
+                        <i class="fab fa-google mr-2"></i> Open in Google Maps (Multi-Pin)
+                    </a>
+                    <a href="${osmUrl}" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">
+                        <i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)
+                    </a>
                 </div>
             `;
         }
-
-        // --- DATA EXPORT/IMPORT FUNCTIONS ---
-
-        /** Generates and displays the JSON data for export. */
-        function exportData() {
-            const dataToExport = { surveys, userProfile, userId, timestamp: new Date().toISOString() };
-            const jsonString = JSON.stringify(dataToExport, null, 2);
-            document.getElementById('export-data-area').value = jsonString;
-            showMessage("Data export generated. Copy the text below.", 'success');
-        }
-
-        /** Imports data from the textarea and overwrites local data. */
-        function importData() {
-            const importArea = document.getElementById('import-data-area');
-            const jsonString = importArea.value.trim();
-
-            if (!jsonString) {
-                return showMessage("Please paste JSON data into the box first.", 'error');
+        
+        /** * Finds user location and calculates bearing and distance to the closest target.
+         * Displays the results in the modal.
+         */
+        function findAndDisplayClosestTarget(targets) {
+            const displayEl = document.getElementById('current-location-display');
+            const targetEl = document.getElementById('closest-target-display');
+            const refreshBtn = document.getElementById('refresh-gps-btn');
+            
+            if (targets.length === 0) {
+                 targetEl.innerHTML = `<p class="text-gray-500 italic">No targets with GPS to calculate distance/bearing.</p>`;
+                 return;
             }
 
-            showConfirmationModal(
-                'Confirm Data Import & OVERWRITE',
-                "Are you absolutely sure you want to import this data? It will **permanently overwrite** all your existing local survey data.",
-                // Confirmation callback (YES)
-                () => {
-                    try {
-                        const importedData = JSON.parse(jsonString);
+            // 1. Show loading state
+            displayEl.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Finding your current location...`;
+            refreshBtn.disabled = true;
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userLat = position.coords.latitude;
+                        const userLon = position.coords.longitude;
                         
-                        // Basic validation
-                        if (!importedData.surveys || !Array.isArray(importedData.surveys)) {
-                            throw new Error("Invalid import structure. Missing 'surveys' array.");
+                        displayEl.innerHTML = `Your Coords: <span class="font-semibold text-primary">${userLat.toFixed(6)}, ${userLon.toFixed(6)}</span> (Accuracy: ${position.coords.accuracy.toFixed(1)}m)`;
+
+                        // 2. Find the closest target
+                        let closestTarget = null;
+                        let minDistance = Infinity;
+
+                        targets.forEach(target => {
+                            const [targetLat, targetLon] = target.coordinates.split(',').map(c => parseFloat(c.trim()));
+
+                            if (!isNaN(targetLat) && !isNaN(targetLon)) {
+                                const distance = getDistance(userLat, userLon, targetLat, targetLon);
+                                
+                                if (distance < minDistance) {
+                                    minDistance = distance;
+                                    closestTarget = target;
+                                }
+                            }
+                        });
+
+                        // 3. Display closest target info
+                        if (closestTarget) {
+                            const bearing = getBearing(userLat, userLon, 
+                                parseFloat(closestTarget.coordinates.split(',')[0]), 
+                                parseFloat(closestTarget.coordinates.split(',')[1])
+                            );
+                            
+                            // Format distance
+                            let distanceText;
+                            if (minDistance > 1000) {
+                                distanceText = (minDistance / 1000).toFixed(2) + ' km';
+                            } else {
+                                distanceText = minDistance.toFixed(1) + ' meters';
+                            }
+
+                            targetEl.innerHTML = `
+                                <h4 class="font-bold text-gray-800">Closest Target: ${closestTarget.description}</h4>
+                                <p class="text-lg mt-2">
+                                    <strong class="text-primary">${distanceText}</strong> away
+                                </p>
+                                <p class="text-2xl font-bold text-red-600 mt-1">
+                                    Bearing: ${bearing.toFixed(1)}° True North
+                                </p>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    To reach this target, walk in the direction of **${bearing.toFixed(1)} degrees** (measured clockwise from North) for ${distanceText}.
+                                    Use a physical compass or your native phone map app for navigation.
+                                </p>
+                            `;
+                        } else {
+                            targetEl.innerHTML = `<p class="text-gray-500 italic">Could not find valid coordinates for any target.</p>`;
                         }
 
-                        // Overwrite global state
-                        surveys = importedData.surveys;
-                        userProfile = importedData.userProfile || { name: "Imported User", detector: "Imported Machine" };
-                        userId = importedData.userId || generateId(); // Keep old ID if present, otherwise generate new
-
-                        saveSurveysToLocalStorage();
-                        loadDataFromLocalStorage();
-                        showMessage("Data import successful! Local data has been overwritten.", 'success');
-                        importArea.value = ''; // Clear input after successful import
-                        render();
-                    } catch (e) {
-                        showMessage(`Import Failed: ${e.message}`, 'error');
-                        console.error("Import Error:", e);
+                        refreshBtn.disabled = false;
+                    },
+                    (error) => {
+                        // Handle errors (permission denied, position unavailable, timeout)
+                        displayEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1 text-red-500"></i> Location Error: ${error.message}`;
+                        targetEl.innerHTML = `<p class="text-red-500 italic">Cannot calculate bearing/distance without your current location.</p>`;
+                        refreshBtn.disabled = false;
+                        showMessage('Failed to get current GPS location.', 'error');
+                        console.error('Geolocation Error on Compass Page:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
                     }
+                );
+            } else {
+                displayEl.innerHTML = `<i class="fas fa-times-circle mr-1 text-red-500"></i> Geolocation Not Supported.`;
+                refreshBtn.disabled = true;
+                targetEl.innerHTML = `<p class="text-red-500 italic">This device does not support geolocation needed for this feature.</p>`;
+            }
+        }
+
+        /** Renders the content for the Compass page. */
+        function renderCompassPage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            
+            if (!openSurvey) {
+                return `
+                    <div class="p-4">
+                        <h2 class="text-3xl font-bold text-primary mb-6">Targets & Map View</h2>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+                            <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
+                            <p class="text-gray-700">Please open a survey on the **Home** page to view its targets on the map and calculate bearings.</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Filter for targets that actually have usable coordinates
+            const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates !== 'No GPS logged');
+            let contentHtml = '';
+
+            // --- Geolocation Check and Target Listing ---
+            contentHtml += `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets & Map View</h2>
+
+                    <div class="bg-card p-4 rounded-lg shadow-md mb-6 border-l-4 border-primary">
+                        <h3 class="text-xl font-semibold mb-1 text-gray-700">
+                            Viewing Targets for: <span class="text-primary">${openSurvey.name}</span>
+                        </h3>
+                        <p class="text-sm text-gray-600">Targets with GPS logged: **${targets.length}**</p>
+                    </div>
+
+                    <div id="live-gps-section" class="bg-white p-4 rounded-xl shadow-lg mb-6 border border-gray-100">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                            <i class="fas fa-location-arrow mr-2"></i> Closest Target Bearing Helper
+                        </h3>
+                        <p class="text-xs text-gray-500 mb-3">Uses your phone's GPS to find your location and calculate the direction (bearing) and distance to your nearest target.</p>
+                        
+                        <div id="current-location-display" class="bg-gray-50 p-3 rounded-md text-sm italic text-gray-600">
+                            <i class="fas fa-spinner fa-spin mr-2"></i> Awaiting Location...
+                        </div>
+                        <div id="closest-target-display" class="mt-4 pt-4 border-t border-gray-100 text-base font-medium">
+                            Targeting information will appear here once your location is known.
+                        </div>
+                        <button id="refresh-gps-btn" class="w-full mt-4 bg-primary text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150">
+                            <i class="fas fa-sync-alt mr-1"></i> Get My Location & Bearing
+                        </button>
+                    </div>
+                    
+                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-8">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                            <i class="fas fa-map-marked-alt mr-2"></i> Visualize All Targets
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-3">Click below to open an external mapping app showing all ${targets.length} targets from the open survey as pins.</p>
+                        ${targets.length > 0 ? createMapLinkHtml(targets) : `<p class="text-red-500 italic">No targets with GPS coordinates found to map.</p>`}
+                    </div>
+                </div>
+            `;
+            
+            // Set HTML content and immediately attach listener
+            setTimeout(() => {
+                const refreshBtn = document.getElementById('refresh-gps-btn');
+                if (refreshBtn) {
+                    // Attach the event listener to the button
+                    refreshBtn.addEventListener('click', () => {
+                        findAndDisplayClosestTarget(targets);
+                    });
                 }
-            );
+            }, 0); 
+            
+            return contentHtml;
         }
 
         /** Renders the content for the Settings page. */
