@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug - Metal Detecting Survey Log</title>
+    <title>More Debug - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1213,32 +1213,32 @@
         }
         
         /** Creates HTML for map links using the coordinates of all targets. */
+/** Creates HTML for map links using the coordinates of all targets. */
         function createMapLinkHtml(targets) {
             if (targets.length === 0) return '';
             
             // Limit to the first 10 targets for simple URL construction
             const mapTargets = targets.slice(0, 10);
             
-            // --- GOOGLE MAPS CONSTRUCTION (CORRECTED & DIAGNOSTIC) ---
+            // --- GOOGLE MAPS CONSTRUCTION (ROBUST FIX) ---
             
-            // 1. Create the pipe-separated string of coordinates (lat1,lon1|lat2,lon2|...)
+            // 1. Collect all coordinate strings (lat,lon)
             const mapPins = mapTargets.map((t) => {
-                // Ensure coordinates are trimmed and formatted as lat,lon without spaces
                 const [lat, lon] = t.coordinates.split(',').map(c => c.trim());
                 return `${lat},${lon}`;
-            }).join('|'); // <-- Uses PIPE (|) separator
+            }); 
             
             // 2. Center the map on the first target's coordinates
             const [centerLat, centerLon] = mapTargets[0].coordinates.split(',').map(c => c.trim());
 
-            // Constructing the final Google Maps URL using the correct base and parameter structure.
-            // Using a simple, robust structure for the map link. The number '6' in the path is a placeholder 
-            // used internally to bypass certain browser/mobile URL issues.
-            const googleMapsUrl = `https://maps.google.com/maps?$?center=${centerLat},${centerLon}&markers=${encodeURIComponent(mapPins)}&z=14`;
+            // 3. Create the robust Google Maps URL:
+            // The 'query' parameter takes the pipe-separated, URL-encoded list of pins.
+            const pinQuery = mapPins.join('|');
+            const googleMapsUrl = `https://maps.google.com/maps/search/?api=1&query=${encodeURIComponent(pinQuery)}&center=${centerLat},${centerLon}&zoom=14`;
             
             // --- OPENSTREETMAP CONSTRUCTION ---
             
-            // OpenStreetMap link
+            // OpenStreetMap link (still centered on the first target)
             const osmCenterLat = centerLat;
             const osmCenterLon = centerLon;
             const osmUrl = `https://www.openstreetmap.org/?mlat=${osmCenterLat}&mlon=${osmCenterLon}#map=16/${osmCenterLat}/${osmCenterLon}`;
@@ -1262,9 +1262,7 @@
                     </a>
                 </div>
             `;
-        }
-        
-        /** * Finds user location and calculates bearing and distance to the closest target.
+        }        /** * Finds user location and calculates bearing and distance to the closest target.
          * Displays the results in the modal.
          */
 /** * Finds user location and calculates bearing and distance to the closest target.
