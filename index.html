@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini - Metal Detecting Survey Log</title>
+    <title>Dectector - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -168,6 +168,31 @@
                     <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
                             style="background-color: rgb(var(--color-secondary));">
                         Log Target
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-profile-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Edit Detectorist Profile</h3>
+            <form id="edit-profile-form">
+                <div class="mb-4">
+                    <label for="profile-name" class="block text-sm font-medium text-gray-700">Detectorist Name *</label>
+                    <input type="text" id="profile-name" name="profileName" required 
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="mb-4">
+                    <label for="profile-detector" class="block text-sm font-medium text-gray-700">Detector Used</label>
+                    <input type="text" id="profile-detector" name="profileDetector" required
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Save Changes
                     </button>
                 </div>
             </form>
@@ -503,6 +528,51 @@
             
             // Switch to Targets page automatically to view the new entry
             currentPage = 'Targets'; 
+            render();
+        }
+
+        /** Shows the Edit Profile Modal and loads current data. (NEW) */
+        function showEditProfileModal() {
+            const modal = document.getElementById('edit-profile-modal');
+            
+            // Pre-fill the form with current profile data
+            document.getElementById('profile-name').value = userProfile.name;
+            document.getElementById('profile-detector').value = userProfile.detector;
+
+            modal.style.display = 'block';
+
+            // Attach the submit listener
+            const form = document.getElementById('edit-profile-form');
+            form.removeEventListener('submit', handleEditProfileSubmit); 
+            form.addEventListener('submit', handleEditProfileSubmit); 
+        }
+
+        /** Closes the Edit Profile Modal. (NEW) */
+        function closeEditProfileModal() {
+            document.getElementById('edit-profile-modal').style.display = 'none';
+        }
+
+        /** Handles the submission of the Edit Profile form. (NEW) */
+        function handleEditProfileSubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const newName = form['profileName'].value.trim();
+            const newDetector = form['profileDetector'].value.trim();
+
+            if (!newName || !newDetector) {
+                showMessage('Both Name and Detector are required.', 'error');
+                return;
+            }
+
+            // Update global state
+            userProfile.name = newName;
+            userProfile.detector = newDetector;
+
+            // Save and re-render
+            saveSurveysToLocalStorage();
+            closeEditProfileModal();
+            showMessage(`Profile updated successfully!`, 'success');
             render();
         }
 
@@ -944,7 +1014,7 @@
                         <h3 class="text-xl font-semibold text-gray-700 mb-3">Your Profile</h3>
                         <p class="text-md text-gray-800 mb-1"><strong>Name:</strong> ${userProfile.name}</p>
                         <p class="text-md text-gray-800 mb-4"><strong>Detector:</strong> ${userProfile.detector}</p>
-                        <button class="px-3 py-1 bg-primary text-white rounded-md text-sm hover:bg-primary/90">Edit Profile (Coming Soon)</button>
+                        <button onclick="showEditProfileModal()" class="px-3 py-1 bg-primary text-white rounded-md text-sm hover:bg-primary/90">Edit Profile</button>
                         <hr class="my-4"/>
                         <p class="text-lg font-semibold text-gray-700">Your Local User ID</p>
                         <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
