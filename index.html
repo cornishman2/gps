@@ -1267,6 +1267,9 @@
         /** * Finds user location and calculates bearing and distance to the closest target.
          * Displays the results in the modal.
          */
+/** * Finds user location and calculates bearing and distance to the closest target.
+         * Displays the results in the modal.
+         */
         function findAndDisplayClosestTarget(targets) {
             const displayEl = document.getElementById('current-location-display');
             const targetEl = document.getElementById('closest-target-display');
@@ -1294,7 +1297,10 @@
                         let minDistance = Infinity;
 
                         targets.forEach(target => {
-                            const [targetLat, targetLon] = target.coordinates.split(',').map(c => parseFloat(c.trim()));
+                            // Safely parse coordinates
+                            const coordsArray = target.coordinates.split(',').map(c => parseFloat(c.trim()));
+                            const targetLat = coordsArray[0];
+                            const targetLon = coordsArray[1];
 
                             if (!isNaN(targetLat) && !isNaN(targetLon)) {
                                 const distance = getDistance(userLat, userLon, targetLat, targetLon);
@@ -1359,9 +1365,7 @@
                 refreshBtn.disabled = true;
                 targetEl.innerHTML = `<p class="text-red-500 italic">This device does not support geolocation needed for this feature.</p>`;
             }
-        }
-
-        /** Renders the content for the Compass page. */
+        }        /** Renders the content for the Compass page. */
         function renderCompassPage() {
             const openSurvey = surveys.find(s => s.status === 'Open');
             
