@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>7:29 - Metal Detecting Survey Log</title>
+    <title>7:37 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1213,42 +1213,48 @@
         }
         
         /** Creates HTML for map links using the coordinates of all targets. */
-       function createMapLinkHtml(targets) {
-    if (targets.length === 0) return '';
-    
-    // Limit to the first 10 targets for simple URL construction
-    const mapTargets = targets.slice(0, 10);
-    
-    // --- GOOGLE MAPS CONSTRUCTION (CORRECTED) ---
-    
-    // 1. Create individual marker parameters for each coordinate
-    const markerParams = mapTargets.map((t) => {
-        const [lat, lon] = t.coordinates.split(',').map(c => c.trim());
-        return `markers=${lat},${lon}`;
-    }).join('&');
-    
-    // 2. Center the map on the first target's coordinates
-    const [centerLat, centerLon] = mapTargets[0].coordinates.split(',').map(c => c.trim());
-    
-    // Construct the Google Maps URL with proper multiple marker syntax
-    const googleMapsUrl = `https://www.google.com/maps?${markerParams}&center=${centerLat},${centerLon}`;
-    
-    // --- OPENSTREETMAP CONSTRUCTION ---
-    
-    const osmUrl = `https://www.openstreetmap.org/?mlat=${centerLat}&mlon=${centerLon}#map=16/${centerLat}/${centerLon}`;
-    
-    return `
-        <div class="space-y-3">
-            <a href="${googleMapsUrl}" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
-                <i class="fab fa-google mr-2"></i> Open in Google Maps (Multi-Pin)
-            </a>
-            <a href="${osmUrl}" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">
-                <i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)
-            </a>
-        </div>
-    `;
-} 
-        /** * Finds user location and calculates bearing and distance to the closest target.
+ /** Creates HTML for map links using the coordinates of all targets. */
+        function createMapLinkHtml(targets) {
+            if (targets.length === 0) return '';
+            
+            // Limit to the first 10 targets for simple URL construction
+            const mapTargets = targets.slice(0, 10);
+            
+            // --- GOOGLE MAPS CONSTRUCTION (CORRECTED) ---
+            
+            // 1. Create the pipe-separated string of coordinates (lat1,lon1|lat2,lon2|...)
+            const mapPins = mapTargets.map((t) => {
+                // Ensure coordinates are trimmed and formatted as lat,lon without spaces
+                const [lat, lon] = t.coordinates.split(',').map(c => c.trim());
+                return `${lat},${lon}`;
+            }).join('|'); // <-- Uses PIPE (|) separator
+
+            
+            // 2. Center the map on the first target's coordinates
+            const [centerLat, centerLon] = mapTargets[0].coordinates.split(',').map(c => c.trim());
+
+            // Constructing the final Google Maps URL using the correct base and parameter structure.
+            const googleMapsUrl = `https://maps.google.com/maps?q=${centerLat},${centerLon}&markers=${encodeURIComponent(mapPins)}&z=14`;
+            
+            // --- OPENSTREETMAP CONSTRUCTION ---
+            
+            // OpenStreetMap link
+            const osmCenterLat = centerLat;
+            const osmCenterLon = centerLon;
+            const osmUrl = `https://www.openstreetmap.org/?mlat=${osmCenterLat}&mlon=${osmCenterLon}#map=16/${osmCenterLat}/${osmCenterLon}`;
+
+
+            return `
+                <div class="space-y-3">
+                    <a href="${googleMapsUrl}" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
+                        <i class="fab fa-google mr-2"></i> Open in Google Maps (Multi-Pin)
+                    </a>
+                    <a href="${osmUrl}" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">
+                        <i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)
+                    </a>
+                </div>
+            `;
+        }       /** * Finds user location and calculates bearing and distance to the closest target.
          * Displays the results in the modal.
          */
         function findAndDisplayClosestTarget(targets) {
