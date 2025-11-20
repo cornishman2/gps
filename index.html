@@ -3,399 +3,439 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dig It! Metal Detecting App</title>
-    <!-- Load Tailwind CSS -->
+    <title>Dig It! Survey Logger 13:10</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Configure Tailwind for Inter font and some custom colors -->
-    <script>
+    <style>
+        /* Custom Tailwind Configuration */
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'primary': '#4F46E5', // Indigo 600
-                        'secondary': '#10B981', // Emerald 500
-                        'background': '#F9FAFB', // Gray 50
-                        'card': '#FFFFFF',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
+                        primary: '#3b82f6', /* Blue 500 */
+                        secondary: '#10b981', /* Emerald 500 - For action buttons */
+                        card: '#ffffff',
+                    }
                 }
             }
         }
-    </script>
-    <style>
-        /* Base styles for Inter font and full screen height */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #F9FAFB;
+        /* Hide the dropdown content by default, show it on group-hover */
+        .group:hover .group-hover\:block {
+            display: block;
         }
-        /* Fix the content area height, accounting for the bottom nav */
-        .content-area {
-            min-height: calc(100vh - 4rem); /* 100vh minus the height of the bottom nav (h-16) */
-            padding-bottom: 4rem; /* Ensure content doesn't get hidden behind the fixed footer */
-        }
-        /* Style for the active navigation button */
-        .nav-btn.active {
-            color: #4F46E5; /* Primary color */
-            font-weight: 600;
-        }
-        /* Modal Backdrop */
-        .modal-overlay {
-            background-color: rgba(0, 0, 0, 0.75);
-            transition: opacity 0.3s ease-in-out;
-        }
-        /* Modal Dialog */
-        .modal-dialog {
-            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
-        }
-        .hidden .modal-dialog {
-            transform: scale(0.95);
-            opacity: 0;
+        /* Sticky footer for the bottom navigation */
+        .sticky-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
         }
     </style>
 </head>
-<body class="min-h-screen antialiased">
+<body class="bg-gray-50 min-h-screen">
 
-    <!-- Main Application Container -->
-    <div id="app" class="max-w-3xl mx-auto shadow-xl bg-background">
-        
-        <!-- Header / Page Title -->
-        <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 12:39</h1>
-        </header>
-
-        <!-- Main Content Area -->
-        <main id="content-area" class="content-area p-4 overflow-y-auto">
-            <!-- This is where page content will be rendered -->
-        </main>
-
-        <!-- Persistent Bottom Navigation -->
-        <footer class="fixed inset-x-0 bottom-0 bg-white border-t border-gray-200 shadow-xl">
-            <nav class="flex justify-around items-center h-16 max-w-3xl mx-auto">
-                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200 active" data-page="home">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-10l-2-2m2 2v10a1 1 0 00-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                    <span class="text-xs mt-1">Home</span>
-                </button>
-                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200" data-page="targets">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3-.895-3-2 1.343-2 3-2zM18.823 6.177A12.016 12.016 0 0012 3C6.477 3 2 7.477 2 13s4.477 10 10 10 10-4.477 10-10a12.016 12.016 0 00-3.177-6.823z"></path></svg>
-                    <span class="text-xs mt-1">Targets</span>
-                </button>
-                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200" data-page="compass">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M16 4h2a2 2 0 012 2v6m-4-2H5a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2v-6a2 2 0 00-2-2h-3m-4 0a3 3 0 01-3-3V5h6v4a3 3 0 01-3 3z"></path></svg>
-                    <span class="text-xs mt-1">Compass</span>
-                </button>
-                <button class="nav-btn flex flex-col items-center p-2 transition-colors duration-200" data-page="settings">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.82 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.82 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.82-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.82-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    <span class="text-xs mt-1">Settings</span>
-                </button>
-            </nav>
-        </footer>
-    </div>
-
-    <!-- CUSTOM CONFIRMATION MODAL -->
-    <div id="confirmation-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
-        <div class="modal-dialog bg-white w-full max-w-sm mx-auto rounded-xl shadow-2xl p-6 transform">
-            <h3 id="modal-title" class="text-xl font-bold text-red-600 mb-3">Confirm Deletion</h3>
-            <p id="modal-message" class="text-gray-700 mb-6">Are you sure you want to proceed?</p>
+    <div id="confirmation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 id="modal-title" class="text-lg font-bold text-gray-900 mb-4">Confirmation</h3>
+            <p id="modal-message" class="text-sm text-gray-700 mb-6">Are you sure?</p>
             <div class="flex justify-end space-x-3">
-                <button id="modal-cancel-btn" class="px-4 py-2 text-sm font-medium rounded-lg text-gray-700 bg-gray-200 hover:bg-gray-300 transition duration-150" onclick="handleModalCancel()">
-                    Cancel
-                </button>
-                <button id="modal-confirm-btn" class="px-4 py-2 text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 transition duration-150" onclick="handleModalConfirm()">
-                    Yes, Delete
-                </button>
+                <button id="modal-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Cancel</button>
+                <button id="modal-confirm-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Confirm</button>
             </div>
         </div>
     </div>
 
-    <!-- Local Storage Application Logic -->
-    <script type="module">
-        // --- GLOBAL STATE & LOCAL STORAGE SETUP ---
-        const LS_KEY_PROFILE = 'dig_it_user_profile';
-        const LS_KEY_SURVEYS = 'dig_it_surveys';
-        const LS_KEY_USER_ID = 'dig_it_user_id';
-        
-        let userId = null; 
-        let surveys = []; 
-        let userProfile = {}; 
-        let currentPage = 'home'; 
-        
-        // Modal logic globals
-        let modalActionCallback = null;
+    <main id="app-content" class="pb-24 pt-4 min-h-screen"></main>
 
-        // --- DATA HELPERS ---
+    <nav class="sticky-footer bg-white border-t border-gray-200 shadow-lg">
+        <div class="max-w-xl mx-auto flex justify-around h-16">
+            <button class="nav-btn flex flex-col items-center justify-center text-sm px-4 w-full transition-colors" data-page="home">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-10v10a1 1 0 001 1h3M11 11h2"></path></svg>
+                <span class="mt-1">Home</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center text-sm px-4 w-full transition-colors" data-page="targets">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span class="mt-1">Targets</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center text-sm px-4 w-full transition-colors" data-page="compass">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                <span class="mt-1">Compass</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center text-sm px-4 w-full transition-colors" data-page="settings">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span class="mt-1">Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <script type="module">
+        // --- GLOBAL STATE ---
+        let surveys = [];
+        let currentPage = 'home';
+        let userProfile = { name: "Local Digger", detector: "Nox 800" };
+        let userId = null;
+        const STORAGE_KEY = 'digit_survey_app_data';
+
+        // --- UTILITY FUNCTIONS ---
 
         /** Generates a simple, unique ID. */
         function generateId() {
-            return crypto.randomUUID();
+            return '_' + Math.random().toString(36).substr(2, 9);
         }
 
-        /** Saves the current surveys array to localStorage. */
-        function saveSurveysToLocalStorage() {
-            try {
-                localStorage.setItem(LS_KEY_SURVEYS, JSON.stringify(surveys));
-                console.log("Surveys saved to local storage.");
-            } catch (error) {
-                console.error("Error saving surveys to local storage:", error);
-            }
+        /** Formats an ISO date string to a readable format. */
+        function formatDate(isoString) {
+            if (!isoString) return 'N/A';
+            const date = new Date(isoString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        /** Loads all data from localStorage. */
-        function loadDataFromLocalStorage() {
-            // 1. User ID (For display consistency, use a sticky ID)
-            userId = localStorage.getItem(LS_KEY_USER_ID);
-            if (!userId) {
-                userId = generateId();
-                localStorage.setItem(LS_KEY_USER_ID, userId);
-            }
+        /** Shows a temporary message banner. */
+        function showMessage(message, type = 'info') {
+            const container = document.getElementById('app-content');
+            let color = 'bg-blue-500';
+            if (type === 'success') color = 'bg-secondary';
+            if (type === 'error') color = 'bg-red-500';
 
-            // 2. User Profile
-            try {
-                const profileJson = localStorage.getItem(LS_KEY_PROFILE);
-                userProfile = profileJson ? JSON.parse(profileJson) : {};
-            } catch (e) {
-                console.error("Error parsing user profile from local storage, starting fresh.", e);
-                userProfile = {};
-            }
+            const alert = document.createElement('div');
+            alert.className = `fixed top-0 left-0 right-0 p-3 text-center text-white ${color} z-50 shadow-lg transition-all duration-300`;
+            alert.textContent = message;
 
-            // 3. Surveys
-            try {
-                const surveysJson = localStorage.getItem(LS_KEY_SURVEYS);
-                // Parse and ensure targets property exists (for safety)
-                surveys = surveysJson ? JSON.parse(surveysJson).map(s => ({ ...s, targets: s.targets || [] })) : [];
-            } catch (e) {
-                console.error("Error parsing surveys from local storage, starting fresh.", e);
-                surveys = [];
-            }
-            
-            // Sort by creation date (newest first)
-            surveys.sort((a, b) => new Date(b.creationDate) - new Date(a.creationDate));
+            // Remove existing messages
+            document.querySelectorAll('.fixed.top-0').forEach(el => el.remove());
 
-            console.log("All data loaded from local storage.");
+            container.prepend(alert);
+            setTimeout(() => {
+                alert.remove();
+            }, 3500);
         }
 
-
-        /** Helper function to manage status messages in the UI. */
-        function showMessage(text, type = 'info') {
-            const messageBox = document.getElementById('home-message-box');
-            if (!messageBox) return; // Guard if not on home page yet
-
-            messageBox.textContent = text;
-            // Reset colors
-            messageBox.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800', 'bg-secondary/10', 'text-secondary-800');
-            
-            switch (type) {
-                case 'success':
-                    messageBox.classList.add('bg-green-100', 'text-green-800');
-                    break;
-                case 'error':
-                    messageBox.classList.add('bg-red-100', 'text-red-800');
-                    break;
-                case 'info':
-                default:
-                    messageBox.classList.add('bg-secondary/10', 'text-secondary-800');
-                    break;
-            }
-        }
-
-        // --- CUSTOM MODAL LOGIC ---
-        
-        /** Displays the confirmation modal and sets up the action callbacks. */
-        function showConfirmationModal(title, message, confirmCallback) {
+        /** Handles the display of the confirmation modal. */
+        function showConfirmationModal(title, message, onConfirmCallback) {
             const modal = document.getElementById('confirmation-modal');
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-message').textContent = message;
-            
-            modalActionCallback = confirmCallback;
-            
-            modal.classList.remove('hidden');
-        }
 
-        /** Hides the confirmation modal. */
-        function hideConfirmationModal() {
-            document.getElementById('confirmation-modal').classList.add('hidden');
-            modalActionCallback = null;
-        }
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            const cancelBtn = document.getElementById('modal-cancel-btn');
 
-        /** Handles the 'Yes, Delete' button click inside the modal. */
-        window.handleModalConfirm = function() {
-            if (modalActionCallback) {
-                modalActionCallback(); // Execute the stored action
-            }
-            hideConfirmationModal();
-        }
+            // Clear previous listeners
+            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
 
-        /** Handles the 'Cancel' button click inside the modal. */
-        window.handleModalCancel = function() {
-            hideConfirmationModal();
-            showMessage("Deletion cancelled.", 'info');
-        }
-        
-        // --- DATA MANIPULATION FUNCTIONS (LOCAL STORAGE CRUD) ---
+            const newConfirmBtn = document.getElementById('modal-confirm-btn');
+            const newCancelBtn = document.getElementById('modal-cancel-btn');
 
-        /** Saves the user's name and detector to localStorage. */
-        function saveUserProfile() {
-            const nameInput = document.getElementById('name-input').value.trim();
-            const detectorInput = document.getElementById('detector-input').value.trim();
-            
-            userProfile = {
-                name: nameInput,
-                detector: detectorInput,
+            newConfirmBtn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                onConfirmCallback();
             };
 
+            newCancelBtn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // --- DATA MANIPULATION FUNCTIONS (LOCAL STORAGE CRUD) ---
+
+        /** Saves the current surveys and profile to Local Storage. */
+        function saveSurveysToLocalStorage() {
             try {
-                localStorage.setItem(LS_KEY_PROFILE, JSON.stringify(userProfile));
-                console.log("Profile saved successfully to local storage.");
-                showMessage("Profile updated automatically (saved locally).", 'info');
-                render();
-            } catch (error) {
-                console.error("Error saving profile:", error);
-                showMessage(`Error saving profile locally: ${error.message}`, 'error');
+                const data = {
+                    surveys: surveys,
+                    userProfile: userProfile,
+                    userId: userId,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (e) {
+                showMessage("Error saving data to local storage.", 'error');
+                console.error("Save Error:", e);
             }
         }
-        
-        /** Creates a new survey, automatically setting its status to 'Open'. */
-        function createNewSurvey() {
-            // Check if an 'Open' survey already exists
-            const openSurvey = surveys.find(s => s.status === 'Open');
-            if (openSurvey) {
-                showMessage(`Error: Please Close or Archive the current Open survey ('${openSurvey.name}') before creating a new one.`, 'error');
-                return;
+
+        /** Loads data from Local Storage or initializes defaults. */
+        function loadDataFromLocalStorage() {
+            let loadedData = null;
+            try {
+                const storedData = localStorage.getItem(STORAGE_KEY);
+                if (storedData) {
+                    loadedData = JSON.parse(storedData);
+                }
+            } catch (e) {
+                showMessage("Error parsing stored data. Starting fresh.", 'error');
+                console.error("Load/Parse Error:", e);
             }
-            
-            // Generate pre-filled name with current date and time
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-            const defaultName = `Survey - ${dateStr} ${timeStr}`;
 
-            // Use prompt to get the survey name, pre-filled with the date/time string
-            const surveyName = prompt(`Enter a name for the new survey (Pre-filled with date/time, edit as needed):`, defaultName);
-            if (!surveyName || surveyName.trim() === '') return;
+            if (loadedData && loadedData.userId) {
+                surveys = loadedData.surveys || [];
+                userProfile = loadedData.userProfile || userProfile;
+                userId = loadedData.userId;
+            } else {
+                // Initialize default data if none exists
+                userId = generateId();
+                surveys = [
+                    {
+                        id: generateId(),
+                        name: "First Site Survey (Active)",
+                        description: "Standard site clearance and survey, area A.",
+                        status: "Active",
+                        creationDate: new Date(Date.now() - 86400000).toISOString(),
+                        dateLastChanged: new Date(Date.now() - 86400000).toISOString(),
+                        targets: [
+                            { id: generateId(), time: new Date(Date.now() - 7200000).toISOString(), type: 'Coin', description: 'Small Copper Coin', vdi: '14', depth: '4 inches', coordinates: '50.12345, -5.67890', status: 'Signal Detected', user: 'Local Digger', detector: 'Nox 800' },
+                            { id: generateId(), time: new Date(Date.now() - 3600000).toISOString(), type: 'Junk', description: 'Iron Nail', vdi: '8-10', depth: '6 inches', coordinates: '50.12350, -5.67895', status: 'Signal Ignored', user: 'Local Digger', detector: 'Nox 800' }
+                        ]
+                    },
+                    {
+                        id: generateId(),
+                        name: "Phase 2 Area B (Open)",
+                        description: "New area search, logging all non-ferrous.",
+                        status: "Open",
+                        creationDate: new Date().toISOString(),
+                        dateLastChanged: new Date().toISOString(),
+                        targets: [] // Starts empty
+                    },
+                    {
+                        id: generateId(),
+                        name: "Old Log (Archived)",
+                        description: "Data from a 2023 dig.",
+                        status: "Archived",
+                        creationDate: new Date(Date.now() - 31536000000).toISOString(),
+                        dateLastChanged: new Date(Date.now() - 31536000000).toISOString(),
+                        targets: []
+                    }
+                ];
+                saveSurveysToLocalStorage();
+                showMessage("Initialized new data model and User ID.", 'info');
+            }
 
-            // Get the description
-            const description = prompt(`Enter a brief description for '${surveyName}':`);
-            
-            const timestamp = new Date().toISOString();
+            // Always ensure the targets are sorted newest first within the array
+            surveys.forEach(survey => {
+                if (survey.targets) {
+                    survey.targets.sort((a, b) => new Date(b.time) - new Date(a.time));
+                }
+            });
+
+            // Sort surveys by date last changed (most recent first)
+            surveys.sort((a, b) => new Date(b.dateLastChanged) - new Date(a.dateLastChanged));
+        }
+
+        /** Clears the 'Open' status from all surveys. */
+        function clearOpenStatus() {
+            surveys.forEach(s => {
+                if (s.status === 'Open') {
+                    s.status = 'Active'; // Revert to Active
+                    s.dateLastChanged = new Date().toISOString();
+                }
+            });
+        }
+
+        /** Creates a new survey via prompt. */
+        function createNewSurvey() {
+            const name = prompt("Enter the name for the new survey:", `New Survey Log ${surveys.length + 1}`);
+            if (!name) return showMessage("Survey creation cancelled.", 'info');
+
+            const description = prompt("Enter a brief description:", "A general area search.");
+            if (!description === null) return showMessage("Survey creation cancelled.", 'info');
+
+            // Clear any currently open survey
+            clearOpenStatus();
 
             const newSurvey = {
                 id: generateId(),
-                name: surveyName.trim(),
-                description: description || 'No description provided.',
-                status: 'Open', 
-                creationDate: timestamp,
-                dateLastChanged: timestamp,
-                targets: [] 
+                name: name.trim(),
+                description: description.trim(),
+                status: 'Open', // Newly created survey starts 'Open'
+                creationDate: new Date().toISOString(),
+                dateLastChanged: new Date().toISOString(),
+                targets: []
             };
-            
-            surveys.push(newSurvey);
+
+            surveys.unshift(newSurvey); // Add to the start of the list
             saveSurveysToLocalStorage();
             loadDataFromLocalStorage(); // Reload and sort
-            
-            showMessage(`Success: New survey '${surveyName.trim()}' created and set to Open.`, 'success');
-            console.log("New survey created locally.");
-            
-            // Explicitly call render() to refresh the UI
+            showMessage(`Success: New survey '${name}' created and set to Open.`, 'success');
             render();
         }
 
-        /** Updates a survey's status and dateLastChanged. */
-        function updateSurveyStatus(surveyId, newStatus) {
-            const surveyIndex = surveys.findIndex(s => s.id === surveyId);
-            if (surveyIndex === -1) return showMessage("Survey not found.", 'error');
+        /** Handles status changes (Open, Close, Archive, Restore). */
+        function updateSurveyStatus(id, newStatus) {
+            const survey = surveys.find(s => s.id === id);
+            if (!survey) return showMessage("Error: Survey not found.", 'error');
 
-            const surveyName = surveys[surveyIndex].name;
-
-            // Special handling for 'Open': ensure no other survey is open
+            // Handle 'Open' action specifically: must close all others first
             if (newStatus === 'Open') {
-                const openSurvey = surveys.find(s => s.status === 'Open' && s.id !== surveyId);
-                if (openSurvey) {
-                    showMessage(`Error: Cannot open this survey. Please Close or Archive the current Open survey ('${openSurvey.name}') first.`, 'error');
-                    return;
-                }
+                clearOpenStatus();
             }
 
-            surveys[surveyIndex].status = newStatus;
-            surveys[surveyIndex].dateLastChanged = new Date().toISOString();
-            
+            survey.status = newStatus;
+            survey.dateLastChanged = new Date().toISOString();
             saveSurveysToLocalStorage();
             loadDataFromLocalStorage(); // Reload and sort
-            
-            showMessage(`Success: Survey '${surveyName}' status updated to '${newStatus}'.`, 'success');
-            console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
-
-            // Explicitly call render() to refresh the UI
+            showMessage(`Survey '${survey.name}' status updated to ${newStatus}.`, 'success');
             render();
         }
 
-        /** Triggers the custom modal for survey deletion. */
-        function deleteSurvey(surveyId, surveyName) {
+        /** Permanently deletes a survey using the confirmation modal. */
+        function deleteSurvey(id, name) {
             showConfirmationModal(
-                'Confirm Permanent Deletion',
-                `Are you sure you want to permanently delete the survey: "${surveyName}"? This action cannot be undone and local data will be lost.`,
+                'Confirm Survey Deletion',
+                `Are you sure you want to permanently delete the survey: "${name}"? This will delete all ${surveys.find(s => s.id === id)?.targets?.length || 0} targets within it. This action cannot be undone.`,
                 // Confirmation callback (YES)
                 () => {
-                    surveys = surveys.filter(s => s.id !== surveyId);
-                    saveSurveysToLocalStorage();
-                    loadDataFromLocalStorage(); 
-                    
-                    showMessage(`Success: Survey '${surveyName}' was permanently deleted.`, 'success');
-                    console.log(`Survey ${surveyId} deleted locally.`);
-                    
-                    // Crucial: Explicitly call render() to refresh the UI and remove the card.
+                    const initialCount = surveys.length;
+                    surveys = surveys.filter(s => s.id !== id);
+                    if (surveys.length < initialCount) {
+                        saveSurveysToLocalStorage();
+                        loadDataFromLocalStorage();
+                        showMessage(`Success: Survey '${name}' was permanently deleted.`, 'success');
+                    } else {
+                        showMessage(`Error: Survey '${name}' not found for deletion.`, 'error');
+                    }
+                    render();
+                }
+            );
+        }
+        
+        // Target Action Handlers - NEW FUNCTIONS
+        
+        /** Updates a target's status, saving and re-rendering. */
+        function updateTargetStatus(surveyId, targetId, newStatus) {
+            const survey = surveys.find(s => s.id === surveyId);
+            if (!survey) return showMessage("Survey not found.", 'error');
+
+            const targetIndex = survey.targets.findIndex(t => t.id === targetId);
+            if (targetIndex === -1) return showMessage("Target not found.", 'error');
+            
+            survey.targets[targetIndex].status = newStatus;
+            survey.dateLastChanged = new Date().toISOString();
+
+            saveSurveysToLocalStorage();
+            loadDataFromLocalStorage();
+            showMessage(`Target '${survey.targets[targetIndex].description}' status updated to '${newStatus}'.`, 'info');
+            render();
+        }
+
+        /** Deletes a specific target using the confirmation modal. */
+        function deleteTarget(surveyId, targetId, targetName) {
+            showConfirmationModal(
+                'Confirm Target Deletion',
+                `Are you sure you want to permanently delete the target: "${targetName}"? This action cannot be undone.`,
+                // Confirmation callback (YES)
+                () => {
+                    const survey = surveys.find(s => s.id === surveyId);
+                    if (!survey) return showMessage("Survey not found during deletion.", 'error');
+
+                    const initialCount = survey.targets.length;
+                    survey.targets = survey.targets.filter(t => t.id !== targetId);
+
+                    if (survey.targets.length < initialCount) {
+                        survey.dateLastChanged = new Date().toISOString();
+                        saveSurveysToLocalStorage();
+                        loadDataFromLocalStorage();
+                        showMessage(`Success: Target '${targetName}' was permanently deleted.`, 'success');
+                    } else {
+                        showMessage(`Error: Target '${targetName}' not found for deletion.`, 'error');
+                    }
                     render();
                 }
             );
         }
 
-        /** Exports all application data into a JSON string. */
-        function exportData() {
-            const data = {
-                userId: userId,
-                userProfile: userProfile,
-                surveys: surveys
-            };
-            const jsonString = JSON.stringify(data, null, 2);
-            document.getElementById('export-data-area').value = jsonString;
-            showMessage("Data exported successfully. Copy the JSON text above.", 'success');
+        /** Edits target details (simplified via prompts). */
+        function editTarget(surveyId, targetId) {
+            const survey = surveys.find(s => s.id === surveyId);
+            if (!survey) return showMessage("Survey not found.", 'error');
+
+            const target = survey.targets.find(t => t.id === targetId);
+            if (!target) return showMessage("Target not found.", 'error');
+
+            // Use current values as defaults for quick editing
+            const newType = prompt("Edit Target Type:", target.type);
+            if (newType === null) return showMessage("Edit cancelled.", 'info');
+
+            const newDescription = prompt("Edit Description:", target.description);
+            if (newDescription === null) return showMessage("Edit cancelled.", 'info');
+            
+            const newVdi = prompt("Edit VDI Reading:", target.vdi);
+            if (newVdi === null) return showMessage("Edit cancelled.", 'info');
+            
+            const newDepth = prompt("Edit Depth:", target.depth);
+            if (newDepth === null) return showMessage("Edit cancelled.", 'info');
+
+            const newCoordinates = prompt("Edit GPS Coordinates:", target.coordinates);
+            if (newCoordinates === null) return showMessage("Edit cancelled.", 'info');
+            
+            // Update target fields
+            target.type = newType.trim();
+            target.description = newDescription.trim();
+            target.vdi = newVdi.trim();
+            target.depth = newDepth.trim();
+            target.coordinates = newCoordinates.trim();
+            
+            survey.dateLastChanged = new Date().toISOString();
+            saveSurveysToLocalStorage();
+            loadDataFromLocalStorage();
+            showMessage(`Target '${target.description}' updated successfully.`, 'success');
+            render();
         }
 
-        /** Imports application data from a JSON string, overwriting local storage. */
-        function importData() {
-            const importArea = document.getElementById('import-data-area');
-            const jsonString = importArea.value.trim();
+        /** Global handler for all survey actions (Open, Close, Archive, Delete). */
+        window.handleSurveyAction = function(element) {
+            const action = element.dataset.action;
+            const id = element.dataset.id;
+            const name = element.dataset.name;
 
-            if (!jsonString) {
-                showMessage("Import failed: Paste JSON data into the box first.", 'error');
-                return;
-            }
-
-            try {
-                const importedData = JSON.parse(jsonString);
-
-                if (!importedData.surveys || !Array.isArray(importedData.surveys)) {
-                    showMessage("Import failed: JSON structure is invalid. Missing 'surveys' array.", 'error');
-                    return;
-                }
-
-                // 1. Update localStorage keys based on imported data
-                localStorage.setItem(LS_KEY_USER_ID, importedData.userId || generateId());
-                localStorage.setItem(LS_KEY_PROFILE, JSON.stringify(importedData.userProfile || {}));
-                localStorage.setItem(LS_KEY_SURVEYS, JSON.stringify(importedData.surveys));
-                
-                // 2. Reload state and render UI
-                loadDataFromLocalStorage();
-                render();
-
-                showMessage("Data imported successfully! The app state has been updated.", 'success');
-
-            } catch (error) {
-                console.error("Import error:", error);
-                showMessage(`Import failed: Invalid JSON format. Please check the pasted text.`, 'error');
+            switch (action) {
+                case 'open':
+                    updateSurveyStatus(id, 'Open');
+                    break;
+                case 'close':
+                    updateSurveyStatus(id, 'Active');
+                    break;
+                case 'archive':
+                    updateSurveyStatus(id, 'Archived');
+                    break;
+                case 'restore':
+                    updateSurveyStatus(id, 'Active');
+                    break;
+                case 'delete':
+                    deleteSurvey(id, name);
+                    break;
+                default:
+                    console.error("Unknown survey action:", action);
             }
         }
         
+        /** Global handler for all target actions (Edit, Delete, Set Status). */
+        window.handleTargetAction = function(element) {
+            const action = element.dataset.action;
+            const surveyId = element.dataset.surveyId;
+            const targetId = element.dataset.id;
+            const targetName = element.dataset.name;
+
+            switch (action) {
+                case 'delete':
+                    deleteTarget(surveyId, targetId, targetName);
+                    break;
+                case 'edit':
+                    editTarget(surveyId, targetId);
+                    break;
+                case 'setStatus':
+                    const newStatus = element.dataset.status;
+                    updateTargetStatus(surveyId, targetId, newStatus);
+                    break;
+                default:
+                    console.error("Unknown target action:", action);
+            }
+        }
+
         /** Adds a new target to the survey currently marked as 'Open'. */
         function addTargetToOpenSurvey() {
             const openSurvey = surveys.find(s => s.status === 'Open');
@@ -411,7 +451,6 @@
             const description = prompt("Enter Description (e.g., 1901 Penny, Iron Nail):");
             if (!description) { showMessage("Target logging cancelled.", 'info'); return; }
 
-            // MODIFICATION: Add explanatory text to the VDI prompt
             const vdi = prompt("Enter VDI Reading (Visual Display Indicator / Signal Number, e.g., 12, 8-10):", "N/A");
             
             const depth = prompt("Enter Depth (e.g., 6 inches, 15 cm):", "Unknown");
@@ -426,7 +465,7 @@
                 coordinates: coordinates.trim(),
                 depth: depth.trim(),
                 vdi: vdi.trim(),
-                // Include user/gear data for context
+                status: 'Signal Detected', // ⭐ NEW FIELD: Target Status
                 user: userProfile.name || 'Unknown Digger',
                 detector: userProfile.detector || 'Unknown Machine'
             };
@@ -435,7 +474,7 @@
             const surveyIndex = surveys.findIndex(s => s.id === openSurvey.id);
             if (surveyIndex !== -1) {
                 // Add the new target to the start of the targets array (newest first)
-                surveys[surveyIndex].targets.unshift(newTarget); 
+                surveys[surveyIndex].targets.unshift(newTarget);
                 surveys[surveyIndex].dateLastChanged = new Date().toISOString();
                 
                 saveSurveysToLocalStorage();
@@ -449,156 +488,81 @@
         }
 
 
-        // --- UI RENDER FUNCTIONS ---
+        // --- PAGE RENDERING FUNCTIONS ---
 
-        /** Main render function, called whenever state changes. */
+        /** Main rendering function. */
         function render() {
-            const contentArea = document.getElementById('content-area');
-            const navButtons = document.querySelectorAll('.nav-btn');
+            const contentDiv = document.getElementById('app-content');
+            let pageContent = '';
 
-            // Update active navigation button style
-            navButtons.forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.page === currentPage);
-                btn.classList.remove('text-gray-500');
-                btn.classList.add(btn.dataset.page === currentPage ? 'text-primary' : 'text-gray-500');
+            // Update navigation button active state
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const page = btn.dataset.page;
+                const isActive = page === currentPage;
+                btn.classList.toggle('text-primary', isActive);
+                btn.classList.toggle('text-gray-500', !isActive);
+                btn.classList.toggle('font-bold', isActive);
             });
 
-            // Clear and render the current page content
-            contentArea.innerHTML = '';
+            // Route to the correct page renderer
             switch (currentPage) {
                 case 'home':
-                    contentArea.innerHTML = renderHomePage();
-                    // Attach event listeners for the Home page elements
-                    document.getElementById('name-input')?.addEventListener('blur', saveUserProfile);
-                    document.getElementById('detector-input')?.addEventListener('blur', saveUserProfile);
-                    document.getElementById('create-survey-btn')?.addEventListener('click', createNewSurvey);
-                    // Re-attach survey action listeners (must be done after innerHTML update)
-                    attachSurveyActionListeners(); 
+                    pageContent = renderHomePage();
                     break;
                 case 'targets':
-                    contentArea.innerHTML = renderTargetsPage();
-                    // Attach listener for the new target button
-                    document.getElementById('add-target-btn')?.addEventListener('click', addTargetToOpenSurvey);
+                    pageContent = renderTargetsPage();
                     break;
                 case 'compass':
-                    contentArea.innerHTML = renderCompassPage();
+                    pageContent = renderCompassPage();
                     break;
                 case 'settings':
-                    contentArea.innerHTML = renderSettingsPage();
-                    document.getElementById('export-data-btn')?.addEventListener('click', exportData);
-                    document.getElementById('import-data-btn')?.addEventListener('click', importData);
+                    pageContent = renderSettingsPage();
                     break;
+            }
+
+            contentDiv.innerHTML = `<div class="max-w-xl mx-auto">${pageContent}</div>`;
+            
+            // Attach specific event listeners after rendering
+            if (currentPage === 'home') {
+                document.getElementById('create-survey-btn')?.addEventListener('click', createNewSurvey);
+            } else if (currentPage === 'targets') {
+                document.getElementById('add-target-btn')?.addEventListener('click', addTargetToOpenSurvey);
+            } else if (currentPage === 'settings') {
+                document.getElementById('export-data-btn')?.addEventListener('click', exportData);
+                document.getElementById('import-data-btn')?.addEventListener('click', importData);
             }
         }
 
-        /** Attaches event listeners to all dynamically generated survey action buttons. */
-        function attachSurveyActionListeners() {
-            // Re-select all buttons after the page is rendered
-            document.querySelectorAll('.survey-action-btn').forEach(button => {
-                button.removeEventListener('click', handleSurveyAction); // Prevent double-listening
-                button.addEventListener('click', handleSurveyAction);
-            });
-        }
-
-        /** Handles all survey button clicks based on data attributes. */
-        function handleSurveyAction(e) {
-            const button = e.currentTarget;
-            const action = button.dataset.action;
-            const surveyId = button.dataset.id;
-            const surveyName = button.dataset.name;
-
-            switch (action) {
-                case 'close':
-                    updateSurveyStatus(surveyId, 'Active'); // Active but closed
-                    break;
-                case 'archive':
-                    updateSurveyStatus(surveyId, 'Archived'); // Archive (automatically closes)
-                    break;
-                case 'open':
-                    updateSurveyStatus(surveyId, 'Open');
-                    break;
-                case 'delete':
-                    deleteSurvey(surveyId, surveyName);
-                    break;
-                case 'restore':
-                    updateSurveyStatus(surveyId, 'Active'); // Restore to Active/Closed
-                    break;
-                default:
-                    console.error("Unknown survey action:", action);
-            }
-        }
-
-        /** Helper to format ISO date string to a readable format. */
-        function formatDate(isoString) {
-            if (!isoString) return 'N/A';
-            try {
-                return new Date(isoString).toLocaleDateString();
-            } catch (e) {
-                return 'Invalid Date';
-            }
-        }
-
-        /** Renders the content for the Home page. */
+        /** Renders the content for the Home page (Survey list). */
         function renderHomePage() {
-            // Separate surveys by status
             const openSurvey = surveys.find(s => s.status === 'Open');
-            const activeSurveys = surveys.filter(s => s.status === 'Active');
-            const archivedSurveys = surveys.filter(s => s.status === 'Archived');
+            const surveyListHtml = surveys.map(s => renderSurveyCard(s, s.status === 'Open')).join('');
             
             return `
-                <!-- Message Box: The helper function showMessage manages the content and color -->
-                <div id="home-message-box" class="p-3 mb-4 rounded-lg text-sm bg-secondary/10 text-secondary-800">
-                    Data loaded instantly from local storage.
-                </div>
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
 
-                <!-- User Profile Inputs -->
-                <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
-                    <h2 class="text-xl font-semibold mb-3 text-gray-700">My Gear</h2>
-                    <div class="space-y-4">
-                        <div>
-                            <label for="name-input" class="block text-sm font-medium text-gray-700">Your Name</label>
-                            <input type="text" id="name-input" value="${userProfile.name || ''}" placeholder="Enter your name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
-                        </div>
-                        <div>
-                            <label for="detector-input" class="block text-sm font-medium text-gray-700">Metal Detector Used</label>
-                            <input type="text" id="detector-input" value="${userProfile.detector || ''}" placeholder="e.g., Minelab Equinox 800" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary p-2 border">
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Changes are saved automatically when you click outside the box.</p>
+                    <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
+                        <h3 class="text-xl font-semibold mb-2 text-gray-700">
+                            Status: ${openSurvey ? openSurvey.name : '<span class="text-red-500">No Active Survey</span>'}
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-4">
+                            ${openSurvey ? `Targets Logged: ${openSurvey.targets.length}` : 'Click "New Survey" to start a new logging session.'}
+                        </p>
+                        <button id="create-survey-btn" class="w-full bg-primary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150 flex items-center justify-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            New Survey
+                        </button>
                     </div>
-                </div>
 
-                <!-- Create New Survey Button (MOVED HERE) -->
-                <button id="create-survey-btn" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-secondary/90 transition duration-150 mb-8 mt-2 flex items-center justify-center">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Create New Survey
-                </button>
-
-                <!-- Open Survey Section -->
-                <div class="mb-8">
-                    <h2 class="text-2xl font-bold text-primary mb-3">Open Survey (1/1)</h2>
-                    <div id="open-survey-list" class="space-y-4">
-                        ${openSurvey ? renderSurveyCard(openSurvey, true) : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No survey is currently open and recording targets.</p>'}
-                    </div>
-                </div>
-
-                <!-- Active Surveys Section -->
-                <div class="mb-8">
-                    <h2 class="text-2xl font-bold text-primary mb-3">Active (Closed) Surveys</h2>
-                    <div id="active-survey-list" class="space-y-4">
-                        ${activeSurveys.length > 0 ? activeSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No active, closed surveys. They are ready to be opened again.</p>'}
-                    </div>
-                </div>
-
-                <!-- Archived Surveys Section -->
-                <div class="mb-8">
-                    <h2 class="text-2xl font-bold text-primary mb-3">Archived Surveys</h2>
-                    <div id="archived-survey-list" class="space-y-4">
-                        ${archivedSurveys.length > 0 ? archivedSurveys.map(s => renderSurveyCard(s)).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No archived surveys yet. Great way to tidy up old data!</p>'}
+                    <h3 class="text-2xl font-bold text-primary mb-3">All Surveys (${surveys.length})</h3>
+                    <div id="survey-list" class="space-y-4">
+                        ${surveyListHtml.length > 0 ? surveyListHtml : `<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No surveys found. Click 'New Survey' to begin.</p>`}
                     </div>
                 </div>
             `;
         }
-        
+
         /** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
@@ -610,23 +574,23 @@
                 case 'Open':
                     statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="close" data-name="${survey.name}" ${disabledAttr}>Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}" ${disabledAttr}>Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
                     `;
                     break;
                 case 'Active': // Active but Closed
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="open" data-name="${survey.name}" ${disabledAttr}>Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}" ${disabledAttr}>Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}" ${disabledAttr}>Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
                     `;
                     break;
                 case 'Archived':
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" ${disabledAttr}>Restore to Active</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" ${disabledAttr}>Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm ${disabledClass}" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}" ${disabledAttr}>Delete</button>
                     `;
                     break;
             }
@@ -649,30 +613,107 @@
                 </div>
             `;
         }
+        
+        /** Renders a single target card with status and actions. */
+        function renderTargetCard(target, surveyId) {
+            // Define status styles
+            let statusClass = 'bg-gray-100 text-gray-800';
+            let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+
+            switch (target.status) {
+                case 'Hole Dug':
+                    statusClass = 'bg-yellow-100 text-yellow-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
+                    break;
+                case 'Hole Refilled':
+                    statusClass = 'bg-secondary/10 text-secondary';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3m-3 3l-6 6"></path></svg>`;
+                    break;
+                case 'Signal Ignored':
+                    statusClass = 'bg-red-100 text-red-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                    break;
+                case 'Signal Detected':
+                default:
+                    statusClass = 'bg-blue-100 text-blue-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3-.895-3-2 1.343-2 3-2zM12 20s-7-12-7-15a7 7 0 0114 0c0 3-7 15-7 15z"></path></svg>`;
+                    break;
+            }
+
+            const typeBadgeClass = target.type.toLowerCase().includes('junk') ? 'bg-red-200 text-red-900' : 'bg-primary/10 text-primary';
+            
+            // Status Action Dropdown
+            const statusOptions = ['Signal Detected', 'Hole Dug', 'Hole Refilled', 'Signal Ignored'];
+            const actionDropdown = statusOptions.filter(s => s !== target.status).map(status => `
+                <li>
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="${status}" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Set to ${status}
+                    </a>
+                </li>
+            `).join('');
+
+            return `
+                <div class="bg-card p-4 rounded-xl shadow-md border-l-4 border-gray-200">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex flex-col">
+                            <h4 class="text-xl font-bold text-gray-800">${target.description}</h4>
+                            <span class="${typeBadgeClass} text-xs font-semibold px-2.5 py-0.5 rounded">${target.type}</span>
+                        </div>
+                        
+                        <div class="relative inline-block text-left group">
+                            <button id="dropdownMenuButton-${target.id}" class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary" aria-expanded="true" aria-haspopup="true">
+                                Actions
+                                <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            
+                            <div class="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block z-10">
+                                <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownMenuButton-${target.id}">
+                                    ${actionDropdown}
+                                    <div class="border-t border-gray-100"></div>
+                                    <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                        Edit Details
+                                    </a>
+                                    <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                        Delete Target
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center ${statusClass}">
+                        ${statusIcon} ${target.status}
+                    </p>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t border-gray-100">
+                        <div>
+                            <strong class="text-gray-500">VDI:</strong> <span class="text-gray-800">${target.vdi}</span>
+                        </div>
+                        <div>
+                            <strong class="text-gray-500">Depth:</strong> <span class="text-gray-800">${target.depth}</span>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <strong class="text-gray-500">Location:</strong> <span class="text-gray-800 break-all">${target.coordinates}</span>
+                        </div>
+                        <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
+                            Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
         /** Renders the content for the Targets page. */
         function renderTargetsPage() {
             const openSurvey = surveys.find(s => s.status === 'Open');
             const targets = openSurvey ? openSurvey.targets : [];
+            const surveyId = openSurvey ? openSurvey.id : null;
 
             let targetsListHtml = '';
             if (targets.length === 0) {
                 targetsListHtml = `<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No targets logged in this survey yet. Click 'Log New Target' to record your first find!</p>`;
             } else {
-                targetsListHtml = targets.map(t => `
-                    <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-secondary">
-                        <div class="flex justify-between items-start mb-2">
-                            <h4 class="text-lg font-bold text-gray-800">${t.type} <span class="text-sm font-normal text-gray-500 ml-2">(${t.description})</span></h4>
-                            <span class="text-xs text-gray-500">${new Date(t.time).toLocaleTimeString()}</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-2">
-                            <div><strong>VDI:</strong> ${t.vdi}</div>
-                            <div><strong>Depth:</strong> ${t.depth}</div>
-                            <div class="col-span-2"><strong>Location:</strong> ${t.coordinates}</div>
-                        </div>
-                        <p class="text-xs text-gray-400">Logged by: ${t.user} (${t.detector})</p>
-                    </div>
-                `).join('');
+                targetsListHtml = targets.map(t => renderTargetCard(t, surveyId)).join('');
             }
             
             const isButtonDisabled = !openSurvey;
@@ -681,7 +722,6 @@
                 <div class="p-4">
                     <h2 class="text-3xl font-bold text-primary mb-6">Targets Log</h2>
 
-                    <!-- Current Status & Add Button -->
                     <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
                         <h3 class="text-xl font-semibold mb-2 text-gray-700">
                             Current Survey: ${openSurvey ? openSurvey.name : '<span class="text-red-500">None Open</span>'}
@@ -696,7 +736,6 @@
                         </button>
                     </div>
                     
-                    <!-- Targets List -->
                     <h3 class="text-2xl font-bold text-primary mb-3">Survey Targets (${targets.length})</h3>
                     <div id="targets-list" class="space-y-4">
                         ${targetsListHtml}
@@ -710,9 +749,61 @@
             return `
                 <div class="p-4">
                     <h2 class="text-3xl font-bold text-primary mb-6">Compass/GPS Page</h2>
-                    <p class="text-gray-700">This page would typically show a compass or map interface to help you log target locations using device GPS. (Functionality coming soon)</p>
+                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <p class="text-gray-700">This page would typically show a compass or map interface to help you log target locations using device GPS. (Functionality coming soon)</p>
+                    </div>
                 </div>
             `;
+        }
+
+        // --- DATA EXPORT/IMPORT FUNCTIONS ---
+
+        /** Generates and displays the JSON data for export. */
+        function exportData() {
+            const dataToExport = { surveys, userProfile, userId, timestamp: new Date().toISOString() };
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            document.getElementById('export-data-area').value = jsonString;
+            showMessage("Data export generated. Copy the text below.", 'success');
+        }
+
+        /** Imports data from the textarea and overwrites local data. */
+        function importData() {
+            const importArea = document.getElementById('import-data-area');
+            const jsonString = importArea.value.trim();
+
+            if (!jsonString) {
+                return showMessage("Please paste JSON data into the box first.", 'error');
+            }
+
+            showConfirmationModal(
+                'Confirm Data Import & OVERWRITE',
+                "Are you absolutely sure you want to import this data? It will **permanently overwrite** all your existing local survey data.",
+                // Confirmation callback (YES)
+                () => {
+                    try {
+                        const importedData = JSON.parse(jsonString);
+                        
+                        // Basic validation
+                        if (!importedData.surveys || !Array.isArray(importedData.surveys)) {
+                            throw new Error("Invalid import structure. Missing 'surveys' array.");
+                        }
+
+                        // Overwrite global state
+                        surveys = importedData.surveys;
+                        userProfile = importedData.userProfile || { name: "Imported User", detector: "Imported Machine" };
+                        userId = importedData.userId || generateId(); // Keep old ID if present, otherwise generate new
+
+                        saveSurveysToLocalStorage();
+                        loadDataFromLocalStorage();
+                        showMessage("Data import successful! Local data has been overwritten.", 'success');
+                        importArea.value = ''; // Clear input after successful import
+                        render();
+                    } catch (e) {
+                        showMessage(`Import Failed: ${e.message}`, 'error');
+                        console.error("Import Error:", e);
+                    }
+                }
+            );
         }
 
         /** Renders the content for the Settings page. */
@@ -721,14 +812,12 @@
                 <div class="p-4">
                     <h2 class="text-3xl font-bold text-primary mb-6">Settings & Local Data Management</h2>
 
-                    <!-- User ID Display -->
                     <div class="mb-8">
                         <p class="text-lg font-semibold text-gray-700">Your Local User ID</p>
                         <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
                         <p class="text-xs text-red-500 mt-2">🛑 WARNING: This ID ties your data to this browser/device only. This data is NOT synced to the cloud.</p>
                     </div>
 
-                    <!-- Export Section -->
                     <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border border-gray-100">
                         <h3 class="text-xl font-semibold text-gray-700 mb-3">Export Data (Backup / Manual Transfer)</h3>
                         <p class="text-sm text-gray-600 mb-3">Click the button to generate a complete JSON backup of all your surveys and profile data. You can copy this text and save it elsewhere or import it on another device.</p>
@@ -739,7 +828,6 @@
                         <textarea id="export-data-area" rows="10" readonly class="w-full p-2 border border-gray-300 rounded-md bg-gray-50 text-xs font-mono"></textarea>
                     </div>
 
-                    <!-- Import Section -->
                     <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 class="text-xl font-semibold text-gray-700 mb-3">Import Data (Restore / Manual Transfer)</h3>
                         <p class="text-sm text-gray-600 mb-3">Paste the exported JSON text here and click Import. **Warning:** This will overwrite any existing local data on this device.</p>
@@ -752,6 +840,7 @@
                 </div>
             `;
         }
+
 
         // --- INITIALIZATION & EVENT LISTENERS ---
 
