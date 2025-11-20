@@ -49,7 +49,7 @@
         
         <!-- Header / Page Title -->
         <header class="p-4 bg-white border-b border-gray-200">
-            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:37</h1>
+            <h1 class="text-3xl font-extrabold text-primary text-center">Dig It! 9:47</h1>
         </header>
 
         <!-- Main Content Area -->
@@ -87,10 +87,10 @@
         const LS_KEY_SURVEYS = 'dig_it_surveys';
         const LS_KEY_USER_ID = 'dig_it_user_id';
         
-        let userId = null; // Used for display, but technically not needed for local storage
-        let surveys = []; // Array to hold all survey documents from localStorage
-        let userProfile = {}; // Object to hold user's name and detector
-        let currentPage = 'home'; // Tracks the current visible page
+        let userId = null; 
+        let surveys = []; 
+        let userProfile = {}; 
+        let currentPage = 'home'; 
         
         // --- DATA HELPERS ---
 
@@ -141,7 +141,7 @@
             surveys.sort((a, b) => new Date(b.creationDate) - new Date(a.creationDate));
 
             console.log("All data loaded from local storage.");
-            showMessage("Data loaded instantly from local storage.", 'success');
+            // We no longer call showMessage here; it's handled by the caller/initialization.
         }
 
 
@@ -231,6 +231,9 @@
             
             showMessage(`Success: New survey '${surveyName.trim()}' created and set to Open.`, 'success');
             console.log("New survey created locally.");
+            
+            // FIX: Explicitly call render() to refresh the UI
+            render();
         }
 
         /** Updates a survey's status and dateLastChanged. */
@@ -257,6 +260,9 @@
             
             showMessage(`Success: Survey '${surveyName}' status updated to '${newStatus}'.`, 'success');
             console.log(`Survey ${surveyId} status updated to ${newStatus}.`);
+
+            // FIX: Explicitly call render() to refresh the UI
+            render();
         }
 
         /** Deletes a survey document. */
@@ -271,11 +277,62 @@
                 
                 showMessage(`Success: Survey '${surveyName}' was permanently deleted.`, 'success');
                 console.log(`Survey ${surveyId} deleted locally.`);
+                
+                // FIX: Explicitly call render() to refresh the UI
+                render();
             } else {
                 showMessage(`Deletion of survey '${surveyName}' cancelled.`, 'info');
                 console.log("Deletion cancelled.");
             }
         }
+
+        /** Exports all application data into a JSON string. */
+        function exportData() {
+            const data = {
+                userId: userId,
+                userProfile: userProfile,
+                surveys: surveys
+            };
+            const jsonString = JSON.stringify(data, null, 2);
+            document.getElementById('export-data-area').value = jsonString;
+            showMessage("Data exported successfully. Copy the JSON text above.", 'success');
+        }
+
+        /** Imports application data from a JSON string, overwriting local storage. */
+        function importData() {
+            const importArea = document.getElementById('import-data-area');
+            const jsonString = importArea.value.trim();
+
+            if (!jsonString) {
+                showMessage("Import failed: Paste JSON data into the box first.", 'error');
+                return;
+            }
+
+            try {
+                const importedData = JSON.parse(jsonString);
+
+                if (!importedData.surveys || !Array.isArray(importedData.surveys)) {
+                    showMessage("Import failed: JSON structure is invalid. Missing 'surveys' array.", 'error');
+                    return;
+                }
+
+                // 1. Update localStorage keys based on imported data
+                localStorage.setItem(LS_KEY_USER_ID, importedData.userId || generateId());
+                localStorage.setItem(LS_KEY_PROFILE, JSON.stringify(importedData.userProfile || {}));
+                localStorage.setItem(LS_KEY_SURVEYS, JSON.stringify(importedData.surveys));
+                
+                // 2. Reload state and render UI
+                loadDataFromLocalStorage();
+                render();
+
+                showMessage("Data imported successfully! The app state has been updated.", 'success');
+
+            } catch (error) {
+                console.error("Import error:", error);
+                showMessage(`Import failed: Invalid JSON format. Please check the pasted text.`, 'error');
+            }
+        }
+
 
         // --- UI RENDER FUNCTIONS ---
 
@@ -311,6 +368,8 @@
                     break;
                 case 'settings':
                     contentArea.innerHTML = renderSettingsPage();
+                    document.getElementById('export-data-btn')?.addEventListener('click', exportData);
+                    document.getElementById('import-data-btn')?.addEventListener('click', importData);
                     break;
             }
         }
@@ -502,10 +561,36 @@
         function renderSettingsPage() {
             return `
                 <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Settings Page</h2>
-                    <p class="text-gray-700">Your local User ID (used for this browser instance) is: </p>
-                    <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
-                    <p class="text-sm text-gray-500 mt-2">This ID ties your data to this browser/device only. If you clear your browser cache, this data will be lost.</p>
+                    <h2 class="text-3xl font-bold text-primary mb-6">Settings & Local Data Management</h2>
+
+                    <!-- User ID Display -->
+                    <div class="mb-8">
+                        <p class="text-lg font-semibold text-gray-700">Your Local User ID</p>
+                        <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
+                        <p class="text-xs text-red-500 mt-2">🛑 WARNING: This ID ties your data to this browser/device only. This data is NOT synced to the cloud.</p>
+                    </div>
+
+                    <!-- Export Section -->
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border border-gray-100">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Export Data (Backup / Manual Transfer)</h3>
+                        <p class="text-sm text-gray-600 mb-3">Click the button to generate a complete JSON backup of all your surveys and profile data. You can copy this text and save it elsewhere or import it on another device.</p>
+                        
+                        <button id="export-data-btn" class="w-full bg-primary text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150 mb-4">
+                            Generate Export JSON
+                        </button>
+                        <textarea id="export-data-area" rows="10" readonly class="w-full p-2 border border-gray-300 rounded-md bg-gray-50 text-xs font-mono"></textarea>
+                    </div>
+
+                    <!-- Import Section -->
+                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Import Data (Restore / Manual Transfer)</h3>
+                        <p class="text-sm text-gray-600 mb-3">Paste the exported JSON text here and click Import. **Warning:** This will overwrite any existing local data on this device.</p>
+                        
+                        <textarea id="import-data-area" rows="10" placeholder="Paste your exported JSON data here..." class="w-full p-2 border border-yellow-500 rounded-md font-mono text-xs mb-4"></textarea>
+                        <button id="import-data-btn" class="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-150">
+                            Import & Overwrite Local Data
+                        </button>
+                    </div>
                 </div>
             `;
         }
@@ -525,6 +610,7 @@
 
         // 1. Load data first
         loadDataFromLocalStorage();
+        showMessage("Data loaded instantly from local storage.", 'success'); // Show initial load message
 
         // 2. Initial render call
         render();
