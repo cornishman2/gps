@@ -227,10 +227,18 @@
                 messageBox.classList.add('bg-red-100', 'text-red-800');
                 return;
             }
+            
+            // Generate pre-filled name with current date and time
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const defaultName = `Survey - ${dateStr} ${timeStr}`;
 
-            const surveyName = prompt("Enter a name for the new survey (e.g., 'West Field Day 3'):");
+            // Use prompt to get the survey name, pre-filled with the date/time string
+            const surveyName = prompt(`Enter a name for the new survey (Pre-filled with date/time, edit as needed):`, defaultName);
             if (!surveyName || surveyName.trim() === '') return;
 
+            // Get the description
             const description = prompt(`Enter a brief description for '${surveyName}':`);
 
             try {
@@ -238,7 +246,7 @@
                 await addDoc(getSurveysCollectionRef(), {
                     name: surveyName.trim(),
                     description: description || 'No description provided.',
-                    status: 'Open', // Only one can be 'Open' at a time
+                    status: 'Open', // Set status to 'Open' as per the "only one open" rule
                     creationDate: serverTimestamp(),
                     dateLastChanged: serverTimestamp(),
                     targets: [] // Initialize an empty array for targets
@@ -442,23 +450,23 @@
                 case 'Open':
                     statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
                     `;
                     break;
                 case 'Active': // Active but Closed
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Open</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
                 case 'Archived':
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
                     actions = `
-                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-secondary hover:bg-secondary/90 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore to Active</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
             }
