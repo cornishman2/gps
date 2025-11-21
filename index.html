@@ -1,151 +1,580 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Metal Finder v5</title>
-  <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>a. GPS Target Compass & Map</title>
+    <script src="https://www.google.com/maps/search/?api=1&query=$4"></script>
+    <link rel="stylesheet" href="https://www.google.com/maps/search/?api=1&query=$5">
+    <style>
+        /* Custom CSS for Map Pins */
+        #relative-map-container {
+            height: 400px; /* Fixed height for the map view */
+            position: relative; /* Essential for positioning pins absolutely */
+        }
+
+        .map-pin {
+            position: absolute;
+            border-radius: 50%;
+            transform: translate(-50%, -50%); /* Centers the pin exactly on the coordinates */
+            z-index: 10;
+            transition: all 0.5s ease-out; /* Smooth movement */
+        }
+
+        .target-pin {
+            background-color: red;
+            border: 2px solid darkred;
+            width: 10px;
+            height: 10px;
+        }
+
+        .user-pin {
+            background-color: blue;
+            border: 3px solid white;
+            box-shadow: 0 0 8px rgba(0, 0, 255, 0.9);
+            width: 16px;
+            height: 16px;
+            font-size: 8px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+    </style>
 </head>
-<body>
-<div class="app">
-<header>
-  <div class="logo">
-    <div class="logo-icon">📍</div>
-    <div>
-      <h1>Chat - Metal Finder- Wednesday 17:26</h1>
-      <div class="version">v4.0 - Professional</div>
-    </div>
-  </div>
-  <div class="gps-info">
-    <div class="gps-status">
-      <div class="gps-label">
-        <span class="status-dot"></span>
-        <span>GPS: <strong id="gpsText">Searching...</strong></span>
-      </div>
-      <div>Accuracy: <strong id="accText">—</strong></div>
-    </div>
-  </div>
-</header>
+<body class="bg-gray-100 min-h-screen">
 
-<main>
-  <section id="screen-home" class="screen">
-    <div class="card">
-      <div class="card-title">Settings</div>
-      <div class="row">
-        <input id="detectoristName" placeholder="Your name" />
-        <input id="detectorUsed" placeholder="Detector model" />
-      </div>
-    </div>
+    <div class="container mx-auto p-4 max-w-3xl">
+        <header class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">GPS Target Tracker</h1>
+            <p class="text-sm text-gray-500">Manage targets and find the distance/bearing to the closest one.</p>
+        </header>
 
-    <div class="card">
-      <div class="card-title">Quick Actions</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnNewSurvey">✨ New Survey</button>
-        <button class="btn btn-secondary btn-sm" id="btnNewSurveyAdd">+ Survey & Target</button>
-        <button class="btn btn-secondary btn-sm" id="btnCloseSurvey">Close Survey</button>
-      </div>
-    </div>
+        <nav class="flex space-x-1 bg-white p-1 rounded-lg shadow-md mb-6">
+            <button id="tab-targets" class="flex-1 py-2 px-4 text-center font-medium text-white bg-blue-600 rounded-md transition duration-150">Targets</button>
+            <button id="tab-compass" class="flex-1 py-2 px-4 text-center font-medium text-gray-600 hover:bg-gray-100 rounded-md transition duration-150">Compass & Map</button>
+        </nav>
 
-    <div class="card">
-      <div class="card-title">Surveys</div>
-      <div class="list" id="surveyList"></div>
-    </div>
-  </section>
+        <div id="message-container" class="mb-4 hidden"></div>
 
-  <section id="screen-targets" class="screen hidden">
-    <div class="card">
-      <div class="card-title">Targets</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnAddTarget">📍 Add Target</button>
-        <button class="btn btn-secondary" id="btnBatch">🔄 Batch Add</button>
-      </div>
-      <div style="margin-top:12px;color:var(--muted);font-size:14px">
-        Open survey: <strong style="color:var(--accent)" id="openSurveyName">—</strong>
-      </div>
-    </div>
-    <div class="list" id="targetsList"></div>
-  </section>
+        <div id="view-targets" class="space-y-6">
+            
+            <section class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Add New Target</h2>
+                <form id="add-target-form" class="space-y-4">
+                    <div>
+                        <label for="target-description" class="block text-sm font-medium text-gray-700">Description (Name/ID)</label>
+                        <input type="text" id="target-description" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="target-coordinates" class="block text-sm font-medium text-gray-700">GPS Coordinates (Lat, Lon)</label>
+                        <input type="text" id="target-coordinates" placeholder="e.g., 51.5079, -0.1278" required pattern="^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Latitude, Longitude (e.g., 50.231581, -5.222946)</p>
+                    </div>
+                    <button type="submit" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-md shadow-md hover:bg-green-600 transition duration-150">
+                        <i class="fas fa-plus-circle mr-2"></i> Add Target
+                    </button>
+                </form>
+            </section>
 
-  <section id="screen-compass" class="screen hidden">
-    <div class="card compass-screen">
-      <div class="card-title" style="justify-content:center">🧭 Compass Navigation</div>
-      <div style="font-size:18px;font-weight:600;margin:16px 0;color:var(--text-bright)" id="compassTargetName">Select a target</div>
+            <section class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800">Saved Targets</h2>
+                    <button id="clear-all-btn" class="text-sm text-red-600 hover:text-red-800 transition duration-150">
+                        <i class="fas fa-trash-alt mr-1"></i> Clear All
+                    </button>
+                </div>
+                
+                <div id="targets-list" class="space-y-3">
+                    <p id="no-targets-message" class="text-gray-500 italic">No targets saved yet.</p>
+                </div>
+            </section>
+        </div>
 
-      <div class="compass-info">
-        <div class="compass-stat">
-          <div class="stat-label">Your Heading</div>
-          <div class="stat-value"><span id="heading">—</span>°</div>
-        </div>
-        <div class="compass-stat">
-          <div class="stat-label">Target Bearing</div>
-          <div class="stat-value"><span id="bearing">—</span>°</div>
-        </div>
-      </div>
+        <div id="view-compass" class="space-y-6 hidden">
+            
+            <section class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Closest Target Bearing</h2>
+                
+                <div class="flex items-center justify-between mb-4">
+                    <button id="refresh-gps-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md shadow-md hover:bg-blue-700 transition duration-150 disabled:opacity-50" disabled>
+                        <i class="fas fa-location-arrow mr-2"></i> Get Location & Bearing
+                    </button>
+                    <div id="closest-target-display">
+                        <p class="text-gray-500 italic">Press the button to find your location.</p>
+                    </div>
+                </div>
 
-      <div class="direction-text" id="bearingText">—</div>
+                <div class="border-t pt-4">
+                    <p class="text-sm font-medium text-gray-700 mb-1">Current GPS Status:</p>
+                    <p id="current-location-display" class="text-sm text-gray-600 italic">Awaiting location request...</p>
+                </div>
+            </section>
+            
+            <div class="p-4 border-t border-gray-200 bg-white rounded-lg shadow-md">
+                <h3 class="text-xl font-semibold mb-2 text-gray-800">🎯 Relative Target Map (North is Up)</h3>
+                <p class="text-sm text-gray-600 mb-3">Map shows targets relative to each other. Blue circle is your current position (U).</p>
+                <div id="relative-map-container" class="w-full bg-gray-50 shadow-inner rounded-lg overflow-hidden border border-gray-300">
+                     <p class="text-center p-4 text-gray-500">Press 'Get Location & Bearing' to draw the map.</p>
+                </div>
+            </div>
+            <section class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">External Map Links</h2>
+                <div id="external-map-links">
+                    <p class="text-gray-500 italic">Add targets with coordinates to generate map links.</p>
+                </div>
+            </section>
+        </div>
+    </div>
 
-      <div class="arrow-container">
-        <div class="arrow" id="arrow">↑</div>
-      </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- GLOBAL REFERENCES AND INITIALIZATION ---
+            const targetListEl = document.getElementById('targets-list');
+            const addTargetForm = document.getElementById('add-target-form');
+            const clearAllBtn = document.getElementById('clear-all-btn');
+            const refreshGpsBtn = document.getElementById('refresh-gps-btn');
+            
+            let targets = [];
 
-      <div class="compass-controls">
-        <button class="btn btn-secondary btn-sm" id="btnFirstTarget">⏮️ First</button>
-        <button class="btn btn-secondary btn-sm" id="btnPrevTarget">◀️ Prev</button>
-        <button class="btn btn-primary" id="btnMarkFound">✅ Mark Found</button>
-        <button class="btn btn-secondary btn-sm" id="btnNextTarget">Next ▶️</button>
-        <button class="btn btn-secondary btn-sm" id="btnLastTarget">Last ⏭️</button>
-      </div>
-    </div>
-  </section>
+            // --- LOCAL STORAGE FUNCTIONS ---
 
-  <section id="screen-settings" class="screen hidden">
-    <div class="card">
-      <div class="card-title">Data Management</div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnExport">💾 Export Data</button>
-        <button class="btn btn-secondary" id="btnImport">📂 Import Data</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
-      </div>
-      <div class="row">
-        <button class="btn btn-danger" id="btnClear">🗑️ Clear All Data</button>
-      </div>
-    </div>
-  </section>
-</main>
+            function loadTargets() {
+                const storedTargets = localStorage.getItem('gpsTargets');
+                targets = storedTargets ? JSON.parse(storedTargets) : [];
+                renderTargetsList();
+                updateCompassView();
+            }
 
-<div id="modal" class="modal">
-  <div class="modal-content">
-    <div class="modal-title" id="modalTitle">Title</div>
-    <div id="modalBody"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" id="modalCancel">Cancel</button>
-      <button class="btn btn-primary" id="modalConfirm">Confirm</button>
-    </div>
-  </div>
-</div>
+            function saveTargets() {
+                localStorage.setItem('gpsTargets', JSON.stringify(targets));
+                renderTargetsList();
+                updateCompassView();
+            }
 
-<div id="toast" class="toast">Saved</div>
+            // --- UI AND MESSAGE FUNCTIONS ---
 
-<nav class="bottom-nav">
-  <div class="nav-item active" data-screen="screen-home">
-    <div class="nav-icon">🏠</div>
-    <div>Home</div>
-  </div>
-  <div class="nav-item" data-screen="screen-targets">
-    <div class="nav-icon">📍</div>
-    <div>Targets</div>
-  </div>
-  <div class="nav-item" data-screen="screen-compass">
-    <div class="nav-icon">🧭</div>
-    <div>Compass</div>
-  </div>
-  <div class="nav-item" data-screen="screen-settings">
-    <div class="nav-icon">⚙️</div>
-    <div>Settings</div>
-  </div>
-</nav>
-</div>
+            function showMessage(text, type = 'info') {
+                const container = document.getElementById('message-container');
+                container.innerHTML = `
+                    <div class="p-3 rounded-md ${type === 'error' ? 'bg-red-100 text-red-800 border border-red-400' : 'bg-green-100 text-green-800 border border-green-400'}">
+                        <i class="fas ${type === 'error' ? 'fa-exclamation-triangle' : 'fa-check-circle'} mr-2"></i>
+                        ${text}
+                    </div>
+                `;
+                container.classList.remove('hidden');
+                setTimeout(() => container.classList.add('hidden'), 5000);
+            }
 
-<script src="script.js" defer></script>
+            function renderTargetsList() {
+                targetListEl.innerHTML = '';
+                if (targets.length === 0) {
+                    document.getElementById('no-targets-message').style.display = 'block';
+                    clearAllBtn.style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('no-targets-message').style.display = 'none';
+                clearAllBtn.style.display = 'inline-block';
+
+                targets.forEach((target, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-md border border-gray-200';
+                    item.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${target.description}</p>
+                            <p class="text-sm text-gray-600">${target.coordinates}</p>
+                        </div>
+                        <button data-index="${index}" class="remove-target-btn text-red-500 hover:text-red-700 transition duration-150">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    `;
+                    targetListEl.appendChild(item);
+                });
+            }
+            
+            function updateCompassView() {
+                // Ensure the GPS button is enabled if the browser supports GeoLocation
+                if (navigator.geolocation) {
+                    refreshGpsBtn.disabled = false;
+                }
+                
+                // Update the map links section
+                document.getElementById('external-map-links').innerHTML = createMapLinkHtml(targets);
+                
+                // If there are no targets, clear the bearing display
+                if (targets.length === 0) {
+                    document.getElementById('closest-target-display').innerHTML = `<p class="text-gray-500 italic">No targets with GPS to calculate distance/bearing.</p>`;
+                }
+
+                // Draw the map initially with only targets (no user position yet)
+                drawRelativeMap(targets);
+            }
+
+            // --- TAB SWITCHING LOGIC ---
+            function switchTab(viewId) {
+                document.getElementById('view-targets').classList.add('hidden');
+                document.getElementById('view-compass').classList.add('hidden');
+                document.getElementById(viewId).classList.remove('hidden');
+
+                document.getElementById('tab-targets').classList.remove('bg-blue-600', 'text-white');
+                document.getElementById('tab-targets').classList.add('text-gray-600', 'hover:bg-gray-100');
+                document.getElementById('tab-compass').classList.remove('bg-blue-600', 'text-white');
+                document.getElementById('tab-compass').classList.add('text-gray-600', 'hover:bg-gray-100');
+                
+                if (viewId === 'view-targets') {
+                    document.getElementById('tab-targets').classList.add('bg-blue-600', 'text-white');
+                } else {
+                    document.getElementById('tab-compass').classList.add('bg-blue-600', 'text-white');
+                    // Automatically try to get location when moving to the Compass tab
+                    // Only if we have targets to measure against
+                    if (targets.length > 0) {
+                         findAndDisplayClosestTarget(targets);
+                    }
+                }
+            }
+
+
+            // --- GEOLOCATION HELPER FUNCTIONS ---
+            
+            /** * Calculates distance between two points using the Haversine formula (meters) */
+            function getDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371000; // Radius of Earth in meters
+                const φ1 = lat1 * Math.PI / 180;
+                const φ2 = lat2 * Math.PI / 180;
+                const Δφ = (lat2 - lat1) * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                return R * c; // Distance in meters
+            }
+
+            /** * Calculates bearing (initial direction) from point 1 to point 2 (degrees True North) */
+            function getBearing(lat1, lon1, lat2, lon2) {
+                const φ1 = lat1 * Math.PI / 180;
+                const φ2 = lat2 * Math.PI / 180;
+                const λ1 = lon1 * Math.PI / 180;
+                const λ2 = lon2 * Math.PI / 180;
+
+                const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+                const x = Math.cos(φ1) * Math.sin(φ2) -
+                          Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+                
+                let bearing = Math.atan2(y, x);
+                bearing = bearing * 180 / Math.PI; // Convert to degrees
+                return (bearing + 360) % 360; // Normalize to 0-360 degrees
+            }
+
+            /** * Finds user location and calculates bearing and distance to the closest target.
+             * Displays the results in the modal and draws the map.
+             */
+            function findAndDisplayClosestTarget(targets) {
+                const displayEl = document.getElementById('current-location-display');
+                const targetEl = document.getElementById('closest-target-display');
+                const refreshBtn = document.getElementById('refresh-gps-btn');
+                
+                if (targets.length === 0) {
+                    targetEl.innerHTML = `<p class="text-gray-500 italic">No targets with GPS to calculate distance/bearing.</p>`;
+                    return;
+                }
+
+                // 1. Show loading state
+                displayEl.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Finding your current location...`;
+                refreshBtn.disabled = true;
+
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const userLat = position.coords.latitude;
+                            const userLon = position.coords.longitude;
+                            
+                            displayEl.innerHTML = `Your Coords: <span class="font-semibold text-blue-600">${userLat.toFixed(6)}, ${userLon.toFixed(6)}</span> (Accuracy: ${position.coords.accuracy.toFixed(1)}m)`;
+
+                            // 2. Find the closest target
+                            let closestTarget = null;
+                            let minDistance = Infinity;
+
+                            targets.forEach(target => {
+                                // Safely parse coordinates
+                                const coordsArray = target.coordinates.split(',').map(c => parseFloat(c.trim()));
+                                const targetLat = coordsArray[0];
+                                const targetLon = coordsArray[1];
+
+                                if (!isNaN(targetLat) && !isNaN(targetLon)) {
+                                    const distance = getDistance(userLat, userLon, targetLat, targetLon);
+                                    
+                                    if (distance < minDistance) {
+                                        minDistance = distance;
+                                        closestTarget = target;
+                                    }
+                                }
+                            });
+
+                            // 3. Display closest target info
+                            if (closestTarget) {
+                                const bearing = getBearing(userLat, userLon, 
+                                    parseFloat(closestTarget.coordinates.split(',')[0]), 
+                                    parseFloat(closestTarget.coordinates.split(',')[1])
+                                );
+                                
+                                // Format distance
+                                let distanceText;
+                                if (minDistance > 1000) {
+                                    distanceText = (minDistance / 1000).toFixed(2) + ' km';
+                                } else {
+                                    distanceText = minDistance.toFixed(1) + ' meters';
+                                }
+
+                                targetEl.innerHTML = `
+                                    <h4 class="font-bold text-gray-800">Closest Target: ${closestTarget.description}</h4>
+                                    <p class="text-lg mt-2">
+                                        <strong class="text-blue-600">${distanceText}</strong> away
+                                    </p>
+                                    <p class="text-2xl font-bold text-red-600 mt-1">
+                                        Bearing: ${bearing.toFixed(1)}° True North
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-2">
+                                        Walk towards **${bearing.toFixed(1)} degrees** (clockwise from North) for ${distanceText}.
+                                    </p>
+                                `;
+                            } else {
+                                targetEl.innerHTML = `<p class="text-gray-500 italic">Could not find valid coordinates for any target.</p>`;
+                            }
+                            
+                            // --- DRAW THE RELATIVE MAP ---
+                            drawRelativeMap(targets, position);
+                            // -----------------------------
+
+                            refreshBtn.disabled = false;
+                        },
+                        (error) => {
+                            // Handle errors (permission denied, position unavailable, timeout)
+                            displayEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1 text-red-500"></i> Location Error: ${error.message}`;
+                            targetEl.innerHTML = `<p class="text-red-500 italic">Cannot calculate bearing/distance without your current location.</p>`;
+                            refreshBtn.disabled = false;
+                            showMessage('Failed to get current GPS location.', 'error');
+                            console.error('Geolocation Error on Compass Page:', error);
+                            
+                            // Clear user position from map if error occurs
+                            drawRelativeMap(targets, null); 
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0
+                        }
+                    );
+                } else {
+                    displayEl.innerHTML = `<i class="fas fa-times-circle mr-1 text-red-500"></i> Geolocation Not Supported.`;
+                    refreshBtn.disabled = true;
+                    targetEl.innerHTML = `<p class="text-red-500 italic">This device does not support geolocation needed for this feature.</p>`;
+                }
+            }
+
+
+            // --- MAP DRAWING LOGIC (The Relative Compass/Map) ---
+
+            /** * Draws a relative map showing targets and user location.
+             * The map is North (up) oriented.
+             */
+            function drawRelativeMap(targets, userPosition = null) {
+                const mapContainer = document.getElementById('relative-map-container');
+                const mapWidth = mapContainer.clientWidth;
+                const mapHeight = mapContainer.clientHeight;
+                mapContainer.innerHTML = ''; // Clear previous pins
+
+                let allCoords = [];
+                
+                // 1. Collect all valid target coordinates
+                targets.forEach(target => {
+                    const parts = target.coordinates.split(',').map(c => parseFloat(c.trim()));
+                    const lat = parts[0];
+                    const lon = parts[1];
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        allCoords.push({ type: 'target', lat, lon, description: target.description });
+                    }
+                });
+
+                // 2. Add user location to the list if available
+                if (userPosition) {
+                    allCoords.push({ 
+                        type: 'user', 
+                        lat: userPosition.coords.latitude, 
+                        lon: userPosition.coords.longitude 
+                    });
+                }
+                
+                if (allCoords.length === 0) {
+                    mapContainer.innerHTML = '<p class="text-center p-4 text-gray-500">No valid coordinates found for mapping.</p>';
+                    return;
+                }
+                
+                // If only one pin (user or target), center it
+                if (allCoords.length === 1) {
+                    const pin = document.createElement('div');
+                    const coord = allCoords[0];
+                    
+                    pin.style.top = `${mapHeight / 2}px`;
+                    pin.style.left = `${mapWidth / 2}px`;
+
+                    if (coord.type === 'user') {
+                        pin.className = 'map-pin user-pin';
+                        pin.title = 'You are here';
+                        pin.innerHTML = 'U';
+                    } else {
+                        pin.className = 'map-pin target-pin';
+                        pin.title = coord.description;
+                    }
+                    mapContainer.appendChild(pin);
+                    return;
+                }
+
+
+                // 3. Determine the min/max coordinate bounds
+                const allLats = allCoords.map(c => c.lat);
+                const allLons = allCoords.map(c => c.lon);
+                const minLat = Math.min(...allLats);
+                const maxLat = Math.max(...allLats);
+                const minLon = Math.min(...allLons);
+                const maxLon = Math.max(...allLons);
+
+                // Add a 10% buffer to the bounds
+                const latBuffer = (maxLat - minLat) * 0.1 || 0.0001;
+                const lonBuffer = (maxLon - minLon) * 0.1 || 0.0001;
+                
+                const viewMinLat = minLat - latBuffer;
+                const viewMaxLat = maxLat + latBuffer;
+                const viewMinLon = minLon - lonBuffer;
+                const viewMaxLon = maxLon + lonBuffer;
+
+                // 4. Set up the scaling functions
+                const latRange = viewMaxLat - viewMinLat;
+                const lonRange = viewMaxLon - viewMinLon;
+                
+                // Safety check for range (should not happen with buffer, but good practice)
+                if (latRange === 0 || lonRange === 0) {
+                     mapContainer.innerHTML = '<p class="text-center p-4 text-gray-500">Cannot draw map: All points are identical.</p>';
+                     return;
+                }
+
+                // The scaling function: maps a coordinate value to a pixel value
+                function scale(coordValue, minCoord, maxCoord, minPixel, maxPixel) {
+                    const range = maxCoord - minCoord;
+                    const percent = (coordValue - minCoord) / range;
+                    return minPixel + percent * (maxPixel - minPixel);
+                }
+
+                // 5. Draw the pins
+                allCoords.forEach(coord => {
+                    // Y-axis: MaxLat (North/Up) maps to 0px (Top). MinLat (South/Down) maps to mapHeight (Bottom).
+                    const top = scale(coord.lat, viewMinLat, viewMaxLat, mapHeight, 0); 
+                    
+                    // X-axis: MinLon (West/Left) maps to 0px (Left). MaxLon (East/Right) maps to mapWidth (Right).
+                    const left = scale(coord.lon, viewMinLon, viewMaxLon, 0, mapWidth);
+                    
+                    // Create the pin element
+                    const pin = document.createElement('div');
+                    pin.style.top = `${top}px`;
+                    pin.style.left = `${left}px`;
+
+                    if (coord.type === 'user') {
+                        pin.className = 'map-pin user-pin';
+                        pin.title = 'You are here';
+                        pin.innerHTML = 'U';
+                    } else {
+                        pin.className = 'map-pin target-pin';
+                        pin.title = coord.description;
+                    }
+                    
+                    mapContainer.appendChild(pin);
+                });
+            }
+
+            /** Creates HTML for map links using the coordinates of all targets. */
+            function createMapLinkHtml(targets) {
+                if (targets.length === 0) return '';
+                
+                // Limit to the first 10 targets for reliable URL construction
+                const mapTargets = targets.slice(0, 10);
+                
+                // 1. Center the map on the first target's coordinates
+                const parts = mapTargets[0].coordinates.split(',');
+                const centerLat = parts[0].trim();
+                const centerLon = parts[1].trim();
+
+                // --- OPENSTREETMAP CONSTRUCTION (SIMPLE & RELIABLE) ---
+                // Format: #map=Zoom/Lat/Lon
+                const osmUrl = `https://www.openstreetmap.org/?mlat=${centerLat}&mlon=${centerLon}#map=16/${centerLat}/${centerLon}`;
+
+
+                // Simple output for external map links
+                return `
+                    <div class="space-y-3">
+                        <p class="text-sm text-gray-500 italic">Links center on the first target in your list.</p>
+                        <a href="${osmUrl}" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">
+                            <i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)
+                        </a>
+                    </div>
+                `;
+            }
+
+
+            // --- EVENT LISTENERS ---
+
+            // Add Target Form Submission
+            addTargetForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const description = document.getElementById('target-description').value.trim();
+                const coordinates = document.getElementById('target-coordinates').value.trim();
+
+                targets.push({ description, coordinates });
+                saveTargets();
+                
+                addTargetForm.reset();
+                showMessage(`Target "${description}" added successfully!`);
+            });
+
+            // Remove Target Button
+            targetListEl.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-target-btn') || e.target.closest('.remove-target-btn')) {
+                    const button = e.target.closest('.remove-target-btn');
+                    const index = parseInt(button.dataset.index);
+                    const removedName = targets[index].description;
+                    
+                    targets.splice(index, 1);
+                    saveTargets();
+                    showMessage(`Target "${removedName}" removed.`);
+                }
+            });
+
+            // Clear All Targets Button
+            clearAllBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear ALL saved targets? This cannot be undone.')) {
+                    targets = [];
+                    saveTargets();
+                    showMessage('All targets cleared successfully.', 'error');
+                }
+            });
+
+            // GPS Refresh Button
+            refreshGpsBtn.addEventListener('click', () => {
+                findAndDisplayClosestTarget(targets);
+            });
+
+            // Tab Switching Listeners
+            document.getElementById('tab-targets').addEventListener('click', () => switchTab('view-targets'));
+            document.getElementById('tab-compass').addEventListener('click', () => switchTab('view-compass'));
+
+            // Initial Load
+            loadTargets();
+            switchTab('view-targets'); // Start on the targets view
+        });
+    </script>
 </body>
 </html>
