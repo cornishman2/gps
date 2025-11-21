@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rectangle - Metal Detecting Survey Log</title>
+    <title>Dots - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -284,6 +284,9 @@
         function toDeg(radians) {
             return radians * (180 / Math.PI);
         }
+        
+        /** Clamps a number between a minimum and maximum value. */
+        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
 
         // --- END GEOGRAPHY HELPER FUNCTIONS ---
 
@@ -830,7 +833,7 @@
                         break;
                     case 'delete':
                         surveys = surveys.filter(s => s.id !== id);
-                        showMessage(`Survey '${name}' permanently deleted.`, 'error');
+                        showMessage(`Survey '${name}' permanently deleted. 'error`);
                         break;
                 }
                 survey.dateLastChanged = now;
@@ -1160,9 +1163,7 @@
             `;
         }
         
-        /** * Renders a static plot of targets based on relative coordinates.
-         * This replaces the complex external map and bearing helper functions.
-         */
+        /** * Renders a static plot of targets based on relative coordinates. */
         function renderTargetPlot(targets) {
             if (targets.length === 0) {
                 return `
@@ -1214,15 +1215,19 @@
             // 2. Normalize and generate pins HTML
             const pinsHtml = parsedCoords.map(t => {
                 // Calculate position percentages (0% to 100%)
-                // X-axis (Longitude): East is right, so (lon - minLon) / lonRange
-                const xPercent = ((t.lon - minLon) / lonRange) * 100;
-                // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. 
-                // So use (maxLat - lat) / latRange to invert the Y-axis.
-                const yPercent = ((maxLat - t.lat) / latRange) * 100;
+                
+                // X-axis (Longitude): East is right, (lon - minLon) / lonRange
+                const xRaw = ((t.lon - minLon) / lonRange) * 100;
+                // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. Invert Y-axis: (maxLat - lat) / latRange
+                const yRaw = ((maxLat - t.lat) / latRange) * 100;
+                
+                // FIX: Clamp values to ensure they are within the 0-100% boundary
+                const xPercent = clamp(xRaw, 0, 100);
+                const yPercent = clamp(yRaw, 0, 100);
 
                 let color = 'bg-primary'; // Default for Relic/Unidentified
                 if (t.type === 'Coin') color = 'bg-yellow-500';
-                if (t.type.includes('Junk')) color = 'bg-gray-500';
+                if (t.type.includes('Junk')) color = 'bg-gray-700';
                 
                 // Add a primary color border for good visibility
                 return `
