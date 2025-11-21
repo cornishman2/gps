@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live view - Metal Detecting Survey Log</title>
+    <title>Confidence - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -165,6 +165,8 @@
                         </label>
                         <input type="text" id="target-coords" name="targetCoords" placeholder="Requesting location..." 
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                        <input type="hidden" id="target-accuracy" name="targetAccuracy">
+                        <p id="gps-accuracy-display" class="text-xs text-gray-500 mt-1 hidden">Accuracy (Radius): <span class="font-semibold text-red-600">N/A</span></p>
                     </div>
                 </div>
 
@@ -223,6 +225,11 @@
                         <input type="text" id="edit-target-coords" name="targetCoords" placeholder="e.g., 50.2568, -5.2345" 
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
+                    <div class="mb-4 col-span-2">
+                        <label for="edit-target-accuracy" class="block text-sm font-medium text-gray-700">GPS Accuracy (m)</label>
+                        <input type="text" id="edit-target-accuracy" name="targetAccuracy" placeholder="e.g., 5.0" 
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
                 </div>
 
                 <div class="flex justify-end space-x-3 mt-6">
@@ -276,6 +283,7 @@
         // --- NEW REAL-TIME LOCATION STATE ---
         let autoRefreshIntervalId = null; 
         let currentUserCoords = null; // Stores {lat: number, lon: number}
+        let currentUserAccuracy = null; // Stores accuracy in meters
 
         // --- GEOGRAPHY HELPER FUNCTIONS ---
 
@@ -291,6 +299,15 @@
         
         /** Clamps a number between a minimum and maximum value. */
         const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
+        /** Calculates the diameter for the confidence circle (Accuracy * 2). */
+        function getCircleDiameter(accuracyInMeters) {
+            if (typeof accuracyInMeters === 'number' && accuracyInMeters > 0) {
+                // Diameter is twice the radius (accuracy)
+                return (accuracyInMeters * 2).toFixed(1); 
+            }
+            return 'N/A';
+        }
 
         // --- END GEOGRAPHY HELPER FUNCTIONS ---
 
@@ -340,10 +357,10 @@
                             creationDate: Date.now(),
                             dateLastChanged: Date.now(),
                             targets: [
-                                // Sample targets with valid coordinates for mapping
-                                { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.256800, -5.234500", user: userProfile.name, detector: userProfile.detector },
-                                { id: generateId(), description: "Lead Button", vdi: "30", depth: "6in", type: "Relic", status: "Signal Detected", time: Date.now() - 100000, coordinates: "50.257000, -5.234100", user: userProfile.name, detector: userProfile.detector },
-                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.256700, -5.234800", user: userProfile.name, detector: userProfile.detector }
+                                // Sample targets with valid coordinates and accuracy for mapping
+                                { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.256800, -5.234500", accuracy: "5.5", user: userProfile.name, detector: userProfile.detector },
+                                { id: generateId(), description: "Lead Button", vdi: "30", depth: "6in", type: "Relic", status: "Signal Detected", time: Date.now() - 100000, coordinates: "50.257000, -5.234100", accuracy: "2.1", user: userProfile.name, detector: userProfile.detector },
+                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.256700, -5.234800", accuracy: "10.0", user: userProfile.name, detector: userProfile.detector }
                             ]
                         }
                     ];
@@ -445,15 +462,20 @@
 
         // --- GPS GEOLOCATION FUNCTIONS ---
         
-        /** Safely requests and handles GPS coordinates for a single log entry (used in new target modal). */
+        /** Safely requests and handles GPS coordinates and accuracy for a single log entry. */
         function getCurrentPosition() {
             const coordsInput = document.getElementById('target-coords');
+            const accuracyInput = document.getElementById('target-accuracy'); 
+            const accuracyDisplay = document.getElementById('gps-accuracy-display'); 
             const loadingIndicator = document.getElementById('gps-loading-indicator');
             
             // 1. Reset field and show loading
             coordsInput.value = '';
             coordsInput.placeholder = 'Requesting location...';
             coordsInput.disabled = true; // Prevent manual typing while loading
+            accuracyInput.value = ''; 
+            document.querySelector('#gps-accuracy-display .font-semibold').textContent = 'N/A';
+            accuracyDisplay.classList.add('hidden'); 
             loadingIndicator.classList.remove('hidden');
 
             if (navigator.geolocation) {
@@ -461,11 +483,18 @@
                     (position) => {
                         const lat = position.coords.latitude.toFixed(6);
                         const lon = position.coords.longitude.toFixed(6);
+                        const accuracy = position.coords.accuracy; // Capture accuracy in meters
                         const coordinates = `${lat}, ${lon}`;
                         
                         coordsInput.value = coordinates;
                         coordsInput.placeholder = 'GPS Found';
                         coordsInput.disabled = false;
+                        
+                        // NEW: Set accuracy values
+                        accuracyInput.value = accuracy.toFixed(2);
+                        document.querySelector('#gps-accuracy-display .font-semibold').textContent = `${accuracy.toFixed(1)} meters`;
+                        accuracyDisplay.classList.remove('hidden');
+                        
                         loadingIndicator.classList.add('hidden');
                         showMessage('GPS location found and filled.', 'info');
                     },
@@ -474,6 +503,12 @@
                         coordsInput.value = '';
                         coordsInput.placeholder = 'No GPS logged (tap to enter manually)';
                         coordsInput.disabled = false;
+                        
+                        // NEW: Clear accuracy info on error
+                        accuracyInput.value = 'N/A';
+                        document.querySelector('#gps-accuracy-display .font-semibold').textContent = 'N/A';
+                        accuracyDisplay.classList.add('hidden');
+
                         loadingIndicator.classList.add('hidden');
 
                         let errorMessage = 'GPS error: Unable to retrieve location.';
@@ -501,7 +536,7 @@
             }
         }
 
-        /** Requests and updates the global currentUserCoords state (used for map refresh). */
+        /** Requests and updates the global currentUserCoords and currentUserAccuracy state. */
         function getCurrentUserPosition() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -510,10 +545,12 @@
                             lat: position.coords.latitude,
                             lon: position.coords.longitude
                         };
+                        currentUserAccuracy = position.coords.accuracy; // Store accuracy in meters
                     },
                     (error) => {
                         // On error, clear the coordinates so the user pin disappears
                         currentUserCoords = null;
+                        currentUserAccuracy = null;
                         console.error('Real-time Geolocation Error:', error);
                     },
                     {
@@ -524,6 +561,7 @@
                 );
             } else {
                 currentUserCoords = null;
+                currentUserAccuracy = null;
             }
         }
 
@@ -698,6 +736,7 @@
             const depth = form['targetDepth'].value.trim() || 'Unknown';
             const type = form['targetType'].value;
             const coords = form['targetCoords'].value.trim() || 'No GPS logged';
+            const accuracy = form['targetAccuracy'].value.trim() || 'N/A'; // NEW: Get accuracy
             const now = Date.now();
 
             if (!description) {
@@ -715,6 +754,7 @@
                 status: 'Signal Detected', // Initial status
                 time: now,
                 coordinates: coords,
+                accuracy: accuracy,       // NEW: Log Accuracy
                 user: userProfile.name,      // Pulled from userProfile state
                 detector: userProfile.detector // Pulled from userProfile state
             };
@@ -751,6 +791,8 @@
             document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
             document.getElementById('edit-target-type').value = target.type;
             document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
+            // NEW: Populate accuracy field
+            document.getElementById('edit-target-accuracy').value = target.accuracy === 'N/A' ? '' : target.accuracy;
 
 
             // 2. Display the modal
@@ -780,6 +822,7 @@
             const newDepth = form['targetDepth'].value.trim() || 'Unknown';
             const newType = form['targetType'].value;
             const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
+            const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A'; // NEW: Get accuracy
 
             const survey = surveys.find(s => s.id === surveyId);
             const target = survey ? survey.targets.find(t => t.id === targetId) : null;
@@ -790,6 +833,7 @@
                 target.depth = newDepth;
                 target.type = newType;
                 target.coordinates = newCoords;
+                target.accuracy = newAccuracy; // NEW: Update accuracy
                 
                 survey.dateLastChanged = Date.now();
 
@@ -1204,9 +1248,13 @@
                             <strong class="text-gray-500">Depth:</strong>
                             <span class="text-gray-800">${target.depth}</span>
                         </div>
-                        <div class="sm:col-span-2">
-                            <strong class="text-gray-500">Location:</strong>
-                            <span class="text-gray-800 break-all">${target.coordinates}</span>
+                        <div>
+                            <strong class="text-gray-500">Accuracy:</strong>
+                            <span class="text-gray-800">${target.accuracy && target.accuracy !== 'N/A' ? target.accuracy + 'm' : 'N/A'}</span>
+                        </div>
+                        <div>
+                            <strong class="text-gray-500">Coords:</strong>
+                            <span class="text-gray-800 break-all">${target.coordinates.split(',')[0] || target.coordinates}...</span>
                         </div>
                         <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
                             Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
@@ -1228,6 +1276,7 @@
                     description: t.description, 
                     type: t.type, 
                     vdi: t.vdi,
+                    accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
                     isUser: false 
                 };
             }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
@@ -1242,6 +1291,7 @@
                     description: 'Your Current Location', 
                     type: 'User', 
                     vdi: 'N/A',
+                    accuracy: currentUserAccuracy || 0,
                     isUser: true 
                 });
             }
@@ -1315,7 +1365,7 @@
                     labelHtml = `
                         <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
                               style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                            ${t.description}
+                            ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
                         </span>
                     `;
                 }
@@ -1324,7 +1374,7 @@
                     <div 
                         class="absolute" 
                         style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: ${t.isUser ? 20 : 10};"
-                        title="${t.description} (VDI: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)}"
+                        title="${t.description} (VDI: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
                     >
                         ${pinHtml}
                         
@@ -1333,7 +1383,8 @@
                 `;
             }).join('');
 
-            // 3. Return the container HTML
+            // 3. Return the container HTML, including live accuracy display
+            const circleDiameter = getCircleDiameter(currentUserAccuracy);
             return `
                 <div class="relative w-full aspect-square border-4 border-gray-400 bg-gray-200 rounded-lg overflow-hidden my-4">
                     ${pinsHtml}
@@ -1344,7 +1395,13 @@
                         <li><span class="font-bold">North</span> is towards the top of the box.</li>
                         <li><span class="font-bold">East</span> is towards the right of the box.</li>
                         <li>Total Targets Plotted: ${parsedCoords.length}</li>
-                        ${currentUserCoords ? `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>` : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`}
+                        ${currentUserCoords ? 
+                            `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
+                             <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
+                             <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${circleDiameter}m</li>
+                            ` 
+                            : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
+                        }
                     </ul>
                 </div>
             `;
