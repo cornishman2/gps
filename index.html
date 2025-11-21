@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map - Metal Detecting Survey Log</title>
+    <title>Rectangle - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -283,45 +283,6 @@
         /** Converts radians to degrees. */
         function toDeg(radians) {
             return radians * (180 / Math.PI);
-        }
-
-        /** * Calculates the distance between two GPS points using the Haversine formula.
-         * Returns distance in meters.
-         */
-        function getDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Earth's radius in meters
-            const phi1 = toRad(lat1);
-            const phi2 = toRad(lat2);
-            const deltaPhi = toRad(lat2 - lat1);
-            const deltaLambda = toRad(lon2 - lon1);
-
-            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-                      Math.cos(phi1) * Math.cos(phi2) *
-                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-            return R * c; // Distance in meters
-        }
-
-        /**
-         * Calculates the initial bearing (in degrees) from point 1 to point 2.
-         * Returns bearing in degrees (0 to 360).
-         */
-        function getBearing(lat1, lon1, lat2, lon2) {
-            const phi1 = toRad(lat1);
-            const phi2 = toRad(lat2);
-            const lambda1 = toRad(lon1);
-            const lambda2 = toRad(lon2);
-            const deltaLambda = lambda2 - lambda1;
-
-            const y = Math.sin(deltaLambda) * Math.cos(phi2);
-            const x = Math.cos(phi1) * Math.sin(phi2) -
-                      Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
-            
-            let bearing = toDeg(Math.atan2(y, x));
-            
-            // Convert to 0-360 degrees
-            return (bearing + 360) % 360; 
         }
 
         // --- END GEOGRAPHY HELPER FUNCTIONS ---
@@ -744,10 +705,8 @@
             const form = document.getElementById('edit-target-form');
             form.removeEventListener('submit', handleEditTargetSubmit); 
             form.addEventListener('submit', handleEditTargetSubmit); 
-            
-            showMessage(`Editing target: ${target.description}`, 'info');
         }
-        
+
         /** Closes the Edit Target Modal. */
         function closeEditTargetModal() {
             document.getElementById('edit-target-modal').style.display = 'none';
@@ -760,30 +719,23 @@
             const form = event.target;
             const targetId = form['targetId'].value;
             const surveyId = form['surveyId'].value;
-            
             const newDescription = form['targetDescription'].value.trim();
-            const newVdi = form['targetVDI'].value.trim() || 'N/A';
+            const newVDI = form['targetVDI'].value.trim() || 'N/A';
             const newDepth = form['targetDepth'].value.trim() || 'Unknown';
             const newType = form['targetType'].value;
             const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
 
-            if (!newDescription) {
-                showMessage('A description is required for the target.', 'error');
-                return;
-            }
-
             const survey = surveys.find(s => s.id === surveyId);
-            const targetIndex = survey.targets.findIndex(t => t.id === targetId);
+            const target = survey ? survey.targets.find(t => t.id === targetId) : null;
 
-            if (survey && targetIndex !== -1) {
-                // Update the target object in the array
-                survey.targets[targetIndex].description = newDescription;
-                survey.targets[targetIndex].vdi = newVdi;
-                survey.targets[targetIndex].depth = newDepth;
-                survey.targets[targetIndex].type = newType;
-                survey.targets[targetIndex].coordinates = newCoords;
+            if (target && survey) {
+                target.description = newDescription;
+                target.vdi = newVDI;
+                target.depth = newDepth;
+                target.type = newType;
+                target.coordinates = newCoords;
                 
-                survey.dateLastChanged = Date.now(); // Update survey's last modified time
+                survey.dateLastChanged = Date.now();
 
                 // Save and re-render
                 saveSurveysToLocalStorage();
@@ -791,26 +743,22 @@
                 showMessage(`Target '${newDescription}' updated successfully!`, 'success');
                 render();
             } else {
-                 showMessage('Error: Target or Survey not found during submission.', 'error');
+                showMessage('Error: Target or Survey not found during submission.', 'error');
             }
         }
-
 
         /** Shows the Edit Profile Modal and loads current data. */
         function showEditProfileModal() {
             const modal = document.getElementById('edit-profile-modal');
-            
             // Pre-fill the form with current profile data
             document.getElementById('profile-name').value = userProfile.name;
             document.getElementById('profile-detector').value = userProfile.detector;
-
             modal.style.display = 'block';
 
             // Attach the submit listener
             const form = document.getElementById('edit-profile-form');
             form.removeEventListener('submit', handleEditProfileSubmit); 
             form.addEventListener('submit', handleEditProfileSubmit); 
-            
             showMessage("Edit Profile modal opened. Please enter your name and detector and click 'Save Changes'.", 'info');
         }
 
@@ -840,11 +788,9 @@
             saveSurveysToLocalStorage();
             closeEditProfileModal();
             showMessage(`Profile updated to "${newName}" using "${newDetector}" successfully!`, 'success');
-            
             // Re-render the current page (Settings) to reflect the new profile data
             render();
         }
-
 
         // --- SURVEY & TARGET LOGIC (Action Handlers) ---
 
@@ -854,46 +800,49 @@
             const action = button.dataset.action;
             const name = button.dataset.name;
             const survey = surveys.find(s => s.id === id);
-
             if (!survey) return;
 
             const executeAction = () => {
+                const now = Date.now();
                 switch (action) {
                     case 'open':
-                        // Close any currently open survey
+                        // Close any currently open survey first
                         surveys.forEach(s => {
-                            if (s.status === 'Open') s.status = 'Active';
+                            if (s.status === 'Open') {
+                                s.status = 'Active';
+                                s.dateLastChanged = now;
+                            }
                         });
                         survey.status = 'Open';
                         showMessage(`Survey '${name}' is now OPEN.`, 'success');
                         break;
                     case 'close':
                         survey.status = 'Active';
-                        showMessage(`Survey '${name}' is now Closed (Active).`, 'warning');
+                        showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
                         break;
                     case 'archive':
                         survey.status = 'Archived';
-                        showMessage(`Survey '${name}' has been Archived.`, 'warning');
+                        showMessage(`Survey '${name}' has been Archived.`, 'info');
                         break;
                     case 'restore':
                         survey.status = 'Active';
-                        showMessage(`Survey '${name}' restored to Active status.`, 'success');
+                        showMessage(`Survey '${name}' Restored to Active.`, 'success');
                         break;
                     case 'delete':
-                        // Remove from the array
                         surveys = surveys.filter(s => s.id !== id);
                         showMessage(`Survey '${name}' permanently deleted.`, 'error');
                         break;
                 }
-                survey.dateLastChanged = Date.now();
+                survey.dateLastChanged = now;
                 saveSurveysToLocalStorage();
                 render();
             };
 
+            // Use confirmation modal for irreversible or significant actions
             if (action === 'delete') {
                 showConfirmationModal(
-                    `Confirm Deletion: ${name}`,
-                    `Are you sure you want to PERMANENTLY delete the survey **${name}** and all its ${survey.targets.length} targets? This cannot be undone.`,
+                    `Confirm Delete: ${name}`,
+                    `Are you sure you want to permanently delete the survey **${name}** and all its targets? This action cannot be undone.`,
                     executeAction
                 );
             } else if (action === 'archive') {
@@ -913,7 +862,6 @@
             const targetId = element.dataset.id;
             const surveyId = element.dataset.surveyId;
             const survey = surveys.find(s => s.id === surveyId);
-
             if (!survey) return;
             const target = survey.targets.find(t => t.id === targetId);
             if (!target) return;
@@ -952,7 +900,6 @@
             }
         }
 
-
         // --- PAGE RENDER FUNCTIONS ---
 
         /** Renders the content for the Home page. */
@@ -973,34 +920,18 @@
                     <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
 
                     <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
-                        <h3 class="text-lg font-bold text-gray-800 flex items-center mb-2">
-                            <i class="fas fa-user-circle text-xl mr-2 text-yellow-500"></i> Active Detectorist Profile
+                        <h3 class="text-xl font-bold text-yellow-700 mb-2">
+                            ${openSurvey ? openSurvey.name : 'No Open Survey'}
                         </h3>
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <strong class="text-gray-500">Name:</strong> 
-                                <span class="font-semibold text-gray-800">${userProfile.name}</span>
-                            </div>
-                            <div>
-                                <strong class="text-gray-500">Detector:</strong> 
-                                <span class="font-semibold text-gray-800">${userProfile.detector}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-card p-4 rounded-xl shadow-lg mb-6 border border-primary/20">
-                        <h3 class="text-xl font-bold text-primary mb-3 flex items-center">
-                            <i class="fas fa-layer-group mr-2"></i> Current OPEN Survey
-                        </h3>
-                        ${openSurvey 
-                            ? renderSurveyCard(openSurvey, true)
-                            : `<p class="text-gray-600 italic">No survey is currently open. Open an active survey below to start logging targets.</p>`
+                        ${openSurvey ? 
+                            `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${openSurvey.targets.length} targets logged)</p>
+                             ${renderSurveyCard(openSurvey, true)}` 
+                            : 
+                            '<p class="text-gray-600">You must open or create a survey to log new targets.</p>'
                         }
                     </div>
 
-                    <button id="new-survey-btn" 
-                        class="w-full text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 flex items-center justify-center mb-6"
-                        style="background-color: rgb(var(--color-secondary));">
+                    <button id="new-survey-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
                         <i class="fas fa-plus-circle mr-2"></i> Create New Survey
                     </button>
 
@@ -1021,7 +952,6 @@
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
             let statusBadge = '';
-
             // Get the secondary color variable for inline styles
             const secondaryColor = 'rgb(var(--color-secondary))';
 
@@ -1039,101 +969,167 @@
                     // 'Open' button uses the secondary (green) color via inline style
                     actions = `
                         <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}" style="background-color: ${secondaryColor};">Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
                 case 'Archived':
                     statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
-                    // 'Restore' button uses the secondary (green) color via inline style
                     actions = `
-                        <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}" style="background-color: ${secondaryColor};">Restore to Active</button>
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
+                        <button class="survey-action-btn bg-blue-500 hover:bg-blue-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="restore" data-name="${survey.name}">Restore</button>
+                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
                     `;
                     break;
             }
 
             return `
-                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-green-500' : 'border-primary'}">
+                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-yellow-500' : 'border-primary'}">
                     <div class="flex justify-between items-start mb-2">
-                        <h3 class="text-lg font-bold text-gray-800">${statusBadge} ${survey.name}</h3>
-                        <div class="text-right text-sm text-gray-500">
-                            <p>Created: ${formatDate(survey.creationDate)}</p>
-                            <p>Updated: ${formatDate(survey.dateLastChanged)}</p>
+                        <h4 class="text-lg font-bold text-gray-800">${statusBadge}${survey.name}</h4>
+                        <div class="flex space-x-2">
+                            ${actions}
                         </div>
                     </div>
-                    <p class="text-sm text-gray-600 mb-3">${survey.description}</p>
-                    <p class="text-sm font-semibold text-gray-700">Targets Logged: ${survey.targets ? survey.targets.length : 0}</p>
-                    
-                    <div class="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
-                        ${actions}
+                    <p class="text-sm text-gray-600 mb-2">${survey.description}</p>
+                    <div class="flex justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 mt-2">
+                        <span>Created: ${formatDate(survey.creationDate)}</span>
+                        <span>Targets: ${survey.targets.length}</span>
+                        <span>Last Change: ${formatDate(survey.dateLastChanged)}</span>
                     </div>
                 </div>
             `;
         }
-        
-        /** Renders a single target card with status and actions. */
-        function renderTargetCard(target, surveyId) {
-            // Define status styles
-            let statusClass = 'bg-gray-100 text-gray-800';
-            let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
 
-            switch (target.status) {
-                case 'Hole Dug':
-                    statusClass = 'bg-yellow-100 text-yellow-800';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
+        /** Renders the content for the Targets page. */
+        function renderTargetsPage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+
+            if (!openSurvey) {
+                return `
+                    <div class="p-4">
+                        <h2 class="text-3xl font-bold text-primary mb-6">Survey Targets</h2>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+                            <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
+                            <p class="text-gray-700">Please open a survey on the **Home** page to view or log targets.</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const targets = openSurvey.targets;
+
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets: ${openSurvey.name}</h2>
+                    
+                    <button id="add-target-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
+                        <i class="fas fa-crosshairs mr-2"></i> Log New Target
+                    </button>
+
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Target Log (${targets.length})</h3>
+                    <div id="targets-list" class="space-y-4">
+                        ${targets.length === 0 ? 
+                            '<p class="text-gray-500 italic p-4 bg-white rounded-xl shadow-lg">No targets logged in this survey yet.</p>' : 
+                            targets.map(t => renderTargetCard(t, openSurvey.id)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        /** Renders a single target card. */
+        function renderTargetCard(target, surveyId) {
+            let typeColor = 'bg-primary';
+            let typeIcon = 'fas fa-gem';
+
+            switch (target.type) {
+                case 'Coin':
+                    typeColor = 'bg-yellow-500';
+                    typeIcon = 'fas fa-coins';
                     break;
-                case 'Hole Refilled':
-                    statusClass = 'bg-secondary/10 text-secondary';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3m-3 3l-6 6"></path></svg>`;
+                case 'Relic':
+                    typeColor = 'bg-red-500';
+                    typeIcon = 'fas fa-shield-alt';
                     break;
-                case 'Signal Ignored':
-                    statusClass = 'bg-red-100 text-red-800';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                case 'Jewelry':
+                    typeColor = 'bg-pink-500';
+                    typeIcon = 'fas fa-ring';
                     break;
-                case 'Signal Detected':
-                default:
-                    statusClass = 'bg-blue-100 text-blue-800';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2-3-.895-3-2 1.343-2 3-2zM12 20s-7-12-7-15a7 7 0 0114 0c0 3-7 15-7 15z"></path></svg>`;
+                case 'Modern Junk':
+                    typeColor = 'bg-gray-500';
+                    typeIcon = 'fas fa-trash';
+                    break;
+                case 'Iron Junk':
+                    typeColor = 'bg-gray-700';
+                    typeIcon = 'fas fa-magnet';
+                    break;
+                case 'Unidentified':
+                    typeColor = 'bg-purple-500';
+                    typeIcon = 'fas fa-question';
                     break;
             }
 
-            const typeBadgeClass = target.type.toLowerCase().includes('junk') ? 'bg-red-200 text-red-900' : 'bg-primary/10 text-primary';
-            
-            // Status Action Dropdown
-            const statusOptions = ['Signal Detected', 'Hole Dug', 'Hole Refilled', 'Signal Ignored'];
-            const actionDropdown = statusOptions.filter(s => s !== target.status).map(status => `
-                <li>
-                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="${status}" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                        Set to ${status}
-                    </a>
-                </li>
-            `).join('');
+            let statusClass = 'bg-green-100 text-green-800';
+            let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+            let actionDropdown = '';
+
+            switch (target.status) {
+                case 'Signal Detected':
+                    statusClass = 'bg-green-100 text-green-800';
+                    actionDropdown = `
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                    `;
+                    break;
+                case 'Hole Dug':
+                    statusClass = 'bg-yellow-100 text-yellow-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
+                    actionDropdown = `
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                    `;
+                    break;
+                case 'Hole Refilled':
+                    statusClass = 'bg-secondary/10 text-secondary';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3 6-6"></path></svg>`;
+                    actionDropdown = `
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                    `;
+                    break;
+                case 'Signal Ignored':
+                    statusClass = 'bg-gray-100 text-gray-800';
+                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                    actionDropdown = `
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                    `;
+                    break;
+            }
 
             return `
-                <div class="bg-card p-4 rounded-xl shadow-md border-l-4 border-gray-200">
+                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4" style="border-left-color: ${typeColor};">
                     <div class="flex justify-between items-start mb-2">
-                        <div class="flex flex-col">
-                            <h4 class="text-xl font-bold text-gray-800">${target.description}</h4>
-                            <span class="${typeBadgeClass} text-xs font-semibold px-2.5 py-0.5 rounded">${target.type}</span>
-                        </div>
+                        <h4 class="text-xl font-bold text-gray-800 flex items-center">
+                            <i class="${typeIcon} mr-2 text-lg" style="color: ${typeColor};"></i>
+                            ${target.description}
+                            <span class="ml-3 text-sm text-white font-semibold px-2 py-0.5 rounded-full" style="background-color: ${typeColor};">${target.type}</span>
+                        </h4>
                         
-                        <div class="relative inline-block text-left group">
-                            <button id="dropdownMenuButton-${target.id}" class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary" aria-expanded="true" aria-haspopup="true">
-                                Actions
-                                <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        <div class="relative inline-block text-left target-dropdown-container">
+                            <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-primary" id="dropdownMenuButton-${target.id}" aria-expanded="true" aria-haspopup="true" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                                <i class="fas fa-ellipsis-v"></i>
                             </button>
                             
-                            <div class="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block z-10">
+                            <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-10">
                                 <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownMenuButton-${target.id}">
                                     ${actionDropdown}
                                     <div class="border-t border-gray-100"></div>
-                                    <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                        Edit Details
-                                    </a>
-                                    <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50">
-                                        Delete Target
-                                    </a>
+                                    <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Edit Details </a>
+                                    <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"> Delete Target </a>
                                 </div>
                             </div>
                         </div>
@@ -1145,13 +1141,16 @@
 
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t border-gray-100">
                         <div>
-                            <strong class="text-gray-500">VDI:</strong> <span class="text-gray-800">${target.vdi}</span>
+                            <strong class="text-gray-500">VDI:</strong>
+                            <span class="text-gray-800">${target.vdi}</span>
                         </div>
                         <div>
-                            <strong class="text-gray-500">Depth:</strong> <span class="text-gray-800">${target.depth}</span>
+                            <strong class="text-gray-500">Depth:</strong>
+                            <span class="text-gray-800">${target.depth}</span>
                         </div>
                         <div class="sm:col-span-2">
-                            <strong class="text-gray-500">Location:</strong> <span class="text-gray-800 break-all">${target.coordinates}</span>
+                            <strong class="text-gray-500">Location:</strong>
+                            <span class="text-gray-800 break-all">${target.coordinates}</span>
                         </div>
                         <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
                             Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
@@ -1160,275 +1159,144 @@
                 </div>
             `;
         }
-
-        /** Renders the content for the Targets page. */
-        function renderTargetsPage() {
-            const openSurvey = surveys.find(s => s.status === 'Open');
-            const targets = openSurvey ? openSurvey.targets : [];
-            const surveyId = openSurvey ? openSurvey.id : null;
-            const secondaryColor = 'rgb(var(--color-secondary))';
-
-            let targetsListHtml = '';
+        
+        /** * Renders a static plot of targets based on relative coordinates.
+         * This replaces the complex external map and bearing helper functions.
+         */
+        function renderTargetPlot(targets) {
             if (targets.length === 0) {
-                targetsListHtml = `<p class="text-gray-500 italic p-4 bg-white rounded-lg shadow-sm">No targets logged in this survey yet. Click 'Log New Target' to record your first find!</p>`;
-            } else {
-                targetsListHtml = targets.map(t => renderTargetCard(t, surveyId)).join('');
+                return `
+                    <div class="p-4 text-center bg-gray-100 rounded-lg">
+                        <p class="text-lg text-gray-500 italic">No targets with GPS coordinates logged in this survey to plot.</p>
+                        <p class="text-sm text-gray-400 mt-1">Log a new target with GPS to see it appear here.</p>
+                    </div>
+                `;
+            }
+
+            // 1. Parse and find min/max coordinates
+            const parsedCoords = targets.map(t => {
+                const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
+                return { lat: parts[0], lon: parts[1], description: t.description, type: t.type, vdi: t.vdi };
+            }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+
+            if (parsedCoords.length === 0) {
+                return `
+                    <div class="p-4 text-center bg-gray-100 rounded-lg">
+                        <p class="text-lg text-gray-500 italic">No valid GPS coordinates found to plot.</p>
+                    </div>
+                `;
+            }
+
+            // Initialize min/max with the first valid point
+            let minLat = parsedCoords[0].lat, maxLat = parsedCoords[0].lat;
+            let minLon = parsedCoords[0].lon, maxLon = parsedCoords[0].lon;
+
+            parsedCoords.forEach(c => {
+                minLat = Math.min(minLat, c.lat);
+                maxLat = Math.max(maxLat, c.lat);
+                minLon = Math.min(minLon, c.lon);
+                maxLon = Math.max(maxLon, c.lon);
+            });
+            
+            // Add a tiny buffer if min/max are the same (single point or all points overlap)
+            if (minLat === maxLat) {
+                minLat -= 0.00001;
+                maxLat += 0.00001;
+            }
+            if (minLon === maxLon) {
+                minLon -= 0.00001;
+                maxLon += 0.00001;
             }
             
-            const isButtonDisabled = !openSurvey;
-            // Determine button styling based on disabled state
-            const buttonStyle = isButtonDisabled
-                ? 'bg-gray-300 text-gray-600 opacity-50 cursor-not-allowed border border-gray-400'
-                : 'text-white hover:opacity-90';
-            const buttonInlineStyle = isButtonDisabled ? '' : `background-color: ${secondaryColor};`;
+            const latRange = maxLat - minLat;
+            const lonRange = maxLon - minLon;
 
+            // 2. Normalize and generate pins HTML
+            const pinsHtml = parsedCoords.map(t => {
+                // Calculate position percentages (0% to 100%)
+                // X-axis (Longitude): East is right, so (lon - minLon) / lonRange
+                const xPercent = ((t.lon - minLon) / lonRange) * 100;
+                // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. 
+                // So use (maxLat - lat) / latRange to invert the Y-axis.
+                const yPercent = ((maxLat - t.lat) / latRange) * 100;
 
+                let color = 'bg-primary'; // Default for Relic/Unidentified
+                if (t.type === 'Coin') color = 'bg-yellow-500';
+                if (t.type.includes('Junk')) color = 'bg-gray-500';
+                
+                // Add a primary color border for good visibility
+                return `
+                    <div 
+                        class="absolute w-3 h-3 rounded-full ${color} border-2 border-primary shadow-lg cursor-pointer" 
+                        style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%);"
+                        title="${t.description} (VDI: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)}"
+                    ></div>
+                `;
+            }).join('');
+
+            // 3. Return the container HTML
             return `
-                <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Log</h2>
-
-                    <div class="bg-card p-4 rounded-lg shadow-md mb-6 border border-gray-100">
-                        <h3 class="text-xl font-semibold mb-2 text-gray-700">
-                            Current Survey: ${openSurvey ? openSurvey.name : '<span class="text-red-500">None Open</span>'}
-                        </h3>
-                        <p class="text-sm text-gray-600 mb-4">
-                            ${openSurvey ? openSurvey.description : 'Open a survey on the Home page to start logging finds.'}
-                        </p>
-
-                        <button id="add-target-btn" 
-                            class="w-full font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 flex items-center justify-center ${buttonStyle}" 
-                            style="${buttonInlineStyle}"
-                            ${isButtonDisabled ? 'disabled' : ''}>
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Log New Target
-                        </button>
-                    </div>
-                    
-                    <h3 class="text-2xl font-bold text-primary mb-3">Survey Targets (${targets.length})</h3>
-                    <div id="targets-list" class="space-y-4">
-                        ${targetsListHtml}
-                    </div>
+                <div class="relative w-full aspect-square border-4 border-gray-400 bg-gray-200 rounded-lg overflow-hidden my-4">
+                    ${pinsHtml}
+                </div>
+                <div class="text-xs text-gray-500 mt-2">
+                    <p>Plot shows relative positions within the survey area.</p>
+                    <ul class="list-disc list-inside mt-1">
+                        <li><span class="font-bold">North</span> is towards the top of the box.</li>
+                        <li><span class="font-bold">East</span> is towards the right of the box.</li>
+                        <li>Total Targets Plotted: ${parsedCoords.length}</li>
+                    </ul>
                 </div>
             `;
         }
-        
-/** Creates HTML for map links using the coordinates of all targets. */
-/** Creates HTML for map links using the coordinates of all targets. */
-        function createMapLinkHtml(targets) {
-            if (targets.length === 0) return '';
-            
-            // Limit to the first 10 targets for reliable URL construction
-            const mapTargets = targets.slice(0, 10);
-            
-            // --- GOOGLE MAPS CONSTRUCTION (OFFICIAL API FIX) ---
-            
-            // 1. Collect all coordinate strings (lat,lon)
-            const mapPins = mapTargets.map((t) => {
-                const parts = t.coordinates.split(',');
-                // Ensure coordinates are trimmed and formatted as lat,lon without spaces
-                return parts[0].trim() + ',' + parts[1].trim();
-            }); 
-            
-            // 2. Center the map on the first target's coordinates
-            const parts = mapTargets[0].coordinates.split(',');
-            const centerLat = parts[0].trim();
-            const centerLon = parts[1].trim();
 
-            // 3. Create the robust Google Maps URL using the official search API format
-            // The format is: https://www.google.com/maps/search/?api=1&query=LAT,LON|LAT,LON...&center=LAT,LON&zoom=14
-            const pinQuery = mapPins.join('|');
-            const encodedPinQuery = encodeURIComponent(pinQuery);
-            
-            // This is the correct, official format
-            const googleMapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodedPinQuery +
-                                  '&center=' + centerLat + ',' + centerLon + 
-                                  '&zoom=14';
-            
-            // --- OPENSTREETMAP CONSTRUCTION (CONCATENATION) ---
-            
-            const osmUrl = 'https://www.openstreetmap.org/?mlat=' + centerLat + 
-                           '&mlon=' + centerLon + 
-                           '#map=16/' + centerLat + '/' + centerLon;
-
-
-            // Use concatenation for the entire HTML block to ensure compatibility
-            return (
-                '<div class="space-y-3">' +
-                    '<a href="' + googleMapsUrl + '" target="_blank" class="block w-full text-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">' +
-                        '<i class="fab fa-google mr-2"></i> Open in Google Maps (Multi-Pin)' +
-                    '</a>' +
-                    
-                    '' +
-                    '<div class="mt-2">' +
-                        '<label for="map-string-display" class="block text-xs font-medium text-gray-500 mb-1">' +
-                            'Raw Google Maps URL for Debugging:' +
-                        '</label>' +
-                        '<textarea id="map-string-display" rows="3" readonly ' +
-                                  'class="w-full p-2 border border-yellow-500 rounded-md bg-gray-50 text-xs font-mono break-all">' + googleMapsUrl + '</textarea>' +
-                    '</div>' +
-                    '' +
-                    
-                    '<a href="' + osmUrl + '" target="_blank" class="block w-full text-center bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-800 transition duration-150">' +
-                        '<i class="fas fa-globe mr-2"></i> Open in OpenStreetMap (Centered)' +
-                    '</a>' +
-                '</div>'
-            );
-        } 
-        
-        /** * Finds user location and calculates bearing and distance to the closest target.
-         * Displays the results in the modal.
-         */
-/** * Finds user location and calculates bearing and distance to the closest target.
-         * Displays the results in the modal.
-         */
-        function findAndDisplayClosestTarget(targets) {
-            const displayEl = document.getElementById('current-location-display');
-            const targetEl = document.getElementById('closest-target-display');
-            const refreshBtn = document.getElementById('refresh-gps-btn');
-            
-            if (targets.length === 0) {
-                 targetEl.innerHTML = `<p class="text-gray-500 italic">No targets with GPS to calculate distance/bearing.</p>`;
-                 return;
-            }
-
-            // 1. Show loading state
-            displayEl.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Finding your current location...`;
-            refreshBtn.disabled = true;
-
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const userLat = position.coords.latitude;
-                        const userLon = position.coords.longitude;
-                        
-                        displayEl.innerHTML = `Your Coords: <span class="font-semibold text-primary">${userLat.toFixed(6)}, ${userLon.toFixed(6)}</span> (Accuracy: ${position.coords.accuracy.toFixed(1)}m)`;
-
-                        // 2. Find the closest target
-                        let closestTarget = null;
-                        let minDistance = Infinity;
-
-                        targets.forEach(target => {
-                            // Safely parse coordinates
-                            const coordsArray = target.coordinates.split(',').map(c => parseFloat(c.trim()));
-                            const targetLat = coordsArray[0];
-                            const targetLon = coordsArray[1];
-
-                            if (!isNaN(targetLat) && !isNaN(targetLon)) {
-                                const distance = getDistance(userLat, userLon, targetLat, targetLon);
-                                
-                                if (distance < minDistance) {
-                                    minDistance = distance;
-                                    closestTarget = target;
-                                }
-                            }
-                        });
-
-                        // 3. Display closest target info
-                        if (closestTarget) {
-                            const bearing = getBearing(userLat, userLon, 
-                                parseFloat(closestTarget.coordinates.split(',')[0]), 
-                                parseFloat(closestTarget.coordinates.split(',')[1])
-                            );
-                            
-                            // Format distance
-                            let distanceText;
-                            if (minDistance > 1000) {
-                                distanceText = (minDistance / 1000).toFixed(2) + ' km';
-                            } else {
-                                distanceText = minDistance.toFixed(1) + ' meters';
-                            }
-
-                            targetEl.innerHTML = `
-                                <h4 class="font-bold text-gray-800">Closest Target: ${closestTarget.description}</h4>
-                                <p class="text-lg mt-2">
-                                    <strong class="text-primary">${distanceText}</strong> away
-                                </p>
-                                <p class="text-2xl font-bold text-red-600 mt-1">
-                                    Bearing: ${bearing.toFixed(1)}° True North
-                                </p>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    To reach this target, walk in the direction of **${bearing.toFixed(1)} degrees** (measured clockwise from North) for ${distanceText}.
-                                    Use a physical compass or your native phone map app for navigation.
-                                </p>
-                            `;
-                        } else {
-                            targetEl.innerHTML = `<p class="text-gray-500 italic">Could not find valid coordinates for any target.</p>`;
-                        }
-
-                        refreshBtn.disabled = false;
-                    },
-                    (error) => {
-                        // Handle errors (permission denied, position unavailable, timeout)
-                        displayEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1 text-red-500"></i> Location Error: ${error.message}`;
-                        targetEl.innerHTML = `<p class="text-red-500 italic">Cannot calculate bearing/distance without your current location.</p>`;
-                        refreshBtn.disabled = false;
-                        showMessage('Failed to get current GPS location.', 'error');
-                        console.error('Geolocation Error on Compass Page:', error);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                displayEl.innerHTML = `<i class="fas fa-times-circle mr-1 text-red-500"></i> Geolocation Not Supported.`;
-                refreshBtn.disabled = true;
-                targetEl.innerHTML = `<p class="text-red-500 italic">This device does not support geolocation needed for this feature.</p>`;
-            }
-        }        
-        
-        /** Renders the content for the Compass page. */
+        /** Renders the content for the Compass page (now a static target plot). */
         function renderCompassPage() {
             const openSurvey = surveys.find(s => s.status === 'Open');
-            
+
             if (!openSurvey) {
                 return `
                     <div class="p-4">
-                        <h2 class="text-3xl font-bold text-primary mb-6">Targets & Map View</h2>
+                        <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
                         <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
                             <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                            <p class="text-gray-700">Please open a survey on the **Home** page to view its targets on the map and calculate bearings.</p>
+                            <p class="text-gray-700">Please open a survey on the **Home** page to view its targets on the plot.</p>
                         </div>
                     </div>
                 `;
             }
 
             // Filter for targets that actually have usable coordinates
-            const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates !== 'No GPS logged');
-            let contentHtml = '';
+            const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged');
 
-            // --- Minimal Content with Heading and Survey Info ---
-            contentHtml += `
+            return `
                 <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Targets & Map View</h2>
-
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
+                    
                     <div class="bg-card p-4 rounded-lg shadow-md mb-6 border-l-4 border-primary">
                         <h3 class="text-xl font-semibold mb-1 text-gray-700">
                             Viewing Targets for: <span class="text-primary">${openSurvey.name}</span>
                         </h3>
-                        <p class="text-sm text-gray-600">Targets with GPS logged: **${targets.length}**</p>
+                        <p class="text-sm text-gray-600">Targets with valid GPS logged: **${targets.length}**</p>
                     </div>
 
                     <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-8">
-                        <p class="text-gray-500 italic text-center py-8">
-                            This section is ready for new functionality.
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                            <i class="fas fa-dot-circle mr-2"></i> Static Target Plot
+                        </h3>
+                        <p class="text-sm text-gray-600 mb-3">
+                            This plot shows the relative geographical distribution of all logged targets in the open survey within a simple rectangle.
                         </p>
+                        ${renderTargetPlot(targets)}
                     </div>
                 </div>
             `;
-            
-            // NOTE: Removed the setTimeout block that attached the event listener for 'refresh-gps-btn'
-            // as all corresponding HTML content was removed per user request.
-
-            return contentHtml;
         }
+
 
         /** Renders the content for the Settings page. */
         function renderSettingsPage() {
-            // Get the secondary color variable for inline styles
             const secondaryColor = 'rgb(var(--color-secondary))';
-            
             return `
                 <div class="p-4">
                     <h2 class="text-3xl font-bold text-primary mb-6">Settings & Local Data Management</h2>
@@ -1439,39 +1307,99 @@
                         <p class="text-md text-gray-800 mb-4"><strong>Detector:</strong> ${userProfile.detector}</p>
                         
                         <div class="mt-4 pt-3 border-t border-gray-100">
-                            <button onclick="showEditProfileModal()" 
-                                class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150 shadow-md"
-                                style="background-color: ${secondaryColor};">
-                                <i class="fas fa-pencil-alt mr-1"></i> Edit Profile
+                            <button onclick="showEditProfileModal()" class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150" style="background-color: ${secondaryColor};">
+                                <i class="fas fa-user-edit mr-1"></i> Edit Profile
                             </button>
                         </div>
-                        <hr class="my-4"/>
-                        <p class="text-lg font-semibold text-gray-700">Your Local User ID</p>
-                        <p class="mt-2 p-2 bg-gray-100 rounded-lg font-mono text-sm break-all">${userId || 'Error: ID Missing'}</p>
-                        <p class="text-xs text-red-500 mt-2">🛑 WARNING: This data is stored locally in your browser and is NOT synced to the cloud.</p>
                     </div>
 
-                    <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border border-gray-100">
-                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Export Data (Backup / Manual Transfer)</h3>
-                        <p class="text-sm text-gray-600 mb-3">Click the button to generate a complete JSON backup of all your surveys and profile data. Copy this text and save it elsewhere.</p>
-                        
-                        <button id="export-data-btn" class="w-full bg-primary text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150 mb-4">
-                            Generate Export JSON
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Data Export & Import</h3>
+
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-primary">
+                        <h4 class="text-lg font-semibold text-gray-700 mb-2">Export Data</h4>
+                        <p class="text-sm text-gray-600 mb-3">Export all your surveys and profile data as JSON text to back it up or move it to another device.</p>
+                        <button id="export-data-btn" class="w-full bg-primary text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-primary/90 transition duration-150">
+                            <i class="fas fa-download mr-1"></i> Export Data (JSON)
                         </button>
-                        <textarea id="export-data-area" rows="10" readonly class="w-full p-2 border border-gray-300 rounded-md bg-gray-50 text-xs font-mono"></textarea>
+                        <textarea id="exported-data-area" rows="5" readonly placeholder="Exported JSON data will appear here..." class="w-full p-2 border border-gray-300 rounded-md font-mono text-xs mt-4 hidden"></textarea>
                     </div>
 
-                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                        <h3 class="text-xl font-semibold text-gray-700 mb-3">Import Data (Restore / Manual Transfer)</h3>
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-yellow-500">
+                        <h4 class="text-lg font-semibold text-yellow-700 mb-2">Import Data (Overwrite)</h4>
                         <p class="text-sm text-gray-600 mb-3">Paste the exported JSON text here and click Import. **Warning:** This will overwrite any existing local data on this device.</p>
                         
                         <textarea id="import-data-area" rows="10" placeholder="Paste your exported JSON data here..." class="w-full p-2 border border-yellow-500 rounded-md font-mono text-xs mb-4"></textarea>
                         <button id="import-data-btn" class="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-150">
-                            Import & Overwrite Local Data
+                            <i class="fas fa-upload mr-1"></i> Import & Overwrite Local Data
                         </button>
                     </div>
                 </div>
             `;
+        }
+
+        // --- DATA MANAGEMENT FUNCTIONS ---
+
+        /** Exports all data (surveys and profile) to a JSON string and displays it. */
+        function exportData() {
+            const dataToExport = {
+                surveys: surveys,
+                profile: userProfile,
+                userId: userId,
+                exportDate: new Date().toISOString()
+            };
+
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const dataArea = document.getElementById('exported-data-area');
+            
+            dataArea.value = jsonString;
+            dataArea.classList.remove('hidden');
+            dataArea.select(); // Select the text for easy copying
+            
+            // Try to copy to clipboard
+            navigator.clipboard.writeText(jsonString).then(() => {
+                showMessage('Data copied to clipboard! Paste it safely.', 'success');
+            }).catch(err => {
+                showMessage('Exported data displayed. Please manually copy the text.', 'warning');
+                console.error('Could not copy text: ', err);
+            });
+        }
+
+        /** Imports data from a JSON string, overwriting existing local storage. */
+        function importData() {
+            const dataArea = document.getElementById('import-data-area');
+            const jsonString = dataArea.value.trim();
+
+            if (!jsonString) {
+                return showMessage('Please paste the JSON data into the box.', 'error');
+            }
+
+            try {
+                const importedData = JSON.parse(jsonString);
+
+                if (!importedData.surveys || !importedData.profile) {
+                    throw new Error("Invalid data structure. Missing 'surveys' or 'profile' key.");
+                }
+
+                showConfirmationModal(
+                    "Confirm Data Import",
+                    `Are you sure you want to import data? This will **permanently overwrite** your ${surveys.length} existing local surveys.`,
+                    () => {
+                        // Overwrite global state
+                        surveys = importedData.surveys;
+                        userProfile = importedData.profile;
+                        userId = importedData.userId || generateId(); // Use existing ID or generate a new one
+                        
+                        saveSurveysToLocalStorage();
+                        dataArea.value = ''; // Clear the input area
+                        showMessage('Data successfully imported and saved!', 'success');
+                        currentPage = 'Home'; // Navigate to home to show new data
+                        render();
+                    }
+                );
+            } catch (e) {
+                console.error("Import Error:", e);
+                showMessage(`Import failed: ${e.message || 'Invalid JSON format.'}`, 'error');
+            }
         }
 
 
