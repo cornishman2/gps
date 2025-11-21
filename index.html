@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence - Metal Detecting Survey Log</title>
+    <title>Blue - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -884,6 +884,19 @@
             userProfile.name = newName;
             userProfile.detector = newDetector;
 
+            // Update user/detector in existing targets 
+            surveys.forEach(survey => {
+                survey.targets.forEach(target => {
+                    if (target.user === userProfile.name) {
+                        target.user = newName;
+                    }
+                    if (target.detector === userProfile.detector) {
+                        target.detector = newDetector;
+                    }
+                });
+            });
+
+
             // Save and re-render
             saveSurveysToLocalStorage();
             closeEditProfileModal();
@@ -1328,6 +1341,16 @@
             const latRange = maxLat - minLat;
             const lonRange = maxLon - minLon;
 
+            // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
+            const metersPerDegreeLat = 111320; // Approximation
+            const meanLat = toRad((minLat + maxLat) / 2);
+            const metersPerDegreeLon = 111320 * Math.cos(meanLat);
+
+            const mapHeightMeters = latRange * metersPerDegreeLat;
+            const mapWidthMeters = lonRange * metersPerDegreeLon;
+
+            const isTinyMap = mapHeightMeters < 1 || mapWidthMeters < 1; 
+
             // 2. Normalize and generate pins HTML
             const pinsHtml = allCoords.map(t => {
                 // Calculate position percentages (0% to 100%)
@@ -1345,10 +1368,40 @@
                 let labelHtml = '';
 
                 if (t.isUser) {
+                    const userAccuracy = t.accuracy; // Radius in meters
+                    let confidenceCircleHtml = '';
+
+                    if (!isTinyMap && userAccuracy > 0) {
+                        // Convert accuracy (radius in meters) to a percentage size
+                        const radiusXPercent = (userAccuracy / mapWidthMeters) * 100;
+                        const radiusYPercent = (userAccuracy / mapHeightMeters) * 100;
+                        
+                        // Calculate diameter percentages
+                        const diameterXPercent = (2 * radiusXPercent);
+                        const diameterYPercent = (2 * radiusYPercent);
+
+                        // Confidence Circle HTML
+                        confidenceCircleHtml = `
+                            <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
+                                style="
+                                    width: ${diameterXPercent.toFixed(2)}%; 
+                                    height: ${diameterYPercent.toFixed(2)}%;
+                                    /* Center the circle on the user's coordinates */
+                                    left: 50%; top: 50%;
+                                    transform: translate(-50%, -50%);
+                                    z-index: 5;
+                                "
+                                title="Confidence Radius: ${t.accuracy.toFixed(1)}m">
+                            </div>
+                        `;
+                    }
+                    
                     // User Pin: Blue Triangle
                     pinHtml = `
-                        <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer"></div>
+                        ${confidenceCircleHtml}
+                        <div class="relative w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
                     `;
+                    
                     labelHtml = `
                         <span class="absolute whitespace-nowrap text-xs font-bold text-white bg-blue-600 p-1 rounded-sm shadow border border-blue-800" 
                               style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
@@ -1461,6 +1514,7 @@
                         </h3>
                         <p class="text-sm text-gray-600 mb-3">
                             This plot shows the relative geographical distribution of all logged targets and your position in the open survey.
+                            Your uncertainty is shown with a semi-transparent red confidence circle (Radius = GPS Accuracy).
                         </p>
                         ${renderTargetPlot(targets)}
                     </div>
