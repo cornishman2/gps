@@ -168,16 +168,28 @@
                 setTimeout(() => container.classList.add('hidden'), 5000);
             }
 
-            function renderTargetsList() {
+function renderTargetsList() {
+                const clearAllBtn = document.getElementById('clear-all-btn'); // Define/get element here
+                const noTargetsMessage = document.getElementById('no-targets-message'); // Define/get element here
+
                 targetListEl.innerHTML = '';
+                
                 if (targets.length === 0) {
-                    document.getElementById('no-targets-message').style.display = 'block';
-                    clearAllBtn.style.display = 'none';
+                    if (noTargetsMessage) {
+                        noTargetsMessage.style.display = 'block';
+                    }
+                    if (clearAllBtn) {
+                        clearAllBtn.style.display = 'none';
+                    }
                     return;
                 }
 
-                document.getElementById('no-targets-message').style.display = 'none';
-                clearAllBtn.style.display = 'inline-block';
+                if (noTargetsMessage) {
+                    noTargetsMessage.style.display = 'none';
+                }
+                if (clearAllBtn) {
+                    clearAllBtn.style.display = 'inline-block';
+                }
 
                 targets.forEach((target, index) => {
                     const item = document.createElement('div');
@@ -194,7 +206,6 @@
                     targetListEl.appendChild(item);
                 });
             }
-            
             function updateCompassView() {
                 // Ensure the GPS button is enabled if the browser supports GeoLocation
                 if (navigator.geolocation) {
