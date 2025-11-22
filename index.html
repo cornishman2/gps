@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS change 2 - Metal Detecting Survey Log</title>
+    <title>GPS Most Accurate - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -475,7 +475,12 @@ function startTargetLocationWatch() {
     const accuracyDisplay = document.getElementById('gps-accuracy-display');
     const accuracyValueSpan = document.querySelector('#gps-accuracy-display .font-semibold');
     const loadingIndicator = document.getElementById('gps-loading-indicator');
+    
+    // --- ADD THIS LINE ---
+    let bestAccuracy = Infinity; 
 
+    // 1. Reset UI
+    // ... (rest of the function)
     // 1. Reset UI
     coordsInput.value = '';
     coordsInput.placeholder = 'Waiting for GPS lock...';
@@ -487,16 +492,48 @@ function startTargetLocationWatch() {
 
     if (navigator.geolocation) {
         // 2. Start Watching (Stream) instead of Getting (Snapshot)
-        targetWatchId = navigator.geolocation.watchPosition(
-            (position) => {
-                const lat = position.coords.latitude.toFixed(6);
-                const lon = position.coords.longitude.toFixed(6);
+ (position) => {
                 const accuracy = position.coords.accuracy;
                 
-                // Update inputs live
-                coordsInput.value = `${lat}, ${lon}`;
-                coordsInput.placeholder = 'GPS Locked';
-                coordsInput.disabled = false; // Enable fields once we have at least one fix
+                // --- NEW LOGIC: ONLY UPDATE IF THIS READING IS MORE ACCURATE ---
+                if (accuracy < bestAccuracy) {
+                    bestAccuracy = accuracy; // Update the best accuracy found
+                    
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lon = position.coords.longitude.toFixed(6);
+
+                    // Update inputs with the better reading
+                    coordsInput.value = `${lat}, ${lon}`;
+                    coordsInput.placeholder = 'GPS Locked';
+                    coordsInput.disabled = false; // Enable fields
+
+                    accuracyInput.value = accuracy.toFixed(2);
+                    accuracyValueSpan.textContent = `${accuracy.toFixed(1)} meters`;
+
+                    // Update UI color based on the BEST accuracy
+                    if(accuracy < 5) {
+                        accuracyValueSpan.className = "font-semibold text-green-600"; // Good!
+                    } else if (accuracy < 15) {
+                        accuracyValueSpan.className = "font-semibold text-yellow-600"; // Okay
+                    } else {
+                        accuracyValueSpan.className = "font-semibold text-red-600"; // Poor
+                    }
+
+                    accuracyDisplay.classList.remove('hidden');
+                    loadingIndicator.classList.add('hidden');
+                    
+                    // OPTIONAL: Inform the user
+                    console.log(`New Best Accuracy: ${accuracy.toFixed(1)}m`);
+                } 
+                // --- END NEW LOGIC ---
+                
+                // Ensure loading indicator is hidden after the first successful reading
+                if (!accuracyDisplay.classList.contains('hidden')) {
+                    loadingIndicator.classList.add('hidden');
+                }
+
+                // If the reading is WORSE (higher number), we do nothing and keep the previously recorded "best" data.
+            },               coordsInput.disabled = false; // Enable fields once we have at least one fix
                 
                 accuracyInput.value = accuracy.toFixed(2);
                 accuracyValueSpan.textContent = `${accuracy.toFixed(1)} meters`;
