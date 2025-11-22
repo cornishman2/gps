@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 3 Most Accurate - Metal Detecting Survey Log</title>
+    <title>GPS 4 Most Accurate - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -469,6 +469,9 @@
         // --- GPS GEOLOCATION FUNCTIONS ---
         
    /** Starts a high-accuracy GPS stream that updates the inputs live. */
+/** * Starts a high-accuracy GPS stream that updates the target logging modal's
+ * inputs only when a reading is more accurate than the current best.
+ */
 function startTargetLocationWatch() {
     const coordsInput = document.getElementById('target-coords');
     const accuracyInput = document.getElementById('target-accuracy');
@@ -476,11 +479,9 @@ function startTargetLocationWatch() {
     const accuracyValueSpan = document.querySelector('#gps-accuracy-display .font-semibold');
     const loadingIndicator = document.getElementById('gps-loading-indicator');
     
-    // --- ADD THIS LINE ---
+    // Local variable to track the best accuracy received so far
     let bestAccuracy = Infinity; 
 
-    // 1. Reset UI
-    // ... (rest of the function)
     // 1. Reset UI
     coordsInput.value = '';
     coordsInput.placeholder = 'Waiting for GPS lock...';
@@ -492,10 +493,11 @@ function startTargetLocationWatch() {
 
     if (navigator.geolocation) {
         // 2. Start Watching (Stream) instead of Getting (Snapshot)
- (position) => {
+        targetWatchId = navigator.geolocation.watchPosition(
+            (position) => {
                 const accuracy = position.coords.accuracy;
                 
-                // --- NEW LOGIC: ONLY UPDATE IF THIS READING IS MORE ACCURATE ---
+                // --- CORE LOGIC: ONLY UPDATE IF THIS READING IS MORE ACCURATE ---
                 if (accuracy < bestAccuracy) {
                     bestAccuracy = accuracy; // Update the best accuracy found
                     
@@ -518,56 +520,38 @@ function startTargetLocationWatch() {
                     } else {
                         accuracyValueSpan.className = "font-semibold text-red-600"; // Poor
                     }
-
-                    accuracyDisplay.classList.remove('hidden');
-                    loadingIndicator.classList.add('hidden');
                     
-                    // OPTIONAL: Inform the user
+                    // Optional: You can remove this console log if you don't need it
                     console.log(`New Best Accuracy: ${accuracy.toFixed(1)}m`);
                 } 
-                // --- END NEW LOGIC ---
+                // --- END CORE LOGIC ---
                 
                 // Ensure loading indicator is hidden after the first successful reading
                 if (!accuracyDisplay.classList.contains('hidden')) {
                     loadingIndicator.classList.add('hidden');
                 }
 
-                // If the reading is WORSE (higher number), we do nothing and keep the previously recorded "best" data.
-            },               coordsInput.disabled = false; // Enable fields once we have at least one fix
-                
-                accuracyInput.value = accuracy.toFixed(2);
-                accuracyValueSpan.textContent = `${accuracy.toFixed(1)} meters`;
-                
-                // Color code the accuracy for the user
-                if(accuracy < 5) {
-                    accuracyValueSpan.className = "font-semibold text-green-600"; // Good!
-                } else if (accuracy < 15) {
-                    accuracyValueSpan.className = "font-semibold text-yellow-600"; // Okay
-                } else {
-                    accuracyValueSpan.className = "font-semibold text-red-600"; // Poor
-                }
+                // If the reading is WORSE (higher number), we ignore it and keep the previous best data.
 
-                accuracyDisplay.classList.remove('hidden');
-                loadingIndicator.classList.add('hidden');
-            }
+            }, // <--- SUCCESS CALLBACK ENDS HERE, followed by comma
             (error) => {
                 console.error('GPS Watch Error:', error);
                 loadingIndicator.classList.add('hidden');
                 coordsInput.placeholder = 'GPS Error (Type Manually)';
                 coordsInput.disabled = false;
-            }
+                showMessage(`GPS Error: ${error.message}. Please input coordinates manually.`, 'error');
+            },
             {
-                enableHighAccuracy: true, // Force GPS hardware
-                timeout: 30000,           // Wait longer for a lock
-                maximumAge: 0             // Do not accept cached old positions
+                enableHighAccuracy: true, 
+                timeout: 30000,           
+                maximumAge: 0             
             }
         );
     } else {
         showMessage('Geolocation is not supported on this device.', 'error');
     }
 }
-
-/** Stops the GPS stream to save battery. */
+        /** Stops the GPS stream to save battery. */
 function stopTargetLocationWatch() {
     if (targetWatchId !== null) {
         navigator.geolocation.clearWatch(targetWatchId);
