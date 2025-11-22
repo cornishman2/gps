@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Changes - Metal Detecting Survey Log</title>
+    <title>Correction - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1441,16 +1441,29 @@
             }).join('');
 
             // 3. Return the container HTML with click-to-fullscreen added
+ // 3. Determine classes based on global state
+            let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
+            
+            if (isMapFullscreen) {
+                // Fullscreen Classes (Fixed position, full width/height)
+                containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
+            } else {
+                // Normal/Small Classes (Square aspect ratio, borders)
+                containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
+            }
+
             const circleDiameter = getCircleDiameter(currentUserAccuracy);
+
+            // NOTICE: We use ${containerClasses} below instead of hardcoded classes
+            // AND we removed 'this' from the onclick function call
             return `
-                <div onclick="toggleMapFullscreen(this)" class="relative w-full aspect-square border-4 border-gray-400 bg-gray-200 rounded-lg overflow-hidden my-4 cursor-pointer transition-all duration-300 group" title="Tap to fullscreen">
+                <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
                     ${pinsHtml}
                     <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
-                        <i class="fas fa-expand"></i> Tap to Resize
+                        <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
                     </div>
                 </div>
-                <div class="text-xs text-gray-500 mt-2">
-                    <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
+                <div class="text-xs text-gray-500 mt-2">                   <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
                     <ul class="list-disc list-inside mt-1">
                         <li><span class="font-bold">North</span> is towards the top of the box.</li>
                         <li><span class="font-bold">East</span> is towards the right of the box.</li>
