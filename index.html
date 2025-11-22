@@ -271,8 +271,12 @@
 
     <script>
         // --- GLOBAL STATE & INITIALIZATION ---
+        
+// --- GLOBAL STATE & INITIALIZATION ---
         let surveys = [];
         let currentPage = 'Home';
+        let isMapFullscreen = false; // <--- ADD THIS LINE
+        
         // Profile initialized with default data
         let userProfile = {
             name: "New User",
@@ -1463,22 +1467,15 @@
             `;
         }
 
-        /** Toggles the map element between standard view and fullscreen. */
-        function toggleMapFullscreen(element) {
-            // Classes for Fullscreen mode
-            element.classList.toggle('fixed');
-            element.classList.toggle('inset-0'); // Top 0, Left 0, Right 0, Bottom 0
-            element.classList.toggle('z-[100]'); // High z-index to sit on top of everything
-            element.classList.toggle('h-screen'); // Force full height
-            element.classList.toggle('w-screen'); // Force full width
-            
-            // Toggle classes we want to REMOVE when in fullscreen (to remove borders/margins)
-            element.classList.toggle('aspect-square');
-            element.classList.toggle('border-4');
-            element.classList.toggle('rounded-lg');
-            element.classList.toggle('my-4');
-        }
-        
+/** Toggles the map state and re-renders immediately. */
+function toggleMapFullscreen() {
+    // Toggle the state variable
+    isMapFullscreen = !isMapFullscreen;
+    
+    // Re-render the page immediately so the new class is applied
+    // This also resets the auto-refresh timer, which is fine.
+    render(); 
+}        
      
         /** Renders the content for the Compass page (now a static target plot). */
         function renderCompassPage(isAutoRefresh = false) {
