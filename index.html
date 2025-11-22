@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Correction - Metal Detecting Survey Log</title>
+    <title>GPS change - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -276,6 +276,8 @@
         let surveys = [];
         let currentPage = 'Home';
         let isMapFullscreen = false; // <--- ADD THIS LINE
+        // --- GLOBAL STATE ---
+        let targetWatchId = null; // <--- ADD THIS to track the specific GPS process for the modal
         
         // Profile initialized with default data
         let userProfile = {
@@ -466,80 +468,77 @@
 
         // --- GPS GEOLOCATION FUNCTIONS ---
         
-        /** Safely requests and handles GPS coordinates and accuracy for a single log entry. */
-        function getCurrentPosition() {
-            const coordsInput = document.getElementById('target-coords');
-            const accuracyInput = document.getElementById('target-accuracy'); 
-            const accuracyDisplay = document.getElementById('gps-accuracy-display'); 
-            const loadingIndicator = document.getElementById('gps-loading-indicator');
-            
-            // 1. Reset field and show loading
-            coordsInput.value = '';
-            coordsInput.placeholder = 'Requesting location...';
-            coordsInput.disabled = true; // Prevent manual typing while loading
-            accuracyInput.value = ''; 
-            document.querySelector('#gps-accuracy-display .font-semibold').textContent = 'N/A';
-            accuracyDisplay.classList.add('hidden'); 
-            loadingIndicator.classList.remove('hidden');
+   /** Starts a high-accuracy GPS stream that updates the inputs live. */
+function startTargetLocationWatch() {
+    const coordsInput = document.getElementById('target-coords');
+    const accuracyInput = document.getElementById('target-accuracy');
+    const accuracyDisplay = document.getElementById('gps-accuracy-display');
+    const accuracyValueSpan = document.querySelector('#gps-accuracy-display .font-semibold');
+    const loadingIndicator = document.getElementById('gps-loading-indicator');
 
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude.toFixed(6);
-                        const lon = position.coords.longitude.toFixed(6);
-                        const accuracy = position.coords.accuracy; // Capture accuracy in meters
-                        const coordinates = `${lat}, ${lon}`;
-                        
-                        coordsInput.value = coordinates;
-                        coordsInput.placeholder = 'GPS Found';
-                        coordsInput.disabled = false;
-                        
-                        // NEW: Set accuracy values
-                        accuracyInput.value = accuracy.toFixed(2);
-                        document.querySelector('#gps-accuracy-display .font-semibold').textContent = `${accuracy.toFixed(1)} meters`;
-                        accuracyDisplay.classList.remove('hidden');
-                        
-                        loadingIndicator.classList.add('hidden');
-                        showMessage('GPS location found and filled.', 'info');
-                    },
-                    (error) => {
-                        // Handle errors (permission denied, position unavailable, timeout)
-                        coordsInput.value = '';
-                        coordsInput.placeholder = 'No GPS logged (tap to enter manually)';
-                        coordsInput.disabled = false;
-                        
-                        // NEW: Clear accuracy info on error
-                        accuracyInput.value = 'N/A';
-                        document.querySelector('#gps-accuracy-display .font-semibold').textContent = 'N/A';
-                        accuracyDisplay.classList.add('hidden');
+    // 1. Reset UI
+    coordsInput.value = '';
+    coordsInput.placeholder = 'Waiting for GPS lock...';
+    coordsInput.disabled = true;
+    accuracyInput.value = '';
+    accuracyValueSpan.textContent = 'N/A';
+    accuracyDisplay.classList.add('hidden');
+    loadingIndicator.classList.remove('hidden');
 
-                        loadingIndicator.classList.add('hidden');
+    if (navigator.geolocation) {
+        // 2. Start Watching (Stream) instead of Getting (Snapshot)
+        targetWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude.toFixed(6);
+                const lon = position.coords.longitude.toFixed(6);
+                const accuracy = position.coords.accuracy;
+                
+                // Update inputs live
+                coordsInput.value = `${lat}, ${lon}`;
+                coordsInput.placeholder = 'GPS Locked';
+                coordsInput.disabled = false; // Enable fields once we have at least one fix
+                
+                accuracyInput.value = accuracy.toFixed(2);
+                accuracyValueSpan.textContent = `${accuracy.toFixed(1)} meters`;
+                
+                // Color code the accuracy for the user
+                if(accuracy < 5) {
+                    accuracyValueSpan.className = "font-semibold text-green-600"; // Good!
+                } else if (accuracy < 15) {
+                    accuracyValueSpan.className = "font-semibold text-yellow-600"; // Okay
+                } else {
+                    accuracyValueSpan.className = "font-semibold text-red-600"; // Poor
+                }
 
-                        let errorMessage = 'GPS error: Unable to retrieve location.';
-                        if (error.code === error.PERMISSION_DENIED) {
-                            errorMessage = 'GPS permission denied. Please enable location services for this site.';
-                        } else if (error.code === error.TIMEOUT) {
-                            errorMessage = 'GPS timeout. Try moving to an area with better signal.';
-                        }
-                        
-                        showMessage(errorMessage, 'warning');
-                        console.error('Geolocation Error:', error);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                coordsInput.value = '';
-                coordsInput.placeholder = 'Geolocation not supported by this browser.';
-                coordsInput.disabled = false;
+                accuracyDisplay.classList.remove('hidden');
                 loadingIndicator.classList.add('hidden');
-                showMessage('Geolocation is not supported on this device.', 'error');
+            },
+            (error) => {
+                console.error('GPS Watch Error:', error);
+                loadingIndicator.classList.add('hidden');
+                coordsInput.placeholder = 'GPS Error (Type Manually)';
+                coordsInput.disabled = false;
+            },
+            {
+                enableHighAccuracy: true, // Force GPS hardware
+                timeout: 30000,           // Wait longer for a lock
+                maximumAge: 0             // Do not accept cached old positions
             }
-        }
+        );
+    } else {
+        showMessage('Geolocation is not supported on this device.', 'error');
+    }
+}
 
+/** Stops the GPS stream to save battery. */
+function stopTargetLocationWatch() {
+    if (targetWatchId !== null) {
+        navigator.geolocation.clearWatch(targetWatchId);
+        targetWatchId = null;
+        console.log("Target GPS Watch stopped.");
+    }
+}
+        
         /** Requests and updates the global currentUserCoords and currentUserAccuracy state. */
         function getCurrentUserPosition() {
             if (navigator.geolocation) {
@@ -708,7 +707,7 @@
             document.getElementById('new-target-form').reset();
             
             // 3. Request GPS location
-            getCurrentPosition();
+            srartTargetLocationWatch();
             
             // 4. Display modal
             document.getElementById('new-target-modal').style.display = 'block';
@@ -721,6 +720,7 @@
 
         /** Closes the New Target Modal. */
         function closeNewTargetModal() {
+            sropTargetLocationWatch();
             document.getElementById('new-target-modal').style.display = 'none';
         }
 
