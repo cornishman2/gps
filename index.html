@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map buffer 4 - Metal Detecting Survey Log</title>
+    <title>Map buffer 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1317,7 +1317,6 @@ function startTargetLocationWatch() {
         
  /** Renders a static plot of targets based on relative coordinates. */
 /** Renders the target plot map using the active survey data. */
-/** Renders the target plot map using the active survey data. */
 function renderTargetPlot() {
     const activeSurvey = surveys.find(s => s.status === 'Open');
     if (!activeSurvey || !activeSurvey.targets || activeSurvey.targets.length === 0) {
@@ -1348,6 +1347,11 @@ function renderTargetPlot() {
         currentUserCoords.isUser = true;
         parsedCoords.push(currentUserCoords); // Add user to the plot list
     }
+    
+    // Safety check: ensure coordinates exist before calculation
+    if (parsedCoords.length === 0) {
+        return '<p class="text-center text-gray-500 my-8">No valid coordinates found for plotting.</p>';
+    }
 
     // 1. Find the boundaries of all points (targets + user)
     const allLats = parsedCoords.map(t => t.lat);
@@ -1359,7 +1363,6 @@ function renderTargetPlot() {
     let maxLon = Math.max(...allLons);
 
     // --- LOGIC FOR PADDING ---
-    // This constant must be defined locally inside the function!
     const PADDING_RATIO = 0.10; // 10% padding on all four sides
 
     const latRange = maxLat - minLat;
@@ -1411,7 +1414,13 @@ function renderTargetPlot() {
         // Y is inverted (0% is North/Top, 100% is South/Bottom)
         const yPercent = 100 - (((t.lat - paddedMinLat) / mapRange) * 100); 
 
-        // Skip pins that fall outside the calculated, padded map area (shouldn't happen)
+        // CRITICAL CHECK: If any of these are NaN, the mapRange calculation failed.
+        if (isNaN(xPercent) || isNaN(yPercent)) {
+            console.error("Map calculation failed for a pin. Check mapRange and coordinate values.");
+            return '';
+        }
+        
+        // Skip pins that fall outside the calculated, padded map area (shouldn't happen with correct padding)
         if (xPercent < 0 || xPercent > 100 || yPercent < 0 || yPercent > 100) return '';
         
         let pinHtml;
@@ -1465,7 +1474,7 @@ function renderTargetPlot() {
             <ul class="list-disc list-inside mt-1">
                 <li><span class="font-bold">North</span> is towards the top of the box.</li>
                 <li><span class="font-bold">East</span> is towards the right of the box.</li>
-                <li>Total Targets Plotted: ${parsedCoords.length}</li>
+                <li>Total Targets Plotted: ${parsedCoords.filter(t => !t.isUser).length}</li>
                 ${currentUserCoords ? 
                     `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
                      <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
@@ -1476,8 +1485,7 @@ function renderTargetPlot() {
             </ul>
         </div>
     `;
-}//changed here.
-        
+}        
         /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
