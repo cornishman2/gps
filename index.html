@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 6 Most Accurate - Metal Detecting Survey Log</title>
+    <title>Map buffer - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1316,205 +1316,153 @@ function startTargetLocationWatch() {
         }
         
  /** Renders a static plot of targets based on relative coordinates. */
-        function renderTargetPlot(targets) {
-            
-            // 1. Parse targets and prepare for Bounding Box calculation
-            const parsedCoords = targets.map(t => {
-                const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
-                return { 
-                    lat: parts[0], 
-                    lon: parts[1], 
-                    description: t.description, 
-                    type: t.type, 
-                    vdi: t.vdi,
-                    accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
-                    isUser: false 
-                };
-            }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+/** Renders the target plot map using the active survey data. */
+function renderTargetPlot() {
+    const activeSurvey = surveys.find(s => s.status === 'Open');
+    if (!activeSurvey || !activeSurvey.targets || activeSurvey.targets.length === 0) {
+        return '<p class="text-center text-gray-500 my-8">No targets logged for the active survey. Log a target to start plotting.</p>';
+    }
 
-            let allCoords = [...parsedCoords];
+    const parsedCoords = activeSurvey.targets.map(t => ({
+        lat: parseFloat(t.lat),
+        lon: parseFloat(t.lon),
+        description: t.description,
+        vdi: t.vdi,
+        depth: t.depth,
+        type: t.type,
+        isUser: false // Not the user's current location
+    }));
 
-            // Add user's location if available
-            if (currentUserCoords) {
-                allCoords.push({
-                    lat: currentUserCoords.lat,
-                    lon: currentUserCoords.lon,
-                    description: 'Your Current Location', 
-                    type: 'User', 
-                    vdi: 'N/A',
-                    accuracy: currentUserAccuracy || 0,
-                    isUser: true 
-                });
-            }
+    let currentUserCoords = null;
+    let currentUserAccuracy = null;
+    
+    // Get current user location if available (assumes this is available globally or passed in)
+    if (userProfile.currentLocation && userProfile.currentLocation.coords) {
+        currentUserCoords = {
+            lat: parseFloat(userProfile.currentLocation.coords.lat),
+            lon: parseFloat(userProfile.currentLocation.coords.lon),
+            accuracy: parseFloat(userProfile.currentLocation.coords.accuracy)
+        };
+        currentUserAccuracy = currentUserCoords.accuracy;
+        currentUserCoords.isUser = true;
+        parsedCoords.push(currentUserCoords); // Add user to the plot list
+    }
 
-            if (allCoords.length === 0) {
-                 return `
-                    <div class="p-4 text-center bg-gray-100 rounded-lg">
-                        <p class="text-lg text-gray-500 italic">No valid GPS coordinates found to plot (targets or user location).</p>
-                    </div>
-                `;
-            }
+    // 1. Find the boundaries of all points (targets + user)
+    const allLats = parsedCoords.map(t => t.lat);
+    const allLons = parsedCoords.map(t => t.lon);
 
-            // Find the true geographical bounding box of ALL points (targets + user)
-            let minLat = allCoords[0].lat, maxLat = allCoords[0].lat;
-            let minLon = allCoords[0].lon, maxLon = allCoords[0].lon;
+    let minLat = Math.min(...allLats);
+    let maxLat = Math.max(...allLats);
+    let minLon = Math.min(...allLons);
+    let maxLon = Math.max(...allLons);
 
-            allCoords.forEach(c => {
-                minLat = Math.min(minLat, c.lat);
-                maxLat = Math.max(maxLat, c.lat);
-                minLon = Math.min(minLon, c.lon);
-                maxLon = Math.max(maxLon, c.lon);
-            });
-            
-            // Add a tiny buffer if min/max are the same (single point or all points overlap)
-            if (minLat === maxLat) {
-                minLat -= 0.00001;
-                maxLat += 0.00001;
-            }
-            if (minLon === maxLon) {
-                minLon -= 0.00001;
-                maxLon += 0.00001;
-            }
-            
-            const latRange = maxLat - minLat;
-            const lonRange = maxLon - minLon;
+    // --- NEW LOGIC FOR PADDING ---
+    const PADDING_RATIO = 0.10; // 10% padding on all four sides
 
-            // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
-            const metersPerDegreeLat = 111320; // Approximation
-            const meanLat = toRad((minLat + maxLat) / 2);
-            const metersPerDegreeLon = 111320 * Math.cos(meanLat);
+    const latRange = maxLat - minLat;
+    const lonRange = maxLon - minLon;
+    
+    // Use the larger range to ensure the plot is always a perfect square
+    let maxRange = Math.max(latRange, lonRange);
+    
+    // If the range is 0 (only one point), set a default small range for plotting
+    if (maxRange === 0) {
+        maxRange = 0.00005; // Default 5m range if only one point
+    }
 
-            const mapHeightMeters = latRange * metersPerDegreeLat;
-            const mapWidthMeters = lonRange * metersPerDegreeLon;
+    // Apply padding to the maxRange
+    const paddedRange = maxRange * (1 + 2 * PPADDING_RATIO);
+    
+    // Calculate the center point
+    const latCenter = (minLat + maxLat) / 2;
+    const lonCenter = (minLon + maxLon) / 2;
 
-            const isTinyMap = mapHeightMeters < 1 || mapWidthMeters < 1; 
+    // Determine the new, padded min/max bounds
+    const paddedMinLat = latCenter - (paddedRange / 2);
+    const paddedMaxLat = latCenter + (paddedRange / 2);
+    const paddedMinLon = lonCenter - (paddedRange / 2);
+    const paddedMaxLon = lonCenter + (paddedRange / 2);
+    
+    // This is the range used for percentage mapping
+    const mapRange = paddedMaxLat - paddedMinLat; 
+    // -----------------------------
 
-            // 2. Normalize and generate pins HTML
-            const pinsHtml = allCoords.map(t => {
-                // Calculate position percentages (0% to 100%)
-                
-                // X-axis (Longitude): East is right
-                const xRaw = ((t.lon - minLon) / lonRange) * 100;
-                // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. Invert Y-axis.
-                const yRaw = ((maxLat - t.lat) / latRange) * 100;
-                
-                // Clamp values to ensure they are within the 0-100% boundary
-                const xPercent = clamp(xRaw, 0, 100);
-                const yPercent = clamp(yRaw, 0, 100);
+    // 2. Map coordinates to a 0% to 100% position and generate HTML pins
+    const pinsHtml = parsedCoords.map(t => {
+        // Calculate percentages using the padded bounds
+        const xPercent = ((t.lon - paddedMinLon) / mapRange) * 100;
+        // Y is inverted (0% is North/Top, 100% is South/Bottom)
+        const yPercent = 100 - (((t.lat - paddedMinLat) / mapRange) * 100); 
 
-                let pinHtml = '';
-                let labelHtml = '';
+        // Skip pins that fall outside the calculated, padded map area (shouldn't happen)
+        if (xPercent < 0 || xPercent > 100 || yPercent < 0 || yPercent > 100) return '';
+        
+        let pinHtml;
+        let labelHtml = '';
 
-                if (t.isUser) {
-                    const userAccuracy = t.accuracy; // Radius in meters
-                    let confidenceCircleHtml = '';
-
-                    if (!isTinyMap && userAccuracy > 0) {
-                        // Convert accuracy (radius in meters) to a percentage size
-                        const radiusXPercent = (userAccuracy / mapWidthMeters) * 100;
-                        const radiusYPercent = (userAccuracy / mapHeightMeters) * 100;
-                        
-                        // Calculate diameter percentages
-                        const diameterXPercent = (2 * radiusXPercent);
-                        const diameterYPercent = (2 * radiusYPercent);
-
-                        // Confidence Circle HTML
-                        confidenceCircleHtml = `
-                            <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
-                                style="
-                                    width: ${diameterXPercent.toFixed(2)}%; 
-                                    height: ${diameterYPercent.toFixed(2)}%;
-                                    /* Center the circle on the user's coordinates */
-                                    left: 50%; top: 50%;
-                                    transform: translate(-50%, -50%);
-                                    z-index: 5;
-                                "
-                                title="Confidence Radius: ${t.accuracy.toFixed(1)}m">
-                            </div>
-                        `;
-                    }
-                    
-                    // User Pin: Blue Triangle
-                    pinHtml = `
-                        ${confidenceCircleHtml}
-                        <div class="relative w-0 h-0 border-l-[6px] border-r-[6px] border-b-[12px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
-                    `;
-                    
-                    labelHtml = `
-                        <span class="absolute whitespace-nowrap text-xs font-bold text-white bg-blue-600 p-1 rounded-sm shadow border border-blue-800" 
-                              style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                            ${t.description}
-                        </span>
-                    `;
-                } else {
-                    // Target Pin: Colored Dot with Label
-                    let color = 'bg-primary'; 
-                    if (t.type === 'Coin') color = 'bg-yellow-500';
-                    if (t.type.includes('Junk')) color = 'bg-gray-700';
-
-                    pinHtml = `<div class="w-3 h-3 rounded-full ${color} border-2 border-primary shadow-lg cursor-pointer"></div>`;
-                    labelHtml = `
-                        <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
-                              style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                            ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
-                        </span>
-                    `;
-                }
-                
-                return `
-                    <div 
-                        class="absolute" 
-                        style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: ${t.isUser ? 20 : 10};"
-                        title="${t.description} (VDI: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
-                    >
-                        ${pinHtml}
-                        
-                        ${labelHtml}
-                    </div>
-                `;
-            }).join('');
-
-            // 3. Return the container HTML with click-to-fullscreen added
- // 3. Determine classes based on global state
-            let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
-            
-            if (isMapFullscreen) {
-                // Fullscreen Classes (Fixed position, full width/height)
-                containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
-            } else {
-                // Normal/Small Classes (Square aspect ratio, borders)
-                containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
-            }
-
+        if (t.isUser) {
+            // User location is a blue triangle
+            pinHtml = `<i class="fas fa-location-arrow text-blue-600 text-lg" style="transform: rotate(-45deg);"></i>`;
             const circleDiameter = getCircleDiameter(currentUserAccuracy);
-
-            // NOTICE: We use ${containerClasses} below instead of hardcoded classes
-            // AND we removed 'this' from the onclick function call
-            return `
-                <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
-                    ${pinsHtml}
-                    <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
-                        <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
-                    </div>
-                </div>
-                <div class="text-xs text-gray-500 mt-2">                   <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
-                    <ul class="list-disc list-inside mt-1">
-                        <li><span class="font-bold">North</span> is towards the top of the box.</li>
-                        <li><span class="font-bold">East</span> is towards the right of the box.</li>
-                        <li>Total Targets Plotted: ${parsedCoords.length}</li>
-                        ${currentUserCoords ? 
-                            `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
-                             <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
-                             <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${circleDiameter}m</li>
-                            ` 
-                            : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
-                        }
-                    </ul>
-                </div>
-            `;
+            // Draw a red accuracy circle scaled to the map size
+            labelHtml = `<div class="absolute inset-0 rounded-full border-2 border-red-600 opacity-50 pointer-events-none" style="width: ${circleDiameter}%; height: ${circleDiameter}%; left: 50%; top: 50%; transform: translate(-50%, -50%);"></div>`;
+        } else {
+            // Target is a small red dot
+            pinHtml = `<i class="fas fa-circle text-red-600 text-xs"></i>`;
         }
 
-/** Toggles the map state and re-renders immediately. */
+        // Use handlePinClick (from previous step) on the pin itself
+        return `
+            <div 
+                class="absolute pin-hover" 
+                style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: ${t.isUser ? 20 : 10};"
+                title="${t.description} (VDI: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)}"
+                onclick="handlePinClick(event, '${t.description.replace(/'/g, "\\'")}', '${t.vdi}', '${t.depth}', '${t.type}')"
+            >
+                ${pinHtml}
+                ${labelHtml}
+            </div>
+        `;
+    }).join('');
+
+    // 3. Determine classes and return the container HTML
+    let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
+    
+    if (isMapFullscreen) {
+        // Fullscreen Classes
+        containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
+    } else {
+        // Normal/Small Classes
+        containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
+    }
+
+    const circleDiameter = getCircleDiameter(currentUserAccuracy);
+
+    return `
+        <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
+            ${pinsHtml}
+            <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
+                <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
+            </div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">
+            <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
+            <ul class="list-disc list-inside mt-1">
+                <li><span class="font-bold">North</span> is towards the top of the box.</li>
+                <li><span class="font-bold">East</span> is towards the right of the box.</li>
+                <li>Total Targets Plotted: ${parsedCoords.length}</li>
+                ${currentUserCoords ? 
+                    `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
+                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
+                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${circleDiameter}m</li>
+                    ` 
+                    : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
+                }
+            </ul>
+        </div>
+    `;
+}/** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
     isMapFullscreen = !isMapFullscreen;
