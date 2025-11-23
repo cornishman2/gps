@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 10 User Accurate - Metal Detecting Survey Log</title>
+    <title>GPS 11 User Accurate - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1564,61 +1564,61 @@ function toggleMapFullscreen() {
     render(); 
 }        
      
-        /** Renders the content for the Compass page (now a static target plot). */
-        function renderCompassPage(isAutoRefresh = false) {
-            const openSurvey = surveys.find(s => s.status === 'Open');
+function renderCompassPage(isAutoRefresh = false) {
+    const openSurvey = surveys.find(s => s.status === 'Open');
 
-            if (!openSurvey) {
-                return `
-                    <div class="p-4">
-                        <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
-                        <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
-                            <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                            <p class="text-gray-700">Please open a survey on the **Home** page to view its targets on the plot.</p>
-                        </div>
-                    </div>
-                `;
-            }
-            
- // Start the GPS watch and the 5-second rendering interval ONLY ONCE when navigating to the page manually
-        if (!isAutoRefresh) {
-            startLiveMapLocationWatch();
-        }           }
-
-            // Filter for targets that actually have usable coordinates
-            const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged');
-
-            return `
-                <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
-                    
-                    <div class="bg-card p-4 rounded-lg shadow-md mb-6 border-l-4 border-primary">
-                        <h3 class="text-xl font-semibold mb-1 text-gray-700">
-                            Viewing Targets for: <span class="text-primary">${openSurvey.name}</span>
-                        </h3>
-                        <p class="text-sm text-gray-600">Targets with valid GPS logged: **${targets.length}**</p>
-                        ${isAutoRefresh ? 
-                            `<p class="text-sm text-green-600 mt-2">
-                                <i class="fas fa-redo fa-spin mr-1"></i> Auto-refreshing map every 5 seconds...
-                            </p>` : ''
-                        }
-                    </div>
-
-                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-8">
-                        <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
-                            <i class="fas fa-dot-circle mr-2"></i> Static Target Plot
-                        </h3>
-                        <p class="text-sm text-gray-600 mb-3">
-                            This plot shows the relative geographical distribution of all logged targets and your position in the open survey.
-                            Your uncertainty is shown with a semi-transparent red confidence circle (Radius = GPS Accuracy).
-                        </p>
-                        ${renderTargetPlot(targets)}
-                    </div>
+    if (!openSurvey) {
+        // First return path (handles no open survey)
+        return `
+            <div class="p-4">
+                <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+                    <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
+                    <p class="text-gray-700">Please open a survey on the **Home** page to view its targets on the plot.</p>
                 </div>
-            `;
-        }
+            </div>
+        `;
+    }
 
+    // Start the GPS watch and the 5-second rendering interval ONLY ONCE when navigating to the page manually
+    // (This line must be inside the function body, which it is now)
+    if (!isAutoRefresh) {
+        startLiveMapLocationWatch();
+    }
+    
+    // Filter for targets that actually have usable coordinates
+    const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged');
 
+    // Second return path (renders the map view)
+    return `
+        <div class="p-4">
+            <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
+            
+            <div class="bg-card p-4 rounded-lg shadow-md mb-6 border-l-4 border-primary">
+                <h3 class="text-xl font-semibold mb-1 text-gray-700">
+                    Viewing Targets for: <span class="text-primary">${openSurvey.name}</span>
+                </h3>
+                <p class="text-sm text-gray-600">Targets with valid GPS logged: **${targets.length}**</p>
+                ${isAutoRefresh ? 
+                    `<p class="text-sm text-green-600 mt-2">
+                        <i class="fas fa-redo fa-spin mr-1"></i> Auto-refreshing map every 5 seconds...
+                    </p>` : ''
+                }
+            </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-8">
+                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                    <i class="fas fa-dot-circle mr-2"></i> Static Target Plot
+                </h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    This plot shows the relative geographical distribution of all logged targets and your position in the open survey.
+                    Your uncertainty is shown with a semi-transparent red confidence circle (Radius = GPS Accuracy).
+                </p>
+                ${renderTargetPlot(targets)}
+            </div>
+        </div>
+    `;
+}
         /** Renders the content for the Settings page. */
         function renderSettingsPage() {
             const secondaryColor = 'rgb(var(--color-secondary))';
