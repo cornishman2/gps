@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User position 5 - Metal Detecting Survey Log</title>
+    <title>GPS 6 Most Accurate - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -291,42 +291,6 @@
         let currentUserCoords = null; // Stores {lat: number, lon: number}
         let currentUserAccuracy = null; // Stores accuracy in meters
 
-        // --- NEW HISTORY AND ACCURACY LOGIC ---
-
-// Global variable to store a short history of recent locations
-let locationHistory = [];
-const LOCATION_HISTORY_SIZE = 5; // Keep the last 5 good locations
-
-// Define minimum requirements for filtering
-const MIN_ACCEPTED_ACCURACY_METERS = 30; // Ignore locations with accuracy worse than 30 meters
-const MAX_STALE_TIME_MS = 10000;       // Ignore locations older than 10 seconds (10000ms)
-
-/**
- * Finds the most accurate (lowest accuracy number) location point 
- * from the recent location history array.
- * @returns {{lat: number, lon: number, accuracy: number} | null} 
- */
-function getBestAccurateLocation() {
-    if (locationHistory.length === 0) {
-        return null;
-    }
-
-    // Start with the first point as the initial "best"
-    let bestPoint = locationHistory[0];
-
-    // Iterate through the rest of the history to find the point with the lowest accuracy
-    for (let i = 1; i < locationHistory.length; i++) {
-        const currentPoint = locationHistory[i];
-        
-        // Lower accuracy value means better reading
-        if (currentPoint.accuracy < bestPoint.accuracy) {
-            bestPoint = currentPoint;
-        }
-    }
-    
-    return bestPoint;
-}
-
         // --- GEOGRAPHY HELPER FUNCTIONS ---
 
         /** Converts degrees to radians. */
@@ -448,8 +412,6 @@ function getBestAccurateLocation() {
                 }
             });
 
-// ... inside the render() function ...
-
             // Cleanup: Always clear the interval when rendering a new page content,
             // the Compass page will restart it if needed.
             if (autoRefreshIntervalId) {
@@ -457,16 +419,9 @@ function getBestAccurateLocation() {
                 autoRefreshIntervalId = null;
                 console.log("Auto-refresh stopped.");
             }
-            
-            // NEW FIX: Explicitly stop the continuous GPS stream when leaving the Compass page
-            if (userWatchId !== null) {
-                navigator.geolocation.clearWatch(userWatchId);
-                userWatchId = null;
-                console.log("User GPS Watch stopped.");
-            }
 
             switch (currentPage) {
-// ... rest of the function                case 'Home':
+                case 'Home':
                     contentHtml = renderHomePage();
                     break;
                 case 'Targets':
@@ -618,89 +573,39 @@ function startTargetLocationWatch() {
     }
 }
         
-/** * Requests and updates the global currentUserCoords and currentUserAccuracy state. 
- * This uses the 'best of last 5' logic for a stable, highly accurate map position.
- */
-// Global variable to hold the GPS watch ID so we can stop it later
-let userWatchId = null;
-
-/** * Starts continuously watching the user's position using the 'best of last 5' logic 
- * for a stable, highly accurate map position.
- */
-function getCurrentUserPosition() {
-    // If we're already watching, stop the old watch before starting a new one
-    if (userWatchId !== null) {
-        navigator.geolocation.clearWatch(userWatchId);
-        userWatchId = null;
-    }
-    
-    // Check if the browser supports geolocation
-    if (navigator.geolocation) {
-        
-        // --- KEY FIX: Use watchPosition for continuous updates ---
-        userWatchId = navigator.geolocation.watchPosition(
-            // SUCCESS CALLBACK
-            (position) => {
-                const coords = position.coords;
-                const now = Date.now();
-                const age = now - position.timestamp;
-
-                // --- 1. FILTERING: Reject readings that are too old (stale) ---
-                if (age > MAX_STALE_TIME_MS) {
-                    console.warn('GPS reading is too old (stale):', age, 'ms old. Ignoring.');
-                    return;
-                }
-                
-                // --- 2. STORE NEW READING IN HISTORY ---
-                const newPoint = { 
-                    lat: coords.latitude, 
-                    lon: coords.longitude, 
-                    accuracy: coords.accuracy, 
-                    timestamp: position.timestamp 
-                };
-                locationHistory.push(newPoint);
-
-                // Keep the history array manageable (e.g., last 5 points)
-                if (locationHistory.length > LOCATION_HISTORY_SIZE) {
-                    locationHistory.shift(); // Remove the oldest point
-                }
-                
-                // --- 3. APPLY BEST ACCURACY TO GLOBAL STATE (The Absolute Position Fix) ---
-                const mostAccuratePoint = getBestAccurateLocation();
-
-                if (mostAccuratePoint) {
-                    // Update the global variables that renderCompassPage uses 
-                    currentUserCoords = {
-                        lat: mostAccuratePoint.lat,
-                        lon: mostAccuratePoint.lon
-                    };
-                    currentUserAccuracy = mostAccuratePoint.accuracy; 
-                }
-
-            },
-            // ERROR CALLBACK
-            (error) => {
-                // On error, clear the coordinates
+        /** Requests and updates the global currentUserCoords and currentUserAccuracy state. */
+        function getCurrentUserPosition() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentUserCoords = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        };
+                        currentUserAccuracy = position.coords.accuracy; // Store accuracy in meters
+                    },
+                    (error) => {
+                        // On error, clear the coordinates so the user pin disappears
+                        currentUserCoords = null;
+                        currentUserAccuracy = null;
+                        console.error('Real-time Geolocation Error:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
                 currentUserCoords = null;
                 currentUserAccuracy = null;
-                console.error('Real-time Geolocation Error:', error);
-            },
-            // OPTIONS
-            {
-                enableHighAccuracy: true,
-                timeout: 10000, // Increased timeout to 10 seconds for watchPosition
-                maximumAge: 5000 // Accept positions up to 5 seconds old if a new one is unavailable
             }
-        );
-    } else {
-        // Geolocation not supported
-        currentUserCoords = null;
-        currentUserAccuracy = null;
-    }
-}        /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
+        }
+
+        /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
         function updateMapWithUserLocationAndRender() {
             // 1. Fetch user position (this is async, but will update state for the next render cycle)
-            //getCurrentUserPosition();
+            getCurrentUserPosition();
 
             // 2. Re-render the Compass page immediately, signaling it is an auto-refresh
             const appContent = document.getElementById('app-content');
@@ -779,49 +684,49 @@ function getCurrentUserPosition() {
             document.getElementById('new-survey-modal').style.display = 'none';
         }
 
-   /** Handles the submission of the New Survey form. */
-function handleNewSurveySubmit(event) {
-    event.preventDefault();
+        /** Handles the submission of the New Survey form. */
+        function handleNewSurveySubmit(event) {
+            event.preventDefault();
 
-    const form = event.target;
-    const name = form['surveyName'].value.trim(); // <-- FIX: This line was truncated
-    const description = form['surveyDescription'].value.trim() || 'No description provided.';
-    const now = Date.now();
+            const form = event.target;
+            const name = form['surveyName'].value.trim();
+            const description = form['surveyDescription'].value.trim() || 'No description provided.';
+            const now = Date.now();
 
-    if (!name) {
-        showMessage('Survey Name is required.', 'error');
-        return;
-    }
+            if (!name) {
+                showMessage('Survey Name is required.', 'error');
+                return;
+            }
 
-    // 1. Close any currently open survey
-    surveys.forEach(s => {
-        if (s.status === 'Open') {
-            s.status = 'Active';
-            s.dateLastChanged = now;
+            // 1. Close any currently open survey
+            surveys.forEach(s => {
+                if (s.status === 'Open') {
+                    s.status = 'Active';
+                    s.dateLastChanged = now;
+                }
+            });
+
+            // 2. Create the new survey object
+            const newSurvey = {
+                id: generateId(),
+                name: name,
+                description: description,
+                status: 'Open', // Automatically opens the new survey
+                creationDate: now,
+                dateLastChanged: now,
+                targets: []
+            };
+
+            // 3. Add the new survey to the start of the list
+            surveys.unshift(newSurvey);
+
+            // 4. Save and re-render
+            saveSurveysToLocalStorage();
+            closeNewSurveyModal();
+            showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
+            render();
         }
-    });
 
-    // 2. Create the new survey object
-    const newSurvey = {
-        id: generateId(),
-        name: name,
-        description: description,
-        status: 'Open', // Automatically opens the new survey
-        creationDate: now,
-        dateLastChanged: now,
-        targets: []
-    };
-
-    // 3. Add the new survey to the start of the list
-    surveys.unshift(newSurvey);
-
-    // 4. Save and re-render
-    saveSurveysToLocalStorage();
-    closeNewSurveyModal();
-    showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
-    render();
-}
-        
         /** Shows the New Target Modal. */
         function showNewTargetModal() {
             const openSurvey = surveys.find(s => s.status === 'Open');
@@ -1149,63 +1054,51 @@ function handleNewSurveySubmit(event) {
         // --- PAGE RENDER FUNCTIONS ---
 
         /** Renders the content for the Home page. */
-   /** Renders the Home page content showing the list of surveys. */
-function renderHomePage() {
-    // Determine the currently open survey, if any
-    const openSurvey = surveys.find(s => s.status === 'Open');
+        function renderHomePage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            const activeSurveys = surveys.filter(s => s.status === 'Active');
+            const archivedSurveys = surveys.filter(s => s.status === 'Archived');
 
-    const surveyListHtml = surveys.length > 0
-        ? surveys.map(survey => {
-            const statusColor = survey.status === 'Open' ? 'text-secondary' : 'text-gray-500';
-            const statusIcon = survey.status === 'Open' ? 'fa-folder-open' : 'fa-folder';
-            const buttonHtml = survey.status === 'Open'
-                ? `<button class="btn-sm bg-red-500 hover:bg-red-600 text-white" 
-                            onclick="closeSurvey('${survey.id}')">Close</button>`
-                : `<button class="btn-sm bg-secondary hover:bg-green-600 text-white" 
-                            onclick="openSurvey('${survey.id}')">Open</button>`;
+            const renderSurveyList = (list) => {
+                if (list.length === 0) {
+                    return `<p class="text-gray-500 italic p-4">No surveys in this section.</p>`;
+                }
+                return list.map(s => renderSurveyCard(s, s.id === (openSurvey ? openSurvey.id : null))).join('');
+            };
 
             return `
-                <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-white hover:bg-gray-50 cursor-pointer" 
-                     onclick="navigateToSurveyDetails('${survey.id}')">
-                    <div>
-                        <div class="text-lg font-semibold text-gray-800 flex items-center">
-                            <i class="fa-solid ${statusIcon} ${statusColor} mr-2"></i>
-                            ${survey.name} 
-                        </div>
-                        <div class="text-sm text-gray-600">${survey.targets.length} Target(s)</div>
-                        <div class="text-xs text-gray-400">
-                            Created: ${new Date(survey.creationDate).toLocaleDateString()}
-                        </div>
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
+
+                    <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
+                        <h3 class="text-xl font-bold text-yellow-700 mb-2">
+                            ${openSurvey ? openSurvey.name : 'No Open Survey'}
+                        </h3>
+                        ${openSurvey ? 
+                            `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${openSurvey.targets.length} targets logged)</p>
+                             ${renderSurveyCard(openSurvey, true)}` 
+                            : 
+                            '<p class="text-gray-600">You must open or create a survey to log new targets.</p>'
+                        }
                     </div>
-                    ${buttonHtml}
+
+                    <button id="new-survey-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
+                        <i class="fas fa-plus-circle mr-2"></i> Create New Survey
+                    </button>
+
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Active/Closed Surveys (${activeSurveys.length})</h3>
+                    <div id="active-surveys-list" class="space-y-4 mb-8">
+                        ${renderSurveyList(activeSurveys)}
+                    </div>
+
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Archived Surveys (${archivedSurveys.length})</h3>
+                    <div id="archived-surveys-list" class="space-y-4">
+                        ${renderSurveyList(archivedSurveys)}
+                    </div>
                 </div>
             `;
-        }).join('') // <- The loop ends and its results are joined here
-        : '<p class="text-center text-gray-500 p-4">No surveys found. Click the + button to create a new one.</p>';
+        }
 
-    // The missing '}' that ended the map function was needed here.
-    // The previous code had a syntax error because it was missing this closing brace.
-    // This is the correct structure:
-    
-    return `
-        <div class="space-y-4">
-            ${openSurvey ? renderOpenSurveyBanner(openSurvey) : ''}
-            <div class="bg-white shadow-md rounded-lg divide-y divide-gray-200">
-                <div class="p-4 flex justify-between items-center border-b border-gray-200">
-                    <h2 class="text-xl font-bold text-gray-800">My Surveys</h2>
-                    <button class="btn bg-secondary hover:bg-green-600 text-white" 
-                            onclick="openNewSurveyModal()">
-                        <i class="fa-solid fa-plus mr-2"></i>New Survey
-                    </button>
-                </div>
-                <div>
-                    ${surveyListHtml}
-                </div>
-            </div>
-        </div>
-        ${renderNewSurveyModal()}
-    `;
-}
         /** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
@@ -1473,30 +1366,19 @@ function renderHomePage() {
                 maxLon = Math.max(maxLon, c.lon);
             });
             
-// ... around line 1330 in the <script> section
+            // Add a tiny buffer if min/max are the same (single point or all points overlap)
+            if (minLat === maxLat) {
+                minLat -= 0.00001;
+                maxLat += 0.00001;
+            }
+            if (minLon === maxLon) {
+                minLon -= 0.00001;
+                maxLon += 0.00001;
+            }
+            
+            const latRange = maxLat - minLat;
+            const lonRange = maxLon - minLon;
 
-// Handle edge case where all points are identical (to prevent zero division later)
-if (minLat === maxLat) {
-    minLat -= 0.00001;
-    maxLat += 0.00001;
-}
-if (minLon === maxLon) {
-    minLon -= 0.00001;
-    maxLon += 0.00001;
-}
-
-// FIX: Add a small padding (0.0002 degrees) to the map boundaries so targets don't stick to the edge.
-const MAP_PADDING_DEGREES = 0.0002; // Roughly 22 meters of padding on each side
-minLat -= MAP_PADDING_DEGREES;
-maxLat += MAP_PADDING_DEGREES;
-minLon -= MAP_PADDING_DEGREES;
-maxLon += MAP_PADDING_DEGREES;
-
-
-const latRange = maxLat - minLat;
-const lonRange = maxLon - minLon;
-
-// ...
             // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
             const metersPerDegreeLat = 111320; // Approximation
             const meanLat = toRad((minLat + maxLat) / 2);
