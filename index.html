@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User position - Metal Detecting Survey Log</title>
+    <title>User position 2 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -576,9 +576,24 @@ function startTargetLocationWatch() {
 /** * Requests and updates the global currentUserCoords and currentUserAccuracy state. 
  * This uses the 'best of last 5' logic for a stable, highly accurate map position.
  */
+// Global variable to hold the GPS watch ID so we can stop it later
+let userWatchId = null;
+
+/** * Starts continuously watching the user's position using the 'best of last 5' logic 
+ * for a stable, highly accurate map position.
+ */
 function getCurrentUserPosition() {
+    // If we're already watching, stop the old watch before starting a new one
+    if (userWatchId !== null) {
+        navigator.geolocation.clearWatch(userWatchId);
+        userWatchId = null;
+    }
+    
+    // Check if the browser supports geolocation
     if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
+        
+        // --- KEY FIX: Use watchPosition for continuous updates ---
+        userWatchId = navigator.geolocation.watchPosition(
             // SUCCESS CALLBACK
             (position) => {
                 const coords = position.coords;
@@ -592,8 +607,6 @@ function getCurrentUserPosition() {
                 }
                 
                 // --- 2. STORE NEW READING IN HISTORY ---
-                // We store the point even if accuracy is poor, hoping a later reading 
-                // in the history will be better, or to prevent the map location from freezing.
                 const newPoint = { 
                     lat: coords.latitude, 
                     lon: coords.longitude, 
@@ -612,7 +625,6 @@ function getCurrentUserPosition() {
 
                 if (mostAccuratePoint) {
                     // Update the global variables that renderCompassPage uses 
-                    // with the coordinates from the most accurate point found in the history.
                     currentUserCoords = {
                         lat: mostAccuratePoint.lat,
                         lon: mostAccuratePoint.lon
@@ -623,23 +635,24 @@ function getCurrentUserPosition() {
             },
             // ERROR CALLBACK
             (error) => {
-                // On error, clear the coordinates so the user pin disappears
+                // On error, clear the coordinates
                 currentUserCoords = null;
                 currentUserAccuracy = null;
                 console.error('Real-time Geolocation Error:', error);
             },
+            // OPTIONS
             {
                 enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
+                timeout: 10000, // Increased timeout to 10 seconds for watchPosition
+                maximumAge: 5000 // Accept positions up to 5 seconds old if a new one is unavailable
             }
         );
     } else {
+        // Geolocation not supported
         currentUserCoords = null;
         currentUserAccuracy = null;
     }
-}
-        /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
+}        /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
         function updateMapWithUserLocationAndRender() {
             // 1. Fetch user position (this is async, but will update state for the next render cycle)
             getCurrentUserPosition();
