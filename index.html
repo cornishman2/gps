@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Padding 1 - Metal Detecting Survey Log</title>
+    <title>User position - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -573,35 +573,72 @@ function startTargetLocationWatch() {
     }
 }
         
-        /** Requests and updates the global currentUserCoords and currentUserAccuracy state. */
-        function getCurrentUserPosition() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        currentUserCoords = {
-                            lat: position.coords.latitude,
-                            lon: position.coords.longitude
-                        };
-                        currentUserAccuracy = position.coords.accuracy; // Store accuracy in meters
-                    },
-                    (error) => {
-                        // On error, clear the coordinates so the user pin disappears
-                        currentUserCoords = null;
-                        currentUserAccuracy = null;
-                        console.error('Real-time Geolocation Error:', error);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 5000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
+/** * Requests and updates the global currentUserCoords and currentUserAccuracy state. 
+ * This uses the 'best of last 5' logic for a stable, highly accurate map position.
+ */
+function getCurrentUserPosition() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            // SUCCESS CALLBACK
+            (position) => {
+                const coords = position.coords;
+                const now = Date.now();
+                const age = now - position.timestamp;
+
+                // --- 1. FILTERING: Reject readings that are too old (stale) ---
+                if (age > MAX_STALE_TIME_MS) {
+                    console.warn('GPS reading is too old (stale):', age, 'ms old. Ignoring.');
+                    return;
+                }
+                
+                // --- 2. STORE NEW READING IN HISTORY ---
+                // We store the point even if accuracy is poor, hoping a later reading 
+                // in the history will be better, or to prevent the map location from freezing.
+                const newPoint = { 
+                    lat: coords.latitude, 
+                    lon: coords.longitude, 
+                    accuracy: coords.accuracy, 
+                    timestamp: position.timestamp 
+                };
+                locationHistory.push(newPoint);
+
+                // Keep the history array manageable (e.g., last 5 points)
+                if (locationHistory.length > LOCATION_HISTORY_SIZE) {
+                    locationHistory.shift(); // Remove the oldest point
+                }
+                
+                // --- 3. APPLY BEST ACCURACY TO GLOBAL STATE (The Absolute Position Fix) ---
+                const mostAccuratePoint = getBestAccurateLocation();
+
+                if (mostAccuratePoint) {
+                    // Update the global variables that renderCompassPage uses 
+                    // with the coordinates from the most accurate point found in the history.
+                    currentUserCoords = {
+                        lat: mostAccuratePoint.lat,
+                        lon: mostAccuratePoint.lon
+                    };
+                    currentUserAccuracy = mostAccuratePoint.accuracy; 
+                }
+
+            },
+            // ERROR CALLBACK
+            (error) => {
+                // On error, clear the coordinates so the user pin disappears
                 currentUserCoords = null;
                 currentUserAccuracy = null;
+                console.error('Real-time Geolocation Error:', error);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
             }
-        }
-
+        );
+    } else {
+        currentUserCoords = null;
+        currentUserAccuracy = null;
+    }
+}
         /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
         function updateMapWithUserLocationAndRender() {
             // 1. Fetch user position (this is async, but will update state for the next render cycle)
