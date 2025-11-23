@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User position 2 - Metal Detecting Survey Log</title>
+    <title>User position 3 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -412,6 +412,8 @@
                 }
             });
 
+// ... inside the render() function ...
+
             // Cleanup: Always clear the interval when rendering a new page content,
             // the Compass page will restart it if needed.
             if (autoRefreshIntervalId) {
@@ -419,9 +421,16 @@
                 autoRefreshIntervalId = null;
                 console.log("Auto-refresh stopped.");
             }
+            
+            // NEW FIX: Explicitly stop the continuous GPS stream when leaving the Compass page
+            if (userWatchId !== null) {
+                navigator.geolocation.clearWatch(userWatchId);
+                userWatchId = null;
+                console.log("User GPS Watch stopped.");
+            }
 
             switch (currentPage) {
-                case 'Home':
+// ... rest of the function                case 'Home':
                     contentHtml = renderHomePage();
                     break;
                 case 'Targets':
@@ -655,7 +664,7 @@ function getCurrentUserPosition() {
 }        /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
         function updateMapWithUserLocationAndRender() {
             // 1. Fetch user position (this is async, but will update state for the next render cycle)
-            getCurrentUserPosition();
+            //getCurrentUserPosition();
 
             // 2. Re-render the Compass page immediately, signaling it is an auto-refresh
             const appContent = document.getElementById('app-content');
