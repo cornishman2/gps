@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User position 3 - Metal Detecting Survey Log</title>
+    <title>User position 4 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -290,6 +290,42 @@
         let autoRefreshIntervalId = null; 
         let currentUserCoords = null; // Stores {lat: number, lon: number}
         let currentUserAccuracy = null; // Stores accuracy in meters
+
+        // --- NEW HISTORY AND ACCURACY LOGIC ---
+
+// Global variable to store a short history of recent locations
+let locationHistory = [];
+const LOCATION_HISTORY_SIZE = 5; // Keep the last 5 good locations
+
+// Define minimum requirements for filtering
+const MIN_ACCEPTED_ACCURACY_METERS = 30; // Ignore locations with accuracy worse than 30 meters
+const MAX_STALE_TIME_MS = 10000;       // Ignore locations older than 10 seconds (10000ms)
+
+/**
+ * Finds the most accurate (lowest accuracy number) location point 
+ * from the recent location history array.
+ * @returns {{lat: number, lon: number, accuracy: number} | null} 
+ */
+function getBestAccurateLocation() {
+    if (locationHistory.length === 0) {
+        return null;
+    }
+
+    // Start with the first point as the initial "best"
+    let bestPoint = locationHistory[0];
+
+    // Iterate through the rest of the history to find the point with the lowest accuracy
+    for (let i = 1; i < locationHistory.length; i++) {
+        const currentPoint = locationHistory[i];
+        
+        // Lower accuracy value means better reading
+        if (currentPoint.accuracy < bestPoint.accuracy) {
+            bestPoint = currentPoint;
+        }
+    }
+    
+    return bestPoint;
+}
 
         // --- GEOGRAPHY HELPER FUNCTIONS ---
 
@@ -743,49 +779,49 @@ function getCurrentUserPosition() {
             document.getElementById('new-survey-modal').style.display = 'none';
         }
 
-        /** Handles the submission of the New Survey form. */
-        function handleNewSurveySubmit(event) {
-            event.preventDefault();
+   /** Handles the submission of the New Survey form. */
+function handleNewSurveySubmit(event) {
+    event.preventDefault();
 
-            const form = event.target;
-            const name = form['surveyName'].value.trim();
-            const description = form['surveyDescription'].value.trim() || 'No description provided.';
-            const now = Date.now();
+    const form = event.target;
+    const name = form['surveyName'].value.trim(); // <-- FIX: This line was truncated
+    const description = form['surveyDescription'].value.trim() || 'No description provided.';
+    const now = Date.now();
 
-            if (!name) {
-                showMessage('Survey Name is required.', 'error');
-                return;
-            }
+    if (!name) {
+        showMessage('Survey Name is required.', 'error');
+        return;
+    }
 
-            // 1. Close any currently open survey
-            surveys.forEach(s => {
-                if (s.status === 'Open') {
-                    s.status = 'Active';
-                    s.dateLastChanged = now;
-                }
-            });
-
-            // 2. Create the new survey object
-            const newSurvey = {
-                id: generateId(),
-                name: name,
-                description: description,
-                status: 'Open', // Automatically opens the new survey
-                creationDate: now,
-                dateLastChanged: now,
-                targets: []
-            };
-
-            // 3. Add the new survey to the start of the list
-            surveys.unshift(newSurvey);
-
-            // 4. Save and re-render
-            saveSurveysToLocalStorage();
-            closeNewSurveyModal();
-            showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
-            render();
+    // 1. Close any currently open survey
+    surveys.forEach(s => {
+        if (s.status === 'Open') {
+            s.status = 'Active';
+            s.dateLastChanged = now;
         }
+    });
 
+    // 2. Create the new survey object
+    const newSurvey = {
+        id: generateId(),
+        name: name,
+        description: description,
+        status: 'Open', // Automatically opens the new survey
+        creationDate: now,
+        dateLastChanged: now,
+        targets: []
+    };
+
+    // 3. Add the new survey to the start of the list
+    surveys.unshift(newSurvey);
+
+    // 4. Save and re-render
+    saveSurveysToLocalStorage();
+    closeNewSurveyModal();
+    showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
+    render();
+}
+        
         /** Shows the New Target Modal. */
         function showNewTargetModal() {
             const openSurvey = surveys.find(s => s.status === 'Open');
