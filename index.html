@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 6 Most Accurate - Metal Detecting Survey Log</title>
+    <title>GPS 7 User Accurate - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -286,11 +286,16 @@
         };
         let userId;
 
-        // --- NEW REAL-TIME LOCATION STATE ---
-        let autoRefreshIntervalId = null; 
-        let currentUserCoords = null; // Stores {lat: number, lon: number}
-        let currentUserAccuracy = null; // Stores accuracy in meters
+      // --- NEW REAL-TIME LOCATION STATE ---
+let autoRefreshIntervalId = null; 
+let currentUserCoords = null; // Stores {lat: number, lon: number}
+let currentUserAccuracy = null; // Stores accuracy in meters
 
+// ADD THESE FOR LIVE MAP ACCURACY LOGIC:
+let liveMapWatchId = null;      // To track the watchPosition process for the live map
+let bestLiveAccuracy = Infinity; // To track the best accuracy received (lower is better)
+
+        
         // --- GEOGRAPHY HELPER FUNCTIONS ---
 
         /** Converts degrees to radians. */
@@ -412,16 +417,25 @@
                 }
             });
 
-            // Cleanup: Always clear the interval when rendering a new page content,
-            // the Compass page will restart it if needed.
-            if (autoRefreshIntervalId) {
-                clearInterval(autoRefreshIntervalId);
-                autoRefreshIntervalId = null;
-                console.log("Auto-refresh stopped.");
-            }
+// In the render function...
+        
+        // Cleanup: Always clear the interval and GPS watch when rendering a new page content,
+        // the Compass page will restart it if needed.
+        if (autoRefreshIntervalId) {
+            clearInterval(autoRefreshIntervalId);
+            autoRefreshIntervalId = null;
+            console.log("Auto-refresh stopped.");
+        }
+        // ADDED: Clear the live map GPS watch
+        if (liveMapWatchId) {
+            navigator.geolocation.clearWatch(liveMapWatchId);
+            liveMapWatchId = null;
+            bestLiveAccuracy = Infinity;
+            console.log("Live Map GPS Watch stopped.");
+        }
 
-            switch (currentPage) {
-                case 'Home':
+        switch (currentPage) {
+        // ... (rest of the switch statement)                case 'Home':
                     contentHtml = renderHomePage();
                     break;
                 case 'Targets':
@@ -573,41 +587,69 @@ function startTargetLocationWatch() {
     }
 }
         
-        /** Requests and updates the global currentUserCoords and currentUserAccuracy state. */
-        function getCurrentUserPosition() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
+// --- LIVE MAP GPS WATCH FUNCTIONS (New/Modified Logic) ---
+
+        /** Starts a continuous, high-accuracy GPS stream that only updates the state when a reading is more accurate. 
+         * Also starts the 5-second rendering interval.
+         */
+        function startLiveMapLocationWatch() {
+            if (!navigator.geolocation) {
+                currentUserCoords = null;
+                currentUserAccuracy = null;
+                showMessage('Geolocation is not supported on this device.', 'error');
+                return;
+            }
+            
+            // Reset best accuracy for a fresh start
+            bestLiveAccuracy = Infinity; 
+            
+            // 1. Start continuous watchPosition (Runs in the background)
+            liveMapWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const accuracy = position.coords.accuracy;
+                    
+                    // Core Logic: Only update the global state if this reading is more accurate
+                    if (accuracy < bestLiveAccuracy) {
+                        bestLiveAccuracy = accuracy; 
+                        
                         currentUserCoords = {
                             lat: position.coords.latitude,
                             lon: position.coords.longitude
                         };
-                        currentUserAccuracy = position.coords.accuracy; // Store accuracy in meters
-                    },
-                    (error) => {
-                        // On error, clear the coordinates so the user pin disappears
-                        currentUserCoords = null;
-                        currentUserAccuracy = null;
-                        console.error('Real-time Geolocation Error:', error);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 5000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                currentUserCoords = null;
-                currentUserAccuracy = null;
+                        currentUserAccuracy = accuracy;
+                        
+                        console.log(`Live Map New Best Accuracy: ${accuracy.toFixed(1)}m`);
+                    } 
+                }, 
+                
+                // Error Callback
+                (error) => {
+                    currentUserCoords = null;
+                    currentUserAccuracy = null;
+                    console.error('Live Map GPS Watch Error:', error);
+                },
+                
+                // Options Object: High accuracy, no timeout (watch is continuous), maximumAge=0
+                {
+                    enableHighAccuracy: true, 
+                    maximumAge: 0             
+                }
+            );
+
+            // 2. Start the 5-second rendering interval (if not already running)
+            if (autoRefreshIntervalId === null) {
+                autoRefreshIntervalId = setInterval(() => {
+                    updateMapWithUserLocationAndRender();
+                }, 5000); // 5000 milliseconds = 5 seconds
+                console.log("Live Map GPS Watch and 5-second rendering interval started.");
             }
         }
 
-        /** Wrapper function to fetch GPS, update state, and re-render Compass page for auto-refresh. */
+        /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
         function updateMapWithUserLocationAndRender() {
-            // 1. Fetch user position (this is async, but will update state for the next render cycle)
-            getCurrentUserPosition();
-
-            // 2. Re-render the Compass page immediately, signaling it is an auto-refresh
+            // The GPS data is updated asynchronously by startLiveMapLocationWatch().
+            // We just trigger the re-render here.
+            
             const appContent = document.getElementById('app-content');
             // Only re-render if we are still on the Compass page
             if (currentPage === 'Compass') { 
@@ -615,7 +657,7 @@ function startTargetLocationWatch() {
                 attachPageEventListeners();
             }
         }
-
+        
         // --- MODAL & TOAST FUNCTIONS ---
 
         /** Shows a temporary notification toast. */
@@ -1540,18 +1582,10 @@ function toggleMapFullscreen() {
                 `;
             }
             
-            // Start the auto-refresh interval ONLY ONCE when navigating to the page manually
-            if (!isAutoRefresh) {
-                // Set up a new interval to update map every 5 seconds
-                autoRefreshIntervalId = setInterval(() => {
-                    // Call the wrapper function to fetch location and re-render the plot
-                    updateMapWithUserLocationAndRender();
-                }, 5000); // 5000 milliseconds = 5 seconds
-                
-                // Initial immediate call to populate the map with user position
-                getCurrentUserPosition();
-                console.log("Auto-refresh started.");
-            }
+ // Start the GPS watch and the 5-second rendering interval ONLY ONCE when navigating to the page manually
+        if (!isAutoRefresh) {
+            startLiveMapLocationWatch();
+        }           }
 
             // Filter for targets that actually have usable coordinates
             const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged');
