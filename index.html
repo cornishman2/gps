@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 8 User Accurate - Metal Detecting Survey Log</title>
+    <title>GPS 9 User Accurate - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1095,53 +1095,50 @@ function startTargetLocationWatch() {
 
         // --- PAGE RENDER FUNCTIONS ---
 
-        /** Renders the content for the Home page. */
-        function renderHomePage() {
-            const openSurvey = surveys.find(s => s.status === 'Open');
-            const activeSurveys = surveys.filter(s => s.status === 'Active');
-            const archivedSurveys = surveys.filter(s => s.status === 'Archived');
+function renderHomePage() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    const activeSurveys = surveys.filter(s => s.status === 'Active');
+    const archivedSurveys = surveys.filter(s => s.status === 'Archived');
 
-            const renderSurveyList = (list) => {
-                if (list.length === 0) {
-                    return `<p class="text-gray-500 italic p-4">No surveys in this section.</p>`;
-                }
-                return list.map(s => renderSurveyCard(s, s.id === (openSurvey ? openSurvey.id : null))).join('');
-            };
-
-            return
-                <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
-
-                    <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
-                        <h3 class="text-xl font-bold text-yellow-700 mb-2">
-                            ${openSurvey ? openSurvey.name : 'No Open Survey'}
-                        </h3>
-                        ${openSurvey ? 
-                            `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${openSurvey.targets.length} targets logged)</p>
-                             ${renderSurveyCard(openSurvey, true)}` 
-                            : 
-                            '<p class="text-gray-600">You must open or create a survey to log new targets.</p>'
-                        }
-                    </div>
-
-                    <button id="new-survey-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
-                        <i class="fas fa-plus-circle mr-2"></i> Create New Survey
-                    </button>
-
-                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Active/Closed Surveys (${activeSurveys.length})</h3>
-                    <div id="active-surveys-list" class="space-y-4 mb-8">
-                        ${renderSurveyList(activeSurveys)}
-                    </div>
-
-                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Archived Surveys (${archivedSurveys.length})</h3>
-                    <div id="archived-surveys-list" class="space-y-4">
-                        ${renderSurveyList(archivedSurveys)}
-                    </div>
-                </div>
-            `;
+    const renderSurveyList = (list) => {
+        if (list.length === 0) {
+            return `<p class="text-gray-500 italic p-4">No surveys in this section.</p>`;
         }
+        // Pass the openSurvey ID to highlight the currently open survey card in the list
+        return list.map(s => renderSurveyCard(s, s.id === (openSurvey ? openSurvey.id : null))).join('');
+    };
 
-        /** Renders a single survey card with action buttons based on status. */
+    // CRITICAL FIX: The template literal must start on the same line as 'return'
+    return `<div class="p-4">
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
+
+        <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
+            <h3 class="text-xl font-bold text-yellow-700 mb-2">
+                ${openSurvey ? openSurvey.name : 'No Open Survey'}
+            </h3>
+            ${openSurvey ? 
+                `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${openSurvey.targets.length} targets logged)</p>
+                 ${renderSurveyCard(openSurvey, true)}` 
+                : 
+                '<p class="text-gray-600">You must open or create a survey to log new targets.</p>'
+            }
+        </div>
+
+        <button id="new-survey-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
+            <i class="fas fa-plus-circle mr-2"></i> Create New Survey
+        </button>
+
+        <h3 class="text-2xl font-bold text-gray-700 mb-3">Active/Closed Surveys (${activeSurveys.length})</h3>
+        <div id="active-surveys-list" class="space-y-4 mb-8">
+            ${renderSurveyList(activeSurveys)}
+        </div>
+
+        <h3 class="text-2xl font-bold text-gray-700 mb-3">Archived Surveys (${archivedSurveys.length})</h3>
+        <div id="archived-surveys-list" class="space-y-4">
+            ${renderSurveyList(archivedSurveys)}
+        </div>
+    </div>`; // Note the closing backtick here
+}        /** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
             let statusBadge = '';
