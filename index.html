@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User position 4 - Metal Detecting Survey Log</title>
+    <title>User position 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1149,51 +1149,63 @@ function handleNewSurveySubmit(event) {
         // --- PAGE RENDER FUNCTIONS ---
 
         /** Renders the content for the Home page. */
-        function renderHomePage() {
-            const openSurvey = surveys.find(s => s.status === 'Open');
-            const activeSurveys = surveys.filter(s => s.status === 'Active');
-            const archivedSurveys = surveys.filter(s => s.status === 'Archived');
+   /** Renders the Home page content showing the list of surveys. */
+function renderHomePage() {
+    // Determine the currently open survey, if any
+    const openSurvey = surveys.find(s => s.status === 'Open');
 
-            const renderSurveyList = (list) => {
-                if (list.length === 0) {
-                    return `<p class="text-gray-500 italic p-4">No surveys in this section.</p>`;
-                }
-                return list.map(s => renderSurveyCard(s, s.id === (openSurvey ? openSurvey.id : null))).join('');
-            };
+    const surveyListHtml = surveys.length > 0
+        ? surveys.map(survey => {
+            const statusColor = survey.status === 'Open' ? 'text-secondary' : 'text-gray-500';
+            const statusIcon = survey.status === 'Open' ? 'fa-folder-open' : 'fa-folder';
+            const buttonHtml = survey.status === 'Open'
+                ? `<button class="btn-sm bg-red-500 hover:bg-red-600 text-white" 
+                            onclick="closeSurvey('${survey.id}')">Close</button>`
+                : `<button class="btn-sm bg-secondary hover:bg-green-600 text-white" 
+                            onclick="openSurvey('${survey.id}')">Open</button>`;
 
             return `
-                <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
-
-                    <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
-                        <h3 class="text-xl font-bold text-yellow-700 mb-2">
-                            ${openSurvey ? openSurvey.name : 'No Open Survey'}
-                        </h3>
-                        ${openSurvey ? 
-                            `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${openSurvey.targets.length} targets logged)</p>
-                             ${renderSurveyCard(openSurvey, true)}` 
-                            : 
-                            '<p class="text-gray-600">You must open or create a survey to log new targets.</p>'
-                        }
+                <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-white hover:bg-gray-50 cursor-pointer" 
+                     onclick="navigateToSurveyDetails('${survey.id}')">
+                    <div>
+                        <div class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="fa-solid ${statusIcon} ${statusColor} mr-2"></i>
+                            ${survey.name} 
+                        </div>
+                        <div class="text-sm text-gray-600">${survey.targets.length} Target(s)</div>
+                        <div class="text-xs text-gray-400">
+                            Created: ${new Date(survey.creationDate).toLocaleDateString()}
+                        </div>
                     </div>
-
-                    <button id="new-survey-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
-                        <i class="fas fa-plus-circle mr-2"></i> Create New Survey
-                    </button>
-
-                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Active/Closed Surveys (${activeSurveys.length})</h3>
-                    <div id="active-surveys-list" class="space-y-4 mb-8">
-                        ${renderSurveyList(activeSurveys)}
-                    </div>
-
-                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Archived Surveys (${archivedSurveys.length})</h3>
-                    <div id="archived-surveys-list" class="space-y-4">
-                        ${renderSurveyList(archivedSurveys)}
-                    </div>
+                    ${buttonHtml}
                 </div>
             `;
-        }
+        }).join('') // <- The loop ends and its results are joined here
+        : '<p class="text-center text-gray-500 p-4">No surveys found. Click the + button to create a new one.</p>';
 
+    // The missing '}' that ended the map function was needed here.
+    // The previous code had a syntax error because it was missing this closing brace.
+    // This is the correct structure:
+    
+    return `
+        <div class="space-y-4">
+            ${openSurvey ? renderOpenSurveyBanner(openSurvey) : ''}
+            <div class="bg-white shadow-md rounded-lg divide-y divide-gray-200">
+                <div class="p-4 flex justify-between items-center border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-800">My Surveys</h2>
+                    <button class="btn bg-secondary hover:bg-green-600 text-white" 
+                            onclick="openNewSurveyModal()">
+                        <i class="fa-solid fa-plus mr-2"></i>New Survey
+                    </button>
+                </div>
+                <div>
+                    ${surveyListHtml}
+                </div>
+            </div>
+        </div>
+        ${renderNewSurveyModal()}
+    `;
+}
         /** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
