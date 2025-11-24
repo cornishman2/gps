@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 6  - Metal Detecting Survey Log</title>
+    <title>Confidence 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1363,13 +1363,21 @@ function renderHomePage() {
         
  /** Renders a static plot of targets based on relative coordinates. */
 function renderTargetPlot(targets) {
-
-    // Haversine approximation constants (Moved up for use in bounding box)
+    
+    // --- DEBUG HARDCODE (STEP 1: REMOVE LATER) ---
+    // Fix accuracy to 10m for debugging the circle size.
+    const DEBUG_ACCURACY = 10;
+    const DEBUG_MAP_RANGE_METERS = 30;
+    // ---------------------------------------------
+    
+    // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
-    const bufferPercentage = 0.05; // 5% buffer on each side (10% total)
-    const userAccuracy = currentUserAccuracy || 0;
+    
+    // Use the debug accuracy for the plot (or fallback to original if debug is disabled/zero)
+    const userAccuracy = currentUserCoords ? (DEBUG_ACCURACY || currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
+    const bufferPercentage = 0.05;
 
     // 1. Parse targets and prepare for Bounding Box calculation
     const parsedCoords = targets.map(t => {
@@ -1408,72 +1416,60 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // --- Bounding Box Calculation ---
-    // Find the true geographical bounding box of ALL points (targets + user)
-    let minLat = allCoords[0].lat, maxLat = allCoords[0].lat;
-    let minLon = allCoords[0].lon, maxLon = allCoords[0].lon;
+    // --- DEBUG HARDCODE (STEP 2: REMOVE LATER) ---
+    // Override Bounding Box calculation to enforce a 30m map width centered on user.
+    let minLat, maxLat, minLon, maxLon;
+    let latRange, lonRange;
+    let mapWidthMeters, mapHeightMeters;
 
-    allCoords.forEach(c => {
-        minLat = Math.min(minLat, c.lat);
-        maxLat = Math.max(maxLat, c.lat);
-        minLon = Math.min(minLon, c.lon);
-        maxLon = Math.max(maxLon, c.lon);
-    });
+    if (currentUserCoords) {
+        // Center map on user location
+        const centerLat = currentUserCoords.lat;
+        const centerLon = currentUserCoords.lon;
+        
+        const meanLatForConversion = toRad(centerLat);
+        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
 
-    // 1. Calculate Target/Pin Bounding Box (before padding)
-    let targetLatRange = maxLat - minLat;
-    let targetLonRange = maxLon - minLon;
+        // Calculate degrees required for 30m total range (15m on either side)
+        const latChangeDeg = (DEBUG_MAP_RANGE_METERS / M_PER_DEG_LAT) / 2;
+        const lonChangeDeg = (DEBUG_MAP_RANGE_METERS / metersPerDegreeLon) / 2;
 
-    // Ensure a minimal range for plotting (e.g., if all targets overlap)
-    if (targetLatRange < 0.00001) { targetLatRange = 0.00002; }
-    if (targetLonRange < 0.00001) { targetLonRange = 0.00002; }
+        minLat = centerLat - latChangeDeg;
+        maxLat = centerLat + latChangeDeg;
+        minLon = centerLon - lonChangeDeg;
+        maxLon = centerLon + lonChangeDeg;
+        
+        latRange = maxLat - minLat;
+        lonRange = maxLon - minLon;
+        
+        // These should now be exactly 30m (or very close)
+        mapHeightMeters = latRange * M_PER_DEG_LAT;
+        mapWidthMeters = lonRange * metersPerDegreeLon;
 
-    // Apply the buffer to the target range
-    const latBuffer = targetLatRange * bufferPercentage;
-    const lonBuffer = targetLonRange * bufferPercentage;
-    
-    // --- Hybrid Map Scale ---
-    // Calculate the map range required to show the user's confidence circle
-    let userLatRange = 0;
-    let userLonRange = 0;
-    
-    if (currentUserCoords && userAccuracy > 0) {
-        // Calculate required degrees to contain the circle diameter + a small 10% padding
-        const requiredMeters = diameterInMeters * 1.1; // 10% extra padding around the circle
-        const meanLatForConversion = toRad(currentUserCoords.lat);
-        const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
+    } else {
+        // Fallback to previous logic if no user location is available (shouldn't happen with targets)
+        // Find the true geographical bounding box of ALL points (targets + user)
+        minLat = allCoords[0].lat; maxLat = allCoords[0].lat;
+        minLon = allCoords[0].lon; maxLon = allCoords[0].lon;
 
-        userLatRange = requiredMeters / M_PER_DEG_LAT;
-        userLonRange = requiredMeters / metersPerDegreeLonForConversion;
+        allCoords.forEach(c => {
+            minLat = Math.min(minLat, c.lat);
+            maxLat = Math.max(maxLat, c.lat);
+            minLon = Math.min(minLon, c.lon);
+            maxLon = Math.max(maxLon, c.lon);
+        });
+        
+        // Simplified fallback for ranges and meters
+        latRange = maxLat - minLat;
+        lonRange = maxLon - minLon;
+        const finalMeanLat = toRad((minLat + maxLat) / 2);
+        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
+        mapHeightMeters = latRange * M_PER_DEG_LAT;
+        mapWidthMeters = lonRange * metersPerDegreeLon;
+
     }
-
-    // Determine the FINAL required range: the MAX of target range or user circle range
-    let finalLatRange = Math.max(targetLatRange, userLatRange);
-    let finalLonRange = Math.max(targetLonRange, userLonRange);
-
-    // Center the final bounding box around the original target center
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLon = (minLon + maxLon) / 2;
+    // ---------------------------------------------
     
-    // Recalculate min/max using the final ranges and center
-    minLat = centerLat - (finalLatRange / 2) - latBuffer; // Subtracting buffer here centers the buffer correctly
-    maxLat = centerLat + (finalLatRange / 2) + latBuffer;
-    minLon = centerLon - (finalLonRange / 2) - lonBuffer;
-    maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
-    // --- END Hybrid Map Scale ---
-
-    // Recalculate ranges based on the new, final expanded bounding box
-    let latRange = maxLat - minLat;
-    let lonRange = maxLon - minLon;
-
-    // --- Calculate map dimensions in meters for accuracy scaling ---
-    // Note: meanLat must be recalculated if the bounding box changed
-    const finalMeanLat = toRad((minLat + maxLat) / 2);
-    const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
-
-    const mapHeightMeters = latRange * M_PER_DEG_LAT;
-    const mapWidthMeters = lonRange * metersPerDegreeLon;
-
     // 2. Normalize and generate pins HTML
     const pinsHtml = allCoords.map(t => {
         // Calculate position percentages (0% to 100%)
@@ -1493,18 +1489,17 @@ function renderTargetPlot(targets) {
         if (t.isUser) {
             let confidenceCircleHtml = '';
 
+            // Use the hardcoded 10m accuracy (20m diameter)
             if (userAccuracy > 0) {
                 
-                // --- CRITICAL CORRECTION: Force aspect ratio into scaling ---
-                // We use the aspect ratio (max dimension) to define a single, aggressive scale factor.
-                const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100; // Meters per 1% of the largest dimension
+                // CRITICAL CALCULATION: Use the fixed map dimensions for scaling
+                const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100; // Meters per 1% of the largest dimension (Should be 0.3m/1%)
                 
-                const diameterPercent = diameterInMeters / scaleFactor;
+                const diameterPercent = diameterInMeters / scaleFactor; // 20m / 0.3m/1% = 66.67%
 
                 // Set both dimensions to the same percentage to maintain a circle
                 const diameterXPercent = diameterPercent;
                 const diameterYPercent = diameterPercent;
-                // --- END CRITICAL CORRECTION ---
                 
                 // Confidence Circle HTML
                 confidenceCircleHtml = `
@@ -1519,7 +1514,7 @@ function renderTargetPlot(targets) {
                             transform: translate(-50%, -50%);
                             z-index: 30; 
                         "
-                        title="Confidence Radius: ${t.accuracy.toFixed(1)}m">
+                        title="Confidence Radius: ${t.accuracy.toFixed(1)}m (DEBUGGED)">
                     </div>
                 `;
             }
@@ -1609,22 +1604,22 @@ function renderTargetPlot(targets) {
         </div>
         <div class="text-xs text-gray-500 mt-2">
             <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
+            <p class="font-bold text-red-600">DEBUGGING MODE: Map range fixed to ${DEBUG_MAP_RANGE_METERS}m and GPS Accuracy fixed to ${DEBUG_ACCURACY}m.</p>
             <ul class="list-disc list-inside mt-1">
                 <li><span class="font-bold">North</span> is towards the top of the box.</li>
                 <li><span class="font-bold">East</span> is towards the right of the box.</li>
                 <li>Total Targets Plotted: ${parsedCoords.length}</li>
                 ${currentUserCoords ?
                     `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
-                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
-                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${circleDiameter}m</li>
+                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy.toFixed(1)}m (Fixed)</li>
+                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${diameterInMeters.toFixed(1)}m (Fixed)</li>
                     `
                     : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
                 }
             </ul>
         </div>
     `;
-}
-        /** Toggles the map state and re-renders immediately. */
+}        /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
     isMapFullscreen = !isMapFullscreen;
