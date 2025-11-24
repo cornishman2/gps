@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map margin 1 - Metal Detecting Survey Log</title>
+    <title>Map margin 2 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1415,19 +1415,38 @@ const parsedCoords = targets.map(t => {
             
 // ... (Lines 77 to 95 in the provided code snippet)
 
+// ... (after allCoords.forEach loop)
+
+// Calculate the initial ranges
+let latRange = maxLat - minLat;
+let lonRange = maxLon - minLon;
+
+const bufferPercentage = 0.05; // 5% buffer on each side (10% total)
+
 // Add a tiny buffer if min/max are the same (single point or all points overlap)
-if (minLat === maxLat) {
-    minLat -= 0.00001;
-    maxLat += 0.00001;
+if (latRange < 0.00001) { // Check against a tiny threshold instead of exact zero
+    latRange = 0.00002; // Set a default minimal range
 }
-if (minLon === maxLon) {
-    minLon -= 0.00001;
-    maxLon += 0.00001;
+if (lonRange < 0.00001) {
+    lonRange = 0.00002; // Set a default minimal range
 }
 
-const latRange = maxLat - minLat;
-const lonRange = maxLon - minLon;
+// **--- ADDED LOGIC FOR VISUAL MARGIN ---**
+const latBuffer = latRange * bufferPercentage;
+const lonBuffer = lonRange * bufferPercentage;
 
+// Apply the buffer to expand the bounding box
+minLat -= latBuffer;
+maxLat += latBuffer;
+minLon -= lonBuffer;
+maxLon += lonBuffer;
+
+// Recalculate ranges based on the new, expanded bounding box
+latRange = maxLat - minLat;
+lonRange = maxLon - minLon;
+
+// --- NEW: Calculate map dimensions in meters for accuracy scaling ---
+// ...
 // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
 // ...
             // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
