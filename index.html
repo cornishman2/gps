@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Status colour 5 Metal Detecting Survey Log</title>
+    <title>Map margin 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1413,19 +1413,23 @@ const parsedCoords = targets.map(t => {
                 maxLon = Math.max(maxLon, c.lon);
             });
             
-            // Add a tiny buffer if min/max are the same (single point or all points overlap)
-            if (minLat === maxLat) {
-                minLat -= 0.00001;
-                maxLat += 0.00001;
-            }
-            if (minLon === maxLon) {
-                minLon -= 0.00001;
-                maxLon += 0.00001;
-            }
-            
-            const latRange = maxLat - minLat;
-            const lonRange = maxLon - minLon;
+// ... (Lines 77 to 95 in the provided code snippet)
 
+// Add a tiny buffer if min/max are the same (single point or all points overlap)
+if (minLat === maxLat) {
+    minLat -= 0.00001;
+    maxLat += 0.00001;
+}
+if (minLon === maxLon) {
+    minLon -= 0.00001;
+    maxLon += 0.00001;
+}
+
+const latRange = maxLat - minLat;
+const lonRange = maxLon - minLon;
+
+// --- NEW: Calculate map dimensions in meters for accuracy scaling ---
+// ...
             // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
             const metersPerDegreeLat = 111320; // Approximation
             const meanLat = toRad((minLat + maxLat) / 2);
