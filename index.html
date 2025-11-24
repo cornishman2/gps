@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 8  - Metal Detecting Survey Log</title>
+    <title>Confidence 9  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1364,18 +1364,17 @@ function renderHomePage() {
  /** Renders a static plot of targets based on relative coordinates. */
 function renderTargetPlot(targets) {
     
-    // --- DEBUG HARDCODE (STEP 1: REMOVE LATER) ---
-    // Fix accuracy to 10m for debugging the circle size.
-    const DEBUG_ACCURACY = 10;
-    const DEBUG_MAP_RANGE_METERS = 30; // Fix map width/height to 30m for clear scaling
+    // --- FIXED MAP RANGE (STEP 2: RETAIN FOR NOW) ---
+    // Fix map width/height to 30m to ensure the map is focused and scales consistently.
+    const FIXED_MAP_RANGE_METERS = 30;
     // ---------------------------------------------
     
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
     
-    // Use the debug accuracy for the plot
-    const userAccuracy = currentUserCoords ? (DEBUG_ACCURACY || currentUserAccuracy || 0) : 0;
+    // Use the live accuracy
+    const userAccuracy = currentUserCoords ? (currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05;
 
@@ -1420,7 +1419,7 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // --- DEBUG HARDCODE (STEP 2: Bounding Box Calculation) ---
+    // --- Fixed Map Range Bounding Box Calculation ---
     // Enforce a 30m map width centered on user (if user exists).
     let minLat, maxLat, minLon, maxLon;
     let latRange, lonRange;
@@ -1435,8 +1434,8 @@ function renderTargetPlot(targets) {
         const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
 
         // Calculate degrees required for 30m total range
-        const latChangeDeg = (DEBUG_MAP_RANGE_METERS / M_PER_DEG_LAT) / 2;
-        const lonChangeDeg = (DEBUG_MAP_RANGE_METERS / metersPerDegreeLon) / 2;
+        const latChangeDeg = (FIXED_MAP_RANGE_METERS / M_PER_DEG_LAT) / 2;
+        const lonChangeDeg = (FIXED_MAP_RANGE_METERS / metersPerDegreeLon) / 2;
 
         minLat = centerLat - latChangeDeg;
         maxLat = centerLat + latChangeDeg;
@@ -1446,7 +1445,7 @@ function renderTargetPlot(targets) {
         latRange = maxLat - minLat;
         lonRange = maxLon - minLon;
         
-        // These should now be exactly DEBUG_MAP_RANGE_METERS (30m)
+        // These should now be exactly FIXED_MAP_RANGE_METERS (30m)
         mapHeightMeters = latRange * M_PER_DEG_LAT;
         mapWidthMeters = lonRange * metersPerDegreeLon;
 
@@ -1464,7 +1463,7 @@ function renderTargetPlot(targets) {
         
         latRange = maxLat - minLat;
         lonRange = maxLon - minLon;
-        // Apply minimal buffer if targets overlap (not needed with hardcode, but good practice)
+        // Apply minimal buffer if targets overlap
         if (latRange < 0.00001) latRange = 0.00002;
         if (lonRange < 0.00001) lonRange = 0.00002;
         
@@ -1559,11 +1558,11 @@ function renderTargetPlot(targets) {
     // 3. Generate the Confidence Circle and User Pin HTML (if user exists)
     if (userCoord && userAccuracy > 0) {
         
-        // Use the largest dimension for scaling (should be 30m)
+        // Use the largest dimension for scaling (which should be 30m)
         const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
         
-        // Calculate the percentage of the map that the diameter (20m) should cover
-        const diameterPercent = diameterInMeters / scaleFactor; // 20m / (30m/100) = 66.67%
+        // Calculate the percentage of the map that the diameter should cover
+        const diameterPercent = diameterInMeters / scaleFactor;
 
         userConfidenceCircleHtml = `
             <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
@@ -1575,7 +1574,7 @@ function renderTargetPlot(targets) {
                     transform: translate(-50%, -50%);
                     z-index: 5; 
                 "
-                title="Confidence Radius: ${userAccuracy.toFixed(1)}m (DEBUGGED)">
+                title="Confidence Radius: ${userAccuracy.toFixed(1)}m">
             </div>
         `;
     }
@@ -1603,15 +1602,15 @@ function renderTargetPlot(targets) {
         </div>
         <div class="text-xs text-gray-500 mt-2">
             <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
-            <p class="font-bold text-red-600">DEBUGGING MODE: Map range fixed to ${DEBUG_MAP_RANGE_METERS}m and GPS Accuracy fixed to ${DEBUG_ACCURACY}m.</p>
+            <p class="font-bold text-red-600">Map range fixed to ${FIXED_MAP_RANGE_METERS}m (centered on user).</p>
             <ul class="list-disc list-inside mt-1">
                 <li><span class="font-bold">North</span> is towards the top of the box.</li>
                 <li><span class="font-bold">East</span> is towards the right of the box.</li>
                 <li>Total Targets Plotted: ${parsedCoords.length}</li>
                 ${currentUserCoords ?
                     `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
-                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy.toFixed(1)}m (Fixed)</li>
-                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${diameterInMeters.toFixed(1)}m (Fixed)</li>
+                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy !== null ? userAccuracy.toFixed(1) + 'm' : 'N/A'} (Live)</li>
+                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${diameterInMeters.toFixed(1)}m</li>
                     `
                     : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
                 }
