@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 4  - Metal Detecting Survey Log</title>
+    <title>Confidence 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1362,7 +1362,14 @@ function renderHomePage() {
         }
         
  /** Renders a static plot of targets based on relative coordinates. */
-       function renderTargetPlot(targets) {
+function renderTargetPlot(targets) {
+
+    // Haversine approximation constants (Moved up for use in bounding box)
+    const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
+    const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
+    const bufferPercentage = 0.05; // 5% buffer on each side (10% total)
+    const userAccuracy = currentUserAccuracy || 0;
+    const diameterInMeters = userAccuracy * 2;
 
     // 1. Parse targets and prepare for Bounding Box calculation
     const parsedCoords = targets.map(t => {
@@ -1373,8 +1380,8 @@ function renderHomePage() {
             description: t.description,
             type: t.type,
             vdi: t.vdi,
-            status: t.status, // <--- ADD THIS LINE (Preserved)
-            accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
+            status: t.status,
+            accuracy: parseFloat(t.accuracy) || 0,
             isUser: false
         };
     }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
@@ -1388,7 +1395,7 @@ function renderHomePage() {
             description: 'Your Current Location',
             type: 'User',
             vdi: 'N/A',
-            accuracy: currentUserAccuracy || 0,
+            accuracy: userAccuracy,
             isUser: true
         });
     }
@@ -1401,6 +1408,7 @@ function renderHomePage() {
         `;
     }
 
+    // --- Bounding Box Calculation ---
     // Find the true geographical bounding box of ALL points (targets + user)
     let minLat = allCoords[0].lat, maxLat = allCoords[0].lat;
     let minLon = allCoords[0].lon, maxLon = allCoords[0].lon;
@@ -1412,41 +1420,58 @@ function renderHomePage() {
         maxLon = Math.max(maxLon, c.lon);
     });
 
-    // Calculate the initial ranges
+    // 1. Calculate Target/Pin Bounding Box (before padding)
+    let targetLatRange = maxLat - minLat;
+    let targetLonRange = maxLon - minLon;
+
+    // Ensure a minimal range for plotting (e.g., if all targets overlap)
+    if (targetLatRange < 0.00001) { targetLatRange = 0.00002; }
+    if (targetLonRange < 0.00001) { targetLonRange = 0.00002; }
+
+    // Apply the buffer to the target range
+    const latBuffer = targetLatRange * bufferPercentage;
+    const lonBuffer = targetLonRange * bufferPercentage;
+    
+    // --- CRITICAL CORRECTION: Hybrid Map Scale (Lines 100-112) ---
+    // Calculate the map range required to show the user's confidence circle
+    let userLatRange = 0;
+    let userLonRange = 0;
+    
+    if (currentUserCoords && userAccuracy > 0) {
+        // Calculate required degrees to contain the circle diameter + a small 10% padding
+        const requiredMeters = diameterInMeters * 1.1; // 10% extra padding around the circle
+        const meanLat = toRad(currentUserCoords.lat);
+        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLat);
+
+        userLatRange = requiredMeters / M_PER_DEG_LAT;
+        userLonRange = requiredMeters / metersPerDegreeLon;
+    }
+
+    // Determine the FINAL required range: the MAX of target range or user circle range
+    let finalLatRange = Math.max(targetLatRange, userLatRange);
+    let finalLonRange = Math.max(targetLonRange, userLonRange);
+
+    // Center the final bounding box around the original target center
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLon = (minLon + maxLon) / 2;
+    
+    // Recalculate min/max using the final ranges and center
+    minLat = centerLat - (finalLatRange / 2) - latBuffer; // Subtracting buffer here centers the buffer correctly
+    maxLat = centerLat + (finalLatRange / 2) + latBuffer;
+    minLon = centerLon - (finalLonRange / 2) - lonBuffer;
+    maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
+    // --- END CRITICAL CORRECTION ---
+
+    // Recalculate ranges based on the new, final expanded bounding box
     let latRange = maxLat - minLat;
     let lonRange = maxLon - minLon;
 
-    const bufferPercentage = 0.05; // 5% buffer on each side (10% total)
+    // --- Calculate map dimensions in meters for accuracy scaling ---
+    // Note: meanLat must be recalculated if the bounding box changed
+    const finalMeanLat = toRad((minLat + maxLat) / 2);
+    const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
 
-    // Add a tiny buffer if min/max are the same (single point or all points overlap)
-    if (latRange < 0.00001) { // Check against a tiny threshold instead of exact zero
-        latRange = 0.00002; // Set a default minimal range
-    }
-    if (lonRange < 0.00001) {
-        lonRange = 0.00002; // Set a default minimal range
-    }
-
-    // **--- ADDED LOGIC FOR VISUAL MARGIN ---**
-    const latBuffer = latRange * bufferPercentage;
-    const lonBuffer = lonRange * bufferPercentage;
-
-    // Apply the buffer to expand the bounding box
-    minLat -= latBuffer;
-    maxLat += latBuffer;
-    minLon -= lonBuffer;
-    maxLon += lonBuffer;
-
-    // Recalculate ranges based on the new, expanded bounding box
-    latRange = maxLat - minLat;
-    lonRange = maxLon - minLon;
-
-    // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
-    const metersPerDegreeLat = 111320; // Approximation
-    // Note: 'toRad' function is assumed to be available
-    const meanLat = toRad((minLat + maxLat) / 2);
-    const metersPerDegreeLon = 111320 * Math.cos(meanLat);
-
-    const mapHeightMeters = latRange * metersPerDegreeLat;
+    const mapHeightMeters = latRange * M_PER_DEG_LAT;
     const mapWidthMeters = lonRange * metersPerDegreeLon;
 
     const isTinyMap = mapHeightMeters < 1 || mapWidthMeters < 1;
@@ -1461,7 +1486,6 @@ function renderHomePage() {
         const yRaw = ((maxLat - t.lat) / latRange) * 100;
 
         // Clamp values to ensure they are within the 0-100% boundary
-        // Note: 'clamp' function is assumed to be available
         const xPercent = clamp(xRaw, 0, 100);
         const yPercent = clamp(yRaw, 0, 100);
 
@@ -1469,39 +1493,26 @@ function renderHomePage() {
         let labelHtml = '';
 
         if (t.isUser) {
-            const userAccuracy = t.accuracy; // Radius in meters
             let confidenceCircleHtml = '';
 
             if (userAccuracy > 0) {
-                // --- CORRECTION: Robust Scaling Logic (Fixes the tiny circle) ---
-                const metersPerPercentX = mapWidthMeters / 100;
-                const metersPerPercentY = mapHeightMeters / 100;
-
-                // Use the smallest metersPerPercent (largest scaling factor) to ensure visibility
-                const metersPerPercent = Math.min(metersPerPercentX, metersPerPercentY);
-
-                const diameterInMeters = userAccuracy * 2;
-
-                // Calculate size based on the single, conservative scale factor
-                const diameterPercent = (diameterInMeters / metersPerPercent);
-
-                // Apply this calculated size to both axes to keep it a circle
-                const diameterXPercent = diameterPercent;
-                const diameterYPercent = diameterPercent;
-
+                
+                // Calculate size based on the final map dimensions
+                const diameterXPercent = (diameterInMeters / mapWidthMeters) * 100;
+                const diameterYPercent = (diameterInMeters / mapHeightMeters) * 100;
+                
                 // Confidence Circle HTML
                 confidenceCircleHtml = `
                     <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
                         style="
                             width: ${diameterXPercent.toFixed(2)}%; 
                             height: ${diameterYPercent.toFixed(2)}%;
-                            /* --- CORRECTION: Add Minimum Size and Higher Z-Index --- */
                             min-width: 4px; 
                             min-height: 4px;
                             /* Center the circle on the user's coordinates */
                             left: 50%; top: 50%;
                             transform: translate(-50%, -50%);
-                            z-index: 30; /* Increased Z-index to ensure visibility */
+                            z-index: 30; 
                         "
                         title="Confidence Radius: ${t.accuracy.toFixed(1)}m">
                     </div>
@@ -1509,7 +1520,6 @@ function renderHomePage() {
             }
 
             // User Pin: Blue Triangle
-            // (Pin size is already small: 4px base/4px high)
             pinHtml = `
                 ${confidenceCircleHtml}
                 <div class="relative w-0 h-0 border-l-[2px] border-r-[2px] border-b-[4px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
@@ -1547,7 +1557,6 @@ function renderHomePage() {
             }
             // END of new STATUS-BASED logic
 
-            // CORRECT LINE (uses dynamic pinSize and pinColor)
             pinHtml = `<div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>`;
 
 
@@ -1573,7 +1582,6 @@ function renderHomePage() {
     }).join('');
 
     // 3. Return the container HTML with click-to-fullscreen added
-    // 3. Determine classes based on global state
     let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
 
     if (isMapFullscreen) {
@@ -1587,8 +1595,6 @@ function renderHomePage() {
     // Note: The getCircleDiameter function is assumed to be defined earlier in the script.
     const circleDiameter = getCircleDiameter(currentUserAccuracy);
 
-    // NOTICE: We use ${containerClasses} below instead of hardcoded classes
-    // AND we removed 'this' from the onclick function call
     return `
         <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
             ${pinsHtml}
@@ -1613,7 +1619,7 @@ function renderHomePage() {
         </div>
     `;
 }
-/** Toggles the map state and re-renders immediately. */
+        /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
     isMapFullscreen = !isMapFullscreen;
