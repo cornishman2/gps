@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 7  - Metal Detecting Survey Log</title>
+    <title>Confidence 8  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1367,14 +1367,14 @@ function renderTargetPlot(targets) {
     // --- DEBUG HARDCODE (STEP 1: REMOVE LATER) ---
     // Fix accuracy to 10m for debugging the circle size.
     const DEBUG_ACCURACY = 10;
-    const DEBUG_MAP_RANGE_METERS = 30;
+    const DEBUG_MAP_RANGE_METERS = 30; // Fix map width/height to 30m for clear scaling
     // ---------------------------------------------
     
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
     
-    // Use the debug accuracy for the plot (or fallback to original if debug is disabled/zero)
+    // Use the debug accuracy for the plot
     const userAccuracy = currentUserCoords ? (DEBUG_ACCURACY || currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05;
@@ -1394,10 +1394,13 @@ function renderTargetPlot(targets) {
         };
     }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
     let allCoords = [...parsedCoords];
+    
+    // Keep track of user pin info separately
+    let userCoord = null;
 
     // Add user's location if available
     if (currentUserCoords) {
-        allCoords.push({
+        userCoord = {
             lat: currentUserCoords.lat,
             lon: currentUserCoords.lon,
             description: 'Your Current Location',
@@ -1405,7 +1408,8 @@ function renderTargetPlot(targets) {
             vdi: 'N/A',
             accuracy: userAccuracy,
             isUser: true
-        });
+        };
+        allCoords.push(userCoord);
     }
 
     if (allCoords.length === 0) {
@@ -1416,8 +1420,8 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // --- DEBUG HARDCODE (STEP 2: REMOVE LATER) ---
-    // Override Bounding Box calculation to enforce a 30m map width centered on user.
+    // --- DEBUG HARDCODE (STEP 2: Bounding Box Calculation) ---
+    // Enforce a 30m map width centered on user (if user exists).
     let minLat, maxLat, minLon, maxLon;
     let latRange, lonRange;
     let mapWidthMeters, mapHeightMeters;
@@ -1430,7 +1434,7 @@ function renderTargetPlot(targets) {
         const meanLatForConversion = toRad(centerLat);
         const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
 
-        // Calculate degrees required for 30m total range (15m on either side)
+        // Calculate degrees required for 30m total range
         const latChangeDeg = (DEBUG_MAP_RANGE_METERS / M_PER_DEG_LAT) / 2;
         const lonChangeDeg = (DEBUG_MAP_RANGE_METERS / metersPerDegreeLon) / 2;
 
@@ -1442,13 +1446,12 @@ function renderTargetPlot(targets) {
         latRange = maxLat - minLat;
         lonRange = maxLon - minLon;
         
-        // These should now be exactly 30m (or very close)
+        // These should now be exactly DEBUG_MAP_RANGE_METERS (30m)
         mapHeightMeters = latRange * M_PER_DEG_LAT;
         mapWidthMeters = lonRange * metersPerDegreeLon;
 
     } else {
-        // Fallback to previous logic if no user location is available (shouldn't happen with targets)
-        // Find the true geographical bounding box of ALL points (targets + user)
+        // Fallback: If no user, calculate bounds based on targets
         minLat = allCoords[0].lat; maxLat = allCoords[0].lat;
         minLon = allCoords[0].lon; maxLon = allCoords[0].lon;
 
@@ -1459,84 +1462,60 @@ function renderTargetPlot(targets) {
             maxLon = Math.max(maxLon, c.lon);
         });
         
-        // Simplified fallback for ranges and meters
         latRange = maxLat - minLat;
         lonRange = maxLon - minLon;
+        // Apply minimal buffer if targets overlap (not needed with hardcode, but good practice)
+        if (latRange < 0.00001) latRange = 0.00002;
+        if (lonRange < 0.00001) lonRange = 0.00002;
+        
         const finalMeanLat = toRad((minLat + maxLat) / 2);
         const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
         mapHeightMeters = latRange * M_PER_DEG_LAT;
         mapWidthMeters = lonRange * metersPerDegreeLon;
-
     }
     // ---------------------------------------------
     
+    let userXPercent = 0;
+    let userYPercent = 0;
+    let userPinAndLabelHtml = '';
+    let userConfidenceCircleHtml = '';
+
     // 2. Normalize and generate pins HTML
     const pinsHtml = allCoords.map(t => {
         // Calculate position percentages (0% to 100%)
-
-        // X-axis (Longitude): East is right
         const xRaw = ((t.lon - minLon) / lonRange) * 100;
-        // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. Invert Y-axis.
         const yRaw = ((maxLat - t.lat) / latRange) * 100;
 
-        // Clamp values to ensure they are within the 0-100% boundary
         const xPercent = clamp(xRaw, 0, 100);
         const yPercent = clamp(yRaw, 0, 100);
 
-        let pinHtml = '';
-        let labelHtml = '';
-
         if (t.isUser) {
-            let confidenceCircleHtml = '';
+            // Store user position for circle and pin positioning
+            userXPercent = xPercent;
+            userYPercent = yPercent;
 
-            // Use the hardcoded 10m accuracy (20m diameter)
-            if (userAccuracy > 0) {
-                
-                // CRITICAL CALCULATION: Use the fixed map dimensions for scaling
-                const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100; // Meters per 1% of the largest dimension (Should be 0.3m/1%)
-                
-                const diameterPercent = diameterInMeters / scaleFactor; // 20m / 0.3m/1% = 66.67%
-
-                // Set both dimensions to the same percentage to maintain a circle
-                const diameterXPercent = diameterPercent;
-                const diameterYPercent = diameterPercent;
-                
-                // Confidence Circle HTML
-                confidenceCircleHtml = `
-                    <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
-                        style="
-                            width: ${diameterXPercent.toFixed(2)}%; 
-                            height: ${diameterYPercent.toFixed(2)}%;
-                            min-width: 4px; 
-                            min-height: 4px;
-                            /* Center the circle on the user's coordinates */
-                            left: 50%; top: 50%;
-                            transform: translate(-50%, -50%);
-                            z-index: 30; 
-                        "
-                        title="Confidence Radius: ${t.accuracy.toFixed(1)}m (DEBUGGED)">
-                    </div>
-                `;
-            }
-
-            // User Pin: Blue Triangle
-            pinHtml = `
-                ${confidenceCircleHtml}
-                <div class="relative w-0 h-0 border-l-[2px] border-r-[2px] border-b-[4px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
+            // 1. Create the Pin and Label HTML (NO circle)
+            userPinAndLabelHtml = `
+                <div 
+                    class="absolute" 
+                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
+                    title="${t.description} (Acc: ${t.accuracy.toFixed(1)}m)"
+                >
+                    <div class="relative w-0 h-0 border-l-[2px] border-r-[2px] border-b-[4px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
+                    <span class="absolute whitespace-nowrap text-xs font-bold text-white bg-blue-600 p-1 rounded-sm shadow border border-blue-800"
+                        style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
+                        ${t.description}
+                    </span>
+                </div>
             `;
 
-            labelHtml = `
-                <span class="absolute whitespace-nowrap text-xs font-bold text-white bg-blue-600 p-1 rounded-sm shadow border border-blue-800"
-                    style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                    ${t.description}
-                </span>
-            `;
+            // 2. Circle generation is handled separately below (outside map loop)
+            return ''; // Skip regular pin HTML generation for user
         } else {
             // Target Pin: Colored Dot with Label
             let pinColor = 'bg-primary';
             let pinSize = 'w-2 h-2';
 
-            // START of new STATUS-BASED logic
             switch (t.status) {
                 case 'Signal Detected':
                     pinColor = 'bg-green-600';
@@ -1555,49 +1534,69 @@ function renderTargetPlot(targets) {
                 default:
                     pinColor = 'bg-primary';
             }
-            // END of new STATUS-BASED logic
 
-            pinHtml = `<div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>`;
-
-
-            labelHtml = `
-                <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
+            let targetPinHtml = `<div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>`;
+            let targetLabelHtml = `
+                <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
                     style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
                     ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
                 </span>
             `;
-        }
 
-        return `
-            <div
-                class="absolute"
-                style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: ${t.isUser ? 20 : 10};"
-                title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
-            >
-                ${pinHtml}
-                
-                ${labelHtml}
+            return `
+                <div
+                    class="absolute"
+                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
+                    title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
+                >
+                    ${targetPinHtml}
+                    ${targetLabelHtml}
+                </div>
+            `;
+        }
+    }).join(''); // pinsHtml now only contains targets
+
+    // 3. Generate the Confidence Circle and User Pin HTML (if user exists)
+    if (userCoord && userAccuracy > 0) {
+        
+        // Use the largest dimension for scaling (should be 30m)
+        const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
+        
+        // Calculate the percentage of the map that the diameter (20m) should cover
+        const diameterPercent = diameterInMeters / scaleFactor; // 20m / (30m/100) = 66.67%
+
+        userConfidenceCircleHtml = `
+            <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
+                style="
+                    width: ${diameterPercent.toFixed(2)}%; 
+                    height: ${diameterPercent.toFixed(2)}%;
+                    /* Position the circle absolutely on the map using stored user coordinates */
+                    left: ${userXPercent.toFixed(2)}%; top: ${userYPercent.toFixed(2)}%;
+                    transform: translate(-50%, -50%);
+                    z-index: 5; 
+                "
+                title="Confidence Radius: ${userAccuracy.toFixed(1)}m (DEBUGGED)">
             </div>
         `;
-    }).join('');
+    }
 
-    // 3. Return the container HTML with click-to-fullscreen added
+    // Combine all elements for the map container
+    const finalMapContent = userConfidenceCircleHtml + pinsHtml + userPinAndLabelHtml;
+
+    // 4. Return the container HTML
     let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
 
     if (isMapFullscreen) {
-        // Fullscreen Classes (Fixed position, full width/height)
         containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
     } else {
-        // Normal/Small Classes (Square aspect ratio, borders)
         containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
     }
 
-    // Note: The getCircleDiameter function is assumed to be defined earlier in the script.
     const circleDiameter = getCircleDiameter(currentUserAccuracy);
 
     return `
         <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
-            ${pinsHtml}
+            ${finalMapContent}
             <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
                 <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
             </div>
@@ -1619,7 +1618,8 @@ function renderTargetPlot(targets) {
             </ul>
         </div>
     `;
-}        /** Toggles the map state and re-renders immediately. */
+}
+        /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
     isMapFullscreen = !isMapFullscreen;
