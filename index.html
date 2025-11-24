@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 5  - Metal Detecting Survey Log</title>
+    <title>Confidence 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1432,7 +1432,7 @@ function renderTargetPlot(targets) {
     const latBuffer = targetLatRange * bufferPercentage;
     const lonBuffer = targetLonRange * bufferPercentage;
     
-    // --- CRITICAL CORRECTION: Hybrid Map Scale (Lines 100-112) ---
+    // --- Hybrid Map Scale ---
     // Calculate the map range required to show the user's confidence circle
     let userLatRange = 0;
     let userLonRange = 0;
@@ -1440,11 +1440,11 @@ function renderTargetPlot(targets) {
     if (currentUserCoords && userAccuracy > 0) {
         // Calculate required degrees to contain the circle diameter + a small 10% padding
         const requiredMeters = diameterInMeters * 1.1; // 10% extra padding around the circle
-        const meanLat = toRad(currentUserCoords.lat);
-        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLat);
+        const meanLatForConversion = toRad(currentUserCoords.lat);
+        const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
 
         userLatRange = requiredMeters / M_PER_DEG_LAT;
-        userLonRange = requiredMeters / metersPerDegreeLon;
+        userLonRange = requiredMeters / metersPerDegreeLonForConversion;
     }
 
     // Determine the FINAL required range: the MAX of target range or user circle range
@@ -1460,7 +1460,7 @@ function renderTargetPlot(targets) {
     maxLat = centerLat + (finalLatRange / 2) + latBuffer;
     minLon = centerLon - (finalLonRange / 2) - lonBuffer;
     maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
-    // --- END CRITICAL CORRECTION ---
+    // --- END Hybrid Map Scale ---
 
     // Recalculate ranges based on the new, final expanded bounding box
     let latRange = maxLat - minLat;
@@ -1473,8 +1473,6 @@ function renderTargetPlot(targets) {
 
     const mapHeightMeters = latRange * M_PER_DEG_LAT;
     const mapWidthMeters = lonRange * metersPerDegreeLon;
-
-    const isTinyMap = mapHeightMeters < 1 || mapWidthMeters < 1;
 
     // 2. Normalize and generate pins HTML
     const pinsHtml = allCoords.map(t => {
@@ -1497,9 +1495,16 @@ function renderTargetPlot(targets) {
 
             if (userAccuracy > 0) {
                 
-                // Calculate size based on the final map dimensions
-                const diameterXPercent = (diameterInMeters / mapWidthMeters) * 100;
-                const diameterYPercent = (diameterInMeters / mapHeightMeters) * 100;
+                // --- CRITICAL CORRECTION: Force aspect ratio into scaling ---
+                // We use the aspect ratio (max dimension) to define a single, aggressive scale factor.
+                const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100; // Meters per 1% of the largest dimension
+                
+                const diameterPercent = diameterInMeters / scaleFactor;
+
+                // Set both dimensions to the same percentage to maintain a circle
+                const diameterXPercent = diameterPercent;
+                const diameterYPercent = diameterPercent;
+                // --- END CRITICAL CORRECTION ---
                 
                 // Confidence Circle HTML
                 confidenceCircleHtml = `
