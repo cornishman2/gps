@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Status colour 4 Metal Detecting Survey Log</title>
+    <title>Status colour 5 Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1365,19 +1365,20 @@ function renderHomePage() {
         function renderTargetPlot(targets) {
             
             // 1. Parse targets and prepare for Bounding Box calculation
-            const parsedCoords = targets.map(t => {
-                const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
-                return { 
-                    lat: parts[0], 
-                    lon: parts[1], 
-                    description: t.description, 
-                    type: t.type, 
-                    vdi: t.vdi,
-                    accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
-                    isUser: false 
-                };
-            }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
-
+// 1. Parse targets and prepare for Bounding Box calculation
+const parsedCoords = targets.map(t => {
+    const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
+    return { 
+        lat: parts[0], 
+        lon: parts[1], 
+        description: t.description, 
+        type: t.type, 
+        vdi: t.vdi,
+        status: t.status, // <--- ADD THIS LINE
+        accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
+        isUser: false 
+    };
+}).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
             let allCoords = [...parsedCoords];
 
             // Add user's location if available
