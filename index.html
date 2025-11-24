@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 3  - Metal Detecting Survey Log</title>
+    <title>Confidence 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1362,258 +1362,257 @@ function renderHomePage() {
         }
         
  /** Renders a static plot of targets based on relative coordinates. */
-        function renderTargetPlot(targets) {
-            
-            // 1. Parse targets and prepare for Bounding Box calculation
-// 1. Parse targets and prepare for Bounding Box calculation
-const parsedCoords = targets.map(t => {
-    const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
-    return { 
-        lat: parts[0], 
-        lon: parts[1], 
-        description: t.description, 
-        type: t.type, 
-        vdi: t.vdi,
-        status: t.status, // <--- ADD THIS LINE
-        accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
-        isUser: false 
-    };
-}).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
-            let allCoords = [...parsedCoords];
+       function renderTargetPlot(targets) {
 
-            // Add user's location if available
-            if (currentUserCoords) {
-                allCoords.push({
-                    lat: currentUserCoords.lat,
-                    lon: currentUserCoords.lon,
-                    description: 'Your Current Location', 
-                    type: 'User', 
-                    vdi: 'N/A',
-                    accuracy: currentUserAccuracy || 0,
-                    isUser: true 
-                });
-            }
+    // 1. Parse targets and prepare for Bounding Box calculation
+    const parsedCoords = targets.map(t => {
+        const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
+        return {
+            lat: parts[0],
+            lon: parts[1],
+            description: t.description,
+            type: t.type,
+            vdi: t.vdi,
+            status: t.status, // <--- ADD THIS LINE (Preserved)
+            accuracy: parseFloat(t.accuracy) || 0, // Use 0 for plotting if N/A
+            isUser: false
+        };
+    }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+    let allCoords = [...parsedCoords];
 
-            if (allCoords.length === 0) {
-                 return `
-                    <div class="p-4 text-center bg-gray-100 rounded-lg">
-                        <p class="text-lg text-gray-500 italic">No valid GPS coordinates found to plot (targets or user location).</p>
-                    </div>
-                `;
-            }
-
-            // Find the true geographical bounding box of ALL points (targets + user)
-            let minLat = allCoords[0].lat, maxLat = allCoords[0].lat;
-            let minLon = allCoords[0].lon, maxLon = allCoords[0].lon;
-
-            allCoords.forEach(c => {
-                minLat = Math.min(minLat, c.lat);
-                maxLat = Math.max(maxLat, c.lat);
-                minLon = Math.min(minLon, c.lon);
-                maxLon = Math.max(maxLon, c.lon);
-            });
-            
-// ... (Lines 77 to 95 in the provided code snippet)
-
-// ... (after allCoords.forEach loop)
-
-// Calculate the initial ranges
-let latRange = maxLat - minLat;
-let lonRange = maxLon - minLon;
-
-const bufferPercentage = 0.05; // 5% buffer on each side (10% total)
-
-// Add a tiny buffer if min/max are the same (single point or all points overlap)
-if (latRange < 0.00001) { // Check against a tiny threshold instead of exact zero
-    latRange = 0.00002; // Set a default minimal range
-}
-if (lonRange < 0.00001) {
-    lonRange = 0.00002; // Set a default minimal range
-}
-
-// **--- ADDED LOGIC FOR VISUAL MARGIN ---**
-const latBuffer = latRange * bufferPercentage;
-const lonBuffer = lonRange * bufferPercentage;
-
-// Apply the buffer to expand the bounding box
-minLat -= latBuffer;
-maxLat += latBuffer;
-minLon -= lonBuffer;
-maxLon += lonBuffer;
-
-// Recalculate ranges based on the new, expanded bounding box
-latRange = maxLat - minLat;
-lonRange = maxLon - minLon;
-
-// --- NEW: Calculate map dimensions in meters for accuracy scaling ---
-// ...
-// --- NEW: Calculate map dimensions in meters for accuracy scaling ---
-// ...
-            // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
-            const metersPerDegreeLat = 111320; // Approximation
-            const meanLat = toRad((minLat + maxLat) / 2);
-            const metersPerDegreeLon = 111320 * Math.cos(meanLat);
-
-            const mapHeightMeters = latRange * metersPerDegreeLat;
-            const mapWidthMeters = lonRange * metersPerDegreeLon;
-
-            const isTinyMap = mapHeightMeters < 1 || mapWidthMeters < 1; 
-
-            // 2. Normalize and generate pins HTML
-            const pinsHtml = allCoords.map(t => {
-                // Calculate position percentages (0% to 100%)
-                
-                // X-axis (Longitude): East is right
-                const xRaw = ((t.lon - minLon) / lonRange) * 100;
-                // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. Invert Y-axis.
-                const yRaw = ((maxLat - t.lat) / latRange) * 100;
-                
-                // Clamp values to ensure they are within the 0-100% boundary
-                const xPercent = clamp(xRaw, 0, 100);
-                const yPercent = clamp(yRaw, 0, 100);
-
-                let pinHtml = '';
-                let labelHtml = '';
-
-                if (t.isUser) {
-                    const userAccuracy = t.accuracy; // Radius in meters
-                    let confidenceCircleHtml = '';
-
-                    if (userAccuracy > 0) {
-                        // Convert accuracy (radius in meters) to a percentage size
-                        const radiusXPercent = (userAccuracy / mapWidthMeters) * 100;
-                        const radiusYPercent = (userAccuracy / mapHeightMeters) * 100;
-                        
-                        // Calculate diameter percentages
-                        const diameterXPercent = (2 * radiusXPercent);
-                        const diameterYPercent = (2 * radiusYPercent);
-
-                        // Confidence Circle HTML
-                        confidenceCircleHtml = `
-                            <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
-                                style="
-                                    width: ${diameterXPercent.toFixed(2)}%; 
-                                    height: ${diameterYPercent.toFixed(2)}%;
-                                    /* Center the circle on the user's coordinates */
-                                    left: 50%; top: 50%;
-                                    transform: translate(-50%, -50%);
-                                    z-index: 5;
-                                "
-                                title="Confidence Radius: ${t.accuracy.toFixed(1)}m">
-                            </div>
-                        `;
-                    }
-                    
-                    // User Pin: Blue Triangle
-                    pinHtml = `
-                        ${confidenceCircleHtml}
-                  <div class="relative w-0 h-0 border-l-[2px] border-r-[2px] border-b-[4px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>                    `;
-                    
-                    labelHtml = `
-                        <span class="absolute whitespace-nowrap text-xs font-bold text-white bg-blue-600 p-1 rounded-sm shadow border border-blue-800" 
-                              style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                            ${t.description}
-                        </span>
-                    `;
-                } else {
-                    // Target Pin: Colored Dot with Label
-                    let color = 'bg-primary'; 
-//                    if (t.type === 'Coin') color = 'bg-yellow-500';
-//                    if (t.type.includes('Junk')) color = 'bg-gray-700';
-// Use this block to replace the existing type-based coloring logic
-let pinColor = 'bg-primary'; 
-let pinSize = 'w-2 h-2';
-
-
-    // START of new STATUS-BASED logic
-    switch (t.status) { 
-        case 'Signal Detected':
-            pinColor = 'bg-green-600'; 
-            pinSize = 'w-3 h-3'; 
-            break; 
-        case 'Hole Dug': 
-            pinColor = 'bg-yellow-500'; 
-            break; 
-        case 'Find Retrieved':
-        case 'Hole Refilled': 
-            pinColor = 'bg-blue-600'; 
-            break; 
-        case 'Signal Ignored': 
-            pinColor = 'bg-gray-500'; 
-            break; 
-        default:
-            pinColor = 'bg-primary'; 
+    // Add user's location if available
+    if (currentUserCoords) {
+        allCoords.push({
+            lat: currentUserCoords.lat,
+            lon: currentUserCoords.lon,
+            description: 'Your Current Location',
+            type: 'User',
+            vdi: 'N/A',
+            accuracy: currentUserAccuracy || 0,
+            isUser: true
+        });
     }
-    // END of new STATUS-BASED logic
 
+    if (allCoords.length === 0) {
+        return `
+            <div class="p-4 text-center bg-gray-100 rounded-lg">
+                <p class="text-lg text-gray-500 italic">No valid GPS coordinates found to plot (targets or user location).</p>
+            </div>
+        `;
+    }
 
-                    
-// CORRECT LINE (uses dynamic pinSize and pinColor)
-                    pinHtml = `<div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>`;  
+    // Find the true geographical bounding box of ALL points (targets + user)
+    let minLat = allCoords[0].lat, maxLat = allCoords[0].lat;
+    let minLon = allCoords[0].lon, maxLon = allCoords[0].lon;
 
+    allCoords.forEach(c => {
+        minLat = Math.min(minLat, c.lat);
+        maxLat = Math.max(maxLat, c.lat);
+        minLon = Math.min(minLon, c.lon);
+        maxLon = Math.max(maxLon, c.lon);
+    });
 
-        
-                    labelHtml = `
-                        <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
-                              style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                            ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
-                        </span>
-                    `;
-                }
-                
-                return `
-                    <div 
-                        class="absolute" 
-                        style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: ${t.isUser ? 20 : 10};"
-                        title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
-                    >
-                        ${pinHtml}
-                        
-                        ${labelHtml}
+    // Calculate the initial ranges
+    let latRange = maxLat - minLat;
+    let lonRange = maxLon - minLon;
+
+    const bufferPercentage = 0.05; // 5% buffer on each side (10% total)
+
+    // Add a tiny buffer if min/max are the same (single point or all points overlap)
+    if (latRange < 0.00001) { // Check against a tiny threshold instead of exact zero
+        latRange = 0.00002; // Set a default minimal range
+    }
+    if (lonRange < 0.00001) {
+        lonRange = 0.00002; // Set a default minimal range
+    }
+
+    // **--- ADDED LOGIC FOR VISUAL MARGIN ---**
+    const latBuffer = latRange * bufferPercentage;
+    const lonBuffer = lonRange * bufferPercentage;
+
+    // Apply the buffer to expand the bounding box
+    minLat -= latBuffer;
+    maxLat += latBuffer;
+    minLon -= lonBuffer;
+    maxLon += lonBuffer;
+
+    // Recalculate ranges based on the new, expanded bounding box
+    latRange = maxLat - minLat;
+    lonRange = maxLon - minLon;
+
+    // --- NEW: Calculate map dimensions in meters for accuracy scaling ---
+    const metersPerDegreeLat = 111320; // Approximation
+    // Note: 'toRad' function is assumed to be available
+    const meanLat = toRad((minLat + maxLat) / 2);
+    const metersPerDegreeLon = 111320 * Math.cos(meanLat);
+
+    const mapHeightMeters = latRange * metersPerDegreeLat;
+    const mapWidthMeters = lonRange * metersPerDegreeLon;
+
+    const isTinyMap = mapHeightMeters < 1 || mapWidthMeters < 1;
+
+    // 2. Normalize and generate pins HTML
+    const pinsHtml = allCoords.map(t => {
+        // Calculate position percentages (0% to 100%)
+
+        // X-axis (Longitude): East is right
+        const xRaw = ((t.lon - minLon) / lonRange) * 100;
+        // Y-axis (Latitude): North is UP, but CSS 'top' is DOWN. Invert Y-axis.
+        const yRaw = ((maxLat - t.lat) / latRange) * 100;
+
+        // Clamp values to ensure they are within the 0-100% boundary
+        // Note: 'clamp' function is assumed to be available
+        const xPercent = clamp(xRaw, 0, 100);
+        const yPercent = clamp(yRaw, 0, 100);
+
+        let pinHtml = '';
+        let labelHtml = '';
+
+        if (t.isUser) {
+            const userAccuracy = t.accuracy; // Radius in meters
+            let confidenceCircleHtml = '';
+
+            if (userAccuracy > 0) {
+                // --- CORRECTION: Robust Scaling Logic (Fixes the tiny circle) ---
+                const metersPerPercentX = mapWidthMeters / 100;
+                const metersPerPercentY = mapHeightMeters / 100;
+
+                // Use the smallest metersPerPercent (largest scaling factor) to ensure visibility
+                const metersPerPercent = Math.min(metersPerPercentX, metersPerPercentY);
+
+                const diameterInMeters = userAccuracy * 2;
+
+                // Calculate size based on the single, conservative scale factor
+                const diameterPercent = (diameterInMeters / metersPerPercent);
+
+                // Apply this calculated size to both axes to keep it a circle
+                const diameterXPercent = diameterPercent;
+                const diameterYPercent = diameterPercent;
+
+                // Confidence Circle HTML
+                confidenceCircleHtml = `
+                    <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
+                        style="
+                            width: ${diameterXPercent.toFixed(2)}%; 
+                            height: ${diameterYPercent.toFixed(2)}%;
+                            /* --- CORRECTION: Add Minimum Size and Higher Z-Index --- */
+                            min-width: 4px; 
+                            min-height: 4px;
+                            /* Center the circle on the user's coordinates */
+                            left: 50%; top: 50%;
+                            transform: translate(-50%, -50%);
+                            z-index: 30; /* Increased Z-index to ensure visibility */
+                        "
+                        title="Confidence Radius: ${t.accuracy.toFixed(1)}m">
                     </div>
                 `;
-            }).join('');
-
-            // 3. Return the container HTML with click-to-fullscreen added
- // 3. Determine classes based on global state
-            let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
-            
-            if (isMapFullscreen) {
-                // Fullscreen Classes (Fixed position, full width/height)
-                containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
-            } else {
-                // Normal/Small Classes (Square aspect ratio, borders)
-                containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
             }
 
-            const circleDiameter = getCircleDiameter(currentUserAccuracy);
+            // User Pin: Blue Triangle
+            // (Pin size is already small: 4px base/4px high)
+            pinHtml = `
+                ${confidenceCircleHtml}
+                <div class="relative w-0 h-0 border-l-[2px] border-r-[2px] border-b-[4px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
+            `;
 
-            // NOTICE: We use ${containerClasses} below instead of hardcoded classes
-            // AND we removed 'this' from the onclick function call
-            return `
-                <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
-                    ${pinsHtml}
-                    <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
-                        <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
-                    </div>
-                </div>
-                <div class="text-xs text-gray-500 mt-2">                   <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
-                    <ul class="list-disc list-inside mt-1">
-                        <li><span class="font-bold">North</span> is towards the top of the box.</li>
-                        <li><span class="font-bold">East</span> is towards the right of the box.</li>
-                        <li>Total Targets Plotted: ${parsedCoords.length}</li>
-                        ${currentUserCoords ? 
-                            `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
-                             <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
-                             <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${circleDiameter}m</li>
-                            ` 
-                            : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
-                        }
-                    </ul>
-                </div>
+            labelHtml = `
+                <span class="absolute whitespace-nowrap text-xs font-bold text-white bg-blue-600 p-1 rounded-sm shadow border border-blue-800"
+                    style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
+                    ${t.description}
+                </span>
+            `;
+        } else {
+            // Target Pin: Colored Dot with Label
+            let pinColor = 'bg-primary';
+            let pinSize = 'w-2 h-2';
+
+            // START of new STATUS-BASED logic
+            switch (t.status) {
+                case 'Signal Detected':
+                    pinColor = 'bg-green-600';
+                    pinSize = 'w-3 h-3';
+                    break;
+                case 'Hole Dug':
+                    pinColor = 'bg-yellow-500';
+                    break;
+                case 'Find Retrieved':
+                case 'Hole Refilled':
+                    pinColor = 'bg-blue-600';
+                    break;
+                case 'Signal Ignored':
+                    pinColor = 'bg-gray-500';
+                    break;
+                default:
+                    pinColor = 'bg-primary';
+            }
+            // END of new STATUS-BASED logic
+
+            // CORRECT LINE (uses dynamic pinSize and pinColor)
+            pinHtml = `<div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>`;
+
+
+            labelHtml = `
+                <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
+                    style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
+                    ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
+                </span>
             `;
         }
 
+        return `
+            <div
+                class="absolute"
+                style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: ${t.isUser ? 20 : 10};"
+                title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
+            >
+                ${pinHtml}
+                
+                ${labelHtml}
+            </div>
+        `;
+    }).join('');
+
+    // 3. Return the container HTML with click-to-fullscreen added
+    // 3. Determine classes based on global state
+    let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
+
+    if (isMapFullscreen) {
+        // Fullscreen Classes (Fixed position, full width/height)
+        containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
+    } else {
+        // Normal/Small Classes (Square aspect ratio, borders)
+        containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
+    }
+
+    // Note: The getCircleDiameter function is assumed to be defined earlier in the script.
+    const circleDiameter = getCircleDiameter(currentUserAccuracy);
+
+    // NOTICE: We use ${containerClasses} below instead of hardcoded classes
+    // AND we removed 'this' from the onclick function call
+    return `
+        <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
+            ${pinsHtml}
+            <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
+                <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
+            </div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">
+            <p>Plot shows relative positions within the survey area. Targets are dots, your location is the blue triangle.</p>
+            <ul class="list-disc list-inside mt-1">
+                <li><span class="font-bold">North</span> is towards the top of the box.</li>
+                <li><span class="font-bold">East</span> is towards the right of the box.</li>
+                <li>Total Targets Plotted: ${parsedCoords.length}</li>
+                ${currentUserCoords ?
+                    `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
+                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${currentUserAccuracy !== null ? currentUserAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
+                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${circleDiameter}m</li>
+                    `
+                    : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
+                }
+            </ul>
+        </div>
+    `;
+}
 /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
