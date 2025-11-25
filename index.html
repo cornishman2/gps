@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live 5 - Metal Detecting Survey Log</title>
+    <title>Confidence 10  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -295,7 +295,6 @@
 let autoRefreshIntervalId = null; 
 let currentUserCoords = null; // Stores {lat: number, lon: number}
 let currentUserAccuracy = null; // Stores accuracy in meters
-let currentSurvey=[];
 
 // ADD THESE FOR LIVE MAP ACCURACY LOGIC:
 let liveMapWatchId = null;      // To track the watchPosition process for the live map
@@ -331,62 +330,6 @@ let bestLiveAccuracy = Infinity; // To track the best accuracy received (lower i
 
         // --- HELPER FUNCTIONS ---
 
-        /**
- * Calculates the maximum geographical separation in meters between any two points 
- * (targets or user's last known location) in the current survey.
- * * @param {Array} targets - The array of survey targets (currentSurvey.targets).
- * @param {Object} currentUserCoords - The user's current coordinates.
- * @returns {number} The maximum distance in meters, or a default 10m minimum.
- */
-function getGreatestTargetDistance(targets, currentUserCoords) {
-    // R: Earth radius in meters
-    const R = 6371e3; 
-    
-    // Ensure 'toRad' helper is available (used in previous code)
-    const toRad = (value) => value * Math.PI / 180; 
-
-    // Combine targets and user location into one coordinate list
-    const coords = targets.map(t => ({
-        lat: parseFloat(t.coordinates.split(',')[0].trim()),
-        lon: parseFloat(t.coordinates.split(',')[1].trim())
-    })).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
-
-    if (currentUserCoords) {
-        coords.push({
-            lat: currentUserCoords.lat,
-            lon: currentUserCoords.lon
-        });
-    }
-
-    if (coords.length < 2) return 10; // Default minimum range
-
-    let maxDistance = 0;
-
-    // Haversine Distance Calculation loop
-    for (let i = 0; i < coords.length; i++) {
-        for (let j = i + 1; j < coords.length; j++) {
-            const lat1 = coords[i].lat;
-            const lon1 = coords[i].lon;
-            const lat2 = coords[j].lat;
-            const lon2 = coords[j].lon;
-
-            const dLat = toRad(lat2 - lat1);
-            const dLon = toRad(lon2 - lon1);
-
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            const distance = R * c; // Distance in meters
-
-            maxDistance = Math.max(maxDistance, distance);
-        }
-    }
-    
-    // Ensure a minimum distance of 10m to prevent division issues
-    return Math.max(maxDistance, 10); 
-}
         /** Generates a simple unique ID. */
         function generateId() {
             return Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
@@ -655,84 +598,59 @@ function startTargetLocationWatch() {
         /** Starts a continuous, high-accuracy GPS stream that only updates the state when a reading is more accurate. 
          * Also starts the 5-second rendering interval.
          */
-  // --- LIVE MAP GPS WATCH FUNCTIONS (New/Modified Logic) ---
-
-// Define a reasonable threshold outside of the function, perhaps globally or within the module scope
-// This prevents the map from using any reading with an accuracy worse than 15 meters.
-const MAX_ACCEPTABLE_ACCURACY_METERS = 15; 
-
-
-/** Starts a continuous, high-accuracy GPS stream that updates the state with every new position, 
- * but only if the accuracy is better than MAX_ACCEPTABLE_ACCURACY_METERS.
- */
-/** Starts a continuous, high-accuracy GPS stream that updates the state with every new position, 
- * but filters out highly inaccurate readings based on survey size.
- */
-function startLiveMapLocationWatch() {
-    if (!navigator.geolocation) {
-        currentUserCoords = null;
-        currentUserAccuracy = null;
-        showMessage('Geolocation is not supported on this device.', 'error');
-        return;
-    }
-    
-    // 1. CALCULATE DYNAMIC THRESHOLD BASED ON SURVEY SIZE
-    // Find the greatest distance between any two points in the survey area.
-    const maxSurveyDistance = getGreatestTargetDistance(currentSurvey.targets, currentUserCoords);
-
-    // Set the maximum acceptable accuracy to 20% of the max distance, but cap it at 15m.
-    // Use a minimum floor of 5m to always accept a high-quality fix.
-    const DYNAMIC_MAX_ACCURACY = Math.min(
-        maxSurveyDistance * 0.20, // 20% of the survey size
-        15                        // Hard cap at 15m (since >15m is generally useless)
-    );
-    const FINAL_MAX_ACCURACY = Math.max(DYNAMIC_MAX_ACCURACY, 5); // Minimum threshold is 5m
-    
-    // 2. Start continuous watchPosition (Runs in the background)
-    liveMapWatchId = navigator.geolocation.watchPosition(
-        (position) => {
-            const newAccuracy = position.coords.accuracy;
-            
-            // --- DYNAMIC FILTERING LOGIC ---
-            // Only update the live coordinates if the reading is accurate enough 
-            // OR if this is the very first reading (currentUserCoords === null).
-            if (newAccuracy <= FINAL_MAX_ACCURACY || currentUserCoords === null) {
-                currentUserCoords = {
-                    lat: position.coords.latitude,
-                    lon: position.coords.longitude
-                };
-                currentUserAccuracy = newAccuracy;
-                
-                console.log(`Live Map Position Updated. Acc: ${currentUserAccuracy.toFixed(1)}m. Threshold: ${FINAL_MAX_ACCURACY.toFixed(1)}m`);
-            } else {
-                console.log(`Live Map Position Skipped (Acc: ${newAccuracy.toFixed(1)}m > ${FINAL_MAX_ACCURACY.toFixed(1)}m)`);
+        function startLiveMapLocationWatch() {
+            if (!navigator.geolocation) {
+                currentUserCoords = null;
+                currentUserAccuracy = null;
+                showMessage('Geolocation is not supported on this device.', 'error');
+                return;
             }
-            // ---------------------------
-        }, 
-        
-        // Error Callback
-        (error) => {
-            currentUserCoords = null;
-            currentUserAccuracy = null;
-            console.error('Live Map GPS Watch Error:', error);
-        },
-        
-        // Options Object
-        {
-            enableHighAccuracy: true, 
-            maximumAge: 0             
-        }
-    );
+            
+            // Reset best accuracy for a fresh start
+            bestLiveAccuracy = Infinity; 
+            
+            // 1. Start continuous watchPosition (Runs in the background)
+            liveMapWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const accuracy = position.coords.accuracy;
+                    
+                    // Core Logic: Only update the global state if this reading is more accurate
+                    if (accuracy < bestLiveAccuracy) {
+                        bestLiveAccuracy = accuracy; 
+                        
+                        currentUserCoords = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        };
+                        currentUserAccuracy = accuracy;
+                        
+                        console.log(`Live Map New Best Accuracy: ${accuracy.toFixed(1)}m`);
+                    } 
+                }, 
+                
+                // Error Callback
+                (error) => {
+                    currentUserCoords = null;
+                    currentUserAccuracy = null;
+                    console.error('Live Map GPS Watch Error:', error);
+                },
+                
+                // Options Object: High accuracy, no timeout (watch is continuous), maximumAge=0
+                {
+                    enableHighAccuracy: true, 
+                    maximumAge: 0             
+                }
+            );
 
-    // 3. Start the 5-second rendering interval (if not already running)
-    if (autoRefreshIntervalId === null) {
-        autoRefreshIntervalId = setInterval(() => {
-            updateMapWithUserLocationAndRender();
-        }, 5000); // 5000 milliseconds = 5 seconds
-        console.log(`Live Map GPS Watch and 5-second rendering interval started. Dynamic Threshold: ${FINAL_MAX_ACCURACY.toFixed(1)}m`);
-    }
-}
-        
+            // 2. Start the 5-second rendering interval (if not already running)
+            if (autoRefreshIntervalId === null) {
+                autoRefreshIntervalId = setInterval(() => {
+                    updateMapWithUserLocationAndRender();
+                }, 5000); // 5000 milliseconds = 5 seconds
+                console.log("Live Map GPS Watch and 5-second rendering interval started.");
+            }
+        }
+
         /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
         function updateMapWithUserLocationAndRender() {
             // The GPS data is updated asynchronously by startLiveMapLocationWatch().
