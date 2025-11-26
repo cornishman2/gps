@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3 second updates  - Metal Detecting Survey Log</title>
+    <title>New zoom  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -281,6 +281,7 @@
         let surveys = [];
         let currentPage = 'Home';
         let isMapFullscreen = false; // <--- ADD THIS LINE
+        let mapZoomScale = 1.0;
         // --- GLOBAL STATE ---
         let targetWatchId = null; // <--- ADD THIS to track the specific GPS process for the modal
         
@@ -301,6 +302,43 @@ let liveMapWatchId = null;      // To track the watchPosition process for the li
 let bestLiveAccuracy = Infinity; // To track the best accuracy received (lower is better)
 
         
+// --- GEOGRAPHY HELPER FUNCTIONS ---
+// ... existing geography functions (toRad, toDeg, clamp, getCircleDiameter) ...
+// --- END GEOGRAPHY HELPER FUNCTIONS ---
+
+
+// --- NEW MAP ZOOM FUNCTIONS ---
+
+/** Increases the map area by increasing the zoom scale factor and re-rendering. 
+ * Called when the '+' button is clicked. */
+function zoomOutMap() {
+    // Increase the scale factor by 20% (1.0 -> 1.2 -> 1.44, etc.)
+    mapZoomScale *= 1.2; 
+    
+    // Cap the zoom out to a maximum scale to prevent the map from becoming too sparse
+    if (mapZoomScale > 5.0) {
+        mapZoomScale = 5.0;
+        showMessage("Maximum zoom-out level reached.", 'info');
+    } else {
+        showMessage(`Zooming out... Map scale: ${mapZoomScale.toFixed(2)}x`, 'success');
+    }
+
+    // Re-render the Compass page immediately
+    render();
+}
+
+/** Resets the map area to the default fit (zoom scale 1.0) and re-renders. */
+function resetMapZoom() {
+    mapZoomScale = 1.0;
+    showMessage("Map zoom reset to fit all targets.", 'info');
+    render();
+}
+
+// --- END NEW MAP ZOOM FUNCTIONS ---
+
+
+// --- HELPER FUNCTIONS ---
+// ... existing helper functions (generateId, formatDate, etc.) ...
         // --- GEOGRAPHY HELPER FUNCTIONS ---
 
         /** Converts degrees to radians. */
@@ -1456,15 +1494,26 @@ function renderTargetPlot(targets) {
     const centerLon = (minLon + maxLon) / 2;
     
     // Apply the buffer to the final range
-    const latBuffer = finalLatRange * bufferPercentage;
-    const lonBuffer = finalLonRange * bufferPercentage;
+// --- BEGIN Zoomed Dynamic Bounding Box Calculation ---
 
-    // Recalculate min/max using the final ranges and center
-    minLat = centerLat - (finalLatRange / 2) - latBuffer; 
-    maxLat = centerLat + (finalLatRange / 2) + latBuffer;
-    minLon = centerLon - (finalLonRange / 2) - lonBuffer;
-    maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
-    // --- END Dynamic Hybrid Bounding Box Calculation ---
+// 1. Calculate the total required span (range + buffer)
+// The total span is the range plus the buffer on both sides (e.g., 1 + 2*0.05 = 1.1 total span)
+const totalLatSpan = finalLatRange * (1 + 2 * bufferPercentage);
+const totalLonSpan = finalLonRange * (1 + 2 * bufferPercentage);
+
+// 2. Apply the global zoom scale factor (THIS IS THE KEY CHANGE)
+const zoomFactor = mapZoomScale; // mapZoomScale is set in the new zoomOutMap/resetMapZoom functions
+const scaledLatSpan = totalLatSpan * zoomFactor; 
+const scaledLonSpan = totalLonSpan * zoomFactor;
+
+// 3. Recalculate min/max using the center and the new, scaled span
+// This keeps the center constant but expands the map area, moving pins inward.
+minLat = centerLat - (scaledLatSpan / 2);
+maxLat = centerLat + (scaledLatSpan / 2);
+minLon = centerLon - (scaledLonSpan / 2);
+maxLon = centerLon + (scaledLonSpan / 2);
+
+// --- END Zoomed Dynamic Bounding Box Calculation ---    // --- END Dynamic Hybrid Bounding Box Calculation ---
 
     // Recalculate ranges based on the new, final expanded bounding box
     let latRange = maxLat - minLat;
@@ -1674,13 +1723,34 @@ function renderCompassPage(isAutoRefresh = false) {
             </div>
 
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-8">
-                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
-                    <i class="fas fa-dot-circle mr-2"></i> Static Target Plot
-                </h3>
-                <p class="text-sm text-gray-600 mb-3">
-                    This plot shows the relative geographical distribution of all logged targets and your position in the open survey.
-                    Your uncertainty is shown with a semi-transparent red confidence circle (Radius = GPS Accuracy).
-                </p>
+              <div class="flex justify-between items-start mb-3">
+                    <div class="pr-4">
+                        <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-1">
+                            <i class="fas fa-dot-circle mr-2"></i> Static Target Plot
+                        </h3>
+                        <p class="text-sm text-gray-600">
+                            This plot shows the relative geographical distribution of all logged targets and your position in the open survey.
+                            Your uncertainty is shown with a semi-transparent red confidence circle (Radius = GPS Accuracy).
+                        </p>
+                    </div>
+                                        <div class="flex space-x-2 flex-shrink-0 mt-1">
+                                                <button onclick="zoomOutMap()" 
+                                class="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200 transition duration-150" 
+                                title="Zoom Out Map (Moves targets closer to center)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                                                <button onclick="resetMapZoom()" 
+                                class="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200 transition duration-150" 
+                                title="Reset Zoom">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                                                <button onclick="toggleMapFullscreen()" 
+                                class="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200 transition duration-150" 
+                                title="${isMapFullscreen ? 'Exit Fullscreen' : 'Go to Fullscreen'}">
+                            <i class="fas ${isMapFullscreen ? 'fa-compress-alt' : 'fa-expand-alt'}"></i>
+                        </button>
+                    </div>
+                </div>
                 ${renderTargetPlot(targets)}
             </div>
         </div>
