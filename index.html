@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Refresh 10  - Metal Detecting Survey Log</title>
+    <title>Confidence 10  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -144,12 +144,6 @@
                         <input type="text" id="target-depth" name="targetDepth" placeholder="e.g., 6 inches"
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
-                    <div class="mb-4">
-                        <label for="centre-me" class="block text-sm font-medium text-gray-700">Centre on map</label>
-                        <input type="text" id="centre-me" name="centreme" placeholder="Yes/No"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
-                    </div>
-
                     <div class="mb-4 col-span-2">
                         <label for="target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
                         <select id="target-type" name="targetType" required
@@ -217,14 +211,6 @@
                         <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
-                    <div class="mb-4">
-                        <label for="edit-centre-me" class="block text-sm font-medium text-gray-700">Centre on map</label>
-                        <input type="text" id="edit-centre-me" name="centreme" placeholder="e.g.Yes/No"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
-                    </div>
-
-
-                    
                     <div class="mb-4 col-span-2">
                         <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
                         <select id="edit-target-type" name="targetType" required
@@ -612,58 +598,60 @@ function startTargetLocationWatch() {
         /** Starts a continuous, high-accuracy GPS stream that only updates the state when a reading is more accurate. 
          * Also starts the 5-second rendering interval.
          */
-// --- LIVE MAP GPS WATCH FUNCTIONS (New/Modified Logic) ---
-
-/** Starts a continuous, high-accuracy GPS stream that updates the state with every new position. 
- * Also starts the 5-second rendering interval.
- */
-function startLiveMapLocationWatch() {
-    if (!navigator.geolocation) {
-        currentUserCoords = null;
-        currentUserAccuracy = null;
-        showMessage('Geolocation is not supported on this device.', 'error');
-        return;
-    }
-    
-    // NOTE: The 'bestLiveAccuracy' variable is no longer used here.
-    
-    // 1. Start continuous watchPosition (Runs in the background)
-    liveMapWatchId = navigator.geolocation.watchPosition(
-        (position) => {
-            // --- FIX: ALWAYS UPDATE THE LOCATION AND ACCURACY FOR LIVE VIEW ---
-            // We want the LATEST position for a live map, regardless of whether 
-            // the accuracy is better or worse than the previous reading.
-            currentUserCoords = {
-                lat: position.coords.latitude,
-                lon: position.coords.longitude
-            };
-            currentUserAccuracy = position.coords.accuracy;
+        function startLiveMapLocationWatch() {
+            if (!navigator.geolocation) {
+                currentUserCoords = null;
+                currentUserAccuracy = null;
+                showMessage('Geolocation is not supported on this device.', 'error');
+                return;
+            }
             
-            console.log(`Live Map Position Received: ${currentUserCoords.lat.toFixed(6)}, Acc: ${currentUserAccuracy.toFixed(1)}m`);
-        }, 
-        
-        // Error Callback
-        (error) => {
-            currentUserCoords = null;
-            currentUserAccuracy = null;
-            console.error('Live Map GPS Watch Error:', error);
-        },
-        
-        // Options Object: High accuracy, no timeout (watch is continuous), maximumAge=0
-        {
-            enableHighAccuracy: true, 
-            maximumAge: 0             
-        }
-    );
+            // Reset best accuracy for a fresh start
+            bestLiveAccuracy = Infinity; 
+            
+            // 1. Start continuous watchPosition (Runs in the background)
+            liveMapWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const accuracy = position.coords.accuracy;
+                    
+                    // Core Logic: Only update the global state if this reading is more accurate
+                    if (accuracy < bestLiveAccuracy) {
+                        bestLiveAccuracy = accuracy; 
+                        
+                        currentUserCoords = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        };
+                        currentUserAccuracy = accuracy;
+                        
+                        console.log(`Live Map New Best Accuracy: ${accuracy.toFixed(1)}m`);
+                    } 
+                }, 
+                
+                // Error Callback
+                (error) => {
+                    currentUserCoords = null;
+                    currentUserAccuracy = null;
+                    console.error('Live Map GPS Watch Error:', error);
+                },
+                
+                // Options Object: High accuracy, no timeout (watch is continuous), maximumAge=0
+                {
+                    enableHighAccuracy: true, 
+                    maximumAge: 0             
+                }
+            );
 
-    // 2. Start the 5-second rendering interval (if not already running)
-    if (autoRefreshIntervalId === null) {
-        autoRefreshIntervalId = setInterval(() => {
-            updateMapWithUserLocationAndRender();
-        }, 3000); // 3000 milliseconds = 5 seconds
-        console.log("Live Map GPS Watch and 5-second rendering interval started.");
-    }
-}        /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
+            // 2. Start the 5-second rendering interval (if not already running)
+            if (autoRefreshIntervalId === null) {
+                autoRefreshIntervalId = setInterval(() => {
+                    updateMapWithUserLocationAndRender();
+                }, 5000); // 5000 milliseconds = 5 seconds
+                console.log("Live Map GPS Watch and 5-second rendering interval started.");
+            }
+        }
+
+        /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
         function updateMapWithUserLocationAndRender() {
             // The GPS data is updated asynchronously by startLiveMapLocationWatch().
             // We just trigger the re-render here.
@@ -832,7 +820,6 @@ function startLiveMapLocationWatch() {
             const description = form['targetDescription'].value.trim();
             const vdi = form['targetVDI'].value.trim() || 'N/A';
             const depth = form['targetDepth'].value.trim() || 'Unknown';
-            const centreme = form['centreme'].value.trim() || 'Yes';
             const type = form['targetType'].value;
             const coords = form['targetCoords'].value.trim() || 'No GPS logged';
             const accuracy = form['targetAccuracy'].value.trim() || 'N/A'; // NEW: Get accuracy
@@ -849,7 +836,6 @@ function startLiveMapLocationWatch() {
                 description: description,
                 vdi: vdi,
                 depth: depth,
-                centreme : centreme, 
                 type: type,
                 status: 'Signal Detected', // Initial status
                 time: now,
@@ -889,8 +875,6 @@ function startLiveMapLocationWatch() {
             document.getElementById('edit-target-description').value = target.description;
             document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
             document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
-            document.getElementById('edit-centre-me').value = target.centreme === 'Yes' ? '' : target.centreme;
-            
             document.getElementById('edit-target-type').value = target.type;
             document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
             // NEW: Populate accuracy field
@@ -922,7 +906,6 @@ function startLiveMapLocationWatch() {
             const newDescription = form['targetDescription'].value.trim();
             const newVDI = form['targetVDI'].value.trim() || 'N/A';
             const newDepth = form['targetDepth'].value.trim() || 'Unknown';
-            const newcentreme = form['centreme'].value.trim() || 'Unknown';
             const newType = form['targetType'].value;
             const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
             const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A'; // NEW: Get accuracy
@@ -934,7 +917,6 @@ function startLiveMapLocationWatch() {
                 target.description = newDescription;
                 target.vdi = newVDI;
                 target.depth = newDepth;
-                target.centreme=newcentreme
                 target.type = newType;
                 target.coordinates = newCoords;
                 target.accuracy = newAccuracy; // NEW: Update accuracy
@@ -1362,22 +1344,14 @@ function renderHomePage() {
                             <strong class="text-gray-500">Depth:</strong>
                             <span class="text-gray-800">${target.depth}</span>
                         </div>
-                         <div>
-                            <strong class="text-gray-500">Centre on map:</strong>
-                            <span class="text-gray-800">${target.centreme}</span>
-                        </div>
-
                         <div>
                             <strong class="text-gray-500">Accuracy:</strong>
                             <span class="text-gray-800">${target.accuracy && target.accuracy !== 'N/A' ? target.accuracy + 'm' : 'N/A'}</span>
                         </div>
-                        
-                        
                         <div>
                             <strong class="text-gray-500">Coords:</strong>
                             <span class="text-gray-800 break-all">${target.coordinates.split(',')[0] || target.coordinates}...</span>
                         </div>
- 
 
                         <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
                             Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
@@ -1408,7 +1382,6 @@ function renderTargetPlot(targets) {
             description: t.description,
             type: t.type,
             vdi: t.vdi,
-            centreme: t.centreme,
             status: t.status,
             accuracy: parseFloat(t.accuracy) || 0,
             isUser: false
