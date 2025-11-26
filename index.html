@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centre 4  - Metal Detecting Survey Log</title>
+    <title>Centre 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -867,8 +867,15 @@ function startTargetLocationWatch() {
                 return;
             }
 
-            // Create the new target object
- // ...
+        // =================================================================
+    // ✨ NEW LOGIC: Enforce single 'Centre on map' setting
+    // =================================================================
+    if (centerOnMap) {
+        // If the new target is set to 'Yes', set all existing targets in this survey to 'No'
+        openSurvey.targets.forEach(target => {
+            target.centerOnMap = false;
+        });
+  
             // Create the new target object
             const newTarget = {
                 id: generateId(),
@@ -976,7 +983,17 @@ function startTargetLocationWatch() {
                 target.coordinates = newCoords;
                 target.accuracy = newAccuracy; // NEW: Update accuracy
                 target.centerOnMap = centerOnMap; // NEW PROPERTY UPDATE
-
+        // =================================================================
+        // ✨ NEW LOGIC: Enforce single 'Centre on map' setting
+        // =================================================================
+        if (centerOnMap) {
+            // If the edited target is set to 'Yes', set all OTHER targets in this survey to 'No'
+            survey.targets.forEach(t => {
+                if (t.id !== targetId) {
+                    t.centerOnMap = false;
+                }
+            });
+     
                 
                 survey.dateLastChanged = Date.now();
 
