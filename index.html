@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confidence 10  - Metal Detecting Survey Log</title>
+    <title>Confidence 11  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -598,60 +598,58 @@ function startTargetLocationWatch() {
         /** Starts a continuous, high-accuracy GPS stream that only updates the state when a reading is more accurate. 
          * Also starts the 5-second rendering interval.
          */
-        function startLiveMapLocationWatch() {
-            if (!navigator.geolocation) {
-                currentUserCoords = null;
-                currentUserAccuracy = null;
-                showMessage('Geolocation is not supported on this device.', 'error');
-                return;
-            }
-            
-            // Reset best accuracy for a fresh start
-            bestLiveAccuracy = Infinity; 
-            
-            // 1. Start continuous watchPosition (Runs in the background)
-            liveMapWatchId = navigator.geolocation.watchPosition(
-                (position) => {
-                    const accuracy = position.coords.accuracy;
-                    
-                    // Core Logic: Only update the global state if this reading is more accurate
-                    if (accuracy < bestLiveAccuracy) {
-                        bestLiveAccuracy = accuracy; 
-                        
-                        currentUserCoords = {
-                            lat: position.coords.latitude,
-                            lon: position.coords.longitude
-                        };
-                        currentUserAccuracy = accuracy;
-                        
-                        console.log(`Live Map New Best Accuracy: ${accuracy.toFixed(1)}m`);
-                    } 
-                }, 
-                
-                // Error Callback
-                (error) => {
-                    currentUserCoords = null;
-                    currentUserAccuracy = null;
-                    console.error('Live Map GPS Watch Error:', error);
-                },
-                
-                // Options Object: High accuracy, no timeout (watch is continuous), maximumAge=0
-                {
-                    enableHighAccuracy: true, 
-                    maximumAge: 0             
-                }
-            );
+// --- LIVE MAP GPS WATCH FUNCTIONS (New/Modified Logic) ---
 
-            // 2. Start the 5-second rendering interval (if not already running)
-            if (autoRefreshIntervalId === null) {
-                autoRefreshIntervalId = setInterval(() => {
-                    updateMapWithUserLocationAndRender();
-                }, 5000); // 5000 milliseconds = 5 seconds
-                console.log("Live Map GPS Watch and 5-second rendering interval started.");
-            }
+/** Starts a continuous, high-accuracy GPS stream that updates the state with every new position. 
+ * Also starts the 5-second rendering interval.
+ */
+function startLiveMapLocationWatch() {
+    if (!navigator.geolocation) {
+        currentUserCoords = null;
+        currentUserAccuracy = null;
+        showMessage('Geolocation is not supported on this device.', 'error');
+        return;
+    }
+    
+    // NOTE: The 'bestLiveAccuracy' variable is no longer used here.
+    
+    // 1. Start continuous watchPosition (Runs in the background)
+    liveMapWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            // --- FIX: ALWAYS UPDATE THE LOCATION AND ACCURACY FOR LIVE VIEW ---
+            // We want the LATEST position for a live map, regardless of whether 
+            // the accuracy is better or worse than the previous reading.
+            currentUserCoords = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude
+            };
+            currentUserAccuracy = position.coords.accuracy;
+            
+            console.log(`Live Map Position Received: ${currentUserCoords.lat.toFixed(6)}, Acc: ${currentUserAccuracy.toFixed(1)}m`);
+        }, 
+        
+        // Error Callback
+        (error) => {
+            currentUserCoords = null;
+            currentUserAccuracy = null;
+            console.error('Live Map GPS Watch Error:', error);
+        },
+        
+        // Options Object: High accuracy, no timeout (watch is continuous), maximumAge=0
+        {
+            enableHighAccuracy: true, 
+            maximumAge: 0             
         }
+    );
 
-        /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
+    // 2. Start the 5-second rendering interval (if not already running)
+    if (autoRefreshIntervalId === null) {
+        autoRefreshIntervalId = setInterval(() => {
+            updateMapWithUserLocationAndRender();
+        }, 5000); // 5000 milliseconds = 5 seconds
+        console.log("Live Map GPS Watch and 5-second rendering interval started.");
+    }
+}        /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
         function updateMapWithUserLocationAndRender() {
             // The GPS data is updated asynchronously by startLiveMapLocationWatch().
             // We just trigger the re-render here.
