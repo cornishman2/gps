@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centre 6  - Metal Detecting Survey Log</title>
+    <title>Centre 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -859,7 +859,7 @@ function handleNewTargetSubmit(event) {
     
     // Read the "Centre on map" field
     const centerOnMapValue = form['targetCenterOnMap'].value;
-    const centerOnMap = centerOnMapValue === 'Yes'; [cite_start]// [cite: 976, 977]
+    const centerOnMap = centerOnMapValue === 'Yes'; 
 
     const now = Date.now();
 
@@ -892,19 +892,19 @@ function handleNewTargetSubmit(event) {
         accuracy: accuracy, // Log Accuracy
         user: userProfile.name, // Pulled from userProfile state
         detector: userProfile.detector, // Pulled from userProfile state
-        [cite_start]centerOnMap: centerOnMap // NEW PROPERTY [cite: 979]
+        centerOnMap: centerOnMap // 
     };
 
-    [cite_start]// 1. Add the new target to the open survey (at the beginning of the array for reverse chronological view) [cite: 980]
+    // 1. Add the new target to the open survey (at the beginning of the array for reverse chronological view) 
     openSurvey.targets.unshift(newTarget);
     openSurvey.dateLastChanged = now;
 
     // 2. Save and re-render
-    saveSurveysToLocalStorage(); [cite_start]// [cite: 981]
+    saveSurveysToLocalStorage(); 
     closeNewTargetModal();
     showMessage(`Target '${description}' successfully logged in ${openSurvey.name}.`, 'success');
     
-    [cite_start]// Switch to Targets page automatically to view the new entry [cite: 982]
+    // Switch to Targets page automatically to view the new entry 
     currentPage = 'Targets';
     render();
 }        /** Shows the Edit Target Modal and loads current data. */
@@ -959,28 +959,28 @@ function handleNewTargetSubmit(event) {
   function handleEditTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;
-    const targetId = form['targetId'].value; [cite_start]// [cite: 1018]
-    const surveyId = form['surveyId'].value; [cite_start]// [cite: 1018]
+    const targetId = form['targetId'].value; 
+    const surveyId = form['surveyId'].value; 
 
-    const newDescription = form['targetDescription'].value.trim(); [cite_start]// [cite: 1019]
+    const newDescription = form['targetDescription'].value.trim(); 
     const newVDI = form['targetVDI'].value.trim() || 'N/A';
     const newDepth = form['targetDepth'].value.trim() || 'Unknown';
     const newType = form['targetType'].value;
-    const newCoords = form['targetCoords'].value.trim() || 'No GPS logged'; [cite_start]// [cite: 1020]
+    const newCoords = form['targetCoords'].value.trim() || 'No GPS logged'; 
     const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
     
-    [cite_start]// Read the "Centre on map" field [cite: 1021]
-    const centerOnMapValue = form['editTargetCenterOnMap'].value;
-    const centerOnMap = centerOnMapValue === 'Yes'; [cite_start]// [cite: 1022]
     
-    const survey = surveys.find(s => s.id === surveyId); [cite_start]// [cite: 1022]
-    const target = survey ? survey.targets.find(t => t.id === targetId) : null; [cite_start]// [cite: 1023]
+    const centerOnMapValue = form['editTargetCenterOnMap'].value;
+    const centerOnMap = centerOnMapValue === 'Yes'; 
+    
+    const survey = surveys.find(s => s.id === surveyId); 
+    const target = survey ? survey.targets.find(t => t.id === targetId) : null; 
 
     if (target && survey) {
         // Update the target object properties
-        target.description = newDescription; [cite_start]// [cite: 1023]
+        target.description = newDescription; 
         target.vdi = newVDI;
-        target.depth = newDepth; [cite_start]// [cite: 1024]
+        target.depth = newDepth; 
         target.type = newType;
         target.coordinates = newCoords;
         target.accuracy = newAccuracy;
@@ -998,12 +998,12 @@ function handleNewTargetSubmit(event) {
         }
         // =================================================================
 
-        target.centerOnMap = centerOnMap; [cite_start]// NEW PROPERTY UPDATE [cite: 1024]
-        survey.dateLastChanged = Date.now(); [cite_start]// [cite: 1025]
+        target.centerOnMap = centerOnMap; 
+        survey.dateLastChanged = Date.now(); 
 
         // Save and re-render
         saveSurveysToLocalStorage();
-        closeEditTargetModal(); [cite_start]// [cite: 1025]
+        closeEditTargetModal(); 
         showMessage(`Target '${target.description}' successfully updated.`, 'success');
         
         // Re-render the targets page to reflect changes
