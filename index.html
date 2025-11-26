@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centre 7  - Metal Detecting Survey Log</title>
+    <title>Centre 8  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1443,8 +1443,8 @@ function renderHomePage() {
         }
         
  /** Renders a static plot of targets based on relative coordinates. */
+/** Renders a static plot of targets based on relative coordinates. */
 function renderTargetPlot(targets) {
-    
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
@@ -1465,11 +1465,12 @@ function renderTargetPlot(targets) {
             vdi: t.vdi,
             status: t.status,
             accuracy: parseFloat(t.accuracy) || 0,
+            centerOnMap: !!t.centerOnMap,
             isUser: false
         };
     }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+
     let allCoords = [...parsedCoords];
-    
     let userCoord = null;
 
     // Add user's location if available
@@ -1494,72 +1495,158 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // --- Dynamic Hybrid Bounding Box Calculation (Restored) ---
-    // Find the true geographical bounding box of ALL points (targets + user)
-    let minLat = allCoords[0].lat, maxLat = allCoords[0].lat;
-    let minLon = allCoords[0].lon, maxLon = allCoords[0].lon;
+    // --- NEW: Find the target (if any) that should be centered on the map ---
+    let centerTargetLat = null;
+    let centerTargetLon = null;
 
-    allCoords.forEach(c => {
-        minLat = Math.min(minLat, c.lat);
-        maxLat = Math.max(maxLat, c.lat);
-        minLon = Math.min(minLon, c.lon);
-        maxLon = Math.max(maxLon, c.lon);
-    });
+    // We use the original targets array because it carries the centerOnMap flag
+    const centreTarget = targets.find(t => 
+        t.centerOnMap === true &&
+        t.coordinates &&
+        t.coordinates.includes(',')
+    );
 
-    // 1. Calculate Target/Pin Bounding Box (before padding)
-    let targetLatRange = maxLat - minLat;
-    let targetLonRange = maxLon - minLon;
-
-    // Ensure a minimal range for plotting (e.g., if all targets overlap)
-    if (targetLatRange < 0.00001) { targetLatRange = 0.00002; }
-    if (targetLonRange < 0.00001) { targetLonRange = 0.00002; }
-    
-    // 2. Calculate the range required to show the user's confidence circle
-    let userLatRange = 0;
-    let userLonRange = 0;
-    
-    if (currentUserCoords && userAccuracy > 0) {
-        // Calculate required degrees to contain the circle diameter + a small 10% padding
-        const requiredMeters = diameterInMeters * 1.1; // 10% extra padding around the circle
-        const meanLatForConversion = toRad(currentUserCoords.lat);
-        const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
-
-        userLatRange = requiredMeters / M_PER_DEG_LAT;
-        userLonRange = requiredMeters / metersPerDegreeLonForConversion;
+    if (centreTarget) {
+        const parts = centreTarget.coordinates.split(',').map(c => parseFloat(c.trim()));
+        if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+            centerTargetLat = parts[0];
+            centerTargetLon = parts[1];
+        }
     }
 
-    // 3. Determine the FINAL required range: the MAX of target range or user circle range
-    let finalLatRange = Math.max(targetLatRange, userLatRange);
-    let finalLonRange = Math.max(targetLonRange, userLonRange);
+    let minLat, maxLat, minLon, maxLon;
+    let latRange, lonRange;
+    let mapHeightMeters, mapWidthMeters;
 
-    // Center the final bounding box around the original target center
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLon = (minLon + maxLon) / 2;
-    
-    // Apply the buffer to the final range
-    const latBuffer = finalLatRange * bufferPercentage;
-    const lonBuffer = finalLonRange * bufferPercentage;
+    if (centerTargetLat !== null && centerTargetLon !== null) {
+        // ============================================================
+        // CASE 1: A "Centre on map" target exists -> force it to centre
+        // ============================================================
 
-    // Recalculate min/max using the final ranges and center
-    minLat = centerLat - (finalLatRange / 2) - latBuffer; 
-    maxLat = centerLat + (finalLatRange / 2) + latBuffer;
-    minLon = centerLon - (finalLonRange / 2) - lonBuffer;
-    maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
-    // --- END Dynamic Hybrid Bounding Box Calculation ---
+        // Find maximum distance (in degrees) from the centre target to any plotted point
+        let maxLatDelta = 0;
+        let maxLonDelta = 0;
 
-    // Recalculate ranges based on the new, final expanded bounding box
-    let latRange = maxLat - minLat;
-    let lonRange = maxLon - minLon;
+        allCoords.forEach(c => {
+            const dLat = Math.abs(c.lat - centerTargetLat);
+            const dLon = Math.abs(c.lon - centerTargetLon);
+            if (dLat > maxLatDelta) maxLatDelta = dLat;
+            if (dLon > maxLonDelta) maxLonDelta = dLon;
+        });
 
-    // --- Calculate map dimensions in meters for accuracy scaling ---
-    const finalMeanLat = toRad((minLat + maxLat) / 2);
-    const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
+        // Ensure a minimal range to avoid degenerate plots
+        if (maxLatDelta < 0.00001) maxLatDelta = 0.00001;
+        if (maxLonDelta < 0.00001) maxLonDelta = 0.00001;
 
-    const mapHeightMeters = latRange * M_PER_DEG_LAT;
-    const mapWidthMeters = lonRange * metersPerDegreeLon;
+        // Range needed to include all points around the centre target
+        let targetLatRange = maxLatDelta * 2;
+        let targetLonRange = maxLonDelta * 2;
+
+        // Circle range to contain the user accuracy circle (if any)
+        let circleLatRange = 0;
+        let circleLonRange = 0;
+
+        if (currentUserCoords && userAccuracy > 0) {
+            const requiredMeters = diameterInMeters * 1.1; // 10% padding
+            const meanLatForConversion = toRad(centerTargetLat);
+            const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
+
+            circleLatRange = requiredMeters / M_PER_DEG_LAT;
+            circleLonRange = requiredMeters / metersPerDegreeLonForConversion;
+        }
+
+        // Final ranges: big enough for both targets and confidence circle
+        const finalLatRange = Math.max(targetLatRange, circleLatRange);
+        const finalLonRange = Math.max(targetLonRange, circleLonRange);
+
+        const latBuffer = finalLatRange * bufferPercentage;
+        const lonBuffer = finalLonRange * bufferPercentage;
+
+        // Build bounding box symmetrically around the chosen centre target
+        minLat = centerTargetLat - (finalLatRange / 2) - latBuffer;
+        maxLat = centerTargetLat + (finalLatRange / 2) + latBuffer;
+        minLon = centerTargetLon - (finalLonRange / 2) - lonBuffer;
+        maxLon = centerTargetLon + (finalLonRange / 2) + lonBuffer;
+
+        latRange = maxLat - minLat;
+        lonRange = maxLon - minLon;
+
+        const finalMeanLat = toRad((minLat + maxLat) / 2);
+        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
+
+        mapHeightMeters = latRange * M_PER_DEG_LAT;
+        mapWidthMeters = lonRange * metersPerDegreeLon;
+
+    } else {
+        // ============================================================
+        // CASE 2: No special centre target -> use existing auto-fit logic
+        // ============================================================
+
+        // Find the true geographical bounding box of ALL points (targets + user)
+        minLat = allCoords[0].lat; 
+        maxLat = allCoords[0].lat;
+        minLon = allCoords[0].lon; 
+        maxLon = allCoords[0].lon;
+
+        allCoords.forEach(c => {
+            minLat = Math.min(minLat, c.lat);
+            maxLat = Math.max(maxLat, c.lat);
+            minLon = Math.min(minLon, c.lon);
+            maxLon = Math.max(maxLon, c.lon);
+        });
+
+        // 1. Calculate Target/Pin Bounding Box (before padding)
+        let targetLatRange = maxLat - minLat;
+        let targetLonRange = maxLon - minLon;
+
+        // Ensure a minimal range for plotting (e.g., if all targets overlap)
+        if (targetLatRange < 0.00001) { targetLatRange = 0.00002; }
+        if (targetLonRange < 0.00001) { targetLonRange = 0.00002; }
+        
+        // 2. Calculate the range required to show the user's confidence circle
+        let userLatRange = 0;
+        let userLonRange = 0;
+        
+        if (currentUserCoords && userAccuracy > 0) {
+            // Calculate required degrees to contain the circle diameter + a small padding
+            const requiredMeters = diameterInMeters * 1.1;
+            const meanLatForConversion = toRad(currentUserCoords.lat);
+            const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
+
+            userLatRange = requiredMeters / M_PER_DEG_LAT;
+            userLonRange = requiredMeters / metersPerDegreeLonForConversion;
+        }
+
+        // 3. Determine the FINAL required range: the MAX of target range or user circle range
+        const finalLatRange = Math.max(targetLatRange, userLatRange);
+        const finalLonRange = Math.max(targetLonRange, userLonRange);
+
+        // Center the final bounding box around the original target centre
+        const centerLat = (minLat + maxLat) / 2;
+        const centerLon = (minLon + maxLon) / 2;
+        
+        // Apply the buffer to the final range
+        const latBuffer = finalLatRange * bufferPercentage;
+        const lonBuffer = finalLonRange * bufferPercentage;
+
+        // Recalculate min/max using the final ranges and centre
+        minLat = centerLat - (finalLatRange / 2) - latBuffer; 
+        maxLat = centerLat + (finalLatRange / 2) + latBuffer;
+        minLon = centerLon - (finalLonRange / 2) - lonBuffer;
+        maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
+
+        latRange = maxLat - minLat;
+        lonRange = maxLon - minLon;
+
+        const finalMeanLat = toRad((minLat + maxLat) / 2);
+        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
+
+        mapHeightMeters = latRange * M_PER_DEG_LAT;
+        mapWidthMeters = lonRange * metersPerDegreeLon;
+    }
 
     // ---------------------------------------------------------------------------------------
-    
+    // Normalise and draw
     let userXPercent = 0;
     let userYPercent = 0;
     let userPinAndLabelHtml = '';
@@ -1643,7 +1730,6 @@ function renderTargetPlot(targets) {
 
     // 3. Generate the Confidence Circle and User Pin HTML (if user exists)
     if (userCoord && userAccuracy > 0) {
-        
         // Use the largest map dimension for scaling the circle (guaranteeing visibility)
         const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
         
@@ -1655,7 +1741,6 @@ function renderTargetPlot(targets) {
                 style="
                     width: ${diameterPercent.toFixed(2)}%; 
                     height: ${diameterPercent.toFixed(2)}%;
-                    /* Position the circle absolutely on the map using stored user coordinates */
                     left: ${userXPercent.toFixed(2)}%; top: ${userYPercent.toFixed(2)}%;
                     transform: translate(-50%, -50%);
                     z-index: 5; 
@@ -1702,7 +1787,8 @@ function renderTargetPlot(targets) {
             </ul>
         </div>
     `;
-}        /** Toggles the map state and re-renders immediately. */
+}
+       /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
     isMapFullscreen = !isMapFullscreen;
