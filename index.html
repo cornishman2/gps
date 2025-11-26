@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Refresh 3  - Metal Detecting Survey Log</title>
+    <title>Refresh 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -144,6 +144,12 @@
                         <input type="text" id="target-depth" name="targetDepth" placeholder="e.g., 6 inches"
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
+                    <div class="mb-4">
+                        <label for="centre-me" class="block text-sm font-medium text-gray-700">Centre on map</label>
+                        <input type="text" id="centre-me" name="centreMe" placeholder="e.g., 6 inches"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+
                     <div class="mb-4 col-span-2">
                         <label for="target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
                         <select id="target-type" name="targetType" required
@@ -211,6 +217,14 @@
                         <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
+                    <div class="mb-4">
+                        <label for="edit-centre-me" class="block text-sm font-medium text-gray-700">Centre on map</label>
+                        <input type="text" id="edit-centre-me" name="centreMe" placeholder="e.g.Yes/No"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                    </div>
+
+
+                    
                     <div class="mb-4 col-span-2">
                         <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
                         <select id="edit-target-type" name="targetType" required
@@ -818,6 +832,7 @@ function startLiveMapLocationWatch() {
             const description = form['targetDescription'].value.trim();
             const vdi = form['targetVDI'].value.trim() || 'N/A';
             const depth = form['targetDepth'].value.trim() || 'Unknown';
+            const depth = form['centreMe'].value.trim() || 'Yes';
             const type = form['targetType'].value;
             const coords = form['targetCoords'].value.trim() || 'No GPS logged';
             const accuracy = form['targetAccuracy'].value.trim() || 'N/A'; // NEW: Get accuracy
@@ -834,6 +849,7 @@ function startLiveMapLocationWatch() {
                 description: description,
                 vdi: vdi,
                 depth: depth,
+                centreMe : centreMe 
                 type: type,
                 status: 'Signal Detected', // Initial status
                 time: now,
@@ -873,6 +889,8 @@ function startLiveMapLocationWatch() {
             document.getElementById('edit-target-description').value = target.description;
             document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
             document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
+            document.getElementById('edit-centre-me').value = target.centreme === 'Yes' ? '' : target.centreme;
+            
             document.getElementById('edit-target-type').value = target.type;
             document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
             // NEW: Populate accuracy field
@@ -904,6 +922,7 @@ function startLiveMapLocationWatch() {
             const newDescription = form['targetDescription'].value.trim();
             const newVDI = form['targetVDI'].value.trim() || 'N/A';
             const newDepth = form['targetDepth'].value.trim() || 'Unknown';
+            const newcentreMe = form['centreMe'].value.trim() || 'Unknown';
             const newType = form['targetType'].value;
             const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
             const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A'; // NEW: Get accuracy
@@ -915,6 +934,7 @@ function startLiveMapLocationWatch() {
                 target.description = newDescription;
                 target.vdi = newVDI;
                 target.depth = newDepth;
+                target.centreMe=newcentreMe
                 target.type = newType;
                 target.coordinates = newCoords;
                 target.accuracy = newAccuracy; // NEW: Update accuracy
@@ -1343,6 +1363,11 @@ function renderHomePage() {
                             <span class="text-gray-800">${target.depth}</span>
                         </div>
                         <div>
+                            <strong class="text-gray-500">Centre on map:</strong>
+                            <span class="text-gray-800">${target.centreMe}</span>
+                        </div>
+
+                        <div>
                             <strong class="text-gray-500">Accuracy:</strong>
                             <span class="text-gray-800">${target.accuracy && target.accuracy !== 'N/A' ? target.accuracy + 'm' : 'N/A'}</span>
                         </div>
@@ -1380,6 +1405,7 @@ function renderTargetPlot(targets) {
             description: t.description,
             type: t.type,
             vdi: t.vdi,
+            centreMe: t.centreMe,
             status: t.status,
             accuracy: parseFloat(t.accuracy) || 0,
             isUser: false
