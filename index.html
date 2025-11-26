@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centre 9  - Metal Detecting Survey Log</title>
+    <title>Centre 10  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -850,7 +850,22 @@ function handleNewTargetSubmit(event) {
     }
 
     // Capture target data
-    const description = form['targetDescription'].value.trim();
+
+    // Line 876 - TEMPORARY DEBUG CODE
+const rawDescription = form['targetDescription'].value;
+console.log("Raw Description Value:", rawDescription); // Check your browser console!
+const description = rawDescription.trim(); 
+
+// Now check if the leading character is a '?'
+if (description.startsWith('?')) {
+    console.error("BUG DETECTED: Prepending '?' found. Cleaning description.");
+    description = description.substring(1).trim(); // Remove the first character and trim again
+} 
+
+// Check console for what's being saved to confirm the bug location!
+// After running this, look in the Console, and you will see:
+// Raw Description Value: ?Your New Target Find [If the bug exists]
+//    const description = form['targetDescription'].value.trim();
     const vdi = form['targetVDI'].value.trim() || 'N/A';
     const depth = form['targetDepth'].value.trim() || 'Unknown';
     const type = form['targetType'].value;
