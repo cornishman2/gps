@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  2 - Metal Detecting Survey Log</title>
+    <title>Find target  3 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1749,20 +1749,19 @@ if (hasUserGPS && effectiveUserCoords) {
     let userConfidenceCircleHtml = '';
 
     // --- Generate pins ---
+    const MAP_EDGE_MARGIN_PERCENT = 10;
+
     const pinsHtml = allCoords.map(t => {
         const xRaw = ((t.lon - minLon) / safeLonRange) * 100;
         const yRaw = ((maxLat - t.lat) / safeLatRange) * 100;
 
-// --- New margin for map edges ---
-const MAP_EDGE_MARGIN_PERCENT = 10;
+        // Clamp to [0, 100]
+        let xPercent = clamp(xRaw, 0, 100);
+        let yPercent = clamp(yRaw, 0, 100);
 
-// Raw projection result
-let xPercent = clamp(xRaw, 0, 100);
-let yPercent = clamp(yRaw, 0, 100);
-
-// Apply inward margin so nothing touches the boundary
-xPercent = MAP_EDGE_MARGIN_PERCENT + (xPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
-yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
+        // Apply inward margin so nothing touches the boundary
+        xPercent = MAP_EDGE_MARGIN_PERCENT + (xPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
+        yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
 
         if (t.isUser) {
             // User pin
@@ -1796,6 +1795,7 @@ yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT 
                 case 'Hole Dug':
                     pinColor = 'bg-yellow-500';
                     break;
+                case 'Find Retrieved':
                 case 'Hole Refilled':
                     pinColor = 'bg-blue-600';
                     break;
@@ -1813,26 +1813,25 @@ yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT 
                 : '';
 
             return `
-  return `
-    <div
-        class="absolute"
-        style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
-        title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
-        onclick="handleMapTargetClick(event, '${t.id || ""}')"
-    >
-        <div class="relative">
-            ${extraRing}
-            <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
-        </div>
-        <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
-            style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-            ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
-        </span>
-    </div>
-`;
+                <div
+                    class="absolute"
+                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
+                    title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
+                    onclick="handleMapTargetClick(event, '${t.id || ''}')"
+                >
+                    <div class="relative">
+                        ${extraRing}
+                        <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
+                    </div>
+                    <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
+                        style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
+                        ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
+                    </span>
+                </div>
+            `;
         }
     }).join('');
-
+    
     // --- Confidence circle for user accuracy ---
     if (userCoord && userAccuracy > 0) {
         const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
