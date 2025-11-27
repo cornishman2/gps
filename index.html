@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIve map update 1  - Metal Detecting Survey Log</title>
+    <title>LIve map update 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1432,7 +1432,7 @@ function renderHomePage() {
         }
         
  /** Renders a static plot of targets based on relative coordinates. */
-/** Renders a static plot of targets based on relative coordinates. */
+/** Renders a static plot of targets based on relative coordinates, with optional centre target and grid. */
 function renderTargetPlot(targets) {
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
@@ -1484,11 +1484,10 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // --- NEW: Find the target (if any) that should be centered on the map ---
+    // --- Find the target (if any) that should be centered on the map ---
     let centerTargetLat = null;
     let centerTargetLon = null;
 
-    // We use the original targets array because it carries the centerOnMap flag
     const centreTarget = targets.find(t => 
         t.centerOnMap === true &&
         t.coordinates &&
@@ -1503,159 +1502,103 @@ function renderTargetPlot(targets) {
         }
     }
 
-    let minLat, maxLat, minLon, maxLon;
-    let latRange, lonRange;
-    let mapHeightMeters, mapWidthMeters;
+    // --- Build initial bounding box using all coordinates ---
+    let minLat = allCoords[0].lat;
+    let maxLat = allCoords[0].lat;
+    let minLon = allCoords[0].lon;
+    let maxLon = allCoords[0].lon;
 
+    allCoords.forEach(c => {
+        minLat = Math.min(minLat, c.lat);
+        maxLat = Math.max(maxLat, c.lat);
+        minLon = Math.min(minLon, c.lon);
+        maxLon = Math.max(maxLon, c.lon);
+    });
+
+    // Default centre: midpoint of all points
+    let centerLat = (minLat + maxLat) / 2;
+    let centerLon = (minLon + maxLon) / 2;
+
+    // If a "centre on map" target exists, override centre
     if (centerTargetLat !== null && centerTargetLon !== null) {
-        // ============================================================
-        // CASE 1: A "Centre on map" target exists -> force it to centre
-        // ============================================================
-
-        // Find maximum distance (in degrees) from the centre target to any plotted point
-        let maxLatDelta = 0;
-        let maxLonDelta = 0;
-
-        allCoords.forEach(c => {
-            const dLat = Math.abs(c.lat - centerTargetLat);
-            const dLon = Math.abs(c.lon - centerTargetLon);
-            if (dLat > maxLatDelta) maxLatDelta = dLat;
-            if (dLon > maxLonDelta) maxLonDelta = dLon;
-        });
-
-        // Ensure a minimal range to avoid degenerate plots
-        if (maxLatDelta < 0.00001) maxLatDelta = 0.00001;
-        if (maxLonDelta < 0.00001) maxLonDelta = 0.00001;
-
-        // Range needed to include all points around the centre target
-        let targetLatRange = maxLatDelta * 2;
-        let targetLonRange = maxLonDelta * 2;
-
-        // Circle range to contain the user accuracy circle (if any)
-        let circleLatRange = 0;
-        let circleLonRange = 0;
-
-        if (currentUserCoords && userAccuracy > 0) {
-            const requiredMeters = diameterInMeters * 1.1; // 10% padding
-            const meanLatForConversion = toRad(centerTargetLat);
-            const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
-
-            circleLatRange = requiredMeters / M_PER_DEG_LAT;
-            circleLonRange = requiredMeters / metersPerDegreeLonForConversion;
-        }
-
-        // Final ranges: big enough for both targets and confidence circle
-        const finalLatRange = Math.max(targetLatRange, circleLatRange);
-        const finalLonRange = Math.max(targetLonRange, circleLonRange);
-
-        const latBuffer = finalLatRange * bufferPercentage;
-        const lonBuffer = finalLonRange * bufferPercentage;
-
-        // Build bounding box symmetrically around the chosen centre target
-        minLat = centerTargetLat - (finalLatRange / 2) - latBuffer;
-        maxLat = centerTargetLat + (finalLatRange / 2) + latBuffer;
-        minLon = centerTargetLon - (finalLonRange / 2) - lonBuffer;
-        maxLon = centerTargetLon + (finalLonRange / 2) + lonBuffer;
-
-        latRange = maxLat - minLat;
-        lonRange = maxLon - minLon;
-
-        const finalMeanLat = toRad((minLat + maxLat) / 2);
-        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
-
-        mapHeightMeters = latRange * M_PER_DEG_LAT;
-        mapWidthMeters = lonRange * metersPerDegreeLon;
-
-    } else {
-        // ============================================================
-        // CASE 2: No special centre target -> use existing auto-fit logic
-        // ============================================================
-
-        // Find the true geographical bounding box of ALL points (targets + user)
-        minLat = allCoords[0].lat; 
-        maxLat = allCoords[0].lat;
-        minLon = allCoords[0].lon; 
-        maxLon = allCoords[0].lon;
-
-        allCoords.forEach(c => {
-            minLat = Math.min(minLat, c.lat);
-            maxLat = Math.max(maxLat, c.lat);
-            minLon = Math.min(minLon, c.lon);
-            maxLon = Math.max(maxLon, c.lon);
-        });
-
-        // 1. Calculate Target/Pin Bounding Box (before padding)
-        let targetLatRange = maxLat - minLat;
-        let targetLonRange = maxLon - minLon;
-
-        // Ensure a minimal range for plotting (e.g., if all targets overlap)
-        if (targetLatRange < 0.00001) { targetLatRange = 0.00002; }
-        if (targetLonRange < 0.00001) { targetLonRange = 0.00002; }
-        
-        // 2. Calculate the range required to show the user's confidence circle
-        let userLatRange = 0;
-        let userLonRange = 0;
-        
-        if (currentUserCoords && userAccuracy > 0) {
-            // Calculate required degrees to contain the circle diameter + a small padding
-            const requiredMeters = diameterInMeters * 1.1;
-            const meanLatForConversion = toRad(currentUserCoords.lat);
-            const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
-
-            userLatRange = requiredMeters / M_PER_DEG_LAT;
-            userLonRange = requiredMeters / metersPerDegreeLonForConversion;
-        }
-
-        // 3. Determine the FINAL required range: the MAX of target range or user circle range
-        const finalLatRange = Math.max(targetLatRange, userLatRange);
-        const finalLonRange = Math.max(targetLonRange, userLonRange);
-
-        // Center the final bounding box around the original target centre
-        const centerLat = (minLat + maxLat) / 2;
-        const centerLon = (minLon + maxLon) / 2;
-        
-        // Apply the buffer to the final range
-        const latBuffer = finalLatRange * bufferPercentage;
-        const lonBuffer = finalLonRange * bufferPercentage;
-
-        // Recalculate min/max using the final ranges and centre
-        minLat = centerLat - (finalLatRange / 2) - latBuffer; 
-        maxLat = centerLat + (finalLatRange / 2) + latBuffer;
-        minLon = centerLon - (finalLonRange / 2) - lonBuffer;
-        maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
-
-        latRange = maxLat - minLat;
-        lonRange = maxLon - minLon;
-
-        const finalMeanLat = toRad((minLat + maxLat) / 2);
-        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
-
-        mapHeightMeters = latRange * M_PER_DEG_LAT;
-        mapWidthMeters = lonRange * metersPerDegreeLon;
+        centerLat = centerTargetLat;
+        centerLon = centerTargetLon;
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Normalise and draw
+    let latRange = maxLat - minLat;
+    let lonRange = maxLon - minLon;
+
+    // Ensure some non-zero range
+    if (latRange === 0) latRange = 0.00001;
+    if (lonRange === 0) lonRange = 0.00001;
+
+    // --- Equalise meter scale vertically and horizontally ---
+    const meanLatRad = toRad(centerLat);
+    const metersPerDegLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatRad);
+
+    let metersLatRange = latRange * M_PER_DEG_LAT;
+    let metersLonRange = lonRange * metersPerDegLon;
+
+    if (metersLatRange === 0) metersLatRange = 1;
+    if (metersLonRange === 0) metersLonRange = 1;
+
+    if (metersLatRange > metersLonRange) {
+        // Expand longitude range so that 1% in X and Y represent the same metres
+        const scaleFactor = metersLatRange / metersLonRange;
+        lonRange = lonRange * scaleFactor;
+    } else {
+        // Expand latitude range instead
+        const scaleFactor = metersLonRange / metersLatRange;
+        latRange = latRange * scaleFactor;
+    }
+
+    // Re-build bounding box symmetrically around centre with the new ranges
+    minLat = centerLat - latRange / 2;
+    maxLat = centerLat + latRange / 2;
+    minLon = centerLon - lonRange / 2;
+    maxLon = centerLon + lonRange / 2;
+
+    // Apply a small buffer around the box
+    const latBuffer = latRange * bufferPercentage;
+    const lonBuffer = lonRange * bufferPercentage;
+
+    minLat -= latBuffer;
+    maxLat += latBuffer;
+    minLon -= lonBuffer;
+    maxLon += lonBuffer;
+
+    latRange = maxLat - minLat;
+    lonRange = maxLon - minLon;
+
+    // Recompute physical dimensions for circle scaling
+    const meanLatRadForMap = toRad((minLat + maxLat) / 2);
+    const metersPerDegLonForMap = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatRadForMap);
+
+    const mapHeightMeters = latRange * M_PER_DEG_LAT;
+    const mapWidthMeters = lonRange * metersPerDegLonForMap;
+
+    // Normalisation guards
+    const safeLatRange = latRange || 0.000001;
+    const safeLonRange = lonRange || 0.000001;
+
     let userXPercent = 0;
     let userYPercent = 0;
     let userPinAndLabelHtml = '';
     let userConfidenceCircleHtml = '';
 
-    // 2. Normalize and generate pins HTML
+    // --- Generate pins ---
     const pinsHtml = allCoords.map(t => {
-        // Calculate position percentages (0% to 100%)
-        const xRaw = ((t.lon - minLon) / lonRange) * 100;
-        const yRaw = ((maxLat - t.lat) / latRange) * 100;
+        const xRaw = ((t.lon - minLon) / safeLonRange) * 100;
+        const yRaw = ((maxLat - t.lat) / safeLatRange) * 100;
 
         const xPercent = clamp(xRaw, 0, 100);
         const yPercent = clamp(yRaw, 0, 100);
 
         if (t.isUser) {
-            // Store user position for circle and pin positioning
+            // User pin
             userXPercent = xPercent;
             userYPercent = yPercent;
 
-            // 1. Create the Pin and Label HTML (NO circle)
             userPinAndLabelHtml = `
                 <div 
                     class="absolute" 
@@ -1669,11 +1612,9 @@ function renderTargetPlot(targets) {
                     </span>
                 </div>
             `;
-
-            // 2. Circle generation is handled separately below (outside map loop)
-            return ''; // Skip regular pin HTML generation for user
+            return '';
         } else {
-            // Target Pin: Colored Dot with Label
+            // Target pin
             let pinColor = 'bg-primary';
             let pinSize = 'w-2 h-2';
 
@@ -1685,7 +1626,6 @@ function renderTargetPlot(targets) {
                 case 'Hole Dug':
                     pinColor = 'bg-yellow-500';
                     break;
-                case 'Find Retrieved':
                 case 'Hole Refilled':
                     pinColor = 'bg-blue-600';
                     break;
@@ -1696,13 +1636,11 @@ function renderTargetPlot(targets) {
                     pinColor = 'bg-primary';
             }
 
-            let targetPinHtml = `<div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>`;
-            let targetLabelHtml = `
-                <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
-                    style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                    ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
-                </span>
-            `;
+            // Highlight the centre target visually
+            const isCentre = t.centerOnMap === true;
+            const extraRing = isCentre
+                ? '<div class="absolute -inset-1 rounded-full border-2 border-red-500 animate-pulse"></div>'
+                : '';
 
             return `
                 <div
@@ -1710,20 +1648,23 @@ function renderTargetPlot(targets) {
                     style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
                 >
-                    ${targetPinHtml}
-                    ${targetLabelHtml}
+                    <div class="relative">
+                        ${extraRing}
+                        <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
+                    </div>
+                    <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
+                        style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
+                        ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
+                    </span>
                 </div>
             `;
         }
-    }).join(''); // pinsHtml now only contains targets
+    }).join('');
 
-    // 3. Generate the Confidence Circle and User Pin HTML (if user exists)
+    // --- Confidence circle for user accuracy ---
     if (userCoord && userAccuracy > 0) {
-        // Use the largest map dimension for scaling the circle (guaranteeing visibility)
         const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
-        
-        // Calculate the percentage of the map that the diameter should cover
-        const diameterPercent = diameterInMeters / scaleFactor;
+        const diameterPercent = diameterInMeters / (scaleFactor || 1);
 
         userConfidenceCircleHtml = `
             <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
@@ -1739,22 +1680,26 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // Combine all elements for the map container
     const finalMapContent = userConfidenceCircleHtml + pinsHtml + userPinAndLabelHtml;
 
-    // 4. Return the container HTML
-    let containerClasses = "relative bg-gray-200 overflow-hidden cursor-pointer transition-all duration-300 group";
+    // --- Container with grid background ---
+    let containerClasses = "relative overflow-hidden cursor-pointer transition-all duration-300 group border-4 border-gray-400 rounded-lg my-4";
 
     if (isMapFullscreen) {
-        containerClasses += " fixed inset-0 z-[100] h-screen w-screen";
+        containerClasses += " fixed inset-0 z-[100] h-screen w-screen bg-gray-200";
     } else {
-        containerClasses += " w-full aspect-square border-4 border-gray-400 rounded-lg my-4";
+        containerClasses += " w-full aspect-square bg-gray-200";
     }
 
-    const circleDiameter = getCircleDiameter(currentUserAccuracy);
+    const gridStyle = `
+        background-image:
+          linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px);
+        background-size: 10% 10%;
+    `;
 
     return `
-        <div onclick="toggleMapFullscreen()" class="${containerClasses}" title="Tap to resize">
+        <div onclick="toggleMapFullscreen()" class="${containerClasses}" style="${gridStyle}" title="Tap to resize">
             ${finalMapContent}
             <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
                 <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
@@ -1768,10 +1713,13 @@ function renderTargetPlot(targets) {
                 <li>Total Targets Plotted: ${parsedCoords.length}</li>
                 ${currentUserCoords ?
                     `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
-                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy !== null ? userAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
-                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${diameterInMeters.toFixed(1)}m</li>
-                    `
+                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy ? userAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
+                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${userAccuracy ? diameterInMeters.toFixed(1) + 'm' : 'N/A'}</li>`
                     : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
+                }
+                ${centreTarget ?
+                    `<li><span class="font-bold text-purple-600">Centre target:</span> ${centreTarget.description}</li>`
+                    : ''
                 }
             </ul>
         </div>
