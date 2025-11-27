@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smooth 4  - Metal Detecting Survey Log</title>
+    <title>Smooth 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1646,8 +1646,16 @@ if (hasUserGPS && effectiveUserCoords) {
         const xRaw = ((t.lon - minLon) / safeLonRange) * 100;
         const yRaw = ((maxLat - t.lat) / safeLatRange) * 100;
 
-        const xPercent = clamp(xRaw, 0, 100);
-        const yPercent = clamp(yRaw, 0, 100);
+// --- New margin for map edges ---
+const MAP_EDGE_MARGIN_PERCENT = 5;
+
+// Raw projection result
+let xPercent = clamp(xRaw, 0, 100);
+let yPercent = clamp(yRaw, 0, 100);
+
+// Apply inward margin so nothing touches the boundary
+xPercent = MAP_EDGE_MARGIN_PERCENT + (xPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
+yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
 
         if (t.isUser) {
             // User pin
