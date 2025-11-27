@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Margin 10 percent  - Metal Detecting Survey Log</title>
+    <title>Find target  1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -323,15 +323,16 @@
         let userId;
 
       // --- NEW REAL-TIME LOCATION STATE ---
-let autoRefreshIntervalId = null; 
-let currentUserCoords = null;
-let currentUserAccuracy = null;
-let bestLiveAccuracy = Infinity;
-let liveMapWatchId = null;
+        let autoRefreshIntervalId = null; 
+        let currentUserCoords = null;
+        let currentUserAccuracy = null;
+        let bestLiveAccuracy = Infinity;
+        let liveMapWatchId = null;
+        let navigationTargetId = null;
 
 // NEW: smoothed position for the live map
-let smoothedUserCoords = null;
-const USER_SMOOTHING_ALPHA = 0.15; // 0 < alpha ≤ 1 (lower = smoother, slower)
+        let smoothedUserCoords = null;
+        const USER_SMOOTHING_ALPHA = 0.15; // 0 < alpha ≤ 1 (lower = smoother, slower)
 //
         function updateSmoothedUserCoords(newLat, newLon) {
     // First reading: snap straight to the new value
@@ -348,31 +349,113 @@ const USER_SMOOTHING_ALPHA = 0.15; // 0 < alpha ≤ 1 (lower = smoother, slower)
 }
 
         
-        // --- GEOGRAPHY HELPER FUNCTIONS ---
+// --- GEOGRAPHY HELPER FUNCTIONS ---
 
-        /** Converts degrees to radians. */
-        function toRad(degrees) {
-            return degrees * (Math.PI / 180);
-        }
+/** Converts degrees to radians. */
+function toRad(degrees) {
+    return degrees * (Math.PI / 180);
+}
 
-        /** Converts radians to degrees. */
-        function toDeg(radians) {
-            return radians * (180 / Math.PI);
-        }
-        
-        /** Clamps a number between a minimum and maximum value. */
-        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+/** Converts radians to degrees. */
+function toDeg(radians) {
+    return radians * (180 / Math.PI);
+}
 
-        /** Calculates the diameter for the confidence circle (Accuracy * 2). */
-        function getCircleDiameter(accuracyInMeters) {
-            if (typeof accuracyInMeters === 'number' && accuracyInMeters > 0) {
-                // Diameter is twice the radius (accuracy)
-                return (accuracyInMeters * 2).toFixed(1); 
-            }
-            return 'N/A';
-        }
+/**
+ * Normalises a longitude delta to the range [-180, 180] degrees.
+ * This is what makes things behave correctly across the International Date Line.
+ */
+function normaliseDeltaLonDegrees(lon1Deg, lon2Deg) {
+    let d = lon2Deg - lon1Deg; // in degrees
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return d;
+}
 
-        // --- END GEOGRAPHY HELPER FUNCTIONS ---
+/**
+ * Returns the great-circle distance between two WGS84 coordinates in metres.
+ * Works globally (north/south of equator, across date line, any hemisphere).
+ */
+function distanceMeters(lat1Deg, lon1Deg, lat2Deg, lon2Deg) {
+    const R = 6371000; // mean Earth radius in metres
+
+    const φ1 = toRad(lat1Deg);
+    const φ2 = toRad(lat2Deg);
+    const Δφ = toRad(lat2Deg - lat1Deg);
+    const Δλ = toRad(normaliseDeltaLonDegrees(lon1Deg, lon2Deg));
+
+    const sinΔφ2 = Math.sin(Δφ / 2);
+    const sinΔλ2 = Math.sin(Δλ / 2);
+
+    const a =
+        sinΔφ2 * sinΔφ2 +
+        Math.cos(φ1) * Math.cos(φ2) * sinΔλ2 * sinΔλ2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
+/**
+ * Returns the initial bearing (forward azimuth) from point 1 to point 2
+ * in degrees from true North, normalised to [0, 360).
+ *
+ * This also uses the normalised longitude delta so it behaves
+ * correctly when crossing the date line.
+ */
+function initialBearingDegrees(lat1Deg, lon1Deg, lat2Deg, lon2Deg) {
+    const φ1 = toRad(lat1Deg);
+    const φ2 = toRad(lat2Deg);
+    const Δλ = toRad(normaliseDeltaLonDegrees(lon1Deg, lon2Deg));
+
+    const y = Math.sin(Δλ) * Math.cos(φ2);
+    const x =
+        Math.cos(φ1) * Math.sin(φ2) -
+        Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+
+    let θ = Math.atan2(y, x); // in radians, -π..+π
+    let bearing = (toDeg(θ) + 360) % 360; // into [0, 360)
+    return bearing;
+}
+
+/**
+ * Converts a bearing in degrees into a human-friendly compass label.
+ * precision:
+ *   4  -> N, E, S, W
+ *   8  -> N, NE, E, SE, S, SW, W, NW
+ *   16 -> N, NNE, NE, ENE, E, ... (default)
+ */
+function bearingToCompassPoint(bearingDeg, precision = 16) {
+    const dirs =
+        precision === 4
+            ? ['N', 'E', 'S', 'W']
+            : precision === 8
+            ? ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+            : [
+                  'N', 'NNE', 'NE', 'ENE',
+                  'E', 'ESE', 'SE', 'SSE',
+                  'S', 'SSW', 'SW', 'WSW',
+                  'W', 'WNW', 'NW', 'NNW'
+              ];
+
+    const step = 360 / dirs.length;
+    const normalised = ((bearingDeg % 360) + 360) % 360; // 0..360
+    const index = Math.round(normalised / step) % dirs.length;
+    return dirs[index];
+}
+
+/** Clamps a number between a minimum and maximum value. */
+const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
+/** Calculates the diameter (in meters) for the confidence circle: Accuracy * 2. */
+function getCircleDiameter(accuracyInMeters) {
+    if (typeof accuracyInMeters === 'number' && accuracyInMeters > 0) {
+        return (accuracyInMeters * 2).toFixed(1); // Diameter = 2 * radius
+    }
+    return 'N/A';
+}
+
+// --- END GEOGRAPHY HELPER FUNCTIONS ---
 
 
         // --- HELPER FUNCTIONS ---
@@ -1180,6 +1263,29 @@ function handleNewTargetSubmit(event) {
         }
 
         /** Handles actions on individual targets. */
+     function handleMapTargetClick(event, targetId) {
+    // Don’t let this click bubble up to the map container,
+    // so it does NOT trigger toggleMapFullscreen().
+    event.stopPropagation();
+
+    if (!targetId) {
+        console.warn('Map target click without a valid targetId');
+        return;
+    }
+
+    navigationTargetId = targetId;
+
+    // For now, just confirm the selection with a toast
+    showMessage('Navigation target selected on map.', 'info');
+
+    // Optional: immediately re-render Compass page to show some visual highlight
+    if (currentPage === 'Compass') {
+        const appContent = document.getElementById('app-content');
+        appContent.innerHTML = renderCompassPage(true);
+        attachPageEventListeners();
+    }
+}
+
         function handleTargetAction(element) {
             const action = element.dataset.action;
             const targetId = element.dataset.id;
@@ -1493,27 +1599,28 @@ function renderTargetPlot(targets) {
     
     // Use the live accuracy
 // Prefer smoothed coords if available, fall back to raw
-const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
-const hasUserGPS = !!effectiveUserCoords && typeof currentUserAccuracy === 'number';
-const userAccuracy = hasUserGPS ? (currentUserAccuracy || 0) : 0;
+    const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
+    const hasUserGPS = !!effectiveUserCoords && typeof currentUserAccuracy === 'number';
+    const userAccuracy = hasUserGPS ? (currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05; // 5% buffer around the entire calculated area
 
     // 1. Parse targets and prepare for Bounding Box calculation
     const parsedCoords = targets.map(t => {
-        const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
-        return {
-            lat: parts[0],
-            lon: parts[1],
-            description: t.description,
-            type: t.type,
-            vdi: t.vdi,
-            status: t.status,
-            accuracy: parseFloat(t.accuracy) || 0,
-            centerOnMap: !!t.centerOnMap,
-            isUser: false
-        };
-    }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+    const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
+    return {
+        id: t.id, // 👈 keep the original target ID
+        lat: parts[0],
+        lon: parts[1],
+        description: t.description,
+        type: t.type,
+        vdi: t.vdi,
+        status: t.status,
+        accuracy: parseFloat(t.accuracy) || 0,
+        centerOnMap: !!t.centerOnMap,
+        isUser: false
+    };
+}).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
 
 let allCoords = [...parsedCoords];
 let userCoord = null;
@@ -1706,21 +1813,23 @@ yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT 
                 : '';
 
             return `
-                <div
-                    class="absolute"
-                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
-                    title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
-                >
-                    <div class="relative">
-                        ${extraRing}
-                        <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
-                    </div>
-                    <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
-                        style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
-                        ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
-                    </span>
-                </div>
-            `;
+  return `
+    <div
+        class="absolute"
+        style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
+        title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
+        onclick="handleMapTargetClick(event, '${t.id || ''}')"
+    >
+        <div class="relative">
+            ${extraRing}
+            <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
+        </div>
+        <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
+            style="left: 100%; top: 50%; transform: translateY(-50%) translateX(5px);">
+            ${t.description} (Acc: ${t.accuracy.toFixed(1)}m)
+        </span>
+    </div>
+`;
         }
     }).join('');
 
