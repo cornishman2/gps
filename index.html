@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIve map update 3  - Metal Detecting Survey Log</title>
+    <title>LIve map update 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -654,7 +654,68 @@ liveMapWatchId = navigator.geolocation.watchPosition(
         // Optionally still track the best accuracy we've ever seen
         if (accuracy < bestLiveAccuracy) {
             bestLiveAccuracy = accuracy;
+        // --- LIVE MAP GPS WATCH FUNCTIONS (New/Modified Logic) ---
+
+/** Starts a continuous, high-accuracy GPS stream that only updates the state when a reading is more accurate. 
+ * Also starts the 5-second rendering interval.
+ */
+function startLiveMapLocationWatch() {
+    if (!navigator.geolocation) {
+        currentUserCoords = null;
+        currentUserAccuracy = null;
+        showMessage('Geolocation is not supported on this device.', 'error');
+        return;
+    }
+    
+    // Reset best accuracy for a fresh start
+    bestLiveAccuracy = Infinity; 
+    
+    liveMapWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const accuracy = position.coords.accuracy;
+
+            // Always update current position so the marker moves
+            currentUserCoords = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude
+            };
+            currentUserAccuracy = accuracy;
+
+            // Optionally still track the best accuracy we've ever seen
+            if (accuracy < bestLiveAccuracy) {
+                bestLiveAccuracy = accuracy;
+            }
+
+            console.log(
+                `Live Map position: ${currentUserCoords.lat.toFixed(6)}, ` +
+                `${currentUserCoords.lon.toFixed(6)} (acc: ${accuracy.toFixed(1)}m, best: ${bestLiveAccuracy.toFixed(1)}m)`
+            );
+        },
+        (error) => {
+            currentUserCoords = null;
+            currentUserAccuracy = null;
+            console.error('Live Map GPS Watch Error:', error);
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 0
         }
+    );
+}  // ✅ This brace was missing before
+
+/** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
+function updateMapWithUserLocationAndRender() {
+    // The GPS data is updated asynchronously by startLiveMapLocationWatch().
+    // We just trigger the re-render here.
+    
+    const appContent = document.getElementById('app-content');
+    // Only re-render if we are still on the Compass page
+    if (currentPage === 'Compass') { 
+        appContent.innerHTML = renderCompassPage(true); 
+        attachPageEventListeners();
+    }
+}
+
 
         console.log(
             `Live Map position: ${currentUserCoords.lat.toFixed(6)}, ` +
