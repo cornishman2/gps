@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIve map update 8  - Metal Detecting Survey Log</title>
+    <title>Smooth 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -324,12 +324,28 @@
 
       // --- NEW REAL-TIME LOCATION STATE ---
 let autoRefreshIntervalId = null; 
-let currentUserCoords = null; // Stores {lat: number, lon: number}
-let currentUserAccuracy = null; // Stores accuracy in meters
+let currentUserCoords = null;
+let currentUserAccuracy = null;
+let bestLiveAccuracy = Infinity;
+let liveMapWatchId = null;
 
-// ADD THESE FOR LIVE MAP ACCURACY LOGIC:
-let liveMapWatchId = null;      // To track the watchPosition process for the live map
-let bestLiveAccuracy = Infinity; // To track the best accuracy received (lower is better)
+// NEW: smoothed position for the live map
+let smoothedUserCoords = null;
+const USER_SMOOTHING_ALPHA = 0.25; // 0 < alpha ≤ 1 (lower = smoother, slower)
+//
+        function updateSmoothedUserCoords(newLat, newLon) {
+    // First reading: snap straight to the new value
+    if (!smoothedUserCoords) {
+        smoothedUserCoords = { lat: newLat, lon: newLon };
+        return;
+    }
+
+    // Exponential moving average
+    smoothedUserCoords.lat =
+        smoothedUserCoords.lat + USER_SMOOTHING_ALPHA * (newLat - smoothedUserCoords.lat);
+    smoothedUserCoords.lon =
+        smoothedUserCoords.lon + USER_SMOOTHING_ALPHA * (newLon - smoothedUserCoords.lon);
+}
 
         
         // --- GEOGRAPHY HELPER FUNCTIONS ---
@@ -467,6 +483,7 @@ let bestLiveAccuracy = Infinity; // To track the best accuracy received (lower i
             navigator.geolocation.clearWatch(liveMapWatchId);
             liveMapWatchId = null;
             bestLiveAccuracy = Infinity;
+            smoothedUserCoords = null;
             console.log("Live Map GPS Watch stopped.");
         }
 
@@ -632,41 +649,55 @@ function startTargetLocationWatch() {
 /** Starts a continuous, high-accuracy GPS stream that only updates the state when a reading is more accurate. 
  * Also starts the 5-second rendering interval.
  */
+/** Starts a continuous, high-accuracy GPS stream for the live map. */
 function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
         currentUserCoords = null;
         currentUserAccuracy = null;
+        smoothedUserCoords = null;
         showMessage('Geolocation is not supported on this device.', 'error');
         return;
     }
-    
-    // Reset best accuracy for a fresh start
-    bestLiveAccuracy = Infinity; 
-    
+
+    // Reset for a fresh run
+    bestLiveAccuracy = Infinity;
+    smoothedUserCoords = null;
+
     liveMapWatchId = navigator.geolocation.watchPosition(
         (position) => {
             const accuracy = position.coords.accuracy;
 
-            // Always update current position so the marker moves
+            // Raw latest reading
             currentUserCoords = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude
             };
             currentUserAccuracy = accuracy;
 
-            // Optionally still track the best accuracy we've ever seen
+            // Update smoothed position used by the map
+            updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
+
+            // Track the best accuracy we've seen this session (for logging/info)
             if (accuracy < bestLiveAccuracy) {
                 bestLiveAccuracy = accuracy;
             }
 
             console.log(
-                `Live Map position: ${currentUserCoords.lat.toFixed(6)}, ` +
+                `Live Map position (raw): ${currentUserCoords.lat.toFixed(6)}, ` +
                 `${currentUserCoords.lon.toFixed(6)} (acc: ${accuracy.toFixed(1)}m, best: ${bestLiveAccuracy.toFixed(1)}m)`
             );
+
+            if (smoothedUserCoords) {
+                console.log(
+                    `Live Map position (smoothed): ${smoothedUserCoords.lat.toFixed(6)}, ` +
+                    `${smoothedUserCoords.lon.toFixed(6)}`
+                );
+            }
         },
         (error) => {
             currentUserCoords = null;
             currentUserAccuracy = null;
+            smoothedUserCoords = null;
             console.error('Live Map GPS Watch Error:', error);
         },
         {
@@ -674,8 +705,7 @@ function startLiveMapLocationWatch() {
             maximumAge: 0
         }
     );
-}  // ✅ This brace was missing before
-
+}
 /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
 function updateMapWithUserLocationAndRender() {
     // The GPS data is updated asynchronously by startLiveMapLocationWatch().
@@ -1464,22 +1494,25 @@ function renderTargetPlot(targets) {
         };
     }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
 
-    let allCoords = [...parsedCoords];
-    let userCoord = null;
+ let allCoords = [...parsedCoords];
+let userCoord = null;
 
-    // Add user's location if available
-    if (currentUserCoords) {
-        userCoord = {
-            lat: currentUserCoords.lat,
-            lon: currentUserCoords.lon,
-            description: 'Your Current Location',
-            type: 'User',
-            vdi: 'N/A',
-            accuracy: userAccuracy,
-            isUser: true
-        };
-        allCoords.push(userCoord);
-    }
+// Prefer smoothed user location for plotting (falls back to raw)
+const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
+
+// Add user's location if available
+if (effectiveUserCoords) {
+    userCoord = {
+        lat: effectiveUserCoords.lat,
+        lon: effectiveUserCoords.lon,
+        description: 'Your Current Location',
+        type: 'User',
+        vdi: 'N/A',
+        accuracy: userAccuracy,
+        isUser: true
+    };
+    allCoords.push(userCoord);
+}
 
     if (allCoords.length === 0) {
         return `
