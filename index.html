@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  3 - Metal Detecting Survey Log</title>
+    <title>Find target  4 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1286,6 +1286,19 @@ function handleNewTargetSubmit(event) {
     }
 }
 
+            function clearNavigationTarget() {
+    navigationTargetId = null;
+    showMessage('Navigation target cleared.', 'info');
+
+    // If we are on the Compass page, re-render so the panel updates
+    if (currentPage === 'Compass') {
+        const appContent = document.getElementById('app-content');
+        appContent.innerHTML = renderCompassPage(true);
+        attachPageEventListeners();
+    }
+}
+
+
         function handleTargetAction(element) {
             const action = element.dataset.action;
             const targetId = element.dataset.id;
@@ -1904,7 +1917,150 @@ function toggleMapFullscreen() {
     // Re-render the page immediately so the new class is applied
     // This also resets the auto-refresh timer, which is fine.
     render(); 
-}        
+}  
+
+function renderNavigationPanel(openSurvey) {
+    // If no navigation target has been selected yet, show a hint.
+    if (!navigationTargetId) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-dashed border-gray-300 mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-1">
+                    <i class="fas fa-location-arrow mr-2"></i> Navigation
+                </h3>
+                <p class="text-sm text-gray-600">
+                    Tap a target pin on the plot to select it for navigation. 
+                    Once selected, distance and bearing from your GPS position will appear here.
+                </p>
+            </div>
+        `;
+    }
+
+    // Look up the selected target in the open survey
+    const target = openSurvey.targets.find(t => t.id === navigationTargetId);
+
+    if (!target) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-red-300 mb-6">
+                <h3 class="text-lg font-semibold text-red-700 mb-1">
+                    <i class="fas fa-exclamation-triangle mr-2"></i> Navigation Target Missing
+                </h3>
+                <p class="text-sm text-gray-600">
+                    The selected navigation target could not be found. It may have been deleted.
+                </p>
+                <button 
+                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
+                    onclick="clearNavigationTarget()">
+                    Clear navigation target
+                </button>
+            </div>
+        `;
+    }
+
+    // Ensure the target has usable coordinates
+    if (!target.coordinates || !target.coordinates.includes(',')) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-yellow-300 mb-6">
+                <h3 class="text-lg font-semibold text-yellow-700 mb-1">
+                    <i class="fas fa-map-marker-alt mr-2"></i> Navigation Target
+                </h3>
+                <p class="text-sm text-gray-600">
+                    Target <strong>${target.description}</strong> is selected, but it has no valid GPS coordinates logged,
+                    so distance and bearing cannot be calculated.
+                </p>
+                <button 
+                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
+                    onclick="clearNavigationTarget()">
+                    Clear navigation target
+                </button>
+            </div>
+        `;
+    }
+
+    // Parse target coordinates
+    const parts = target.coordinates.split(',').map(c => parseFloat(c.trim()));
+    const targetLat = parts[0];
+    const targetLon = parts[1];
+
+    if (isNaN(targetLat) || isNaN(targetLon)) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-yellow-300 mb-6">
+                <h3 class="text-lg font-semibold text-yellow-700 mb-1">
+                    <i class="fas fa-map-marker-alt mr-2"></i> Navigation Target
+                </h3>
+                <p class="text-sm text-gray-600">
+                    Target <strong>${target.description}</strong> has invalid GPS data and cannot be used for navigation.
+                </p>
+                <button 
+                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
+                    onclick="clearNavigationTarget()">
+                    Clear navigation target
+                </button>
+            </div>
+        `;
+    }
+
+    // Decide which user coords to use (prefer smoothed if available)
+    const effectiveUser = smoothedUserCoords || currentUserCoords;
+
+    if (!effectiveUser) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-blue-300 mb-6">
+                <h3 class="text-lg font-semibold text-blue-700 mb-1">
+                    <i class="fas fa-location-arrow mr-2"></i> Navigation to: ${target.description}
+                </h3>
+                <p class="text-sm text-gray-600">
+                    Target is selected, but waiting for your GPS position…
+                    Once your location is available, distance and bearing will appear here.
+                </p>
+                <button 
+                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
+                    onclick="clearNavigationTarget()">
+                    Clear navigation target
+                </button>
+            </div>
+        `;
+    }
+
+    // Compute distance and bearing using the global geo helpers
+    const userLat = effectiveUser.lat;
+    const userLon = effectiveUser.lon;
+
+    const distMeters = distanceMeters(userLat, userLon, targetLat, targetLon);
+    const bearingDeg = initialBearingDegrees(userLat, userLon, targetLat, targetLon);
+    const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
+
+    const distStr =
+        distMeters >= 1000
+            ? (distMeters / 1000).toFixed(2) + ' km'
+            : distMeters.toFixed(1) + ' m';
+
+    const bearingStr = `${bearingDeg.toFixed(1)}° (${bearingLabel})`;
+
+    return `
+        <div class="bg-white p-4 rounded-xl shadow-md border border-green-300 mb-6">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-semibold text-green-700">
+                    <i class="fas fa-location-arrow mr-2"></i> Navigation to: ${target.description}
+                </h3>
+                <button 
+                    class="px-2 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
+                    onclick="clearNavigationTarget()">
+                    Clear
+                </button>
+            </div>
+            <p class="text-sm text-gray-700 mb-1">
+                <span class="font-semibold">Distance:</span> ${distStr}
+            </p>
+            <p class="text-sm text-gray-700 mb-1">
+                <span class="font-semibold">Bearing from you:</span> ${bearingStr}
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+                North is at the top of the plot. Bearing is from your current GPS position to the target.
+            </p>
+        </div>
+    `;
+}
+        
      
 function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
@@ -1947,6 +2103,8 @@ function renderCompassPage(isAutoRefresh = false) {
                     </p>` : ''
                 }
             </div>
+
+            ${renderNavigationPanel(openSurvey)}
 
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-8">
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
