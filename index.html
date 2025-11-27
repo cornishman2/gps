@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smooth 1  - Metal Detecting Survey Log</title>
+    <title>Smooth 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1474,7 +1474,10 @@ function renderTargetPlot(targets) {
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
     
     // Use the live accuracy
-    const userAccuracy = currentUserCoords ? (currentUserAccuracy || 0) : 0;
+// Prefer smoothed coords if available, fall back to raw
+const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
+const hasUserGPS = !!effectiveUserCoords && typeof currentUserAccuracy === 'number';
+const userAccuracy = hasUserGPS ? (currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05; // 5% buffer around the entire calculated area
 
@@ -1494,14 +1497,11 @@ function renderTargetPlot(targets) {
         };
     }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
 
- let allCoords = [...parsedCoords];
+let allCoords = [...parsedCoords];
 let userCoord = null;
 
-// Prefer smoothed user location for plotting (falls back to raw)
-const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
-
-// Add user's location if available
-if (effectiveUserCoords) {
+// Add user's location if available (smoothed preferred)
+if (hasUserGPS && effectiveUserCoords) {
     userCoord = {
         lat: effectiveUserCoords.lat,
         lon: effectiveUserCoords.lon,
@@ -1513,7 +1513,6 @@ if (effectiveUserCoords) {
     };
     allCoords.push(userCoord);
 }
-
     if (allCoords.length === 0) {
         return `
             <div class="p-4 text-center bg-gray-100 rounded-lg">
@@ -1749,12 +1748,12 @@ if (effectiveUserCoords) {
                 <li><span class="font-bold">North</span> is towards the top of the box.</li>
                 <li><span class="font-bold">East</span> is towards the right of the box.</li>
                 <li>Total Targets Plotted: ${parsedCoords.length}</li>
-                ${currentUserCoords ?
-                    `<li><span class="font-bold text-blue-600">User GPS:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}</li>
-                     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy ? userAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
-                     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${userAccuracy ? diameterInMeters.toFixed(1) + 'm' : 'N/A'}</li>`
-                    : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
-                }
+${hasUserGPS && effectiveUserCoords ?
+    `<li><span class="font-bold text-blue-600">User GPS:</span> ${effectiveUserCoords.lat.toFixed(6)}, ${effectiveUserCoords.lon.toFixed(6)}</li>
+     <li><span class="font-bold text-red-600">GPS Accuracy (Radius):</span> ${userAccuracy ? userAccuracy.toFixed(1) + 'm' : 'N/A'}</li>
+     <li><span class="font-bold text-red-600">Confidence Circle Diameter:</span> ${userAccuracy ? diameterInMeters.toFixed(1) + 'm' : 'N/A'}</li>`
+    : `<li><span class="font-bold text-red-600">Warning:</span> No User GPS available.</li>`
+}
                 ${centreTarget ?
                     `<li><span class="font-bold text-purple-600">Centre target:</span> ${centreTarget.description}</li>`
                     : ''
