@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  7 - Metal Detecting Survey Log</title>
+    <title>Find target  8 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1334,7 +1334,7 @@ function handleNewTargetSubmit(event) {
         }
 
         /** Handles actions on individual targets. */
-     function handleMapTargetClick(event, targetId) {
+function handleMapTargetClick(event, targetId) {
     // Don’t let this click bubble up to the map container,
     // so it does NOT trigger toggleMapFullscreen().
     event.stopPropagation();
@@ -1344,16 +1344,25 @@ function handleNewTargetSubmit(event) {
         return;
     }
 
+    // Save the selected target ID for navigation
     navigationTargetId = targetId;
+    console.log('Navigation target selected from map:', navigationTargetId);
 
-    // For now, just confirm the selection with a toast
+    // Give the user some feedback
     showMessage('Navigation target selected on map.', 'info');
 
-    // Optional: immediately re-render Compass page to show some visual highlight
+    // If we're on the Compass page, re-render it so the panel updates
     if (currentPage === 'Compass') {
         const appContent = document.getElementById('app-content');
         appContent.innerHTML = renderCompassPage(true);
         attachPageEventListeners();
+
+        // 👇 Make sure the user actually sees the panel:
+        // scroll the page back to the top.
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
     }
 }
 
