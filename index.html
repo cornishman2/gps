@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  4 - Metal Detecting Survey Log</title>
+    <title>Find target  5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2035,6 +2035,65 @@ function renderNavigationPanel(openSurvey) {
             : distMeters.toFixed(1) + ' m';
 
     const bearingStr = `${bearingDeg.toFixed(1)}° (${bearingLabel})`;
+// --- Movement-based guidance (optional, only if we have enough movement) ---
+let guidanceHtml = '';
+const movementBearingDeg = computeMovementBearingDegrees();
+
+if (movementBearingDeg !== null) {
+    // Relative angle from movement direction to target direction
+    let rel = bearingDeg - movementBearingDeg;
+    // Normalise to -180..+180
+    if (rel > 180) rel -= 360;
+    if (rel <= -180) rel += 360;
+
+    const absRel = Math.abs(rel);
+    let guidanceText = '';
+    let guidanceIcon = '';
+    let guidanceClass = 'text-gray-700';
+
+    if (absRel < 15) {
+        guidanceText = 'On course – target roughly ahead of your walking direction.';
+        guidanceIcon = '<i class="fas fa-arrow-up mr-1"></i>';
+        guidanceClass = 'text-green-700';
+    } else if (absRel < 45) {
+        if (rel > 0) {
+            guidanceText = 'Target slightly to your right – adjust a little right.';
+            guidanceIcon = '<i class="fas fa-arrow-up-right mr-1"></i>';
+        } else {
+            guidanceText = 'Target slightly to your left – adjust a little left.';
+            guidanceIcon = '<i class="fas fa-arrow-up-left mr-1"></i>';
+        }
+        guidanceClass = 'text-yellow-700';
+    } else if (absRel < 135) {
+        if (rel > 0) {
+            guidanceText = 'Target to your right – turn more to the right.';
+            guidanceIcon = '<i class="fas fa-arrow-right mr-1"></i>';
+        } else {
+            guidanceText = 'Target to your left – turn more to the left.';
+            guidanceIcon = '<i class="fas fa-arrow-left mr-1"></i>';
+        }
+        guidanceClass = 'text-orange-700';
+    } else {
+        guidanceText = 'Target is roughly behind you – turn around.';
+        guidanceIcon = '<i class="fas fa-arrow-down mr-1"></i>';
+        guidanceClass = 'text-red-700';
+    }
+
+    guidanceHtml = `
+        <p class="text-sm mt-2 ${guidanceClass}">
+            <span class="font-semibold">Guidance:</span> ${guidanceIcon}${guidanceText}
+        </p>
+        <p class="text-xs text-gray-500 mt-1">
+            Based on recent movement; walk a few metres to stabilise this guidance.
+        </p>
+    `;
+} else {
+    guidanceHtml = `
+        <p class="text-sm text-gray-600 mt-2">
+            <span class="font-semibold">Guidance:</span> Start walking a few metres so we can estimate your direction of travel.
+        </p>
+    `;
+}
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-md border border-green-300 mb-6">
@@ -2057,6 +2116,7 @@ function renderNavigationPanel(openSurvey) {
             <p class="text-xs text-gray-500 mt-1">
                 North is at the top of the plot. Bearing is from your current GPS position to the target.
             </p>
+            ${guideanceHtml}
         </div>
     `;
 }
