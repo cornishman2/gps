@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rings 5  - Metal Detecting Survey Log</title>
+    <title>Rings 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1891,7 +1891,7 @@ function renderTargetPlot(targets) {
     let navTargetYPercent = null;
 
     // 2. Normalize and generate pins HTML
-    const pinsHtml = allCoords.map(t => {
+        const pinsHtml = allCoords.map(t => {
         const xRaw = ((t.lon - minLon) / lonRange) * 100;
         const yRaw = ((maxLat - t.lat) / latRange) * 100;
 
@@ -2023,7 +2023,7 @@ function renderTargetPlot(targets) {
         `;
     }
 
-    // --- NEW: line from user to navigation target (map-space, not true bearing) ---
+     // --- NEW: line from user to navigation target (map-space, not true bearing) ---
     let navLineHtml = '';
     if (
         navigationTargetId &&
@@ -2031,25 +2031,23 @@ function renderTargetPlot(targets) {
         navTargetXPercent !== null &&
         navTargetYPercent !== null
     ) {
-        const dx = navTargetXPercent - userXPercent;
-        const dy = navTargetYPercent - userYPercent;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
-
         navLineHtml = `
-            <div
-                class="absolute pointer-events-none"
-                style="
-                    left: ${userXPercent.toFixed(2)}%;
-                    top: ${userYPercent.toFixed(2)}%;
-                    width: ${length.toFixed(2)}%;
-                    height: 0;
-                    border-top: 2px dashed rgba(37,99,235,0.9);
-                    transform-origin: 0 0;
-                    transform: rotate(${angleDeg.toFixed(2)}deg);
-                    z-index: 8;
-                "
-            ></div>
+            <svg
+                class="absolute inset-0 pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style="z-index: 8;"
+            >
+                <line
+                    x1="${userXPercent.toFixed(2)}"
+                    y1="${userYPercent.toFixed(2)}"
+                    x2="${navTargetXPercent.toFixed(2)}"
+                    y2="${navTargetYPercent.toFixed(2)}"
+                    stroke="rgba(37,99,235,0.9)"
+                    stroke-width="1.5"
+                    stroke-dasharray="3 2"
+                />
+            </svg>
         `;
     }
 
