@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rings 6  - Metal Detecting Survey Log</title>
+    <title>Rings 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1686,6 +1686,119 @@ function renderHomePage() {
                 </div>
             `;
         }
+// --- MAP ZOOM & PAN STATE ---
+
+let mapZoom = 1;
+let mapOffsetX = 0; // in %
+let mapOffsetY = 0; // in %
+
+const MAP_ZOOM_MIN = 0.5;
+const MAP_ZOOM_MAX = 3;
+const MAP_ZOOM_STEP = 0.25;
+
+let isMapDragging = false;
+let mapDragStartX = 0;
+let mapDragStartY = 0;
+let mapDragStartOffsetX = 0;
+let mapDragStartOffsetY = 0;
+
+/** Re-render the Compass page if it is the active page. */
+function rerenderCompassIfActive() {
+    if (typeof currentPage !== 'undefined' && currentPage === 'Compass') {
+        const appContent = document.getElementById('app-content');
+        if (appContent && typeof renderCompassPage === 'function') {
+            appContent.innerHTML = renderCompassPage(true);
+            if (typeof attachPageEventListeners === 'function') {
+                attachPageEventListeners();
+            }
+        }
+    }
+}
+
+function zoomMapIn(event) {
+    if (event) event.stopPropagation();
+    mapZoom = Math.min(MAP_ZOOM_MAX, mapZoom + MAP_ZOOM_STEP);
+    rerenderCompassIfActive();
+}
+
+function zoomMapOut(event) {
+    if (event) event.stopPropagation();
+    mapZoom = Math.max(MAP_ZOOM_MIN, mapZoom - MAP_ZOOM_STEP);
+    rerenderCompassIfActive();
+}
+
+function resetMapView(event) {
+    if (event) event.stopPropagation();
+    mapZoom = 1;
+    mapOffsetX = 0;
+    mapOffsetY = 0;
+    rerenderCompassIfActive();
+}
+
+/** Start dragging the map to pan it. */
+function startMapDrag(event) {
+    // Don't start a drag when clicking on zoom controls or a pin
+    if (
+        event.target.closest &&
+        (event.target.closest('.map-zoom-controls') ||
+         event.target.closest('.map-pin'))
+    ) {
+        return;
+    }
+
+    const e = event.touches ? event.touches[0] : event;
+    event.preventDefault();
+
+    isMapDragging = true;
+    mapDragStartX = e.clientX;
+    mapDragStartY = e.clientY;
+    mapDragStartOffsetX = mapOffsetX;
+    mapDragStartOffsetY = mapOffsetY;
+
+    document.addEventListener('mousemove', onMapDrag, { passive: false });
+    document.addEventListener('mouseup', endMapDrag);
+    document.addEventListener('touchmove', onMapDrag, { passive: false });
+    document.addEventListener('touchend', endMapDrag);
+}
+
+function onMapDrag(event) {
+    if (!isMapDragging) return;
+
+    const e = event.touches ? event.touches[0] : event;
+    event.preventDefault();
+
+    const container = document.getElementById('target-map-container');
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const dx = e.clientX - mapDragStartX;
+    const dy = e.clientY - mapDragStartY;
+
+    const dxPercent = (dx / rect.width) * 100;
+    const dyPercent = (dy / rect.height) * 100;
+
+    mapOffsetX = mapDragStartOffsetX + dxPercent;
+    mapOffsetY = mapDragStartOffsetY + dyPercent;
+
+    // Update transform live without a full re-render
+    const inner = container.querySelector('.map-inner-layer');
+    if (inner) {
+        inner.style.transform =
+            `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
+    }
+}
+
+function endMapDrag() {
+    if (!isMapDragging) return;
+    isMapDragging = false;
+
+    document.removeEventListener('mousemove', onMapDrag);
+    document.removeEventListener('mouseup', endMapDrag);
+    document.removeEventListener('touchmove', onMapDrag);
+    document.removeEventListener('touchend', endMapDrag);
+}
         
 /** Renders a static plot of targets based on relative coordinates, with optional centre target, grid, and nav line. */
 function renderTargetPlot(targets) {
@@ -1986,7 +2099,7 @@ function renderTargetPlot(targets) {
             return `
                 ${targetCircleHtml}
                 <div
-                    class="absolute ${dimClass}"
+                    class="absolute map-pin ${dimClass}"
                     style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
@@ -2053,14 +2166,9 @@ function renderTargetPlot(targets) {
 
     const finalMapContent = userConfidenceCircleHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
 
-    // --- Container with grid background ---
-    let containerClasses = "relative overflow-hidden cursor-pointer transition-all duration-300 group border-4 border-gray-400 rounded-lg my-4";
-
-    if (isMapFullscreen) {
-        containerClasses += " fixed inset-0 z-[100] h-screen w-screen bg-gray-200";
-    } else {
-        containerClasses += " w-full aspect-square bg-gray-200";
-    }
+    // --- Container with grid background & zoom/pan controls ---
+    let containerClasses =
+        "relative overflow-hidden border-4 border-gray-400 rounded-lg my-4 bg-gray-200";
 
     const gridStyle = `
         background-image:
@@ -2069,11 +2177,39 @@ function renderTargetPlot(targets) {
         background-size: 10% 10%;
     `;
 
+    const transformStyle = `
+        transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
+        transform-origin: center center;
+    `;
+
     return `
-        <div onclick="toggleMapFullscreen()" class="${containerClasses}" style="${gridStyle}" title="Tap to resize">
-            ${finalMapContent}
-            <div class="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600 font-bold pointer-events-none group-hover:bg-white">
-                <i class="fas fa-expand"></i> ${isMapFullscreen ? 'Tap to Minimize' : 'Tap to Fullscreen'}
+        <div
+            id="target-map-container"
+            class="${containerClasses}"
+            style="${gridStyle}"
+            onmousedown="startMapDrag(event)"
+            ontouchstart="startMapDrag(event)"
+        >
+            <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
+                ${finalMapContent}
+            </div>
+
+            <div class="absolute bottom-2 right-2 flex gap-1 bg-white/80 px-2 py-1 rounded text-xs text-gray-700 shadow pointer-events-auto map-zoom-controls">
+                <button
+                    type="button"
+                    class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 font-bold"
+                    onclick="zoomMapOut(event)"
+                >−</button>
+                <button
+                    type="button"
+                    class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 font-bold"
+                    onclick="zoomMapIn(event)"
+                >+</button>
+                <button
+                    type="button"
+                    class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                    onclick="resetMapView(event)"
+                >Reset</button>
             </div>
         </div>
         <div class="text-xs text-gray-500 mt-2">
