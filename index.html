@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  9 - Metal Detecting Survey Log</title>
+    <title>Rings 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1844,8 +1844,13 @@ if (hasUserGPS && effectiveUserCoords) {
     let userPinAndLabelHtml = '';
     let userConfidenceCircleHtml = '';
 
-    // --- Generate pins ---
+    // --- Generate pins (user + targets) and confidence circles ---
+
     const MAP_EDGE_MARGIN_PERCENT = 10;
+
+    // Scale factor: metres → percentage of map (used for all circles)
+    const circleScaleFactor =
+        (Math.max(mapWidthMeters, mapHeightMeters) / 100) || 1;
 
     const pinsHtml = allCoords.map(t => {
         const xRaw = ((t.lon - minLon) / safeLonRange) * 100;
@@ -1856,18 +1861,28 @@ if (hasUserGPS && effectiveUserCoords) {
         let yPercent = clamp(yRaw, 0, 100);
 
         // Apply inward margin so nothing touches the boundary
-        xPercent = MAP_EDGE_MARGIN_PERCENT + (xPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
-        yPercent = MAP_EDGE_MARGIN_PERCENT + (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
+        xPercent =
+            MAP_EDGE_MARGIN_PERCENT +
+            (xPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
+        yPercent =
+            MAP_EDGE_MARGIN_PERCENT +
+            (yPercent * (100 - MAP_EDGE_MARGIN_PERCENT * 2) / 100);
 
         if (t.isUser) {
-            // User pin
+            // -----------------------------
+            // USER PIN
+            // -----------------------------
             userXPercent = xPercent;
             userYPercent = yPercent;
 
             userPinAndLabelHtml = `
                 <div 
                     class="absolute" 
-                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
+                    style="left: ${xPercent.toFixed(
+                        2
+                    )}%; top: ${yPercent.toFixed(
+                2
+            )}%; transform: translate(-50%, -50%); z-index: 20;"
                     title="${t.description} (Acc: ${t.accuracy.toFixed(1)}m)"
                 >
                     <div class="relative w-0 h-0 border-l-[2px] border-r-[2px] border-b-[4px] border-l-transparent border-r-transparent border-b-blue-600 shadow-xl cursor-pointer z-10"></div>
@@ -1879,7 +1894,9 @@ if (hasUserGPS && effectiveUserCoords) {
             `;
             return '';
         } else {
-            // Target pin
+            // -----------------------------
+            // TARGET PIN
+            // -----------------------------
             let pinColor = 'bg-primary';
             let pinSize = 'w-2 h-2';
 
@@ -1902,21 +1919,71 @@ if (hasUserGPS && effectiveUserCoords) {
                     pinColor = 'bg-primary';
             }
 
-            // Highlight the centre target visually
+            // Centre-on-map highlight (as before)
             const isCentre = t.centerOnMap === true;
-            const extraRing = isCentre
+
+            // NEW: navigation target highlight
+            const isNavTarget = navigationTargetId && t.id === navigationTargetId;
+
+            const centreRing = isCentre
                 ? '<div class="absolute -inset-1 rounded-full border-2 border-red-500 animate-pulse"></div>'
                 : '';
+
+            const navRing = isNavTarget
+                ? '<div class="absolute -inset-[0.35rem] rounded-full border-2 border-purple-600 animate-ping"></div>'
+                : '';
+
+            // NEW: per-target confidence circle based on target accuracy
+            let accuracyCircleHtml = '';
+            const accMeters = parseFloat(t.accuracy);
+
+            if (!isNaN(accMeters) && accMeters > 0) {
+                const diameterMetersTarget = accMeters * 2; // circle is 2× radius
+                const diameterPercentTarget =
+                    diameterMetersTarget / circleScaleFactor;
+
+                // Stop giant circles from eating the map
+                const clampedDiameter = Math.min(diameterPercentTarget, 180);
+
+                const circleBorderClass = isNavTarget
+                    ? 'border-2 border-purple-600/80 bg-purple-200/10'
+                    : 'border border-gray-500/70 bg-gray-200/5';
+
+                accuracyCircleHtml = `
+                    <div
+                        class="absolute rounded-full ${circleBorderClass}"
+                        style="
+                            width: ${clampedDiameter.toFixed(2)}%;
+                            height: ${clampedDiameter.toFixed(2)}%;
+                            left: 50%;
+                            top: 50%;
+                            transform: translate(-50%, -50%);
+                            z-index: 5;
+                        "
+                        title="Target GPS accuracy radius ~${accMeters.toFixed(1)}m"
+                    ></div>
+                `;
+            }
 
             return `
                 <div
                     class="absolute"
-                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
-                    title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
+                    style="left: ${xPercent.toFixed(
+                        2
+                    )}%; top: ${yPercent.toFixed(
+                2
+            )}%; transform: translate(-50%, -50%); z-index: 10;"
+                    title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(
+                6
+            )}, ${t.lon.toFixed(
+                6
+            )} (Acc: ${t.accuracy.toFixed(1)}m)"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
                     <div class="relative">
-                        ${extraRing}
+                        ${accuracyCircleHtml}
+                        ${centreRing}
+                        ${navRing}
                         <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
                     </div>
                     <span class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300" 
@@ -1927,23 +1994,25 @@ if (hasUserGPS && effectiveUserCoords) {
             `;
         }
     }).join('');
-    
-    // --- Confidence circle for user accuracy ---
+
+    // --- Confidence circle for USER accuracy (unchanged, but now uses circleScaleFactor) ---
     if (userCoord && userAccuracy > 0) {
-        const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
-        const diameterPercent = diameterInMeters / (scaleFactor || 1);
+        const diameterPercent = diameterInMeters / circleScaleFactor;
+        const clampedDiameter = Math.min(diameterPercent, 180);
 
         userConfidenceCircleHtml = `
-            <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
+            <div
+                class="absolute rounded-full border-2 border-red-500/70 bg-red-200/10"
                 style="
-                    width: ${diameterPercent.toFixed(2)}%; 
-                    height: ${diameterPercent.toFixed(2)}%;
-                    left: ${userXPercent.toFixed(2)}%; top: ${userYPercent.toFixed(2)}%;
+                    width: ${clampedDiameter.toFixed(2)}%;
+                    height: ${clampedDiameter.toFixed(2)}%;
+                    left: ${userXPercent.toFixed(2)}%;
+                    top: ${userYPercent.toFixed(2)}%;
                     transform: translate(-50%, -50%);
-                    z-index: 5; 
+                    z-index: 5;
                 "
-                title="Confidence Radius: ${userAccuracy.toFixed(1)}m">
-            </div>
+                title="GPS accuracy radius ~${userAccuracy.toFixed(1)}m"
+            ></div>
         `;
     }
 
