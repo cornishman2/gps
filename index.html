@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  8 - Metal Detecting Survey Log</title>
+    <title>Find target  9 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -486,6 +486,12 @@ function recordMovementSample(lat, lon) {
  *   - a bearing in degrees [0, 360) if we have enough motion
  *   - null if we don't have enough recent movement yet
  */
+/**
+ * Computes the bearing of recent movement based on the movementHistory array.
+ * Returns:
+ *   - a bearing in degrees [0, 360) if we have enough motion
+ *   - null if we don't have enough recent movement yet
+ */
 function computeMovementBearingDegrees() {
     if (!movementHistory || movementHistory.length < 2) {
         return null;
@@ -503,8 +509,8 @@ function computeMovementBearingDegrees() {
     const first = movementHistory[0];
     const last = movementHistory[movementHistory.length - 1];
 
-    // Distance moved in metres (using existing haversineDistance helper)
-    const dist = haversineDistance(first.lat, first.lon, last.lat, last.lon);
+    // Distance moved in metres (use existing distanceMeters helper)
+    const dist = distanceMeters(first.lat, first.lon, last.lat, last.lon);
 
     if (dist < MOVEMENT_MIN_DISTANCE_METERS) {
         // Too little movement to get a stable direction
@@ -514,9 +520,6 @@ function computeMovementBearingDegrees() {
     // Bearing of travel from first point in history to the most recent
     return initialBearingDegrees(first.lat, first.lon, last.lat, last.lon);
 }
-
-// --- END GEOGRAPHY HELPER FUNCTIONS ---
-
         
 // --- END GEOGRAPHY HELPER FUNCTIONS ---
 
