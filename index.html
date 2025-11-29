@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Find target  6 - Metal Detecting Survey Log</title>
+    <title>Find target  7 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -330,6 +330,15 @@
         let liveMapWatchId = null;
         let navigationTargetId = null;
 
+                // --- MOVEMENT HISTORY FOR DIRECTION-OF-TRAVEL GUIDANCE ---
+        // Stores recent smoothed GPS positions so we can estimate which way
+        // you're walking and give "left / right / ahead" style guidance.
+        let movementHistory = [];
+        const MOVEMENT_HISTORY_MAX_AGE_MS = 60000;     // keep ~60s of movement
+        const MOVEMENT_HISTORY_MAX_LENGTH = 30;        // max number of points
+        const MOVEMENT_MIN_DISTANCE_METERS = 2;        // need at least ~2m of motion
+
+
 // NEW: smoothed position for the live map
         let smoothedUserCoords = null;
         const USER_SMOOTHING_ALPHA = 0.15; // 0 < alpha ≤ 1 (lower = smoother, slower)
@@ -455,6 +464,60 @@ function getCircleDiameter(accuracyInMeters) {
     return 'N/A';
 }
 
+// --- MOVEMENT & GUIDANCE HELPER FUNCTIONS ---
+
+/**
+ * Records a new smoothed movement sample.
+ * Called from the live map GPS watch each time we get a new reading.
+ */
+function recordMovementSample(lat, lon) {
+    const now = Date.now();
+    movementHistory.push({ lat, lon, time: now });
+
+    // Trim to recent history only
+    if (movementHistory.length > MOVEMENT_HISTORY_MAX_LENGTH) {
+        movementHistory.shift();
+    }
+}
+
+/**
+ * Computes the bearing of recent movement based on the movementHistory array.
+ * Returns:
+ *   - a bearing in degrees [0, 360) if we have enough motion
+ *   - null if we don't have enough recent movement yet
+ */
+function computeMovementBearingDegrees() {
+    if (!movementHistory || movementHistory.length < 2) {
+        return null;
+    }
+
+    const now = Date.now();
+
+    // Keep only samples from the recent window
+    movementHistory = movementHistory.filter(p => now - p.time <= MOVEMENT_HISTORY_MAX_AGE_MS);
+
+    if (movementHistory.length < 2) {
+        return null;
+    }
+
+    const first = movementHistory[0];
+    const last = movementHistory[movementHistory.length - 1];
+
+    // Distance moved in metres (using existing haversineDistance helper)
+    const dist = haversineDistance(first.lat, first.lon, last.lat, last.lon);
+
+    if (dist < MOVEMENT_MIN_DISTANCE_METERS) {
+        // Too little movement to get a stable direction
+        return null;
+    }
+
+    // Bearing of travel from first point in history to the most recent
+    return initialBearingDegrees(first.lat, first.lon, last.lat, last.lon);
+}
+
+// --- END GEOGRAPHY HELPER FUNCTIONS ---
+
+        
 // --- END GEOGRAPHY HELPER FUNCTIONS ---
 
 
@@ -750,6 +813,7 @@ function startLiveMapLocationWatch() {
     // Fresh run each time we arrive on the Compass page
     bestLiveAccuracy = Infinity;
     smoothedUserCoords = null;
+    movementHistory = [];
 
     // Start / restart the GPS watch
     if (liveMapWatchId !== null) {
@@ -757,7 +821,7 @@ function startLiveMapLocationWatch() {
         liveMapWatchId = null;
     }
 
-    liveMapWatchId = navigator.geolocation.watchPosition(
+liveMapWatchId = navigator.geolocation.watchPosition(
         (position) => {
             const accuracy = position.coords.accuracy;
 
@@ -771,10 +835,17 @@ function startLiveMapLocationWatch() {
             // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
 
+            // Record this smoothed point into the movement history
+            if (smoothedUserCoords) {
+                recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
+            }
+
             // Track best accuracy (for logging/info)
             if (accuracy < bestLiveAccuracy) {
                 bestLiveAccuracy = accuracy;
             }
+
+            // ... rest of your logging code stays the same ...
 
             console.log(
                 `Live Map position (raw): ${currentUserCoords.lat.toFixed(6)}, ` +
