@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rings 2  - Metal Detecting Survey Log</title>
+    <title>Rings 3  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1922,15 +1922,12 @@ if (hasUserGPS && effectiveUserCoords) {
             // Centre-on-map highlight (as before)
             const isCentre = t.centerOnMap === true;
 
-            // NEW: navigation target highlight
-            const isNavTarget = navigationTargetId && t.id === navigationTargetId;
-
             const centreRing = isCentre
-                ? '<div class="absolute -inset-1 rounded-full border-2 border-red-500 animate-pulse"></div>'
+                ? '<div class="absolute -inset-1.5 rounded-full border-4 border-red-500 animate-pulse"></div>'
                 : '';
 
             const navRing = isNavTarget
-                ? '<div class="absolute -inset-[0.35rem] rounded-full border-2 border-purple-600 animate-ping"></div>'
+                ? '<div class="absolute -inset-2 rounded-full border-4 border-purple-500 animate-ping"></div>'
                 : '';
 
             // NEW: per-target confidence circle based on target accuracy
@@ -1942,12 +1939,17 @@ if (hasUserGPS && effectiveUserCoords) {
                 const diameterPercentTarget =
                     diameterMetersTarget / circleScaleFactor;
 
-                // Stop giant circles from eating the map
-                const clampedDiameter = Math.min(diameterPercentTarget, 180);
+                // Stop giant circles from eating the map BUT also give a minimum size
+                const MIN_DIAMETER_PERCENT = 10; // ensure visibility on phones
+                const clampedDiameter = Math.max(
+                    MIN_DIAMETER_PERCENT,
+                    Math.min(diameterPercentTarget, 180)
+                );
 
+                // Much stronger borders & fills so they stand out on mobile
                 const circleBorderClass = isNavTarget
-                    ? 'border-2 border-purple-600/80 bg-purple-200/10'
-                    : 'border border-gray-500/70 bg-gray-200/5';
+                    ? 'border-4 border-purple-500 bg-purple-500/20'
+                    : 'border-2 border-gray-700 bg-gray-500/15';
 
                 accuracyCircleHtml = `
                     <div
@@ -1964,6 +1966,7 @@ if (hasUserGPS && effectiveUserCoords) {
                     ></div>
                 `;
             }
+
 
             return `
                 <div
@@ -2002,7 +2005,7 @@ if (hasUserGPS && effectiveUserCoords) {
 
         userConfidenceCircleHtml = `
             <div
-                class="absolute rounded-full border-2 border-red-500/70 bg-red-200/10"
+                class="absolute rounded-full border-4 border-red-500 bg-red-500/20"
                 style="
                     width: ${clampedDiameter.toFixed(2)}%;
                     height: ${clampedDiameter.toFixed(2)}%;
