@@ -2026,9 +2026,7 @@ function renderTargetPlot(targets) {
                     title="Your Current Location (Acc: ${userAccuracy.toFixed(1)}m)"
                 >
                     <div class="relative">
-                        <div class="${pinSize} bg-blue-500 border-2 border-white shadow-lg transform rotate-45"
-                            style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);">
-                        </div>
+                    <div class="${pinSize} bg-blue-500 border-2 border-white shadow-lg rounded-full"></div>
                     </div>
                 </div>
             `;
@@ -2144,24 +2142,38 @@ function renderTargetPlot(targets) {
         navTargetXPercent !== null &&
         navTargetYPercent !== null
     ) {
-        navLineHtml = `
-            <svg
-                class="absolute inset-0 pointer-events-none"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                style="z-index: 8;"
-            >
-                <line
-                    x1="${userXPercent.toFixed(2)}"
-                    y1="${userYPercent.toFixed(2)}"
-                    x2="${navTargetXPercent.toFixed(2)}"
-                    y2="${navTargetYPercent.toFixed(2)}"
-                    stroke="rgba(37,99,235,0.9)"
-                    stroke-width="1.5"
-                    stroke-dasharray="3 2"
-                />
-            </svg>
-        `;
+      navLineHtml = `
+<svg
+    class="absolute inset-0 pointer-events-none"
+    viewBox="0 0 100 100"
+    preserveAspectRatio="none"
+    style="z-index: 8;"
+>
+    <defs>
+        <marker 
+            id="navArrow"
+            markerWidth="6"
+            markerHeight="6"
+            refX="4"
+            refY="3"
+            orient="auto"
+        >
+            <polygon points="0 0, 6 3, 0 6" fill="rgba(37,99,235,0.9)" />
+        </marker>
+    </defs>
+
+    <line
+        x1="${userXPercent.toFixed(2)}"
+        y1="${userYPercent.toFixed(2)}"
+        x2="${navTargetXPercent.toFixed(2)}"
+        y2="${navTargetYPercent.toFixed(2)}"
+        stroke="rgba(37,99,235,0.9)"
+        stroke-width="1.5"
+        stroke-dasharray="3 2"
+        marker-end="url(#navArrow)"
+    />
+</svg>
+`;
     }
 
     const finalMapContent = userConfidenceCircleHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
