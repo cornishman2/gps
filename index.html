@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arrow 1  - Metal Detecting Survey Log</title>
+    <title>Arrow 3  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1994,14 +1994,16 @@ function renderTargetPlot(targets) {
     // Normalise and draw
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-    let userXPercent = 0;
-    let userYPercent = 0;
-    let userPinAndLabelHtml = '';
-    let userConfidenceCircleHtml = '';
+let userXPercent = 0;
+let userYPercent = 0;
+let userPinAndLabelHtml = '';
+let userConfidenceCircleHtml = '';
 
-    // For nav line
-    let navTargetXPercent = null;
-    let navTargetYPercent = null;
+let navTargetXPercent = null;
+let navTargetYPercent = null;
+let navTargetLat = null;
+let navTargetLon = null;
+let navTargetAccuracy = null;
 
     // 2. Normalize and generate pins HTML
         const pinsHtml = allCoords.map(t => {
@@ -2055,13 +2057,16 @@ function renderTargetPlot(targets) {
             }
 
             // --- NEW: navigation-aware styling ---
-            const isCentre = t.centerOnMap === true;
-            const isNavTarget = !!navigationTargetId && t.id === navigationTargetId;
+const isCentre = t.centerOnMap === true;
+const isNavTarget = navigationTargetId && t.id === navigationTargetId;
 
-            if (isNavTarget) {
-                navTargetXPercent = xPercent;
-                navTargetYPercent = yPercent;
-            }
+if (isNavTarget) {
+    navTargetXPercent = xPercent;
+    navTargetYPercent = yPercent;
+    navTargetLat = t.lat;
+    navTargetLon = t.lon;
+    navTargetAccuracy = typeof t.accuracy === 'number' ? t.accuracy : null;
+}
 
             const extraRing = isNavTarget
                 ? '<div class="absolute -inset-1 rounded-full border-2 border-blue-500 animate-ping"></div>'
@@ -2135,46 +2140,111 @@ function renderTargetPlot(targets) {
     }
 
      // --- NEW: line from user to navigation target (map-space, not true bearing) ---
+     // --- Line from user to current navigation target (with arrow, label, and proximity logic) ---
     let navLineHtml = '';
+
     if (
         navigationTargetId &&
         userCoord &&
         navTargetXPercent !== null &&
-        navTargetYPercent !== null
+        navTargetYPercent !== null &&
+        typeof navTargetLat === 'number' &&
+        typeof navTargetLon === 'number'
     ) {
-      navLineHtml = `
-<svg
-    class="absolute inset-0 pointer-events-none"
-    viewBox="0 0 100 100"
-    preserveAspectRatio="none"
-    style="z-index: 8;"
->
-    <defs>
-        <marker 
-            id="navArrow"
-            markerWidth="6"
-            markerHeight="6"
-            refX="4"
-            refY="3"
-            orient="auto"
-        >
-            <polygon points="0 0, 6 3, 0 6" fill="rgba(37,99,235,0.9)" />
-        </marker>
-    </defs>
+        // Use smoothed coords if available, else raw userCoord
+        const userLat = effectiveUserCoords ? effectiveUserCoords.lat : userCoord.lat;
+        const userLon = effectiveUserCoords ? effectiveUserCoords.lon : userCoord.lon;
 
-    <line
-        x1="${userXPercent.toFixed(2)}"
-        y1="${userYPercent.toFixed(2)}"
-        x2="${navTargetXPercent.toFixed(2)}"
-        y2="${navTargetYPercent.toFixed(2)}"
-        stroke="rgba(37,99,235,0.9)"
-        stroke-width="1.5"
-        stroke-dasharray="3 2"
-        marker-end="url(#navArrow)"
-    />
-</svg>
-`;
+        // Real-world distance in metres
+        const distanceToNavMeters = distanceMeters(userLat, userLon, navTargetLat, navTargetLon);
+
+        // How big is the "inside the circle" threshold?
+        const navAcc = (typeof navTargetAccuracy === 'number' && navTargetAccuracy > 0)
+            ? navTargetAccuracy
+            : null;
+
+        // If we know the nav target accuracy, use that. Otherwise fall back to user accuracy or a small default.
+        const insideCircleThreshold =
+            navAcc || (userAccuracy && userAccuracy > 0 ? userAccuracy : 0);
+
+        const isInsideCircle =
+            insideCircleThreshold && distanceToNavMeters <= insideCircleThreshold;
+
+        // If we're inside the target's confidence circle, hide the line entirely
+        if (!isInsideCircle) {
+            // --- Scale-dependent arrow size based on mapZoom ---
+            const arrowScale = 1 + (mapZoom - 1) * 0.5; // grows as you zoom in
+            const clampedArrowScale = Math.max(0.75, Math.min(arrowScale, 2.0));
+
+            const baseMarkerSize = 6;
+            const markerWidth = baseMarkerSize * clampedArrowScale;
+            const markerHeight = baseMarkerSize * clampedArrowScale;
+            const refX = 4 * clampedArrowScale;
+            const refY = 3 * clampedArrowScale;
+
+            // --- Distance label position (midpoint) ---
+            const midX = (userXPercent + navTargetXPercent) / 2;
+            const midY = (userYPercent + navTargetYPercent) / 2;
+
+            // Human-friendly distance string
+            const distLabel =
+                distanceToNavMeters >= 1000
+                    ? (distanceToNavMeters / 1000).toFixed(2) + ' km'
+                    : distanceToNavMeters.toFixed(1) + ' m';
+
+            // --- Pulse effect when "near" the circle but not inside it ---
+            const pulseThreshold = insideCircleThreshold ? insideCircleThreshold * 1.5 : 0;
+            const shouldPulse = pulseThreshold && distanceToNavMeters <= pulseThreshold;
+            const lineClass = shouldPulse ? 'animate-pulse' : '';
+
+            navLineHtml = `
+                <svg
+                    class="absolute inset-0 pointer-events-none"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    style="z-index: 8;"
+                >
+                    <defs>
+                        <marker 
+                            id="navArrow"
+                            markerWidth="${markerWidth}"
+                            markerHeight="${markerHeight}"
+                            refX="${refX}"
+                            refY="${refY}"
+                            orient="auto"
+                        >
+                            <polygon points="0 0, ${markerWidth} ${markerHeight / 2}, 0 ${markerHeight}" fill="rgba(37,99,235,0.9)" />
+                        </marker>
+                    </defs>
+
+                    <line
+                        x1="${userXPercent.toFixed(2)}"
+                        y1="${userYPercent.toFixed(2)}"
+                        x2="${navTargetXPercent.toFixed(2)}"
+                        y2="${navTargetYPercent.toFixed(2)}"
+                        stroke="rgba(37,99,235,0.9)"
+                        stroke-width="1.5"
+                        stroke-dasharray="3 2"
+                        marker-end="url(#navArrow)"
+                        class="${lineClass}"
+                    />
+                    <text
+                        x="${midX.toFixed(2)}"
+                        y="${midY.toFixed(2)}"
+                        text-anchor="middle"
+                        dominant-baseline="central"
+                        font-size="3"
+                        fill="#1f2937"
+                        stroke="white"
+                        stroke-width="0.3"
+                    >
+                        ${distLabel}
+                    </text>
+                </svg>
+            `;
+        }
     }
+
 
     const finalMapContent = userConfidenceCircleHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
 
