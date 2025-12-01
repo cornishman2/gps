@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds 5  - Metal Detecting Survey Log</title>
+    <title>Finds 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -123,6 +123,114 @@
             </form>
         </div>
     </div>
+
+<!-- Edit Find Modal -->
+<div id="edit-find-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black bg-opacity-40">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+    <form id="edit-find-form" class="p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-primary">Edit Find</h3>
+        <button
+          type="button"
+          id="close-edit-find-btn"
+          class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          aria-label="Close">
+          &times;
+        </button>
+      </div>
+
+      <input type="hidden" id="edit-find-id" name="findId">
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-description">
+          Description / Find Name
+        </label>
+        <input
+          type="text"
+          id="edit-find-description"
+          name="findDescription"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+          required>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-type">
+          Type
+        </label>
+        <select
+          id="edit-find-type"
+          name="findType"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+          <option value="Coin">Coin</option>
+          <option value="Relic">Relic</option>
+          <option value="Jewellery">Jewellery</option>
+          <option value="Modern">Modern</option>
+          <option value="Trash">Trash</option>
+          <option value="Unknown">Unknown</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-vdi">
+            VDI
+          </label>
+          <input
+            type="text"
+            id="edit-find-vdi"
+            name="findVDI"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-depth">
+            Depth
+          </label>
+          <input
+            type="text"
+            id="edit-find-depth"
+            name="findDepth"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-coords">
+          Coordinates
+        </label>
+        <input
+          type="text"
+          id="edit-find-coords"
+          name="findCoords"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-accuracy">
+          Accuracy
+        </label>
+        <input
+          type="text"
+          id="edit-find-accuracy"
+          name="findAccuracy"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button
+          type="button"
+          id="cancel-edit-find-btn"
+          class="px-3 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100">
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="px-4 py-1.5 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-dark">
+          Save changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
     
     <div id="new-target-modal" class="modal">
         <div class="modal-content bg-white p-6 shadow-2xl">
@@ -611,6 +719,88 @@ function computeMovementBearingDegrees() {
 
         // --- HELPER FUNCTIONS ---
 
+        function openEditFindModal(findId) {
+    const find = finds.find(f => f.id === findId);
+    if (!find) {
+        showMessage('Find not found.', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('edit-find-modal');
+    const form  = document.getElementById('edit-find-form');
+    if (!modal || !form) return;
+
+    form['findId'].value           = find.id;
+    form['findDescription'].value  = find.description || '';
+    form['findType'].value         = find.type || 'Unknown';
+    form['findVDI'].value          = find.vdi || '';
+    form['findDepth'].value        = find.depth || '';
+    form['findCoords'].value       = find.coordinates || '';
+    form['findAccuracy'].value     = find.accuracy || '';
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeEditFindModal() {
+    const modal = document.getElementById('edit-find-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function handleEditFindSubmit(event) {
+    event.preventDefault();
+    const form = event.target;
+
+    const id = form['findId'].value;
+    const find = finds.find(f => f.id === id);
+    if (!find) {
+        showMessage('Find not found.', 'error');
+        closeEditFindModal();
+        return;
+    }
+
+    const desc = form['findDescription'].value.trim();
+    if (!desc) {
+        showMessage('Description is required.', 'error');
+        return;
+    }
+
+    find.description = desc;
+    find.type        = form['findType'].value || 'Unknown';
+    find.vdi         = form['findVDI'].value.trim();
+    find.depth       = form['findDepth'].value.trim();
+    find.coordinates = form['findCoords'].value.trim();
+    find.accuracy    = form['findAccuracy'].value.trim();
+
+    // Optionally bump a last-modified timestamp on the find itself
+    find.updatedAt = Date.now();
+
+    saveFindsToLocalStorage();
+    closeEditFindModal();
+    showMessage('Find updated.', 'success');
+    render();
+}
+function deleteFind(findId) {
+    const find = finds.find(f => f.id === findId);
+    if (!find) {
+        showMessage('Find not found.', 'error');
+        return;
+    }
+
+    const ok = window.confirm(
+        `Delete find "${find.description || 'this find'}"? This cannot be undone.`
+    );
+    if (!ok) return;
+
+    finds = finds.filter(f => f.id !== findId);
+    saveFindsToLocalStorage();
+    showMessage('Find deleted.', 'success');
+    render();
+}
+
+
         /** Generates a simple unique ID. */
         function generateId() {
             return Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
@@ -867,6 +1057,29 @@ switch (currentPage) {
             });
         }
     }
+
+    // Edit Find modal
+    const editFindForm = document.getElementById('edit-find-form');
+    if (editFindForm) {
+        editFindForm.addEventListener('submit', handleEditFindSubmit);
+    }
+
+    const cancelEditFindBtn = document.getElementById('cancel-edit-find-btn');
+    if (cancelEditFindBtn) {
+        cancelEditFindBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditFindModal();
+        });
+    }
+
+    const closeEditFindBtn = document.getElementById('close-edit-find-btn');
+    if (closeEditFindBtn) {
+        closeEditFindBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditFindModal();
+        });
+    }
+
 }
 
         // --- GPS GEOLOCATION FUNCTIONS ---
@@ -1976,7 +2189,7 @@ function renderFindsPage() {
               `
             : '';
 
-        return `
+           return `
             <div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-gray-100">
                 <div class="flex items-start justify-between">
                     <div>
@@ -2003,9 +2216,25 @@ function renderFindsPage() {
                     </div>
                 </div>
 
+                <div class="mt-3 flex justify-end gap-2 text-xs">
+                    <button
+                        type="button"
+                        class="px-3 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                        onclick="openEditFindModal('${find.id}')">
+                        Edit
+                    </button>
+                    <button
+                        type="button"
+                        class="px-3 py-1 rounded-md border border-red-500 text-red-600 hover:bg-red-50"
+                        onclick="deleteFind('${find.id}')">
+                        Delete
+                    </button>
+                </div>
+
                 ${photoHtml}
             </div>
         `;
+
     }).join('');
 
     return `
