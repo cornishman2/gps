@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo 3  - Metal Detecting Survey Log</title>
+    <title>Photo 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -174,7 +174,7 @@
         </div>
     </div>
 </div>
-  <div class="mb-4 col-span-2">
+<div class="mb-4 col-span-2">
     <label class="block text-sm font-medium text-gray-700 mb-1">
         Target Photograph
     </label>
@@ -210,7 +210,6 @@
         <img id="target-photo-preview" class="w-11/12 h-auto rounded-md border border-gray-300 object-cover" alt="Target photo preview">
     </div>
 </div>
-
         <div class="mb-4 col-span-2">
                         <label for="target-coords" class="block text-sm font-medium text-gray-700 flex items-center">
                             GPS Coordinates
@@ -1088,36 +1087,32 @@ function triggerTargetPhotoInput() {
     fileInput.click();
 }
 
-/** Handles the selected photo, converts to base64 and stores in a hidden field. */
+/** Handles the file selection or camera capture from the input field. */
 function handleTargetPhotoSelected(event) {
-    const file = event.target.files && event.target.files[0];
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements
     const statusSpan = document.getElementById('target-photo-status');
     const previewWrapper = document.getElementById('target-photo-preview-wrapper');
     const previewImg = document.getElementById('target-photo-preview');
     const hiddenField = document.getElementById('target-photo-data');
 
     if (!file) {
-        if (statusSpan) statusSpan.textContent = 'No photo captured.';
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
         if (previewWrapper) previewWrapper.classList.add('hidden');
         if (hiddenField) hiddenField.value = '';
         return;
     }
 
-    // Basic size guard (e.g. ~2 MB) – optional
-    const maxSizeBytes = 2 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-        showMessage('Photo is too large. Please choose a smaller image.', 'warning');
-        event.target.value = '';
-        if (statusSpan) statusSpan.textContent = 'No photo captured.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-        return;
-    }
+    // NOTE: The previous explicit file type check was removed here
+    // because it was causing issues with camera captures on some devices.
+    // The input's accept="image/*" attribute provides enough file type restriction.
 
+    // Use FileReader to convert the file to a Base64 data URL
     const reader = new FileReader();
-    reader.onload = () => {
-        const dataUrl = reader.result;
-
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
         if (hiddenField) hiddenField.value = dataUrl;
         if (statusSpan) statusSpan.textContent = 'Photo captured.';
         if (previewImg) previewImg.src = dataUrl;
@@ -1130,10 +1125,8 @@ function handleTargetPhotoSelected(event) {
         if (previewWrapper) previewWrapper.classList.add('hidden');
         if (hiddenField) hiddenField.value = '';
     };
-
     reader.readAsDataURL(file);
-}
-                            
+}                            
 function handleNewTargetSubmit(event) {
     event.preventDefault();
     stopTargetLocationWatch(); // Stop GPS watch immediately on submit
