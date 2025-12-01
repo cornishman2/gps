@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo 6  - Metal Detecting Survey Log</title>
+    <title>Photo 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1320,37 +1320,45 @@ function closeEditTargetModal() {
         }
 
         /** Handles the submission of the Edit Target form. */
-  function handleEditTargetSubmit(event) {
+/** Handles the submission of the Edit Target form. */
+function handleEditTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;
-    const targetId = form['targetId'].value; 
-    const surveyId = form['surveyId'].value; 
+    const targetId = form['editTargetId'].value; 
+    const surveyId = form['editSurveyId'].value; 
 
-    const newDescription = form['targetDescription'].value.trim(); 
-    const newVDI = form['targetVDI'].value.trim() || 'N/A';
-    const newDepth = form['targetDepth'].value.trim() || 'Unknown';
-    const newType = form['targetType'].value;
-    const newCoords = form['targetCoords'].value.trim() || 'No GPS logged'; 
-    const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
-    
-    
+    const newDescription = form['editTargetDescription'].value.trim();
+    const newVDI = form['editTargetVDI'].value.trim() || 'N/A';
+    const newDepth = form['editTargetDepth'].value.trim() || 'Unknown';
+    const newType = form['editTargetType'].value;
+    const newCoords = form['editTargetCoords'].value.trim() || 'No GPS logged';
+    const newAccuracy = form['editTargetAccuracy'].value.trim() || 'N/A';
     const centerOnMapValue = form['editTargetCenterOnMap'].value;
-    const centerOnMap = centerOnMapValue === 'Yes'; 
-    
-    const survey = surveys.find(s => s.id === surveyId); 
-    const target = survey ? survey.targets.find(t => t.id === targetId) : null; 
+    const centerOnMap = centerOnMapValue === 'Yes';
+
+    // *** CRITICAL ADDITION: GET PHOTO DATA from the EDIT form's HIDDEN INPUT ***
+    // This assumes the hidden photo field in the edit modal is named 'targetPhotoData'
+    const newPhotoData = form['targetPhotoData'].value || ''; 
+    // ***************************************************************************
+
+    const survey = surveys.find(s => s.id === surveyId);
+    const target = survey ? survey.targets.find(t => t.id === targetId) : null;
 
     if (target && survey) {
         // Update the target object properties
-        target.description = newDescription; 
+        target.description = newDescription;
         target.vdi = newVDI;
-        target.depth = newDepth; 
+        target.depth = newDepth;
         target.type = newType;
         target.coordinates = newCoords;
         target.accuracy = newAccuracy;
+        
+        // *** CRITICAL ADDITION: UPDATE TARGET WITH PHOTO DATA ***
+        target.targetPhotoData = newPhotoData; 
+        // **********************************************************
 
         // =================================================================
-        // ✨ NEW LOGIC: Enforce single 'Centre on map' setting
+        // Logic to enforce single 'Centre on map' setting
         // =================================================================
         if (centerOnMap) {
             // If the edited target is set to 'Yes', set all OTHER targets in this survey to 'No'
@@ -1360,24 +1368,74 @@ function closeEditTargetModal() {
                 }
             });
         }
-        // =================================================================
+        target.centerOnMap = centerOnMap;
 
-        target.centerOnMap = centerOnMap; 
-        survey.dateLastChanged = Date.now(); 
-
-        // Save and re-render
+        survey.dateLastChanged = Date.now();
         saveSurveysToLocalStorage();
-        closeEditTargetModal(); 
-        showMessage(`Target '${target.description}' successfully updated.`, 'success');
-        
-        // Re-render the targets page to reflect changes
-        if (currentPage === 'Targets' || currentPage === 'Compass') {
-            render();
-        }
+        closeEditTargetModal();
+        showMessage(`Target ${target.description} updated successfully.`, 'success');
+        render();
     } else {
         showMessage('Error: Target or Survey not found.', 'error');
     }
 }
+
+
+/** Handles the submission (save) of the New Target form. */
+function handleNewTargetSubmit(event) {
+    event.preventDefault();
+    const form = document.getElementById('new-target-form');
+    
+    const newDescription = form['targetDescription'].value.trim();
+    const newVDI = form['targetVDI'].value.trim() || 'N/A';
+    const newDepth = form['targetDepth'].value.trim() || 'Unknown';
+    const newType = form['targetType'].value;
+    const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
+    const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
+    const centerOnMapValue = form['targetCenterOnMap'].value;
+    const centerOnMap = centerOnMapValue === 'Yes';
+
+    // *** CRITICAL ADDITION 1: GET PHOTO DATA FROM HIDDEN INPUT ***
+    const newPhotoData = form['targetPhotoData'].value || '';
+    // *************************************************************
+    
+    if (!newDescription) {
+        showMessage('Description / Find Name is required.', 'error');
+        return;
+    }
+
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey) {
+        return showMessage('Error: Open survey not found.', 'error');
+    }
+
+    const newTarget = {
+        id: generateId(),
+        description: newDescription,
+        vdi: newVDI,
+        depth: newDepth,
+        type: newType,
+        status: "Hole Dug", // Default initial status
+        time: Date.now(),
+        coordinates: newCoords,
+        accuracy: newAccuracy,
+        user: userProfile.name,
+        detector: userProfile.detector,
+        centerOnMap: centerOnMap,
+        
+        // *** CRITICAL ADDITION 2: SAVE PHOTO DATA TO THE NEW TARGET ***
+        targetPhotoData: newPhotoData 
+        // *************************************************************
+    };
+
+    openSurvey.targets.unshift(newTarget);
+    openSurvey.dateLastChanged = Date.now();
+
+    saveSurveysToLocalStorage();
+    closeNewTargetModal();
+    showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
+    render();
+}            
         /** Shows the Edit Profile Modal and loads current data. */
         function showEditProfileModal() {
             const modal = document.getElementById('edit-profile-modal');
