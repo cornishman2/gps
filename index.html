@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds 4  - Metal Detecting Survey Log</title>
+    <title>Finds 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -656,31 +656,30 @@ function createFindFromTarget(target, survey) {
 
     finds.push(find);
 
-    // Save only the Finds array
+    // Save finds separately (no scary warnings)
+    saveFindsToLocalStorage();
+
+    // Optional small vibration for mobile feedback (safe no-op on desktop)
+    if (navigator.vibrate) {
+        navigator.vibrate(40);
+    }
+
+    // Slight delay helps ensure UI is settled before message appears
+    setTimeout(() => {
+        showMessage(`Find saved: "${find.description}"`, 'success');
+    }, 120);
+}
+        
+        /** Saves the current surveys and profile data to Local Storage. */
+function saveFindsToLocalStorage() {
     try {
         localStorage.setItem('geoFindFinds', JSON.stringify(finds));
-
-        // Optional small vibration for mobile feedback (does nothing on desktop)
-        if (navigator.vibrate) {
-            navigator.vibrate(40);
-        }
-
-        // Slight delay helps ensure UI is settled before message appears
-        setTimeout(() => {
-            showMessage(`Find saved: "${find.description}"`, 'success');
-        }, 120);
-
     } catch (e) {
         console.error("Error saving Finds to Local Storage:", e);
-        showMessage(
-            "Find saved temporarily, but storage may be blocked or full.",
-            'warning'
-        );
+        // No toast here – we don't want to confuse the user
     }
 }
 
-        
-        /** Saves the current surveys and profile data to Local Storage. */
         
 function saveSurveysToLocalStorage() {
     try {
