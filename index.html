@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds 2  - Metal Detecting Survey Log</title>
+    <title>Finds 3  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -655,15 +655,27 @@ function createFindFromTarget(target, survey) {
     };
 
     finds.push(find);
-    saveSurveysToLocalStorage();
+
+    // Save only the Finds collection here, so we don't trip the generic survey saver
+    try {
+        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
+    } catch (e) {
+        console.error("Error saving Finds to Local Storage:", e);
+        showMessage(
+            "Find saved for now, but browser storage is full or blocked – it may disappear after a refresh.",
+            'warning'
+        );
+    }
+
     showMessage(`Saved "${find.description}" to Finds.`, 'success');
 }
 
         
-        /** Saves the current surveys and profile data to Local Storage. */function saveSurveysToLocalStorage() {
+        /** Saves the current surveys and profile data to Local Storage. */
+        
+function saveSurveysToLocalStorage() {
     try {
         localStorage.setItem('geoFindSurveys', JSON.stringify(surveys));
-        localStorage.setItem('geoFindFinds', JSON.stringify(finds));  // <--- NEW
         localStorage.setItem('geoFindProfile', JSON.stringify(userProfile));
         localStorage.setItem('geoFindUserId', userId);
     } catch (e) {
