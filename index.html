@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo 8  - Metal Detecting Survey Log</title>
+    <title>Photo 9  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1322,65 +1322,80 @@ function closeEditTargetModal() {
 
         /** Handles the submission of the Edit Target form. */
 /** Handles the submission of the Edit Target form. */
+/** Handles the submission of the Edit Target form. */
 function handleEditTargetSubmit(event) {
     event.preventDefault();
+
     const form = event.target;
-    const targetId = form['editTargetId'].value; 
-    const surveyId = form['editSurveyId'].value; 
 
-    const newDescription = form['editTargetDescription'].value.trim();
-    const newVDI = form['editTargetVDI'].value.trim() || 'N/A';
-    const newDepth = form['editTargetDepth'].value.trim() || 'Unknown';
-    const newType = form['editTargetType'].value;
-    const newCoords = form['editTargetCoords'].value.trim() || 'No GPS logged';
-    const newAccuracy = form['editTargetAccuracy'].value.trim() || 'N/A';
-    const centerOnMapValue = form['editTargetCenterOnMap'].value;
-    const centerOnMap = centerOnMapValue === 'Yes';
+    // 🔹 Use the actual form field *names* from the HTML
+    const targetId = form['targetId']?.value;
+    const surveyId = form['surveyId']?.value;
 
-    // *** CRITICAL ADDITION: GET PHOTO DATA from the EDIT form's HIDDEN INPUT ***
-    // This assumes the hidden photo field in the edit modal is named 'targetPhotoData'
-    const newPhotoData = form['targetPhotoData'].value || ''; 
-    // ***************************************************************************
-
-    const survey = surveys.find(s => s.id === surveyId);
-    const target = survey ? survey.targets.find(t => t.id === targetId) : null;
-
-    if (target && survey) {
-        // Update the target object properties
-        target.description = newDescription;
-        target.vdi = newVDI;
-        target.depth = newDepth;
-        target.type = newType;
-        target.coordinates = newCoords;
-        target.accuracy = newAccuracy;
-        
-        // *** CRITICAL ADDITION: UPDATE TARGET WITH PHOTO DATA ***
-        target.targetPhotoData = newPhotoData; 
-        // **********************************************************
-
-        // =================================================================
-        // Logic to enforce single 'Centre on map' setting
-        // =================================================================
-        if (centerOnMap) {
-            // If the edited target is set to 'Yes', set all OTHER targets in this survey to 'No'
-            survey.targets.forEach(t => {
-                if (t.id !== targetId) {
-                    t.centerOnMap = false;
-                }
-            });
-        }
-        target.centerOnMap = centerOnMap;
-
-        survey.dateLastChanged = Date.now();
-        saveSurveysToLocalStorage();
-        closeEditTargetModal();
-        showMessage(`Target ${target.description} updated successfully.`, 'success');
-        render();
-    } else {
-        showMessage('Error: Target or Survey not found.', 'error');
+    if (!targetId || !surveyId) {
+        showMessage('Error: Target or Survey not found (missing IDs).', 'error');
+        return;
     }
-}
 
+    const newDescription = form['targetDescription'].value.trim();
+    if (!newDescription) {
+        showMessage('Description / Find Name is required.', 'error');
+        return;
+    }
+
+    const newVDI      = form['targetVDI'].value.trim() || 'N/A';
+    const newDepth    = form['targetDepth'].value.trim() || 'Unknown';
+    const newType     = form['targetType'].value;
+    const newCoords   = form['targetCoords'].value.trim() || 'No GPS logged';
+    const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
+
+    // Radio group is already called editTargetCenterOnMap in the HTML
+    const centerOnMapValue = form['editTargetCenterOnMap'].value;
+    const centerOnMap      = centerOnMapValue === 'Yes';
+
+    // Hidden photo field is called targetPhotoData
+    const newPhotoData = form['targetPhotoData']?.value || '';
+
+    // Look up survey + target
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) {
+        showMessage('Error: Survey not found.', 'error');
+        return;
+    }
+
+    const target = survey.targets.find(t => t.id === targetId);
+    if (!target) {
+        showMessage('Error: Target not found.', 'error');
+        return;
+    }
+
+    // Update core fields
+    target.description = newDescription;
+    target.vdi         = newVDI;
+    target.depth       = newDepth;
+    target.type        = newType;
+    target.coordinates = newCoords;
+    target.accuracy    = newAccuracy;
+
+    // Update photo data (can be empty string if user cleared it)
+    target.targetPhotoData = newPhotoData;
+
+    // Enforce single "Centre on map" within this survey
+    if (centerOnMap) {
+        survey.targets.forEach(t => {
+            if (t.id !== targetId) {
+                t.centerOnMap = false;
+            }
+        });
+    }
+    target.centerOnMap = centerOnMap;
+
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+    closeEditTargetModal();
+    showMessage(`Target ${target.description} updated successfully.`, 'success');
+    render();
+}
 
 /** Handles the submission (save) of the New Target form. */
 function handleNewTargetSubmit(event) {
