@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo 4  - Metal Detecting Survey Log</title>
+    <title>Photo 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -292,6 +292,43 @@
         </div>
     </div>
 </div>
+<div class="mb-4 col-span-2">
+    <label class="block text-sm font-medium text-gray-700 mb-1">
+        Target Photograph
+    </label>
+
+    <input
+        type="file"
+        id="edit-target-photo-input"
+        accept="image/*;capture=camera"
+        class="hidden"
+        onchange="handleEditTargetPhotoSelected(event)"
+    >
+
+    <input
+        type="hidden"
+        id="edit-target-photo-data"
+        name="targetPhotoData"
+    >
+
+    <div class="flex items-center space-x-3">
+        <button
+            type="button"
+            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
+            onclick="triggerEditTargetPhotoInput()"
+        >
+            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+        </button>
+        <span id="edit-target-photo-status" class="text-xs text-gray-500">
+            No photo captured yet.
+        </span>
+    </div>
+
+    <div id="edit-target-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
+        <img id="edit-target-photo-preview" class="w-11/12 h-auto rounded-md border border-gray-300 object-cover" alt="Target photo preview">
+    </div>
+</div>
+                    
 <div class="mb-4 col-span-2">
                         <label for="edit-target-coords" class="block text-sm font-medium text-gray-700">GPS Coordinates</label>
                         <input type="text" id="edit-target-coords" name="targetCoords" placeholder="e.g., 50.2568, -5.2345" 
@@ -1126,104 +1163,73 @@ function handleTargetPhotoSelected(event) {
         if (hiddenField) hiddenField.value = '';
     };
     reader.readAsDataURL(file);
-}                            
-function handleNewTargetSubmit(event) {
-    event.preventDefault();
-    stopTargetLocationWatch(); // Stop GPS watch immediately on submit
-    const form = event.target;
+} 
 
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey) {
-        showMessage('You must have an open survey to log a target.', 'error');
+/** Triggers the hidden file input for the Edit Target modal. */
+function triggerEditTargetPhotoInput() {
+    document.getElementById('edit-target-photo-input').click();
+}
+
+/** Handles file selection/camera capture for the Edit Target modal. */
+function handleEditTargetPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements for the EDIT modal
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
         return;
     }
 
-    // Capture target data
-    const description = form['targetDescription'].value.trim();
-    const vdi = form['targetVDI'].value.trim() || 'N/A';
-    const depth = form['targetDepth'].value.trim() || 'Unknown';
-    const type = form['targetType'].value;
-    const coords = form['targetCoords'].value.trim() || 'No GPS logged';
-    const accuracy = form['targetAccuracy'].value.trim() || 'N/A';
-    // NEW: Photo data (base64 data URL, if a photo was taken/chosen)
-    const photoDataUrl = form['targetPhotoData'] ? form['targetPhotoData'].value : '';
-
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+        
+function showEditTargetModal(targetId, surveyId) {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return showMessage('Error: Survey not found.', 'error');
     
-    // Read the "Centre on map" field
-    const centerOnMapValue = form['targetCenterOnMap'].value;
-    const centerOnMap = centerOnMapValue === 'Yes'; 
+    const target = survey.targets.find(t => t.id === targetId);
+    if (!target) return showMessage('Error: Target not found.', 'error');
 
-    const now = Date.now();
-
-    if (!description) {
-        showMessage('A description is required for the target.', 'error');
-        return;
-    }
-
-    // =================================================================
-    // ✨ NEW LOGIC: Enforce single 'Centre on map' setting
-    // =================================================================
-    if (centerOnMap) {
-        // If the new target is set to 'Yes', set all existing targets in this survey to 'No'
-        openSurvey.targets.forEach(target => {
-            target.centerOnMap = false;
-        });
-    }
-    // =================================================================
-
-    // Create the new target object
-const newTarget = {
-    id: generateId(),
-    description: description,
-    vdi: vdi,
-    depth: depth,
-    type: type,
-    status: 'Signal Detected', // Initial status
-    time: now,
-    coordinates: coords,
-    accuracy: accuracy, // Log Accuracy
-    user: userProfile.name, // Pulled from userProfile state
-    detector: userProfile.detector, // Pulled from userProfile state
-    centerOnMap: centerOnMap, // 
-    // NEW: optional photo
-    photoDataUrl: photoDataUrl || null
-};
-
-    // 1. Add the new target to the open survey (at the beginning of the array for reverse chronological view) 
-    openSurvey.targets.unshift(newTarget);
-    openSurvey.dateLastChanged = now;
-
-    // 2. Save and re-render
-    saveSurveysToLocalStorage(); 
-    closeNewTargetModal();
-    showMessage(`Target '${description}' successfully logged in ${openSurvey.name}.`, 'success');
+    // 1. Populate the form
+    document.getElementById('edit-target-id').value = target.id;
+    document.getElementById('edit-survey-id').value = survey.id;
+    document.getElementById('current-edit-survey-name').textContent = survey.name;
     
-    // Switch to Targets page automatically to view the new entry 
-    currentPage = 'Targets';
-    render();
-}        /** Shows the Edit Target Modal and loads current data. */
-        function showEditTargetModal(targetId, surveyId) {
-            const survey = surveys.find(s => s.id === surveyId);
-            if (!survey) return showMessage('Error: Survey not found.', 'error');
-            
-            const target = survey.targets.find(t => t.id === targetId);
-            if (!target) return showMessage('Error: Target not found.', 'error');
-
-            // 1. Populate the form
-            document.getElementById('edit-target-id').value = target.id;
-            document.getElementById('edit-survey-id').value = survey.id;
-            document.getElementById('current-edit-survey-name').textContent = survey.name;
-            
-            document.getElementById('edit-target-description').value = target.description;
-            document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
-            document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
-            document.getElementById('edit-target-type').value = target.type;
-            document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
-  // NEW: Populate accuracy field
+    document.getElementById('edit-target-description').value = target.description;
+    document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
+    document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
+    document.getElementById('edit-target-type').value = target.type;
+    document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
+    
+    // NEW: Populate accuracy field
     document.getElementById('edit-target-accuracy').value = target.accuracy === 'N/A' ? '' : target.accuracy;
 
     // NEW: Populate Centre on Map radio buttons (Robust Check)
-    const shouldCenterOnMap = target.centerOnMap === true; 
+    const shouldCenterOnMap = target.centerOnMap === true;  
     
     const yesRadio = document.getElementById('edit-target-center-yes');
     const noRadio = document.getElementById('edit-target-center-no');
@@ -1234,19 +1240,85 @@ const newTarget = {
         noRadio.checked = !shouldCenterOnMap;
     }
 
+    // --- PHOTO LOGIC ADDITION ---
+    const photoData = target.targetPhotoData;
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    // Reset all photo fields first
+    if (hiddenField) hiddenField.value = '';
+    if (previewImg) previewImg.src = ''; 
+    if (previewWrapper) previewWrapper.classList.add('hidden');
+    if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+
+    // Load existing photo data if available
+    if (photoData) {
+        if (hiddenField) hiddenField.value = photoData;
+        if (previewImg) previewImg.src = photoData;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan) statusSpan.textContent = 'Existing photo loaded. Click "Take / Choose Photo" to replace.';
+    }
+    // --- END PHOTO LOGIC ADDITION ---
+
     // 2. Display the modal
-    const modal = document.getElementById('edit-target-modal');// ... 
-            modal.style.display = 'block';
+    const modal = document.getElementById('edit-target-modal');
+    modal.style.display = 'block';
 
-            // 3. Attach the submit listener
-            const form = document.getElementById('edit-target-form');
-            form.removeEventListener('submit', handleEditTargetSubmit); 
-            form.addEventListener('submit', handleEditTargetSubmit); 
-        }
+    // 3. Attach the submit listener
+    const form = document.getElementById('edit-target-form');
+    form.removeEventListener('submit', handleEditTargetSubmit);  
+    form.addEventListener('submit', handleEditTargetSubmit);  
+}
 
-        /** Closes the Edit Target Modal. */
-        function closeEditTargetModal() {
-            document.getElementById('edit-target-modal').style.display = 'none';
+// --- NEW PHOTO HANDLER FUNCTIONS ---
+
+/** Triggers the hidden file input for the Edit Target modal. */
+function triggerEditTargetPhotoInput() {
+    document.getElementById('edit-target-photo-input').click();
+}
+
+/** Handles file selection/camera capture for the Edit Target modal. */
+function handleEditTargetPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements for the EDIT modal
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+/** Closes the Edit Target Modal. */
+function closeEditTargetModal() {            
+    document.getElementById('edit-target-modal').style.display = 'none';
         }
 
         /** Handles the submission of the Edit Target form. */
