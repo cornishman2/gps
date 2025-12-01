@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 2  - Metal Detecting Survey Log</title>
+    <title>Photo 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -174,6 +174,46 @@
         </div>
     </div>
 </div>
+    <div class="mb-4 col-span-2">
+    <label class="block text-sm font-medium text-gray-700 mb-1">
+        Target Photograph
+    </label>
+
+    <!-- Hidden file input that opens camera or gallery -->
+    <input
+        type="file"
+        id="target-photo-input"
+        accept="image/*;capture=camera"
+        class="hidden"
+        onchange="handleTargetPhotoSelected(event)"
+    >
+
+    <!-- Hidden field to store the base64 data URL -->
+    <input
+        type="hidden"
+        id="target-photo-data"
+        name="targetPhotoData"
+    >
+
+    <div class="flex items-center space-x-3">
+        <button
+            type="button"
+            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
+            onclick="triggerTargetPhotoInput()"
+        >
+            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+        </button>
+        <span id="target-photo-status" class="text-xs text-gray-500">
+            No photo captured yet.
+        </span>
+    </div>
+
+    <!-- Optional small preview -->
+    <div id="target-photo-preview-wrapper" class="mt-2 hidden">
+        <img id="target-photo-preview" class="h-24 w-auto rounded-md border border-gray-300 object-cover" alt="Target photo preview">
+    </div>
+</div>
+
         <div class="mb-4 col-span-2">
                         <label for="target-coords" class="block text-sm font-medium text-gray-700 flex items-center">
                             GPS Coordinates
@@ -1038,6 +1078,65 @@ function updateMapWithUserLocationAndRender() {
         }
 
         /** Handles the submission of the New Target form. */
+
+  // --- TARGET PHOTO HELPERS ---
+
+/** Opens the hidden file input to let the user take / choose a photo. */
+function triggerTargetPhotoInput() {
+    const fileInput = document.getElementById('target-photo-input');
+    if (!fileInput) return;
+
+    // Clear previous selection
+    fileInput.value = '';
+    fileInput.click();
+}
+
+/** Handles the selected photo, converts to base64 and stores in a hidden field. */
+function handleTargetPhotoSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    const statusSpan = document.getElementById('target-photo-status');
+    const previewWrapper = document.getElementById('target-photo-preview-wrapper');
+    const previewImg = document.getElementById('target-photo-preview');
+    const hiddenField = document.getElementById('target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // Basic size guard (e.g. ~2 MB) – optional
+    const maxSizeBytes = 2 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+        showMessage('Photo is too large. Please choose a smaller image.', 'warning');
+        event.target.value = '';
+        if (statusSpan) statusSpan.textContent = 'No photo captured.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const dataUrl = reader.result;
+
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+
+    reader.readAsDataURL(file);
+}
+                            
 function handleNewTargetSubmit(event) {
     event.preventDefault();
     stopTargetLocationWatch(); // Stop GPS watch immediately on submit
@@ -1056,6 +1155,9 @@ function handleNewTargetSubmit(event) {
     const type = form['targetType'].value;
     const coords = form['targetCoords'].value.trim() || 'No GPS logged';
     const accuracy = form['targetAccuracy'].value.trim() || 'N/A';
+    // NEW: Photo data (base64 data URL, if a photo was taken/chosen)
+    const photoDataUrl = form['targetPhotoData'] ? form['targetPhotoData'].value : '';
+
     
     // Read the "Centre on map" field
     const centerOnMapValue = form['targetCenterOnMap'].value;
@@ -1080,20 +1182,22 @@ function handleNewTargetSubmit(event) {
     // =================================================================
 
     // Create the new target object
-    const newTarget = {
-        id: generateId(),
-        description: description,
-        vdi: vdi,
-        depth: depth,
-        type: type,
-        status: 'Signal Detected', // Initial status
-        time: now,
-        coordinates: coords,
-        accuracy: accuracy, // Log Accuracy
-        user: userProfile.name, // Pulled from userProfile state
-        detector: userProfile.detector, // Pulled from userProfile state
-        centerOnMap: centerOnMap // 
-    };
+const newTarget = {
+    id: generateId(),
+    description: description,
+    vdi: vdi,
+    depth: depth,
+    type: type,
+    status: 'Signal Detected', // Initial status
+    time: now,
+    coordinates: coords,
+    accuracy: accuracy, // Log Accuracy
+    user: userProfile.name, // Pulled from userProfile state
+    detector: userProfile.detector, // Pulled from userProfile state
+    centerOnMap: centerOnMap, // 
+    // NEW: optional photo
+    photoDataUrl: photoDataUrl || null
+};
 
     // 1. Add the new target to the open survey (at the beginning of the array for reverse chronological view) 
     openSurvey.targets.unshift(newTarget);
@@ -1553,134 +1657,150 @@ function renderHomePage() {
         }
 
         /** Renders a single target card. */
-        function renderTargetCard(target, surveyId) {
-            let typeColor = 'bg-primary';
-            let typeIcon = 'fas fa-gem';
+ function renderTargetCard(target, surveyId) {
+    let typeColor = 'bg-primary';
+    let typeIcon = 'fas fa-gem';
 
-            switch (target.type) {
-                case 'Coin':
-                    typeColor = 'bg-yellow-500';
-                    typeIcon = 'fas fa-coins';
-                    break;
-                case 'Relic':
-                    typeColor = 'bg-red-500';
-                    typeIcon = 'fas fa-shield-alt';
-                    break;
-                case 'Jewelry':
-                    typeColor = 'bg-pink-500';
-                    typeIcon = 'fas fa-ring';
-                    break;
-                case 'Modern Junk':
-                    typeColor = 'bg-gray-500';
-                    typeIcon = 'fas fa-trash';
-                    break;
-                case 'Iron Junk':
-                    typeColor = 'bg-gray-700';
-                    typeIcon = 'fas fa-magnet';
-                    break;
-                case 'Unidentified':
-                    typeColor = 'bg-purple-500';
-                    typeIcon = 'fas fa-question';
-                    break;
-            }
+    switch (target.type) {
+        case 'Coin':
+            typeColor = 'bg-yellow-500';
+            typeIcon = 'fas fa-coins';
+            break;
+        case 'Relic':
+            typeColor = 'bg-red-500';
+            typeIcon = 'fas fa-shield-alt';
+            break;
+        case 'Jewelry':
+            typeColor = 'bg-pink-500';
+            typeIcon = 'fas fa-ring';
+            break;
+        case 'Modern Junk':
+            typeColor = 'bg-gray-500';
+            typeIcon = 'fas fa-trash';
+            break;
+        case 'Iron Junk':
+            typeColor = 'bg-gray-700';
+            typeIcon = 'fas fa-magnet';
+            break;
+        case 'Unidentified':
+            typeColor = 'bg-purple-500';
+            typeIcon = 'fas fa-question';
+            break;
+    }
 
-            let statusClass = 'bg-green-100 text-green-800';
-            let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
-            let actionDropdown = '';
+    let statusClass = 'bg-green-100 text-green-800';
+    let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+    let actionDropdown = '';
 
-            switch (target.status) {
-                case 'Signal Detected':
-                    statusClass = 'bg-green-100 text-green-800';
-                    actionDropdown = `
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
-                    `;
-                    break;
-                case 'Hole Dug':
-                    statusClass = 'bg-yellow-100 text-yellow-800';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
-                    actionDropdown = `
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
-                    `;
-                    break;
-                case 'Hole Refilled':
-                    statusClass = 'bg-secondary/10 text-secondary';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3 6-6"></path></svg>`;
-                    actionDropdown = `
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
-                    `;
-                    break;
-                case 'Signal Ignored':
-                    statusClass = 'bg-gray-100 text-gray-800';
-                    statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
-                    actionDropdown = `
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
-                        <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
-                    `;
-                    break;
-            }
+    switch (target.status) {
+        case 'Signal Detected':
+            statusClass = 'bg-green-100 text-green-800';
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+            `;
+            break;
+        case 'Hole Dug':
+            statusClass = 'bg-yellow-100 text-yellow-800';
+            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+            `;
+            break;
+        case 'Hole Refilled':
+            statusClass = 'bg-secondary/10 text-secondary';
+            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3 6-6"></path></svg>`;
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+            `;
+            break;
+        case 'Signal Ignored':
+            statusClass = 'bg-gray-100 text-gray-800';
+            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+            `;
+            break;
+    }
 
-            return `
-                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4" style="border-left-color: ${typeColor};">
-                    <div class="flex justify-between items-start mb-2">
-                        <h4 class="text-xl font-bold text-gray-800 flex items-center">
-                            <i class="${typeIcon} mr-2 text-lg" style="color: ${typeColor};"></i>
-                            ${target.description}
-                            <span class="ml-3 text-sm text-white font-semibold px-2 py-0.5 rounded-full" style="background-color: ${typeColor};">${target.type}</span>
-                        </h4>
-                        
-                        <div class="relative inline-block text-left target-dropdown-container">
-                            <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-primary" id="dropdownMenuButton-${target.id}" aria-expanded="true" aria-haspopup="true" onclick="this.nextElementSibling.classList.toggle('hidden')">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            
-                            <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-10">
-                                <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownMenuButton-${target.id}">
-                                    ${actionDropdown}
-                                    <div class="border-t border-gray-100"></div>
-                                    <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Edit Details </a>
-                                    <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"> Delete Target </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    // NEW: photo thumbnail HTML (if a photo exists)
+    const photoHtml = target.photoDataUrl
+        ? `
+            <div class="mt-3">
+                <img
+                    src="${target.photoDataUrl}"
+                    alt="Target photo"
+                    class="h-24 w-auto rounded-md border border-gray-200 object-cover"
+                >
+            </div>
+        `
+        : '';
+
+    return `
+        <div class="bg-white p-4 rounded-xl shadow-lg border-l-4" style="border-left-color: ${typeColor};">
+            <div class="flex justify-between items-start mb-2">
+                <h4 class="text-xl font-bold text-gray-800 flex items-center">
+                    <i class="${typeIcon} mr-2 text-lg" style="color: ${typeColor};"></i>
+                    ${target.description}
+                    <span class="ml-3 text-sm text-white font-semibold px-2 py-0.5 rounded-full" style="background-color: ${typeColor};">${target.type}</span>
+                </h4>
+                
+                <div class="relative inline-block text-left target-dropdown-container">
+                    <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-primary" id="dropdownMenuButton-${target.id}" aria-expanded="true" aria-haspopup="true" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
                     
-                    <p class="text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center ${statusClass}">
-                        ${statusIcon} ${target.status}
-                    </p>
-
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t border-gray-100">
-                        <div>
-                            <strong class="text-gray-500">Target ID:</strong>
-                            <span class="text-gray-800">${target.vdi}</span>
-                        </div>
-                        <div>
-                            <strong class="text-gray-500">Depth:</strong>
-                            <span class="text-gray-800">${target.depth}</span>
-                        </div>
-                        <div>
-                            <strong class="text-gray-500">Accuracy:</strong>
-                            <span class="text-gray-800">${target.accuracy && target.accuracy !== 'N/A' ? target.accuracy + 'm' : 'N/A'}</span>
-                        </div>
-                        <div>
-                            <strong class="text-gray-500">Coords:</strong>
-                            <span class="text-gray-800 break-all">${target.coordinates.split(',')[0] || target.coordinates}...</span>
-                        </div>
-
-                        <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
-                            Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
+                    <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-10">
+                        <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownMenuButton-${target.id}">
+                            ${actionDropdown}
+                            <div class="border-t border-gray-100"></div>
+                            <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Edit Details </a>
+                            <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"> Delete Target </a>
                         </div>
                     </div>
                 </div>
-            `;
-        }
-// --- MAP ZOOM & PAN STATE ---
+            </div>
+            
+            <p class="text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center ${statusClass}">
+                ${statusIcon} ${target.status}
+            </p>
+
+            ${photoHtml}
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t border-gray-100">
+                <div>
+                    <strong class="text-gray-500">Target ID:</strong>
+                    <span class="text-gray-800">${target.vdi}</span>
+                </div>
+                <div>
+                    <strong class="text-gray-500">Depth:</strong>
+                    <span class="text-gray-800">${target.depth}</span>
+                </div>
+                <div>
+                    <strong class="text-gray-500">Accuracy:</strong>
+                    <span class="text-gray-800">${target.accuracy && target.accuracy !== 'N/A' ? target.accuracy + 'm' : 'N/A'}</span>
+                </div>
+                
+                <div>
+                    <strong class="text-gray-500">Coords:</strong>
+                    <span class="text-gray-800 break-all">${target.coordinates.split(',')[0] || target.coordinates}...</span>
+                </div>
+
+                <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
+                    Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
+                </div>
+            </div>
+        </div>
+    `;
+}
+/ --- MAP ZOOM & PAN STATE ---
 
 let mapZoom = 1;
 let mapOffsetX = 0; // in %
