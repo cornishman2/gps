@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoFind Log - Metal Detecting Survey Log</title>
+    <title>Finds 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -65,11 +65,8 @@
                     <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Home">
                         <i class="fas fa-home text-xl"></i>
                     </button>
-                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Surveys">
-                        <i class="fas fa-map-marked-alt text-xl"></i>
-                    </button>
-                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Finds">
-                        <i class="fas fa-gem text-xl"></i>
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Targets">
+                        <i class="fas fa-bullseye text-xl"></i>
                     </button>
                     <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Compass">
                         <i class="fas fa-compass text-xl"></i>
@@ -343,25 +340,15 @@
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
                     </div>
                 </div>
-                
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse justify-between">
-                    <div class="flex space-x-3">
-                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white sm:ml-3 sm:w-auto sm:text-sm"
+
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeEditTargetModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
                             style="background-color: rgb(var(--color-secondary));">
-                            Save Changes
-                        </button>
-                        <button type="button" onclick="closeEditTargetModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">
-                            Cancel
-                        </button>
-                    </div>
-                    
-                    <button type="button" 
-                        onclick="logTargetAsFind(document.getElementById('edit-target-id').value, document.getElementById('edit-survey-id').value);"
-                        class="mt-3 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-yellow-500 text-base font-medium text-white hover:bg-yellow-600 sm:mt-0 sm:w-auto sm:text-sm">
-                        <i class="fas fa-archive mr-1"></i> Log as Find
+                        Save Target Changes
                     </button>
                 </div>
-                </form>
+            </form>
         </div>
     </div>
     
@@ -395,11 +382,11 @@
         // --- GLOBAL STATE & INITIALIZATION ---
         
 // --- GLOBAL STATE & INITIALIZATION ---
-        const STORAGE_KEY = 'geoFindLogData'; // Key for localStorage
         let surveys = [];
         let currentPage = 'Home';
-        let isMapFullscreen = false; 
-        let targetWatchId = null; 
+        let isMapFullscreen = false; // <--- ADD THIS LINE
+        // --- GLOBAL STATE ---
+        let targetWatchId = null; // <--- ADD THIS to track the specific GPS process for the modal
         
         // Profile initialized with default data
         let userProfile = {
@@ -407,10 +394,6 @@
             detector: "Default Machine"
         };
         let userId;
-        
-        // *** NEW: Permanent Finds Storage ***
-        let finds = []; 
-        // ************************************
 
       // --- NEW REAL-TIME LOCATION STATE ---
         let autoRefreshIntervalId = null; 
@@ -522,10 +505,7 @@ function initialBearingDegrees(lat1Deg, lon1Deg, lat2Deg, lon2Deg) {
  * precision:
  * 4  -> N, E, S, W
  * 8  -> N, NE, E, SE, S, SW, W, NW
- * 16 -> N, NNE, NE, ENE,
- * E, ESE, SE, SSE,
- * S, SSW, SW, WSW,
- * W, WNW, NW, NNW (default)
+ * 16 -> N, NNE, NE, ENE, E, ... (default)
  */
 function bearingToCompassPoint(bearingDeg, precision = 16) {
     const dirs =
@@ -541,161 +521,486 @@ function bearingToCompassPoint(bearingDeg, precision = 16) {
               ];
 
     const step = 360 / dirs.length;
-    const normalised = ((bearingDeg % 360) + 360) % 360; // Ensure positive
-    const index = Math.floor((normalised + step / 2) / step) % dirs.length;
+    const normalised = ((bearingDeg % 360) + 360) % 360; // 0..360
+    const index = Math.round(normalised / step) % dirs.length;
     return dirs[index];
 }
 
-/** Generates a simple, unique ID. */
+/** Clamps a number between a minimum and maximum value. */
+const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
+/** Calculates the diameter (in meters) for the confidence circle: Accuracy * 2. */
+function getCircleDiameter(accuracyInMeters) {
+    if (typeof accuracyInMeters === 'number' && accuracyInMeters > 0) {
+        return (accuracyInMeters * 2).toFixed(1); // Diameter = 2 * radius
+    }
+    return 'N/A';
+}
+
+// --- MOVEMENT & GUIDANCE HELPER FUNCTIONS ---
+
+/**
+ * Records a new smoothed movement sample.
+ * Called from the live map GPS watch each time we get a reading.
+ */
+function recordMovementSample(lat, lon, time) {
+    // 1. Update smoothed position
+    updateSmoothedUserCoords(lat, lon);
+    
+    // 2. Add the smoothed position to the history
+    movementHistory.push({
+        lat: smoothedUserCoords.lat,
+        lon: smoothedUserCoords.lon,
+        time: time
+    });
+
+    // 3. Trim the history to the max length
+    if (movementHistory.length > MOVEMENT_HISTORY_MAX_LENGTH) {
+        movementHistory.shift();
+    }
+}
+
+/**
+ * Computes the bearing of recent movement based on the movementHistory array.
+ * Returns:
+ * - a bearing in degrees [0, 360) if we have enough motion
+ * - null if we don't have enough recent movement yet
+ */
+function computeMovementBearingDegrees() {
+    if (!movementHistory || movementHistory.length < 2) {
+        return null;
+    }
+
+    const now = Date.now();
+    // Keep only samples from the recent window
+    movementHistory = movementHistory.filter(p => now - p.time <= MOVEMENT_HISTORY_MAX_AGE_MS);
+
+    if (movementHistory.length < 2) {
+        return null;
+    }
+
+    const first = movementHistory[0];
+    const last = movementHistory[movementHistory.length - 1];
+
+    // Distance moved in metres (use existing distanceMeters helper)
+    const dist = distanceMeters(first.lat, first.lon, last.lat, last.lon);
+
+    if (dist < MOVEMENT_MIN_DISTANCE_METERS) {
+        // Too little movement to get a stable direction
+        return null;
+    }
+
+    // Bearing of travel from first point in history to the most recent
+    return initialBearingDegrees(first.lat, first.lon, last.lat, last.lon);
+}
+
+// --- END GEOGRAPHY HELPER FUNCTIONS ---
+
+// --- HELPER FUNCTIONS ---
+
+/** Generates a simple unique ID. */
 function generateId() {
-    return 'id_' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
 }
 
-// --- DATA MANAGEMENT (LOAD/SAVE/INIT) ---
+/**
+ * Formats a distance in meters to a human-readable string.
+ * @param {number} meters
+ * @returns {string}
+ */
+function formatDistance(meters) {
+    if (meters === null || meters === undefined) return 'N/A';
+    if (meters < 100) {
+        return `${meters.toFixed(1)} m`;
+    } else if (meters < 1000) {
+        return `${Math.round(meters)} m`;
+    } else {
+        return `${(meters / 1000).toFixed(2)} km`;
+    }
+}
 
-/** Loads data from local storage, or initializes default data. */
-function loadDataFromLocalStorage() {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    
-    if (savedData) {
-        try {
-            const importedData = JSON.parse(savedData);
-            surveys = importedData.surveys || [];
-            userProfile = importedData.profile || {};
-            userId = importedData.userId || generateId();
-            // *** NEW: Load Finds Data ***
-            finds = importedData.finds || []; 
-            // ****************************
-        } catch (e) {
-            console.error("Error parsing local storage data:", e);
-            // Fallback to initial data if parsing fails
-            initializeDefaultData();
+/**
+ * Converts a Date or timestamp to a formatted date/time string.
+ * @param {number|Date} dateIn
+ * @returns {string}
+ */
+function formatDateTime(dateIn) {
+    const date = new Date(dateIn);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Capitalizes the first letter of a string.
+ * @param {string} string
+ * @returns {string}
+ */
+function capitalizeFirstLetter(string) {
+    if (!string) return '';
+    return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+}
+
+/**
+ * Finds a target by its ID across all surveys.
+ * @param {string} targetId 
+ * @returns {{target: Object, survey: Object}|null}
+ */
+function findTargetAndSurveyById(targetId) {
+    for (const survey of surveys) {
+        const target = survey.targets.find(t => t.id === targetId);
+        if (target) {
+            return { target, survey };
         }
-    } else {
-        initializeDefaultData();
     }
+    return null;
 }
 
-/** Initializes default survey and profile data. */
-function initializeDefaultData() {
-    surveys = [];
-    userProfile = { name: 'New User', detector: 'Not Set' };
-    userId = generateId();
-    finds = []; // NEW: Initialize finds array
-    // Optionally, add a sample survey for first-time users:
-    /*
-    const sampleSurvey = {
-        id: generateId(),
-        name: "Sample Hunt (Read Only)",
-        description: "A demonstration survey to show how the app works.",
-        status: "Active",
-        creationDate: Date.now() - 86400000, // 1 day ago
-        dateLastChanged: Date.now(),
-        targets: [
-            // Sample targets...
-        ]
-    };
-    surveys.push(sampleSurvey);
-    */
-    saveSurveysToLocalStorage();
-}
+// --- LOCAL STORAGE FUNCTIONS ---
 
-/** Saves the current surveys and user profile to local storage. */
+/** Saves the current surveys and profile to Local Storage. */
 function saveSurveysToLocalStorage() {
-    const dataToSave = {
-        surveys: surveys,
-        profile: userProfile,
-        userId: userId,
-        // *** NEW: Save Finds Data ***
-        finds: finds 
-        // ****************************
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-}
-
-// --- MODAL & TOAST FUNCTIONS ---
-
-/** Shows a temporary notification toast. */
-function showMessage(message, type = 'info', duration = 3000) {
-    const toast = document.getElementById('message-toast');
-    toast.textContent = message;
-    
-    // Set color based on type
-    toast.classList.remove('bg-red-500', 'bg-green-500', 'bg-blue-500');
-    if (type === 'error') {
-        toast.classList.add('bg-red-500');
-    } else if (type === 'success') {
-        toast.classList.add('bg-green-500');
-    } else {
-        toast.classList.add('bg-blue-500');
+    try {
+        localStorage.setItem('GeoFindSurveys', JSON.stringify(surveys));
+        localStorage.setItem('GeoFindProfile', JSON.stringify(userProfile));
+        localStorage.setItem('GeoFindUserId', userId);
+        console.log("Data saved to Local Storage.");
+    } catch (e) {
+        console.error("Error saving to Local Storage:", e);
+        showMessage("Error saving data. Some changes may not be permanent.", 'error');
     }
-
-    // Show the toast
-    toast.classList.remove('opacity-0', 'pointer-events-none');
-    
-    // Hide the toast after duration
-    setTimeout(() => {
-        toast.classList.add('opacity-0', 'pointer-events-none');
-    }, duration);
 }
 
-/** Shows the confirmation modal. */
-function showConfirmation(title, message, callback) {
-    document.getElementById('confirm-title').textContent = title;
-    document.getElementById('confirm-message').textContent = message;
-    
-    const modal = document.getElementById('confirmation-modal');
-    const yesBtn = document.getElementById('confirm-yes-btn');
-    const noBtn = document.getElementById('confirm-no-btn');
-    
-    // Clear previous listeners
-    const newYesBtn = yesBtn.cloneNode(true);
-    yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
-    
-    const newNoBtn = noBtn.cloneNode(true);
-    noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+/** Loads data from Local Storage, initializing with sample data if none exists. */
+function loadDataFromLocalStorage() {
+    try {
+        const storedSurveys = localStorage.getItem('GeoFindSurveys');
+        const storedProfile = localStorage.getItem('GeoFindProfile');
+        const storedUserId = localStorage.getItem('GeoFindUserId');
 
-    // Attach new listeners
-    newYesBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
-        callback(true);
-    });
-    newNoBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
-        callback(false);
-    });
+        if (storedSurveys) {
+            surveys = JSON.parse(storedSurveys);
+        } else {
+            // Initialize with sample data if nothing is found
+            userProfile = { name: "Sample Detectorist", detector: "Minelab Equinox" };
+            surveys = [ { id: generateId(), name: "The Old Field", description: "First hunt of the year. Focus on the SW corner.", status: "Open", creationDate: Date.now() - 86400000, dateLastChanged: Date.now(), targets: [ { id: generateId(), description: "King George III Halfpenny", vdi: "28", depth: "6in", type: "Coin", status: "Target Found", time: Date.now() - 3600000, coordinates: "50.256800, -5.234500", accuracy: "1.5", user: userProfile.name, detector: userProfile.detector, centerOnMap: true, targetPhotoData: '' // Placeholder for photo data }, { id: generateId(), description: "Musket Ball", vdi: "15", depth: "8in", type: "Relic", status: "Hole Dug", time: Date.now() - 7200000, coordinates: "50.257200, -5.234000", accuracy: "3.2", user: userProfile.name, detector: userProfile.detector, centerOnMap: true, targetPhotoData: '' }, { id: generateId(), description: "Strong Signal - Unidentified", vdi: "20", depth: "4in", type: "Unidentified", status: "Signal Detected", time: Date.now() - 100000, coordinates: "50.257000, -5.234100", accuracy: "2.1", user: userProfile.name, detector: userProfile.detector, centerOnMap: true, targetPhotoData: '' }, { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.256700, -5.234800", accuracy: "10.0", user: userProfile.name, detector: userProfile.detector, centerOnMap: false, targetPhotoData: '' } ] } ];
+        }
 
-    modal.style.display = 'block';
+        if (storedProfile) {
+            // Update userProfile only if storedProfile exists and is valid
+            const tempProfile = JSON.parse(storedProfile);
+            if (tempProfile && tempProfile.name && tempProfile.detector) {
+                userProfile = tempProfile;
+            }
+        } else {
+            // Re-initialize sample profile if needed
+            userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox" };
+        }
+
+        if (storedUserId) {
+            userId = storedUserId;
+        } else {
+            userId = generateId();
+        }
+
+        saveSurveysToLocalStorage(); // Ensure initial data and ID are saved
+    } catch (e) {
+        console.error("Error loading from Local Storage:", e);
+        showMessage("Error loading data. Data may be reset.", 'error');
+        // Fallback to fresh start if corrupted
+        surveys = [];
+        userProfile = { name: "New User", detector: "Default Machine" };
+        userId = generateId();
+    }
 }
 
-function closeNewSurveyModal() {
-    document.getElementById('new-survey-modal').style.display = 'none';
-}
+// --- GPS GEOLOCATION FUNCTIONS ---
 
-function closeNewTargetModal() {
-    document.getElementById('new-target-modal').style.display = 'none';
-    // Clean up photo fields
-    document.getElementById('target-photo-data').value = '';
-    document.getElementById('target-photo-status').textContent = 'No photo captured yet.';
-    document.getElementById('target-photo-preview').src = '';
-    document.getElementById('target-photo-preview-wrapper').classList.add('hidden');
-    
-    // Stop the GPS watcher for the modal
+/**
+ * Starts a high-accuracy GPS stream that updates the target logging modal's
+ * inputs only when a reading is more accurate than the current best.
+ */
+function startTargetLocationWatch(form) {
+    // Clear any previous watch
     if (targetWatchId !== null) {
         navigator.geolocation.clearWatch(targetWatchId);
         targetWatchId = null;
     }
+
+    const coordsInput = form['targetCoords'];
+    const accuracyInput = document.getElementById('target-accuracy');
+    const accuracyDisplay = document.getElementById('gps-accuracy-display');
+    const loadingIndicator = document.getElementById('gps-loading-indicator');
+
+    let bestAccuracy = Infinity;
+
+    // Show loading UI
+    loadingIndicator.classList.remove('hidden');
+    accuracyDisplay.classList.add('hidden');
+
+    targetWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const { latitude, longitude, accuracy } = position.coords;
+
+            // Only update if the new reading is better than the current best (plus a small buffer)
+            if (accuracy < bestAccuracy - 0.5) { 
+                bestAccuracy = accuracy;
+
+                coordsInput.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                accuracyInput.value = accuracy.toFixed(1);
+
+                accuracyDisplay.querySelector('span').textContent = `${accuracy.toFixed(1)}m`;
+                accuracyDisplay.classList.remove('hidden');
+                loadingIndicator.classList.add('hidden');
+            } else if (bestAccuracy === Infinity) {
+                 // If this is the first successful reading, display it
+                bestAccuracy = accuracy;
+
+                coordsInput.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                accuracyInput.value = accuracy.toFixed(1);
+
+                accuracyDisplay.querySelector('span').textContent = `${accuracy.toFixed(1)}m`;
+                accuracyDisplay.classList.remove('hidden');
+                loadingIndicator.classList.add('hidden');
+            }
+            
+            console.log(`Target GPS: Lat: ${latitude}, Lon: ${longitude}, Acc: ${accuracy.toFixed(1)}m (Best: ${bestAccuracy.toFixed(1)}m)`);
+        },
+        (error) => {
+            console.error('Target GPS Watch Error:', error);
+            coordsInput.value = 'Error fetching location.';
+            accuracyInput.value = 'N/A';
+            loadingIndicator.classList.add('hidden');
+            accuracyDisplay.classList.remove('hidden');
+            accuracyDisplay.querySelector('span').textContent = 'Error';
+            showMessage('Could not get GPS location. Try manually entering coordinates.', 'error');
+            stopTargetLocationWatch();
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 0, // No caching
+            timeout: 15000 
+        }
+    );
+    
+    console.log('Target Location Watch started with ID:', targetWatchId);
 }
 
-function closeEditTargetModal() {
-    document.getElementById('edit-target-modal').style.display = 'none';
+/** Stops the GPS stream for the target logging modal. */
+function stopTargetLocationWatch() {
+    if (targetWatchId !== null) {
+        navigator.geolocation.clearWatch(targetWatchId);
+        targetWatchId = null;
+        console.log('Target Location Watch stopped.');
+        
+        // Reset the UI elements for the GPS input in the new target modal
+        const loadingIndicator = document.getElementById('gps-loading-indicator');
+        const coordsInput = document.getElementById('target-coords');
+        
+        if (loadingIndicator) loadingIndicator.classList.add('hidden');
+        if (coordsInput && coordsInput.value === 'Requesting location...') {
+             coordsInput.value = 'No GPS logged';
+        }
+    }
 }
 
-function closeEditProfileModal() {
-    document.getElementById('edit-profile-modal').style.display = 'none';
+
+/** Starts the high-accuracy GPS stream that updates the map in real-time. */
+function startLiveMapLocationWatch() {
+    // 1. Clear any existing watch
+    if (liveMapWatchId !== null) {
+        navigator.geolocation.clearWatch(liveMapWatchId);
+        liveMapWatchId = null;
+        console.log('Previous Live Map GPS Watch stopped.');
+    }
+    
+    // 2. Clear any existing auto-refresh interval
+    if (autoRefreshIntervalId !== null) {
+        clearInterval(autoRefreshIntervalId);
+        autoRefreshIntervalId = null;
+    }
+    
+    // Reset best accuracy for new session
+    bestLiveAccuracy = Infinity; 
+    
+    // 3. Start the high-accuracy watch position
+    liveMapWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const { latitude, longitude, accuracy } = position.coords;
+            
+            // Update global state immediately
+            currentUserCoords = { lat: latitude, lon: longitude };
+            currentUserAccuracy = accuracy;
+            bestLiveAccuracy = Math.min(bestLiveAccuracy, accuracy);
+            
+            // Record smoothed movement sample
+            recordMovementSample(latitude, longitude, Date.now());
+
+            // Check if we need to manually trigger a re-render or if the interval will catch it
+            // We only need to force a render if we are currently on the Compass page
+            if (currentPage === 'Compass') {
+                 // The interval will handle the regular updates, but a very fast first fix
+                 // or a massive accuracy jump might warrant an immediate refresh.
+                 // For simplicity and efficiency, we rely on the interval.
+            }
+
+            console.log(
+                `Live Map position: ${currentUserCoords.lat.toFixed(6)}, ` + 
+                `${currentUserCoords.lon.toFixed(6)} (acc: ${accuracy.toFixed(1)}m, best: ${bestLiveAccuracy.toFixed(1)}m)`
+            );
+            if (smoothedUserCoords) {
+                console.log(
+                    `Live Map position (smoothed): ${smoothedUserCoords.lat.toFixed(6)}, ` + 
+                    `${smoothedUserCoords.lon.toFixed(6)}`
+                );
+            }
+        },
+        (error) => {
+            currentUserCoords = null;
+            currentUserAccuracy = null;
+            smoothedUserCoords = null;
+            console.error('Live Map GPS Watch Error:', error);
+            // On error, let the interval and render logic handle displaying "No GPS"
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 0 // No caching
+        }
+    );
+
+    // 4. Start the auto-refresh interval (if not already running)
+    if (autoRefreshIntervalId === null) {
+        autoRefreshIntervalId = setInterval(() => {
+            updateMapWithUserLocationAndRender();
+        }, 3000); // 3 seconds is a good balance for a moving map
+        console.log('Live Map GPS Watch and auto-refresh interval started.');
+    }
 }
 
-// --- FORM HANDLERS (New Target / New Survey) ---
+/** Stops the live map GPS stream and the refresh interval. */
+function stopLiveMapLocationWatch() {
+    if (liveMapWatchId !== null) {
+        navigator.geolocation.clearWatch(liveMapWatchId);
+        liveMapWatchId = null;
+        console.log('Live Map GPS Watch stopped.');
+    }
+    
+    if (autoRefreshIntervalId !== null) {
+        clearInterval(autoRefreshIntervalId);
+        autoRefreshIntervalId = null;
+        console.log('Auto-refresh interval stopped.');
+    }
+    
+    // Clear the current GPS data
+    currentUserCoords = null;
+    currentUserAccuracy = null;
+    smoothedUserCoords = null;
+    bestLiveAccuracy = Infinity;
+    movementHistory = []; // Reset movement history on stop
+}
+
+
+/** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
+function updateMapWithUserLocationAndRender() {
+    // The GPS data is updated asynchronously by startLiveMapLocationWatch().
+    // We just trigger the re-render here.
+    const appContent = document.getElementById('app-content');
+    
+    // Only re-render if we are still on the Compass page
+    if (currentPage === 'Compass') {
+        appContent.innerHTML = renderCompassPage(true);
+        attachPageEventListeners();
+    }
+}
+
+
+// --- MODAL & TOAST FUNCTIONS ---
+
+/** Shows a temporary notification toast. */
+function showMessage(message, type = 'info') {
+    const toast = document.getElementById('message-toast');
+    if (!toast) return;
+
+    // Reset classes
+    toast.className = 'fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 pointer-events-none';
+
+    let bgColor;
+    switch (type) {
+        case 'success':
+            bgColor = 'bg-green-500';
+            break;
+        case 'error':
+            bgColor = 'bg-red-500';
+            break;
+        case 'warning':
+            bgColor = 'bg-yellow-500';
+            break;
+        case 'info':
+        default:
+            bgColor = 'bg-blue-500';
+    }
+
+    toast.classList.add(bgColor);
+    toast.textContent = message;
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    toast.style.pointerEvents = 'auto'; // Re-enable pointer events while visible
+
+    setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+        toast.style.pointerEvents = 'none'; // Disable pointer events when fading out
+    }, 4000);
+}
+
+
+/**
+ * Shows the Confirmation Modal.
+ * @param {string} title
+ * @param {string} message
+ * @param {Function} onConfirm Callback function to execute on 'Yes'.
+ * @param {string} confirmBtnText Text for the confirm button.
+ */
+function showConfirmationModal(title, message, onConfirm, confirmBtnText = 'Yes, Proceed') {
+    const modal = document.getElementById('confirmation-modal');
+    const titleEl = document.getElementById('confirm-title');
+    const messageEl = document.getElementById('confirm-message');
+    const yesBtn = document.getElementById('confirm-yes-btn');
+    const noBtn = document.getElementById('confirm-no-btn');
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    yesBtn.textContent = confirmBtnText;
+
+    // Remove old listeners from the yes button before adding a new one
+    const newYesBtn = yesBtn.cloneNode(true);
+    yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+    
+    // Add new listener for 'Yes'
+    newYesBtn.addEventListener('click', () => {
+        onConfirm();
+        closeConfirmationModal();
+    });
+    
+    // Add new listener for 'Cancel' (No)
+    noBtn.onclick = closeConfirmationModal;
+
+    modal.style.display = 'block';
+}
+
+/** Closes the Confirmation Modal. */
+function closeConfirmationModal() {
+    document.getElementById('confirmation-modal').style.display = 'none';
+}
+
+/** Shows the New Survey Modal. */
+function showNewSurveyModal() {
+    document.getElementById('new-survey-form').reset();
+    document.getElementById('new-survey-modal').style.display = 'block';
+}
+
+/** Closes the New Survey Modal. */
+function closeNewSurveyModal() {
+    document.getElementById('new-survey-modal').style.display = 'none';
+}
 
 /** Handles the submission of the New Survey form. */
 function handleNewSurveySubmit(event) {
@@ -742,44 +1047,155 @@ function handleNewSurveySubmit(event) {
 /** Shows the New Target Modal. */
 function showNewTargetModal() {
     const openSurvey = surveys.find(s => s.status === 'Open');
-
+    
     if (!openSurvey) {
         return showMessage('Cannot log target. Please open a survey first on the Home page.', 'warning');
     }
 
     // 1. Set survey name in the modal header
     document.getElementById('current-target-survey-name').textContent = openSurvey.name;
-    
-    // 2. Clear previous data and reset photo preview
-    document.getElementById('new-target-form').reset();
-    document.getElementById('target-photo-data').value = '';
+
+    // 2. Reset the form and default values
+    const form = document.getElementById('new-target-form');
+    form.reset(); 
+    document.getElementById('target-coords').value = 'Requesting location...';
     document.getElementById('target-photo-status').textContent = 'No photo captured yet.';
-    document.getElementById('target-photo-preview').src = '';
+    document.getElementById('target-photo-data').value = '';
     document.getElementById('target-photo-preview-wrapper').classList.add('hidden');
-    
-    // 3. Start GPS tracking for the new target modal
-    startTargetLocationWatch();
+    document.getElementById('gps-accuracy-display').classList.add('hidden');
+    document.getElementById('target-center-yes').checked = true; // Default to Yes
+
+    // 3. Start high-accuracy GPS watch
+    if ('geolocation' in navigator) {
+        startTargetLocationWatch(form);
+    } else {
+        document.getElementById('target-coords').value = 'GPS not supported.';
+        showMessage('GPS not supported by this device.', 'error');
+    }
 
     // 4. Show the modal
     document.getElementById('new-target-modal').style.display = 'block';
 }
 
-/** Handles the submission (save) of the New Target form. */
+/** Closes the New Target Modal. */
+function closeNewTargetModal() {
+    stopTargetLocationWatch(); // Stop the GPS watch
+    document.getElementById('new-target-modal').style.display = 'none';
+}
+
+/** Triggers the hidden file input for the New Target modal. */
+function triggerTargetPhotoInput() {
+    document.getElementById('target-photo-input').click();
+}
+
+/** Handles file selection/camera capture for the New Target modal. */
+function handleTargetPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements for the NEW modal
+    const statusSpan = document.getElementById('target-photo-status');
+    const previewWrapper = document.getElementById('target-photo-preview-wrapper');
+    const previewImg = document.getElementById('target-photo-preview');
+    const hiddenField = document.getElementById('target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // Using Data URL conversion. 
+    // Note: The 'capture=camera' attribute in the HTML is often what helps trigger the camera,
+    // and specifying 'image/*' is important. Restricting the file size here is often best
+    // done in a dedicated image compression function, but for this simpler app, 
+    // we rely on the device/browser's camera settings for resolution, and accept 
+    // large files, as trying to scale/compress in-browser often causes issues with 
+    // camera captures on some devices.
+    // The input's accept="image/*" attribute provides enough file type restriction.
+
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+/** Triggers the hidden file input for the Edit Target modal. */
+function triggerEditTargetPhotoInput() {
+    document.getElementById('edit-target-photo-input').click();
+}
+
+/** Handles file selection/camera capture for the Edit Target modal. */
+function handleEditTargetPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements for the EDIT modal
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    // Reset UI if no file selected
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan) statusSpan.textContent = 'New photo captured.';
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+/** Handles the submission of the New Target form. */
 function handleNewTargetSubmit(event) {
     event.preventDefault();
-    const form = document.getElementById('new-target-form');
-    
+    const form = event.target;
+
+    // 🔹 Use the actual form field *names* from the HTML
     const newDescription = form['targetDescription'].value.trim();
     const newVDI = form['targetVDI'].value.trim() || 'N/A';
     const newDepth = form['targetDepth'].value.trim() || 'Unknown';
     const newType = form['targetType'].value;
     const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
-    const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
+    // IMPORTANT: Fetch accuracy from the hidden field, not the display paragraph
+    const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A'; 
     const centerOnMapValue = form['targetCenterOnMap'].value;
     const centerOnMap = centerOnMapValue === 'Yes';
-
-    // GET PHOTO DATA FROM HIDDEN INPUT
+    
+    // *** CRITICAL ADDITION 1: GET PHOTO DATA FROM HIDDEN INPUT ***
     const newPhotoData = form['targetPhotoData'].value || '';
+    // *************************************************************
     
     if (!newDescription) {
         showMessage('Description / Find Name is required.', 'error');
@@ -804,125 +1220,34 @@ function handleNewTargetSubmit(event) {
         user: userProfile.name,
         detector: userProfile.detector,
         centerOnMap: centerOnMap,
-        
-        // SAVE PHOTO DATA TO THE NEW TARGET
-        targetPhotoData: newPhotoData 
+        // *** CRITICAL ADDITION 2: SAVE PHOTO DATA TO THE NEW TARGET ***
+        targetPhotoData: newPhotoData
+        // *************************************************************
     };
 
     openSurvey.targets.unshift(newTarget);
     openSurvey.dateLastChanged = Date.now();
-
     saveSurveysToLocalStorage();
     closeNewTargetModal();
     showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
     render();
 }
 
-
-// --- PHOTO HANDLING FUNCTIONS (New Target) ---
-function triggerTargetPhotoInput() {
-    document.getElementById('target-photo-input').click();
-}
-
-function handleTargetPhotoSelected(event) {
-    const fileInput = event.target;
-    const file = fileInput.files[0];
-    
-    // References to UI elements for the NEW target modal
-    const statusSpan = document.getElementById('target-photo-status');
-    const previewWrapper = document.getElementById('target-photo-preview-wrapper');
-    const previewImg = document.getElementById('target-photo-preview');
-    const hiddenField = document.getElementById('target-photo-data');
-
-    if (!file) {
-        if (hiddenField) hiddenField.value = '';
-        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        return;
-    }
-
-    // Use FileReader to convert the file to a Base64 data URL
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        if (hiddenField) hiddenField.value = dataUrl;
-        if (statusSpan) statusSpan.textContent = 'Photo captured.';
-        if (previewImg) previewImg.src = dataUrl;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-    };
-    reader.onerror = () => {
-        console.error('Error reading photo file:', reader.error);
-        showMessage('Could not read the photo file.', 'error');
-        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-    };
-    reader.readAsDataURL(file);
-}
-
-// --- PHOTO HANDLING FUNCTIONS (Edit Target) ---
-function triggerEditTargetPhotoInput() {
-    document.getElementById('edit-target-photo-input').click();
-}
-
-function handleEditTargetPhotoSelected(event) {
-    const fileInput = event.target;
-    const file = fileInput.files[0];
-
-    // References to UI elements for the EDIT modal
-    const statusSpan = document.getElementById('edit-target-photo-status');
-    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
-    const previewImg = document.getElementById('edit-target-photo-preview');
-    const hiddenField = document.getElementById('edit-target-photo-data');
-
-    if (!file) {
-        // Do not clear the hidden field if a file is not selected, as it may hold the existing photo
-        if (statusSpan) statusSpan.textContent = 'Existing photo loaded.';
-        return;
-    }
-
-    // Use FileReader to convert the file to a Base64 data URL
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        if (hiddenField) hiddenField.value = dataUrl;
-        if (statusSpan) statusSpan.textContent = 'New photo captured.';
-        if (previewImg) previewImg.src = dataUrl;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-    };
-    reader.onerror = () => {
-        console.error('Error reading photo file:', reader.error);
-        showMessage('Could not read the photo file.', 'error');
-        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
-        // On error, we keep the old data in the hidden field, but hide the preview
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-    };
-    reader.readAsDataURL(file);
-}
-
-
-// --- EDIT AND CONVERSION HANDLERS ---
-
-/** Shows the Edit Target Modal. */
+/** Shows the Edit Target Modal and loads target data. */
 function showEditTargetModal(targetId, surveyId) {
     const survey = surveys.find(s => s.id === surveyId);
-    const target = survey ? survey.targets.find(t => t.id === targetId) : null;
+    const target = survey?.targets.find(t => t.id === targetId);
 
     if (!target) {
         return showMessage('Error: Target not found.', 'error');
     }
 
-    // 1. Set data in the form fields
-    const form = document.getElementById('edit-target-form');
-    
-    // Set hidden IDs
-    document.getElementById('edit-target-id').value = target.id;
-    document.getElementById('edit-survey-id').value = survey.id;
-    
-    // Set display name
+    const modal = document.getElementById('edit-target-modal');
     document.getElementById('current-edit-survey-name').textContent = survey.name;
 
-    // Set standard fields
+    // Set values in the form
+    document.getElementById('edit-target-id').value = target.id;
+    document.getElementById('edit-survey-id').value = survey.id;
     document.getElementById('edit-target-description').value = target.description;
     document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
     document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
@@ -930,10 +1255,13 @@ function showEditTargetModal(targetId, surveyId) {
     document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
     document.getElementById('edit-target-accuracy').value = target.accuracy === 'N/A' ? '' : target.accuracy;
 
-    // Populate Centre on Map radio buttons (Robust Check)
+
+    // NEW: Populate Centre on Map radio buttons (Robust Check)
     const shouldCenterOnMap = target.centerOnMap === true;
     const yesRadio = document.getElementById('edit-target-center-yes');
     const noRadio = document.getElementById('edit-target-center-no');
+    
+    // Check if the elements exist before trying to set properties
     if (yesRadio && noRadio) {
         yesRadio.checked = shouldCenterOnMap;
         noRadio.checked = !shouldCenterOnMap;
@@ -944,7 +1272,7 @@ function showEditTargetModal(targetId, surveyId) {
     const statusSpan = document.getElementById('edit-target-photo-status');
     const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
     const previewImg = document.getElementById('edit-target-photo-preview');
-    const hiddenField = document.getElementById('edit-target-photo-data'); // name="targetPhotoData"
+    const hiddenField = document.getElementById('edit-target-photo-data');
 
     // Load existing photo data if it's a valid, non-empty string (Base64 data is usually > 50 chars)
     if (photoData && typeof photoData === 'string' && photoData.length > 50) {
@@ -953,138 +1281,1129 @@ function showEditTargetModal(targetId, surveyId) {
         if (previewWrapper) previewWrapper.classList.remove('hidden');
         if (statusSpan) statusSpan.textContent = 'Existing photo loaded. Click "Take / Choose Photo" to replace.';
     } else {
-        // Explicitly hide preview and clear fields if no valid photo data
+        // Explicitly hide preview and clear fields if no valid photo data exists
         if (hiddenField) hiddenField.value = '';
         if (previewImg) previewImg.src = '';
         if (previewWrapper) previewWrapper.classList.add('hidden');
         if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
     }
-    // --- END PHOTO LOGIC ---
+    // ------------------------------------
 
-    // 2. Attach the submit listener (must be re-attached as a safety measure)
-    form.removeEventListener('submit', handleEditTargetSubmit);  
-    form.addEventListener('submit', handleEditTargetSubmit); 
+    modal.style.display = 'block';
+}
 
-    // 3. Display the modal
-    document.getElementById('edit-target-modal').style.display = 'block';
+/** Closes the Edit Target Modal. */
+function closeEditTargetModal() {
+    document.getElementById('edit-target-modal').style.display = 'none';
 }
 
 /** Handles the submission of the Edit Target form. */
 function handleEditTargetSubmit(event) {
-    event.preventDefault(); 
+    event.preventDefault();
     const form = event.target;
-    
-    // Use the actual form field names from the HTML for the hidden IDs
-    const targetId = form['targetId'].value; 
-    const surveyId = form['surveyId'].value; 
 
-    // Retrieve fields
+    // 🔹 Use the actual form field *names* from the HTML
+    const targetId = form['targetId']?.value;
+    const surveyId = form['surveyId']?.value;
+
+    if (!targetId || !surveyId) {
+        showMessage('Error: Target or Survey not found (missing IDs).', 'error');
+        return;
+    }
+
     const newDescription = form['targetDescription'].value.trim();
     if (!newDescription) {
         showMessage('Description / Find Name is required.', 'error');
         return;
     }
+
     const newVDI = form['targetVDI'].value.trim() || 'N/A';
     const newDepth = form['targetDepth'].value.trim() || 'Unknown';
     const newType = form['targetType'].value;
     const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
     const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
-    
-    // Retrieve radio button value safely
-    const checkedRadio = form.querySelector('input[name="editTargetCenterOnMap"]:checked');
-    const centerOnMapValue = checkedRadio ? checkedRadio.value : 'No';
-    const centerOnMap = centerOnMapValue === 'Yes';
-    
-    // Get photo data from the hidden input
-    const newPhotoData = form['targetPhotoData'].value || ''; 
+    // The name attribute for the edit modal's radio buttons is 'editTargetCenterOnMap'
+    const centerOnMapValue = form['editTargetCenterOnMap'].value; 
+    const centerOnMap = centerOnMapValue === 'Yes'; 
+
+    // *** CRITICAL ADDITION 3: GET PHOTO DATA FROM HIDDEN INPUT (Edit Modal) ***
+    const newPhotoData = form['targetPhotoData'].value || '';
+    // *************************************************************************
 
     const survey = surveys.find(s => s.id === surveyId);
-    const target = survey ? survey.targets.find(t => t.id === targetId) : null;
+    const targetIndex = survey?.targets.findIndex(t => t.id === targetId);
 
-    if (target && survey) {
-        // Update the target object properties
+    if (survey && targetIndex !== -1) {
+        // Update the target object in place
+        const target = survey.targets[targetIndex];
         target.description = newDescription;
         target.vdi = newVDI;
         target.depth = newDepth;
         target.type = newType;
         target.coordinates = newCoords;
         target.accuracy = newAccuracy;
-        target.targetPhotoData = newPhotoData; 
-        
-        // Logic to enforce single 'Centre on map' setting
-        if (centerOnMap && Array.isArray(survey.targets)) {
-            survey.targets.forEach(t => {
-                if (t.id !== targetId) {
-                    t.centerOnMap = false;
-                }
-            });
-        }
         target.centerOnMap = centerOnMap;
+        target.targetPhotoData = newPhotoData; // Save photo data
 
         survey.dateLastChanged = Date.now();
         saveSurveysToLocalStorage();
         closeEditTargetModal();
-        showMessage(`Target ${target.description} updated successfully.`, 'success');
-        render();
+        showMessage(`Target (${newDescription}) changes saved!`, 'success');
+        render(); // Re-render the page to reflect changes
     } else {
-        showMessage('Error: Target or Survey data missing. Cannot save changes.', 'error');
+        showMessage('Error: Could not find target to update.', 'error');
     }
 }
 
-// --- NEW FIND CONVERSION FUNCTION ---
 
-/** Converts a Target object to a permanent Find object. */
-function logTargetAsFind(targetId, surveyId) {
-    const survey = surveys.find(s => s.id === surveyId);
-    const target = survey ? survey.targets.find(t => t.id === targetId) : null;
+/** Shows the Edit Profile Modal and loads current data. */
+function showEditProfileModal() {
+    document.getElementById('profile-name').value = userProfile.name;
+    document.getElementById('profile-detector').value = userProfile.detector;
+    document.getElementById('edit-profile-modal').style.display = 'block';
+}
 
+/** Closes the Edit Profile Modal. */
+function closeEditProfileModal() {
+    document.getElementById('edit-profile-modal').style.display = 'none';
+}
+
+/** Handles the submission of the Edit Profile form. */
+function handleEditProfileSubmit(event) {
+    event.preventDefault();
+    const form = event.target;
+    const newName = form['profileName'].value.trim();
+    const newDetector = form['profileDetector'].value.trim();
+
+    if (!newName || !newDetector) {
+        showMessage('Name and Detector fields are required.', 'error');
+        return;
+    }
+
+    userProfile.name = newName;
+    userProfile.detector = newDetector;
+    saveSurveysToLocalStorage(); // Saves the updated profile
+    closeEditProfileModal();
+    showMessage('Profile changes saved!', 'success');
+    render(); // Re-render to update profile everywhere
+}
+
+// --- TARGET ACTIONS ---
+
+/**
+ * Handles actions taken on a specific target (e.g., change status, edit, delete).
+ * @param {HTMLElement} element The button or link clicked.
+ */
+function handleTargetAction(element) {
+    const action = element.dataset.action;
+    const targetId = element.dataset.id;
+    const surveyId = element.dataset.surveyId;
+    
+    const { target, survey } = findTargetAndSurveyById(targetId) || {};
+    
     if (!target) {
-        return showMessage('Error: Target not found to log as find.', 'error');
+        return showMessage('Target not found!', 'error');
+    }
+
+    const executeAction = () => {
+        switch (action) {
+            case 'setStatus':
+                const newStatus = element.dataset.status;
+                target.status = newStatus;
+                survey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                showMessage(`Target '${target.description}' status updated to ${newStatus}.`, 'info');
+                render(); // Re-render Targets page
+                break;
+            case 'edit':
+                showEditTargetModal(targetId, surveyId);
+                break;
+            case 'delete':
+                survey.targets = survey.targets.filter(t => t.id !== targetId);
+                survey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                showMessage(`Target '${target.description}' permanently deleted.`, 'success');
+                render(); // Re-render Targets page
+                break;
+            case 'navigate':
+                 // If already navigating to this target, clear it
+                if (navigationTargetId === targetId) {
+                    clearNavigationTarget();
+                } else {
+                    navigationTargetId = targetId;
+                    showMessage(`Navigation started to '${target.description}'. Go to Compass tab.`, 'info');
+                }
+                // Force a re-render of the current page to update button state
+                render(); 
+                break;
+            default:
+                showMessage(`Unknown action: ${action}`, 'error');
+        }
+    };
+    
+    if (action === 'delete') {
+        showConfirmationModal(
+            'Delete Target Confirmation',
+            `Are you sure you want to permanently delete the target: "${target.description}"? This cannot be undone.`,
+            executeAction,
+            'Yes, Delete It'
+        );
+    } else {
+        executeAction();
+    }
+}
+
+// --- SURVEY ACTIONS ---
+
+/**
+ * Handles actions taken on a survey (e.g., open, close, archive).
+ * @param {HTMLElement} element The button or link clicked.
+ */
+function handleSurveyAction(element) {
+    const action = element.dataset.action;
+    const id = element.dataset.id;
+    const name = element.dataset.name;
+
+    const survey = surveys.find(s => s.id === id);
+    if (!survey) return;
+
+    const executeAction = () => {
+        const now = Date.now();
+        switch (action) {
+            case 'open':
+                // Close any currently open survey first
+                surveys.forEach(s => {
+                    if (s.status === 'Open') {
+                        s.status = 'Active';
+                        s.dateLastChanged = now;
+                    }
+                });
+                survey.status = 'Open';
+                showMessage(`Survey '${name}' is now OPEN.`, 'success');
+                break;
+            case 'close':
+                survey.status = 'Active';
+                showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
+                break;
+            case 'archive':
+                survey.status = 'Archived';
+                showMessage(`Survey '${name}' has been Archived.`, 'success');
+                break;
+            case 'unarchive':
+                survey.status = 'Active'; // Unarchiving sets it to Active/Closed
+                showMessage(`Survey '${name}' has been Restored.`, 'success');
+                break;
+            case 'delete':
+                 // Actual deletion logic
+                surveys = surveys.filter(s => s.id !== id);
+                showMessage(`Survey '${name}' and all its targets permanently deleted.`, 'success');
+                break;
+            default:
+                showMessage(`Unknown survey action: ${action}`, 'error');
+        }
+
+        if (action !== 'delete') {
+             // Only update date if not deleted
+            survey.dateLastChanged = now;
+        }
+
+        saveSurveysToLocalStorage();
+        render();
+    };
+
+    if (action === 'delete') {
+        showConfirmationModal(
+            'Permanent Deletion Confirmation',
+            `Are you sure you want to permanently delete the survey: "${name}" and all ${survey.targets.length} targets within it? This cannot be undone.`,
+            executeAction,
+            'Yes, Delete Survey'
+        );
+    } else {
+        executeAction();
+    }
+}
+
+// --- NAVIGATION TARGET FUNCTIONS ---
+
+/** Clears the currently selected navigation target. */
+function clearNavigationTarget() {
+    navigationTargetId = null;
+    showMessage('Navigation cleared.', 'info');
+    render(); // Re-render to update the navigation UI
+}
+
+// --- RENDERING FUNCTIONS ---
+
+/** Renders the content based on the current page. */
+function render() {
+    const appContent = document.getElementById('app-content');
+    
+    // Clear the auto-refresh and stop GPS watch when leaving the Compass page
+    if (currentPage !== 'Compass') {
+        stopLiveMapLocationWatch();
+    } else {
+         // Start GPS watch only when navigating to the Compass page
+         // The interval will also be started here.
+         if (liveMapWatchId === null) {
+            startLiveMapLocationWatch();
+         }
+    }
+
+    let content = '';
+    switch (currentPage) {
+        case 'Home':
+            content = renderHomePage();
+            break;
+        case 'Targets':
+            content = renderTargetsPage();
+            break;
+        case 'Compass':
+            // Renders the page and starts the map logic/interval within startLiveMapLocationWatch
+            content = renderCompassPage();
+            break;
+        case 'Settings':
+            content = renderSettingsPage();
+            break;
+        default:
+            content = renderHomePage();
+            currentPage = 'Home';
+    }
+
+    appContent.innerHTML = content;
+    attachPageEventListeners();
+}
+
+/** Attaches event listeners that are required after rendering page content. */
+function attachPageEventListeners() {
+    // Universal event listeners for modals/forms
+    document.getElementById('new-survey-form')?.addEventListener('submit', handleNewSurveySubmit);
+    document.getElementById('new-target-form')?.addEventListener('submit', handleNewTargetSubmit);
+    document.getElementById('edit-target-form')?.addEventListener('submit', handleEditTargetSubmit);
+    document.getElementById('edit-profile-form')?.addEventListener('submit', handleEditProfileSubmit);
+    
+    // Universal listener for 'Add Target' button (only appears on Home/Targets)
+    const addTargetBtn = document.getElementById('add-target-btn');
+    if (addTargetBtn) {
+        addTargetBtn.addEventListener('click', showNewTargetModal);
     }
     
-    // Confirm with user before logging permanently
-    showConfirmation(
-        "Confirm Log as Find",
-        `Are you sure you want to permanently log "${target.description}" as a Find? It will be copied to the Finds section and marked as complete in this survey.`,
-        (confirmed) => {
-            if (confirmed) {
-                // 1. Create the new permanent find record
-                const newFind = {
-                    id: generateId(), 
-                    originalTargetId: target.id,
-                    originalSurveyId: survey.id,
-                    dateLogged: Date.now(),
+    // For Settings Page (Export/Import Buttons)
+    const exportBtn = document.getElementById('export-data-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportData);
+    }
+    const importBtn = document.getElementById('import-data-btn');
+    if (importBtn) {
+        importBtn.addEventListener('click', importData);
+    }
+    
+}
 
-                    // Copy all relevant target properties
-                    description: target.description,
-                    type: target.type,
-                    vdi: target.vdi,
-                    depth: target.depth,
-                    coordinates: target.coordinates,
-                    accuracy: target.accuracy,
-                    user: target.user,
-                    targetPhotoData: target.targetPhotoData,
+// --- PAGE RENDER FUNCTIONS ---
 
-                    // Optional: Add fields specific to a Find (to be edited later)
-                    findMaterial: 'Unknown',
-                    findDating: 'Unknown',
-                    findNotes: 'Logged from survey target.'
-                };
+/** Renders the content for the Home (Surveys) page. */
+function renderHomePage() {
+    // Sort surveys: Open first, then by last changed date (newest first)
+    const sortedSurveys = [...surveys].sort((a, b) => {
+        if (a.status === 'Open' && b.status !== 'Open') return -1;
+        if (a.status !== 'Open' && b.status === 'Open') return 1;
+        return b.dateLastChanged - a.dateLastChanged;
+    });
 
-                // 2. Add to the global finds array
-                finds.unshift(newFind);
+    const openSurvey = sortedSurveys.find(s => s.status === 'Open');
+    const hasArchived = sortedSurveys.some(s => s.status === 'Archived');
+    
+    const secondaryColor = `rgb(var(--color-secondary))`;
 
-                // 3. Update the original target's status
-                target.status = 'Logged as Find';
+    let surveyListHtml = sortedSurveys.map(survey => {
+        const lastChanged = formatDateTime(survey.dateLastChanged);
+        let statusBadge = '';
+        let actions = '';
 
-                // 4. Save and Update UI
-                saveSurveysToLocalStorage();
-                closeEditTargetModal();
-                showMessage(`Target "${target.description}" has been successfully logged as a permanent Find!`, 'success');
-                currentPage = 'Finds'; // Automatically show the new Finds screen
-                render();
+        switch (survey.status) {
+            case 'Open':
+                statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN (Active)</span>`;
+                actions = `
+                    <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
+                    <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                `;
+                break;
+            case 'Active': // Active but Closed
+                statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
+                 // 'Open' button uses the secondary (green) color via inline style
+                actions = `
+                    <button class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm hover:opacity-90" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}" style="background-color: ${secondaryColor};">Open</button>
+                    <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
+                `;
+                break;
+            case 'Archived':
+                // Only show if the user explicitly wants to see archived items
+                if (document.getElementById('show-archived-checkbox')?.checked !== true) return ''; 
+                statusBadge = `<span class="bg-gray-100 text-gray-500 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
+                actions = `
+                    <button class="survey-action-btn bg-blue-500 hover:bg-blue-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="unarchive" data-name="${survey.name}">Restore</button>
+                    <button class="survey-action-btn bg-red-800 hover:bg-red-900 p-2 text-white text-xs font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">DEL PERMANENTLY</button>
+                `;
+                break;
+        }
+
+        // Only show if not archived, OR if it is archived and the checkbox is checked (handled above by returning '')
+        
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-4 flex flex-col">
+                <div class="flex items-start justify-between">
+                    <h3 class="text-lg font-bold text-primary">${survey.name}</h3>
+                    ${statusBadge}
+                </div>
+                <p class="text-sm text-gray-600 mt-1">${survey.description}</p>
+                <div class="text-xs text-gray-500 mt-2">
+                    Logged Targets: <span class="font-semibold">${survey.targets.length}</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1 mb-3">
+                    Last Change: ${lastChanged}
+                </div>
+                <div class="flex flex-wrap space-x-2 pt-2 border-t border-gray-100">
+                    ${actions}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    if (surveyListHtml === '' && sortedSurveys.length > 0) {
+        surveyListHtml = `<p class="text-center text-gray-500 mt-8 p-4 bg-white rounded-xl shadow-md">All surveys are currently hidden as they are archived. Check 'Show Archived Surveys' to view.</p>`;
+    } else if (surveyListHtml === '') {
+        surveyListHtml = `<p class="text-center text-gray-500 mt-8 p-4 bg-white rounded-xl shadow-md">No surveys found. Click the button below to create your first survey!</p>`;
+    }
+    
+    // Checkbox for archived items
+    const archivedToggleHtml = hasArchived ? `
+        <div class="flex items-center mt-4 mb-4">
+            <input id="show-archived-checkbox" type="checkbox" onchange="render()"
+                   class="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary">
+            <label for="show-archived-checkbox" class="ml-2 block text-sm text-gray-700">Show Archived Surveys (${surveys.filter(s => s.status === 'Archived').length})</label>
+        </div>` : '';
+
+
+    return `
+        <div class="p-4">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 class="text-2xl font-extrabold text-gray-800">Your Surveys</h2>
+                    ${openSurvey ? `<p class="text-sm font-medium text-green-600 mt-1">Currently Open: <span class="font-bold">${openSurvey.name}</span></p>` : `<p class="text-sm font-medium text-red-600 mt-1">No survey is currently OPEN.</p>`}
+                </div>
+                <button onclick="showNewSurveyModal()" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                        style="background-color: rgb(var(--color-primary));">
+                    <i class="fas fa-plus-circle mr-1"></i> New Survey
+                </button>
+            </div>
+            
+            <button id="add-target-btn" 
+                    class="w-full mb-6 p-3 text-white font-bold rounded-lg shadow-lg hover:opacity-90 transition duration-150 ${openSurvey ? '' : 'opacity-50 cursor-not-allowed'}"
+                    style="background-color: rgb(var(--color-secondary));"
+                    ${openSurvey ? '' : 'disabled'}
+                    title="${openSurvey ? 'Log a new target for the open survey' : 'You must open a survey first'}">
+                <i class="fas fa-crosshairs mr-2"></i> Log New Target Now
+            </button>
+            
+            <h3 class="text-xl font-bold text-gray-700 border-b pb-2 mb-4">Survey List</h3>
+            
+            ${archivedToggleHtml}
+            
+            ${surveyListHtml}
+        </div>
+    `;
+}
+
+/** Renders the content for the Targets page. */
+function renderTargetsPage() {
+    // 1. Get the currently open survey
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    
+    // 2. If no survey is open, show a message
+    if (!openSurvey) {
+        return `
+            <div class="p-4">
+                 <h2 class="text-2xl font-extrabold text-gray-800 mb-6">Survey Targets</h2>
+                <div class="bg-yellow-100 p-4 rounded-xl shadow-md border border-yellow-300">
+                    <p class="font-semibold text-yellow-800">
+                        <i class="fas fa-exclamation-triangle mr-2"></i> No Active Survey.
+                    </p>
+                    <p class="text-sm text-yellow-700 mt-1">Please open a survey on the Home tab to view its targets.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    // 3. Prepare the list of targets (newest first)
+    const targets = [...openSurvey.targets].sort((a, b) => b.time - a.time);
+    const secondaryColor = `rgb(var(--color-secondary))`;
+
+    const targetListHtml = targets.map(target => {
+        let typeColor = 'bg-primary';
+        let typeIcon = 'fas fa-gem';
+        switch (target.type) {
+            case 'Coin': typeColor = 'bg-yellow-500'; typeIcon = 'fas fa-coins'; break;
+            case 'Ring': typeColor = 'bg-yellow-400'; typeIcon = 'fas fa-ring'; break;
+            case 'Jewelry': typeColor = 'bg-pink-500'; typeIcon = 'fas fa-gem'; break;
+            case 'Relic': typeColor = 'bg-red-500'; typeIcon = 'fas fa-shield-alt'; break;
+            case 'Modern Junk': typeColor = 'bg-gray-500'; typeIcon = 'fas fa-trash'; break;
+            case 'Iron Junk': typeColor = 'bg-gray-700'; typeIcon = 'fas fa-magnet'; break;
+            case 'Unidentified': typeColor = 'bg-purple-500'; typeIcon = 'fas fa-question'; break;
+        }
+
+        let statusClass = 'bg-green-100 text-green-800';
+        let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+        let actionDropdown = '';
+        
+        // Navigation button logic
+        const isNavigationTarget = navigationTargetId === target.id;
+        const navButtonClass = isNavigationTarget 
+            ? 'bg-red-500 hover:bg-red-600 text-white' 
+            : 'bg-indigo-500 hover:bg-indigo-600 text-white';
+        const navButtonText = isNavigationTarget ? '<i class="fas fa-route mr-1"></i> Stop Nav' : '<i class="fas fa-location-arrow mr-1"></i> Navigate';
+        const navButtonTitle = isNavigationTarget ? `Stop navigating to ${target.description}` : `Start navigating to ${target.description}`;
+
+
+        switch (target.status) {
+            case 'Signal Detected':
+                statusClass = 'bg-green-100 text-green-800';
+                actionDropdown = `
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                `;
+                break;
+            case 'Hole Dug':
+                statusClass = 'bg-yellow-100 text-yellow-800';
+                statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+                actionDropdown = `
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Target Found" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Target Found </a>
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                `;
+                break;
+            case 'Target Found':
+                statusClass = 'bg-blue-100 text-blue-800';
+                statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.152A1.498 1.498 0 001.636 10.43c.123.633.652 1.132 1.258 1.132h18.212c.606 0 1.135-.499 1.258-1.132A1.498 1.498 0 0011.049 2.152z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14v4M6 18h12"></path></svg>`; // A simple artifact icon
+                actionDropdown = `
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                `;
+                break;
+            case 'Signal Ignored':
+                statusClass = 'bg-gray-100 text-gray-800';
+                statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                 actionDropdown = `
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                    <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                `;
+                break;
+        }
+
+        // --- Target Photo Logic for Thumbnail ---
+        const photoData = target.targetPhotoData;
+        const hasPhoto = photoData && photoData.length > 50;
+        const photoHtml = hasPhoto 
+            ? `<img src="${photoData}" alt="Target Photo Thumbnail" class="w-16 h-16 object-cover rounded-md mr-4 border border-gray-300 shadow-sm">`
+            : `<div class="w-16 h-16 flex items-center justify-center bg-gray-100 rounded-md mr-4 text-gray-400 text-lg"><i class="fas fa-camera"></i></div>`;
+        // --- End Photo Logic ---
+
+
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-4">
+                
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start">
+                        ${photoHtml}
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">${target.description}</h3>
+                            <span class="${statusClass} text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-flex items-center">
+                                ${statusIcon} ${target.status}
+                            </span>
+                        </div>
+                    </div>
+                     <div class="relative inline-block text-left target-actions-dropdown">
+                        <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-primary" id="menu-button-${target.id}" aria-expanded="true" aria-haspopup="true">
+                            Actions
+                            <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+
+                        <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden" role="menu" aria-orientation="vertical" aria-labelledby="menu-button-${target.id}" tabindex="-1">
+                            <div class="py-1" role="none">
+                                ${actionDropdown}
+                                <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-blue-700 hover:bg-gray-100"> Edit Details </a>
+                                <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-survey-id="${openSurvey.id}" class="block px-4 py-2 text-sm text-red-700 hover:bg-gray-100"> Delete Target </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mt-3 border-t pt-3">
+                    <p><span class="font-semibold">Type:</span> <i class="${typeIcon} mr-1" style="color: ${typeColor}"></i> ${target.type}</p>
+                    <p><span class="font-semibold">Logged:</span> ${formatDateTime(target.time)}</p>
+                    <p><span class="font-semibold">T-ID:</span> ${target.vdi}</p>
+                    <p><span class="font-semibold">Depth:</span> ${target.depth}</p>
+                    <p class="col-span-2"><span class="font-semibold">User:</span> ${target.user} (${target.detector})</p>
+                    <p class="col-span-2"><span class="font-semibold">GPS:</span> ${target.coordinates} (Acc: ${target.accuracy}m)</p>
+                     <button onclick="handleTargetAction(this)" data-action="navigate" data-id="${target.id}" data-survey-id="${openSurvey.id}" title="${navButtonTitle}"
+                                class="col-span-2 mt-2 px-3 py-2 text-sm font-semibold rounded-md shadow-sm ${navButtonClass}">
+                            ${navButtonText}
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Logic to toggle the dropdown menus
+    document.querySelectorAll('.target-actions-dropdown > button').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.stopPropagation(); // Prevent the document listener from immediately closing it
+            const dropdown = this.nextElementSibling;
+            
+            // Close all other open dropdowns
+            document.querySelectorAll('.target-actions-dropdown > div').forEach(otherDropdown => {
+                if (otherDropdown !== dropdown) {
+                    otherDropdown.classList.add('hidden');
+                }
+            });
+
+            // Toggle the clicked dropdown
+            dropdown.classList.toggle('hidden');
+        });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(event) {
+        document.querySelectorAll('.target-actions-dropdown > div').forEach(dropdown => {
+            if (!dropdown.previousElementSibling.contains(event.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    });
+
+
+    return `
+        <div class="p-4">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 class="text-2xl font-extrabold text-gray-800">Targets: ${openSurvey.name}</h2>
+                    <p class="text-sm font-medium text-gray-600 mt-1">Total Logged: <span class="font-bold">${targets.length}</span></p>
+                </div>
+                <button id="add-target-btn" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                        style="background-color: ${secondaryColor};">
+                    <i class="fas fa-crosshairs mr-1"></i> Log New Target
+                </button>
+            </div>
+
+            ${targetListHtml.length > 0 ? targetListHtml : 
+                `<p class="text-center text-gray-500 mt-8 p-4 bg-white rounded-xl shadow-md">No targets have been logged for this survey yet. Click 'Log New Target' above to begin!</p>`
+            }
+        </div>
+    `;
+}
+
+
+// --- MAP/COMPASS FUNCTIONS (For renderCompassPage) ---
+
+/**
+ * Calculates the bounding box (min/max lat/lon) for all targets in the open survey.
+ * @param {Array<Object>} targets - The list of targets.
+ * @returns {{minLat: number, maxLat: number, minLon: number, maxLon: number}|null}
+ */
+function calculateMapBounds(targets) {
+    if (targets.length === 0) return null;
+
+    let minLat = Infinity, maxLat = -Infinity;
+    let minLon = Infinity, maxLon = -Infinity;
+
+    targets.forEach(target => {
+        const coordsMatch = target.coordinates.match(/(-?\d+\.\d+), (-?\d+\.\d+)/);
+        if (coordsMatch) {
+            const lat = parseFloat(coordsMatch[1]);
+            const lon = parseFloat(coordsMatch[2]);
+            
+            if (!isNaN(lat) && !isNaN(lon)) {
+                minLat = Math.min(minLat, lat);
+                maxLat = Math.max(maxLat, lat);
+                minLon = Math.min(minLon, lon);
+                maxLon = Math.max(maxLon, lon);
             }
         }
+    });
+
+    if (minLat === Infinity) return null;
+
+    // Add current user position to bounds if available and accurate
+    if (currentUserCoords && currentUserAccuracy !== null && currentUserAccuracy < 50) {
+        minLat = Math.min(minLat, currentUserCoords.lat);
+        maxLat = Math.max(maxLat, currentUserCoords.lat);
+        minLon = Math.min(minLon, currentUserCoords.lon);
+        maxLon = Math.max(maxLon, currentUserCoords.lon);
+    }
+    
+    // Safety check: if all targets are at the same point, expand slightly
+    if (minLat === maxLat) {
+        minLat -= 0.0001;
+        maxLat += 0.0001;
+    }
+    if (minLon === maxLon) {
+        minLon -= 0.0001;
+        maxLon += 0.0001;
+    }
+
+    return { minLat, maxLat, minLon, maxLon };
+}
+
+
+/**
+ * Renders the Compass/Map page content.
+ * @param {boolean} isRefresh - True if called from the auto-refresh interval.
+ */
+function renderCompassPage(isRefresh = false) {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    const primaryColor = `rgb(var(--color-primary))`;
+    const secondaryColor = `rgb(var(--color-secondary))`;
+
+    // 1. Check for open survey
+    if (!openSurvey) {
+        return `
+            <div class="p-4">
+                 <h2 class="text-2xl font-extrabold text-gray-800 mb-6">Live Compass & Map</h2>
+                <div class="bg-yellow-100 p-4 rounded-xl shadow-md border border-yellow-300">
+                    <p class="font-semibold text-yellow-800">
+                        <i class="fas fa-exclamation-triangle mr-2"></i> No Active Survey.
+                    </p>
+                    <p class="text-sm text-yellow-700 mt-1">Please open a survey on the Home tab to view its targets on the map.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    // 2. Navigation Target Display
+    let navTargetHtml = '';
+    const navTarget = navigationTargetId ? findTargetAndSurveyById(navigationTargetId)?.target : null;
+    
+    if (navTarget && currentUserCoords && smoothedUserCoords) {
+        const coordsMatch = navTarget.coordinates.match(/(-?\d+\.\d+), (-?\d+\.\d+)/);
+        if (coordsMatch) {
+            const targetLat = parseFloat(coordsMatch[1]);
+            const targetLon = parseFloat(coordsMatch[2]);
+            const userLat = smoothedUserCoords.lat;
+            const userLon = smoothedUserCoords.lon;
+            const targetAccuracy = parseFloat(navTarget.accuracy) || 10;
+            
+            const distMeters = distanceMeters(userLat, userLon, targetLat, targetLon);
+            const bearing = initialBearingDegrees(userLat, userLon, targetLat, targetLon);
+            const bearingStr = bearingToCompassPoint(bearing);
+            const distStr = formatDistance(distMeters);
+            
+            const inRange = distMeters < targetAccuracy; // Are we "on top" of the target?
+
+            // Estimate direction of travel
+            const movementBearing = computeMovementBearingDegrees();
+            let guidanceText = '...';
+            let guidanceIcon = '';
+            let guidanceClass = 'text-gray-600';
+
+            if (inRange) {
+                guidanceText = "You've reached the target area! Start searching.";
+                guidanceIcon = '<i class="fas fa-check-circle mr-1 text-green-600"></i> ';
+                guidanceClass = 'text-green-600 font-bold';
+            } else if (movementBearing !== null) {
+                // Determine relative direction: Ahead, Left, Right, Behind
+                let relativeBearing = movementBearing - bearing;
+                relativeBearing = ((relativeBearing % 360) + 360) % 360; // Normalize to [0, 360)
+                
+                if (relativeBearing < 45 || relativeBearing > 315) {
+                    guidanceText = 'Walk straight ahead (Bearing: ' + bearingStr + ')';
+                    guidanceIcon = '<i class="fas fa-arrow-up mr-1"></i> ';
+                    guidanceClass = 'text-green-600 font-semibold';
+                } else if (relativeBearing >= 45 && relativeBearing < 135) {
+                    guidanceText = 'Target is to your left-forward.';
+                    guidanceIcon = '<i class="fas fa-arrow-up-left mr-1"></i> ';
+                    guidanceClass = 'text-orange-600';
+                } else if (relativeBearing >= 135 && relativeBearing < 225) {
+                    guidanceText = 'Target is behind you (Bearing: ' + bearingStr + ')';
+                    guidanceIcon = '<i class="fas fa-arrow-down mr-1"></i> ';
+                    guidanceClass = 'text-red-600 font-semibold';
+                } else { // 225 to 315
+                    guidanceText = 'Target is to your right-forward.';
+                    guidanceIcon = '<i class="fas fa-arrow-up-right mr-1"></i> ';
+                    guidanceClass = 'text-orange-600';
+                }
+            } else {
+                 // No movement history, but not in range
+                guidanceText = `Walk towards ${bearingStr} (True Bearing: ${bearing.toFixed(0)}°)`;
+                guidanceIcon = '<i class="fas fa-arrow-up-right-dots mr-1"></i> ';
+            }
+
+            navTargetHtml = `
+                <div class="bg-white p-4 rounded-xl shadow-md border border-green-300 mb-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-semibold text-green-700">
+                            <i class="fas fa-location-arrow mr-2"></i> Navigation to: ${navTarget.description}
+                        </h3>
+                        <button class="px-2 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300" onclick="clearNavigationTarget()">
+                            Clear
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-700 mb-1">
+                        <span class="font-semibold">Distance:</span> ${distStr}
+                    </p>
+                    <p class="text-sm text-gray-700 mb-1">
+                        <span class="font-semibold">Target Bearing:</span> ${bearingStr} (${bearing.toFixed(0)}°)
+                    </p>
+                    
+                    <p class="text-sm mt-2 ${guidanceClass}">
+                        <span class="font-semibold">Guidance:</span> ${guidanceIcon}${guidanceText}
+                    </p>
+                    ${movementBearing === null && !inRange ? `
+                    <p class="text-xs text-gray-500 mt-1"> 
+                        Based on recent movement; walk a few metres to stabilise this guidance. 
+                    </p>` : ''}
+                </div>
+            `;
+        }
+    }
+
+
+    // 3. Current Location Status
+    let locationStatusHtml = '';
+    if (!('geolocation' in navigator)) {
+        locationStatusHtml = `<p class="text-red-600 font-semibold">GPS is not supported on this device.</p>`;
+    } else if (!currentUserCoords) {
+        locationStatusHtml = `<p class="text-yellow-600 font-semibold">Waiting for GPS signal...</p>
+        <p class="text-xs text-gray-500 mt-1">Please ensure location services are enabled.</p>`;
+    } else {
+        const accuracyClass = currentUserAccuracy < 5 ? 'text-green-600' : currentUserAccuracy < 15 ? 'text-orange-600' : 'text-red-600';
+        locationStatusHtml = `
+            <p class="text-sm text-gray-700 mb-1">
+                <span class="font-semibold">Position:</span> ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}
+            </p>
+            <p class="text-sm text-gray-700">
+                <span class="font-semibold">Accuracy:</span> 
+                <span class="${accuracyClass}">${currentUserAccuracy.toFixed(1)} m</span> (Best: ${bestLiveAccuracy.toFixed(1)} m)
+            </p>
+        `;
+        if (smoothedUserCoords && (currentUserCoords.lat !== smoothedUserCoords.lat || currentUserCoords.lon !== smoothedUserCoords.lon)) {
+             locationStatusHtml += `
+                 <p class="text-xs text-gray-500 mt-1">
+                    Map Position (Smoothed): ${smoothedUserCoords.lat.toFixed(6)}, ${smoothedUserCoords.lon.toFixed(6)} 
+                 </p>`;
+        }
+    }
+
+
+    // 4. Map Rendering Logic (SVG)
+    const targets = openSurvey.targets.filter(t => t.coordinates.match(/(-?\d+\.\d+), (-?\d+\.\d+)/));
+    const bounds = calculateMapBounds(targets);
+    
+    let mapHtml = '';
+    
+    if (bounds) {
+        // Constants for the map SVG dimensions (viewport in pixels)
+        const VIEWPORT_WIDTH = 400;
+        const VIEWPORT_HEIGHT = 400;
+        
+        // Padding/Margin in meters for the map bounds calculation
+        const PADDING_METERS = 10; 
+
+        // Calculate the total required span in meters
+        const maxSpanMeters = distanceMeters(bounds.minLat, bounds.minLon, bounds.maxLat, bounds.maxLon);
+        // The aspect ratio of the geographical area (not the SVG aspect ratio)
+        const mapCenterLat = (bounds.minLat + bounds.maxLat) / 2;
+        const widthMeters = distanceMeters(mapCenterLat, bounds.minLon, mapCenterLat, bounds.maxLon);
+        const heightMeters = distanceMeters(bounds.minLat, bounds.minLon, bounds.maxLat, bounds.minLon);
+        
+        // Determine the scale based on the limiting dimension and add padding
+        const PADDED_WIDTH_METERS = widthMeters + PADDING_METERS * 2;
+        const PADDED_HEIGHT_METERS = heightMeters + PADDING_METERS * 2;
+        
+        // Calculate scale factors (pixels per meter)
+        const scaleX = VIEWPORT_WIDTH / PADDED_WIDTH_METERS;
+        const scaleY = VIEWPORT_HEIGHT / PADDED_HEIGHT_METERS;
+        
+        // Use the smaller scale factor to ensure everything fits (i.e., min(scaleX, scaleY))
+        const scale = Math.min(scaleX, scaleY); 
+        
+        // Calculate the center of the bounding box in meters, relative to the minLat, minLon corner (origin)
+        const CENTER_X_M = widthMeters / 2;
+        const CENTER_Y_M = heightMeters / 2;
+        
+        // Determine the offset needed to center the content within the fixed-size viewport
+        const offsetX = (VIEWPORT_WIDTH - widthMeters * scale) / 2;
+        const offsetY = (VIEWPORT_HEIGHT - heightMeters * scale) / 2;
+
+        /**
+         * Converts a WGS84 coordinate to an SVG coordinate (Y is inverted for map rendering).
+         * @param {number} lat - Target latitude.
+         * @param {number} lon - Target longitude.
+         * @returns {{x: number, y: number}|null}
+         */
+        function toSvgCoords(lat, lon) {
+            if (!bounds || !scale) return null;
+
+            // 1. Calculate distance from the South-West corner (minLat, minLon)
+            const distXM = distanceMeters(bounds.minLat, bounds.minLon, bounds.minLat, lon);
+            const distYM = distanceMeters(bounds.minLat, bounds.minLon, lat, bounds.minLon);
+
+            // 2. Scale to pixels
+            const xScaled = distXM * scale;
+            const yScaled = distYM * scale;
+
+            // 3. Apply centering offset
+            let xSvg = xScaled + offsetX;
+            let ySvg = VIEWPORT_HEIGHT - (yScaled + offsetY); // Invert Y for screen coordinates (North is up)
+            
+            // 4. Clip to boundaries for safety, should mostly be covered by initial bounds calc.
+            xSvg = clamp(xSvg, 0, VIEWPORT_WIDTH);
+            ySvg = clamp(ySvg, 0, VIEWPORT_HEIGHT);
+            
+            return { x: xSvg, y: ySvg };
+        }
+
+
+        // Plot Targets
+        const targetMarkers = targets.map(target => {
+            const coordsMatch = target.coordinates.match(/(-?\d+\.\d+), (-?\d+\.\d+)/);
+            if (!coordsMatch) return '';
+
+            const lat = parseFloat(coordsMatch[1]);
+            const lon = parseFloat(coordsMatch[2]);
+            const svgCoords = toSvgCoords(lat, lon);
+            if (!svgCoords) return '';
+            
+            const radius = 5; // Fixed small radius for the target pin
+            const targetColor = navigationTargetId === target.id ? secondaryColor : primaryColor;
+            
+            // Confidence circle for the target's recorded GPS accuracy
+            const accuracyMeters = parseFloat(target.accuracy) || 5;
+            // Radius in SVG pixels: accuracy (in meters) * scale
+            const accuracyRadius = accuracyMeters * scale; 
+            
+            return `
+                <circle cx="${svgCoords.x}" cy="${svgCoords.y}" r="${accuracyRadius}" 
+                        fill="${targetColor}" fill-opacity="0.1" stroke="none" />
+                
+                <circle cx="${svgCoords.x}" cy="${svgCoords.y}" r="${radius}" 
+                        fill="${targetColor}" stroke="white" stroke-width="1.5"
+                        onclick="navigationTargetId='${target.id}'; updateMapWithUserLocationAndRender();"
+                        style="cursor: pointer;"
+                        title="${target.description} (Acc: ${target.accuracy}m)">
+                     <title>${target.description}</title>
+                </circle>
+            `;
+        }).join('');
+        
+        // Plot User Location
+        let userMarker = '';
+        let navLine = '';
+        
+        if (currentUserCoords && smoothedUserCoords) {
+            const userSvgCoords = toSvgCoords(smoothedUserCoords.lat, smoothedUserCoords.lon);
+            if (userSvgCoords) {
+                // User Confidence Circle
+                const userAccuracyRadius = currentUserAccuracy * scale;
+                userMarker += `
+                    <circle cx="${userSvgCoords.x}" cy="${userSvgCoords.y}" r="${userAccuracyRadius}" 
+                            fill="red" fill-opacity="0.1" stroke="none" />
+                            
+                    <circle cx="${userSvgCoords.x}" cy="${userSvgCoords.y}" r="6" 
+                            fill="blue" stroke="white" stroke-width="1.5" title="Your Live GPS Position" />
+                `;
+                
+                // Navigation Line (from User to Target)
+                if (navTarget) {
+                    const navCoordsMatch = navTarget.coordinates.match(/(-?\d+\.\d+), (-?\d+\.\d+)/);
+                    const targetAccuracy = parseFloat(navTarget.accuracy) || 10;
+                    const distMeters = distanceMeters(smoothedUserCoords.lat, smoothedUserCoords.lon, navTarget.lat, navTarget.lon);
+
+                    if (navCoordsMatch && distMeters >= targetAccuracy) { // Only draw if not "on top" of target
+                        const targetSvgCoords = toSvgCoords(parseFloat(navCoordsMatch[1]), parseFloat(navCoordsMatch[2]));
+                        if (targetSvgCoords) {
+                            navLine = `
+                                <line x1="${userSvgCoords.x}" y1="${userSvgCoords.y}" x2="${targetSvgCoords.x}" y2="${targetSvgCoords.y}"
+                                      stroke="#1e40af" stroke-width="2" stroke-dasharray="4" marker-end="url(#arrowhead)" />
+                            `;
+                        }
+                    }
+                }
+            }
+        }
+        
+        
+        mapHtml = `
+            <div class="bg-white p-2 rounded-xl shadow-md border border-gray-300">
+                <h3 class="text-xl font-bold text-gray-700 mb-2">Survey Plot</h3>
+                
+                <svg viewBox="0 0 ${VIEWPORT_WIDTH} ${VIEWPORT_HEIGHT}" width="100%" height="auto" class="border border-gray-200 bg-gray-50 rounded-lg">
+                    <defs>
+                        <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+                            <polygon points="0 0, 6 2, 0 4" fill="#1e40af" />
+                        </marker>
+                    </defs>
+                    
+                    ${navLine}
+                    ${targetMarkers}
+                    ${userMarker}
+                </svg>
+                
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 text-xs text-gray-600 mt-4">
+                    <h4 class="font-semibold mb-1">Plot & navigation notes</h4>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>The plot shows relative positions within the survey area. Targets are dots; your position is the blue circle.</li>
+                        <li><span class="font-semibold">North</span> is towards the top of the box, and <span class="font-semibold">East</span> is towards the right.</li>
+                        <li>Tap a target pin on the map to select it for navigation. The dashed line and arrow show direction from your GPS position to the target.</li>
+                        <li>When you are inside the target’s confidence circle, the navigation line is hidden as you are already “on top” of the target.</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+
+    } else if (targets.length > 0) {
+        mapHtml = `<div class="bg-yellow-100 p-4 rounded-xl shadow-md border border-yellow-300">
+            <p class="font-semibold text-yellow-800"><i class="fas fa-map-marked-alt mr-2"></i> Map Unavailable</p>
+            <p class="text-sm text-yellow-700 mt-1">Found ${targets.length} target(s) but their coordinates could not be parsed correctly or are all identical. Ensure coordinates are in 'LAT, LON' format (e.g., 50.2568, -5.2345).</p>
+        </div>`;
+    } else {
+         mapHtml = `<div class="bg-yellow-100 p-4 rounded-xl shadow-md border border-yellow-300">
+            <p class="font-semibold text-yellow-800"><i class="fas fa-map-marked-alt mr-2"></i> Map Unavailable</p>
+            <p class="text-sm text-yellow-700 mt-1">No targets with valid GPS coordinates are logged for this survey.</p>
+        </div>`;
+    }
+
+
+    return `
+        <div class="p-4">
+            <h2 class="text-2xl font-extrabold text-gray-800 mb-6">Live Compass & Map</h2>
+            
+            ${navTargetHtml}
+            
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-6">
+                <h3 class="text-xl font-bold text-primary mb-2">Your Live Location</h3>
+                ${locationStatusHtml}
+            </div>
+
+            ${mapHtml}
+        </div>
+    `;
+}
+
+/** Renders the content for the Settings page. */
+function renderSettingsPage() {
+    const secondaryColor = 'rgb(var(--color-secondary))';
+    return `
+        <div class="p-4">
+            <h2 class="text-2xl font-extrabold text-gray-800 mb-6">Settings & Profile</h2>
+
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-6">
+                <h3 class="text-xl font-bold text-primary mb-3 flex justify-between items-center">
+                    Detectorist Profile
+                    <button onclick="showEditProfileModal()" class="text-sm font-semibold text-blue-600 hover:text-blue-800">
+                         <i class="fas fa-edit mr-1"></i> Edit
+                    </button>
+                </h3>
+                <p class="text-gray-700 mb-2"><span class="font-semibold">Name:</span> ${userProfile.name}</p>
+                <p class="text-gray-700"><span class="font-semibold">Detector:</span> ${userProfile.detector}</p>
+            </div>
+            
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-6">
+                <h3 class="text-xl font-bold text-primary mb-4">Data Management</h3>
+                
+                <p class="text-sm text-gray-600 mb-4">Export or import your entire application data (surveys and profile) as a JSON file.</p>
+
+                <div class="mb-6 border-b pb-4">
+                    <h4 class="text-lg font-semibold text-gray-700 mb-2">Export Data</h4>
+                    <button id="export-data-btn" class="w-full px-4 py-3 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-primary));">
+                        <i class="fas fa-download mr-1"></i> Export Local Data
+                    </button>
+                    <textarea id="export-data-area" rows="8" readonly class="mt-4 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-xs"
+                              placeholder="Your exported JSON data will appear here after clicking 'Export Local Data'."></textarea>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-700 mb-2">Import Data</h4>
+                    <p class="text-sm text-red-600 mb-2 font-semibold">⚠️ WARNING: Importing data will completely overwrite all existing data in this app.</p>
+                    <textarea id="import-data-area" rows="8" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-xs"
+                              placeholder="Paste the JSON data from a previous export here."></textarea>
+                    <button id="import-data-btn" class="w-full mt-3 px-4 py-3 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        <i class="fas fa-upload mr-1"></i> Import & Overwrite Local Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// --- DATA MANAGEMENT FUNCTIONS ---
+
+/** Exports all data (surveys and profile) to a JSON string and displays it. */
+function exportData() {
+    const dataToExport = {
+        surveys: surveys,
+        profile: userProfile,
+        userId: userId,
+        exportDate: new Date().toISOString()
+    };
+    
+    const jsonString = JSON.stringify(dataToExport, null, 2);
+    const dataArea = document.getElementById('export-data-area');
+    
+    if (dataArea) {
+        dataArea.value = jsonString;
+        showMessage('Data exported successfully to the text area below.', 'success');
+        
+        // Optional: Trigger download as file
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `GeoFind_Export_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+}
+
+/** Imports data from the textarea and overwrites current local storage. */
+function importData() {
+    const dataArea = document.getElementById('import-data-area');
+    if (!dataArea || !dataArea.value.trim()) {
+        return showMessage('Please paste your exported JSON data into the text area.', 'error');
+    }
+    
+    const jsonString = dataArea.value.trim();
+    
+    showConfirmationModal(
+        'Confirm Data Import',
+        'Are you absolutely sure you want to import this data? This will permanently OVERWRITE all your current surveys and profile.',
+        () => {
+            try {
+                const importedData = JSON.parse(jsonString);
+                
+                if (!importedData.surveys || !Array.isArray(importedData.surveys) || !importedData.profile) {
+                    throw new Error('Missing "surveys" array or "profile" object in JSON.');
+                }
+
+                // Overwrite global state
+                surveys = importedData.surveys;
+                userProfile = importedData.profile;
+                userId = importedData.userId || generateId(); // Use existing ID or generate a new one
+                
+                saveSurveysToLocalStorage();
+                dataArea.value = ''; // Clear the input area
+                showMessage('Data successfully imported and saved!', 'success');
+                currentPage = 'Home'; // Navigate to home to show new data
+                render();
+            } catch (e) {
+                console.error("Import Error:", e);
+                showMessage(`Import failed: ${e.message || 'Invalid JSON format.'}`, 'error');
+            }
+        },
+        'Yes, Overwrite Data'
     );
 }
 
@@ -1109,250 +2428,6 @@ showMessage("Data loaded instantly from local storage.", 'success'); // Show ini
 // 2. Initial render call
 render();
 
-
-// --- RENDER FUNCTIONS (Page Content) ---
-
-/** Renders the content for the Home page (Survey Summary). */
-function renderHomePage() {
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    const secondaryColor = 'rgb(var(--color-secondary))';
-
-    let content = `
-        <div class="p-4 space-y-6">
-            <h2 class="text-3xl font-bold text-primary">Your Hunts</h2>
-    `;
-
-    // 1. Open Survey Card
-    if (openSurvey) {
-        const targetCount = openSurvey.targets.length;
-        content += `
-            <div class="bg-white p-6 rounded-xl shadow-lg border border-green-300">
-                <h3 class="text-xl font-bold text-secondary mb-2">Open Survey: ${openSurvey.name}</h3>
-                <p class="text-gray-600 mb-4">${openSurvey.description}</p>
-                <p class="text-sm font-semibold text-gray-700">Targets Logged: ${targetCount}</p>
-                <div class="mt-4 flex space-x-3">
-                    <button class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
-                            style="background-color: ${secondaryColor};" onclick="showNewTargetModal()">
-                        <i class="fas fa-plus-circle mr-1"></i> Log New Target
-                    </button>
-                    <button class="px-4 py-2 bg-yellow-500 text-black font-semibold rounded-lg shadow-md hover:bg-yellow-600 transition duration-150"
-                            onclick="handleSurveyAction(this)" data-id="${openSurvey.id}" data-action="close" data-name="${openSurvey.name}">
-                        <i class="fas fa-lock mr-1"></i> Close Survey
-                    </button>
-                </div>
-            </div>
-        `;
-    } else {
-        content += `
-            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-300 text-center">
-                <p class="text-lg text-gray-700 mb-4">No survey is currently open.</p>
-                <button class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
-                        style="background-color: ${secondaryColor};" onclick="showNewSurveyModal()">
-                    <i class="fas fa-plus-circle mr-1"></i> Start New Survey
-                </button>
-            </div>
-        `;
-    }
-
-    // 2. General Stats
-    const totalTargets = surveys.reduce((sum, s) => sum + s.targets.length, 0);
-    const totalFindsLogged = finds.length; // NEW: Find count
-    
-    content += `
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200">
-                <h4 class="text-sm font-medium text-gray-500">Total Targets</h4>
-                <p class="text-2xl font-bold text-primary">${totalTargets}</p>
-            </div>
-            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200">
-                <h4 class="text-sm font-medium text-gray-500">Permanent Finds</h4>
-                <p class="text-2xl font-bold text-primary">${totalFindsLogged}</p>
-            </div>
-        </div>
-    `;
-
-    content += `</div>`;
-    return content;
-}
-
-/** Renders the content for the Surveys (Targets) page. */
-function renderSurveysPage() {
-    // Logic for rendering surveys... (omitted for brevity, assume existing)
-    // NOTE: This function's full implementation is assumed to be in the user's file.
-    let content = `
-        <div class="p-4">
-            <h2 class="text-2xl font-bold mb-4 text-primary">All Surveys & Targets</h2>
-            <p class="text-gray-600 mb-6">View and manage all your historical and active hunts.</p>
-    `;
-    
-    if (surveys.length === 0) {
-        content += `<p class="text-gray-500">No surveys have been recorded yet.</p>`;
-    } else {
-        surveys.forEach(survey => {
-            const dateStr = new Date(survey.creationDate).toLocaleDateString();
-            const targetCount = survey.targets.length;
-            let statusBadge = '';
-            let actionButtons = '';
-            const surveyId = survey.id;
-
-            switch (survey.status) {
-                case 'Open':
-                    statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
-                    actionButtons = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                    `;
-                    break;
-                case 'Active': // Active but Closed
-                    statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">CLOSED</span>`;
-                    actionButtons = `
-                        <button class="survey-action-btn bg-green-500 hover:bg-green-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="open" data-name="${survey.name}">Re-Open</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                    `;
-                    break;
-                case 'Archived':
-                    statusBadge = `<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ARCHIVED</span>`;
-                    actionButtons = `
-                        <button class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="delete" data-name="${survey.name}">Delete</button>
-                    `;
-                    break;
-            }
-
-            content += `
-                <div class="mb-6 bg-white p-4 rounded-xl shadow-md border border-gray-200">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-lg font-bold text-primary">${survey.name} ${statusBadge}</h3>
-                        <div class="flex space-x-2">${actionButtons}</div>
-                    </div>
-                    <p class="text-sm text-gray-600 mb-1">Created: ${dateStr}</p>
-                    <p class="text-sm text-gray-600 mb-3">${targetCount} Target${targetCount !== 1 ? 's' : ''}</p>
-                    
-                    ${targetCount > 0 ? `
-                        <div class="mt-4 border-t border-gray-200 pt-3 space-y-2">
-                            ${survey.targets.map(target => renderTargetListItem(target, surveyId)).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
-    }
-
-    content += `</div>`;
-    return content;
-}
-
-
-/** Renders the Finds page content. */
-function renderFindsPage() {
-    return `
-        <div class="p-4">
-            <h2 class="text-2xl font-bold mb-4 text-primary">Your Permanent Finds</h2>
-            <p class="text-gray-600 mb-6">This database contains all targets you have successfully logged as permanent historical finds. Total Finds: ${finds.length}</p>
-            
-            ${finds.length === 0 ? '<p class="mt-4 text-center text-gray-500 text-lg p-6 bg-white rounded-lg shadow">No permanent finds have been logged yet. Use the "Log as Find" feature on a dug target to start your collection!</p>' : renderFindList()}
-        </div>
-    `;
-}
-
-/** Renders a list of finds (Minimal Placeholder) */
-function renderFindList() {
-    // This is a minimal placeholder for the list itself
-    return `<div class="space-y-3">` + finds.map(find => {
-        const dateStr = new Date(find.dateLogged).toLocaleDateString();
-        
-        return `
-            <div class="bg-white p-3 rounded-lg shadow-md border border-gray-200 flex items-center space-x-4">
-                ${find.targetPhotoData ? `<img src="${find.targetPhotoData}" class="w-16 h-16 object-cover rounded border border-gray-300 flex-shrink-0" alt="Find photo">` : `<div class="w-16 h-16 bg-gray-100 rounded flex items-center justify-center flex-shrink-0"><i class="fas fa-image text-gray-400"></i></div>`}
-                <div class="flex-grow">
-                    <div class="font-semibold text-lg text-primary">${find.description}</div>
-                    <div class="text-sm text-gray-600">Type: ${find.type || 'N/A'} | Logged: ${dateStr}</div>
-                </div>
-                <button class="px-3 py-1 bg-blue-500 text-white text-sm rounded-md shadow-sm hover:bg-blue-600 flex-shrink-0">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </div>
-        `;
-    }).join('') + `</div>`;
-}
-
-/** Renders the content for the Settings page. */
-function renderSettingsPage() {
-    const secondaryColor = 'rgb(var(--color-secondary))';
-    return `
-        <div class="p-4 space-y-6">
-            <h2 class="text-2xl font-bold text-primary mb-4">Data Management</h2>
-
-            <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                <h3 class="text-xl font-semibold text-gray-700 mb-3">Export Data</h3>
-                <p class="text-sm text-gray-600 mb-4">Export all your current survey, find, and profile data as a JSON file for backup or transfer.</p>
-                <button id="export-data-btn" onclick="exportData()" class="w-full px-4 py-2 bg-primary text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150">
-                    <i class="fas fa-download mr-1"></i> Export Data
-                </button>
-                <textarea id="export-data-area" rows="6" class="mt-4 w-full border border-gray-300 rounded-md p-2 text-sm hidden" readonly></textarea>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                <h3 class="text-xl font-semibold text-red-600 mb-3">Import Data</h3>
-                <p class="text-sm text-gray-600 mb-4">Paste previously exported JSON data here. This will OVERWRITE your current local data!</p>
-                <textarea id="import-data-area" rows="6" placeholder="Paste JSON data here..." class="mt-1 w-full border border-red-300 rounded-md p-2 text-sm focus:ring-red-500 focus:border-red-500"></textarea>
-                <button id="import-data-btn" onclick="importData()" class="w-full px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 transition duration-150">
-                    <i class="fas fa-upload mr-1"></i> Import & Overwrite Local Data
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-/** The main render function that updates the entire application content. */
-function render() {
-    const contentDiv = document.getElementById('app-content');
-    
-    // Update navigation button styles
-    document.querySelectorAll('.nav-btn').forEach(button => {
-        button.classList.remove('bg-gray-200'); // Remove active style from all
-        button.classList.remove('text-primary'); // Ensure current page is highlighted in primary color
-        button.classList.add('text-gray-500'); // Default color
-        
-        if (button.dataset.page === currentPage) {
-            button.classList.add('bg-gray-200'); // Active background
-            button.classList.remove('text-gray-500'); 
-            button.classList.add('text-primary'); // Active text color
-        }
-    });
-
-    switch (currentPage) {
-        case 'Home':
-            contentDiv.innerHTML = renderHomePage();
-            break;
-        case 'Surveys':
-            contentDiv.innerHTML = renderSurveysPage();
-            break;
-        // NEW: Finds Page Case
-        case 'Finds':
-            contentDiv.innerHTML = renderFindsPage();
-            break;
-        case 'Compass':
-            // contentDiv.innerHTML = renderCompassPage(); // Placeholder for compass logic
-            contentDiv.innerHTML = renderSettingsPage(); // Using Settings as placeholder until Compass is fully implemented
-            break;
-        case 'Profile':
-            // contentDiv.innerHTML = renderProfilePage(); // Placeholder
-            contentDiv.innerHTML = renderSettingsPage(); // Using Settings as placeholder
-            break;
-        case 'Settings':
-            contentDiv.innerHTML = renderSettingsPage();
-            break;
-        default:
-            contentDiv.innerHTML = renderHomePage();
-    }
-    
-    // Re-attach event listeners after rendering
-    attachPageEventListeners();
-}
-
-// ... (rest of the functions like renderTargetListItem, handleSurveyAction, etc., remain unchanged)
-// Assuming all other necessary helper functions like GPS, export, import, etc., are present in the full file.
-// The code provided is a complete file with the new functionality fully integrated.
     </script>
 </body>
 </html>
