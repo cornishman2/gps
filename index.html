@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo in finds 6  - Metal Detecting Survey Log</title>
+    <title>Photo in finds 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -848,11 +848,12 @@ function handleEditFindSubmit(event) {
     find.coordinates = form['findCoords'].value.trim();
     find.accuracy    = form['findAccuracy'].value.trim();
 
-    // NEW: photo for the Find (stored in same property as Targets)
-    const newPhotoData = form['findPhotoData']?.value || '';
-    find.targetPhotoData = newPhotoData;
+    // 🔹 NEW: update photo data from the hidden field
+    if (form['findPhotoData']) {
+        find.targetPhotoData = form['findPhotoData'].value || '';
+    }
 
-    // Optionally bump a last-modified timestamp on the find itself
+    // Optional last-modified timestamp
     find.updatedAt = Date.now();
 
     saveFindsToLocalStorage();
@@ -860,7 +861,6 @@ function handleEditFindSubmit(event) {
     showMessage('Find updated.', 'success');
     render();
 }
-
         function deleteFind(findId) {
     const find = finds.find(f => f.id === findId);
     if (!find) {
@@ -1081,7 +1081,8 @@ switch (currentPage) {
         }
 
         /** Attaches event listeners for dynamically rendered elements */
- function attachPageEventListeners() {
+/** Attaches event listeners for dynamically rendered elements */
+function attachPageEventListeners() {
     // Home Page (New Survey Button)
     const newSurveyBtn = document.getElementById('new-survey-btn');
     if (newSurveyBtn) {
@@ -1105,10 +1106,10 @@ switch (currentPage) {
     }
 
     // Finds Page (search + filters)
-    const findsSearchInput = document.getElementById('finds-search-input');
-    const findsTypeSelect  = document.getElementById('finds-type-select');
+    const findsSearchInput  = document.getElementById('finds-search-input');
+    const findsTypeSelect   = document.getElementById('finds-type-select');
     const findsSurveySelect = document.getElementById('finds-survey-select');
-    const clearFindsBtn    = document.getElementById('clear-finds-filters-btn');
+    const clearFindsBtn     = document.getElementById('clear-finds-filters-btn');
 
     if (findsSearchInput || findsTypeSelect || findsSurveySelect || clearFindsBtn) {
         if (findsSearchInput) {
@@ -1137,9 +1138,28 @@ switch (currentPage) {
         }
     }
 
- 
-}
+    // 🔹 Edit Find modal (this was missing in the 1648 file)
+    const editFindForm = document.getElementById('edit-find-form');
+    if (editFindForm) {
+        editFindForm.addEventListener('submit', handleEditFindSubmit);
+    }
 
+    const cancelEditFindBtn = document.getElementById('cancel-edit-find-btn');
+    if (cancelEditFindBtn) {
+        cancelEditFindBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditFindModal();
+        });
+    }
+
+    const closeEditFindBtn = document.getElementById('close-edit-find-btn');
+    if (closeEditFindBtn) {
+        closeEditFindBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditFindModal();
+        });
+    }
+}
         // --- GPS GEOLOCATION FUNCTIONS ---
         
    /** Starts a high-accuracy GPS stream that updates the inputs live. */
