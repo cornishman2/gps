@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds 8  - Metal Detecting Survey Log</title>
+    <title>Photo in finds 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2176,18 +2176,24 @@ function renderFindsPage() {
         return true;
     });
 
-    const cardsHtml = filteredFinds.map(find => {
-        const dateText = find.createdAt ? formatDate(find.createdAt) : '';
-        const typeLabel = find.type || 'Unknown';
-        const photoHtml = find.targetPhotoData
-            ? `
-                <div class="mt-3">
-                    <img src="${find.targetPhotoData}"
-                         alt="Find photo"
-                         class="w-full max-h-48 object-cover rounded-lg border border-gray-200" />
-                </div>
-              `
-            : '';
+const cardsHtml = filteredFinds.map(find => {
+    const dateText = find.createdAt ? formatDate(find.createdAt) : '';
+    const typeLabel = find.type || 'Unknown';
+
+    // Use whichever photo field is present on the Find
+    const photoSrc = find.targetPhotoData || find.photoData || '';
+
+    const photoHtml = photoSrc
+        ? `
+            <div class="mt-3">
+                <img
+                    src="${photoSrc}"
+                    alt="Find photo"
+                    class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
+                />
+            </div>
+          `
+        : '';
 
            return `
             <div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-gray-100">
