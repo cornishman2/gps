@@ -791,8 +791,8 @@ function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
-    // --- NEW: photo UI, mirroring Edit Target logic ---
-    const photoData      = find.targetPhotoData; // Finds reuse targetPhotoData field
+    // Photo UI
+    const photoData      = find.targetPhotoData;
     const statusSpan     = document.getElementById('edit-find-photo-status');
     const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
     const previewImg     = document.getElementById('edit-find-photo-preview');
@@ -810,27 +810,23 @@ function openEditFindModal(findId) {
         if (previewWrapper) previewWrapper.classList.add('hidden');
         if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
     }
-    // --- END NEW PHOTO UI ---
-
-    // --- END NEW PHOTO UI ---
-
-    // Attach the submit handler in the same pattern as Targets / Profile
-    form.removeEventListener('submit', handleEditFindSubmit);
-    form.addEventListener('submit', handleEditFindSubmit);
 
     // Show the modal
-    //modal.classList.remove('hidden');
-    //modal.classList.add('flex');
-    // Show the modal
-    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // IMPORTANT: Attach submit handler AFTER modal is visible
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(() => {
+        form.onsubmit = handleEditFindSubmit;
+    }, 0);
 }
-
-        function closeEditFindModal() {
+        
+    function closeEditFindModal() {
     const modal = document.getElementById('edit-find-modal');
     if (!modal) return;
-//    modal.classList.add('hidden');
-//    modal.classList.remove('flex');
-      modal.style.display = 'none';      
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
 
 function handleEditFindSubmit(event) {
