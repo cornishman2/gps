@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo in finds 11  - Metal Detecting Survey Log</title>
+    <title>Photo in finds 12  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -777,6 +777,12 @@ function openEditFindModal(findId) {
         showMessage('Find not found.', 'error');
         return;
     }
+function openEditFindModal(findId) {
+    const find = finds.find(f => f.id === findId);
+    if (!find) {
+        showMessage('Find not found.', 'error');
+        return;
+    }
 
     const modal = document.getElementById('edit-find-modal');
     const form  = document.getElementById('edit-find-form');
@@ -819,11 +825,51 @@ function openEditFindModal(findId) {
     modal.style.display = 'block';
 }
 
-    function closeEditFindModal() {
+    const modal = document.getElementById('edit-find-modal');
+    const form  = document.getElementById('edit-find-form');
+    if (!modal || !form) return;
+
+    // Core fields
+    form['findId'].value           = find.id;
+    form['findDescription'].value  = find.description || '';
+    form['findType'].value         = find.type || 'Unknown';
+    form['findVDI'].value          = find.vdi || '';
+    form['findDepth'].value        = find.depth || '';
+    form['findCoords'].value       = find.coordinates || '';
+    form['findAccuracy'].value     = find.accuracy || '';
+
+    // Photo UI (mirroring Edit Target logic)
+    const photoData      = find.targetPhotoData;
+    const statusSpan     = document.getElementById('edit-find-photo-status');
+    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
+    const previewImg     = document.getElementById('edit-find-photo-preview');
+    const hiddenField    = document.getElementById('edit-find-photo-data');
+
+    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
+        if (hiddenField)    hiddenField.value = photoData;
+        if (previewImg)     previewImg.src = photoData;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan)     statusSpan.textContent =
+            'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
+    } else {
+        if (hiddenField)    hiddenField.value = '';
+        if (previewImg)     previewImg.src = '';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
+    }
+
+    // Attach the submit handler in the same pattern as Targets / Profile
+    form.removeEventListener('submit', handleEditFindSubmit);
+    form.addEventListener('submit', handleEditFindSubmit);
+
+    // Show the modal (same as Edit Target)
+    modal.style.display = 'block';
+}
+
+function closeEditFindModal() {
     const modal = document.getElementById('edit-find-modal');
     if (!modal) return;
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
+    modal.style.display = 'none';
 }
 
 function handleEditFindSubmit(event) {
@@ -852,12 +898,11 @@ function handleEditFindSubmit(event) {
     find.coordinates = form['findCoords'].value.trim();
     find.accuracy    = form['findAccuracy'].value.trim();
 
-    // 🔹 NEW: update photo data from the hidden field
+    // Photo data
     if (form['findPhotoData']) {
         find.targetPhotoData = form['findPhotoData'].value || '';
     }
 
-    // Optional last-modified timestamp
     find.updatedAt = Date.now();
 
     saveFindsToLocalStorage();
