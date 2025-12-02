@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photos 5  - Metal Detecting Survey Log</title>
+    <title>Photos 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1018,40 +1018,43 @@ function removeEditFindPhoto(btn) {
     }
 }
 
-/** Handles the file input change for adding photos to the Edit Find modal. */
+/**
+ * Handles the file input change for adding photos to the Edit Find modal.
+ * * FIX: Uses the "Clone and Replace" method to reset the file input's state,
+ * which resolves the issue where the modal's buttons become unresponsive 
+ * after a photo is selected, particularly on mobile/hybrid apps.
+ */
 function handleEditFindPhotoInputChange(e) {
     const files = e.target.files;
     if (!files) return;
 
-    // Iterate through all selected files and read them as data URLs
+    // --- 1. PROCESS FILES ---
     Array.from(files).forEach(file => {
+        // Ensure the file is an image before proceeding
         if (!file.type || !file.type.startsWith('image/')) return;
+        
         const reader = new FileReader();
         
-        // When the file is loaded, add the photo to the modal's container
         reader.onload = (ev) => {
+            // Assume this function exists and handles adding the thumbnail to the DOM
             addPhotoToEditFindModal(ev.target.result);
         };
         reader.readAsDataURL(file);
     });
 
-    // *** THE ROBUST FIX: CLONE AND REPLACE THE INPUT ELEMENT ***
-    // This completely resets the file input's state, which fixes the focus/lockup bug.
-    
+    // --- 2. ROBUST INPUT RESET (Clone and Replace) ---
     const oldInput = e.target;
     
-    // 1. Create a clone (deep copy) of the original input element
+    // Create a deep copy of the original input element
     const newInput = oldInput.cloneNode(true);
     
-    // 2. Replace the old input with the new, clean input
+    // Replace the old input with the new, clean input
     oldInput.parentNode.replaceChild(newInput, oldInput);
     
-    // 3. Re-attach the event listener to the new input element. 
-    // This is crucial because the clone does not automatically inherit listeners.
+    // Crucially, re-attach the event listener to the new input element.
+    // Listeners are NOT copied by cloneNode.
     newInput.addEventListener('change', handleEditFindPhotoInputChange);
-    // *** END OF FIX ***
-}        
-        /** Renders the current page content into the main container. */
+}        /** Renders the current page content into the main container. */
         function render() {
             const appContent = document.getElementById('app-content');
             let contentHtml = '';
