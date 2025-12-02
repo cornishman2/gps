@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photos 6  - Metal Detecting Survey Log</title>
+    <title>Photos 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -784,7 +784,7 @@ function closeEditFindModal() {
 function handleEditFindSubmit(event) {
     event.preventDefault();
 
-    // Always use the form the listener is attached to
+    // Always work with the form element itself
     const form = event.currentTarget || event.target;
 
     const id = form['findId'].value;
@@ -813,7 +813,7 @@ function handleEditFindSubmit(event) {
     const photos = Array.from(photoThumbs).map(img => img.src);
 
     find.photos = photos;
-    find.targetPhotoData = photos[0] || ''; // use first as main
+    find.targetPhotoData = photos[0] || ''; // first is main
 
     find.updatedAt = Date.now();
 
@@ -1018,43 +1018,28 @@ function removeEditFindPhoto(btn) {
     }
 }
 
-/**
- * Handles the file input change for adding photos to the Edit Find modal.
- * * FIX: Uses the "Clone and Replace" method to reset the file input's state,
- * which resolves the issue where the modal's buttons become unresponsive 
- * after a photo is selected, particularly on mobile/hybrid apps.
- */
 function handleEditFindPhotoInputChange(e) {
-    const files = e.target.files;
-    if (!files) return;
+    const input = e.target;
+    const files = Array.from(input.files || []);
 
-    // --- 1. PROCESS FILES ---
-    Array.from(files).forEach(file => {
-        // Ensure the file is an image before proceeding
+    files.forEach(file => {
         if (!file.type || !file.type.startsWith('image/')) return;
-        
+
         const reader = new FileReader();
-        
         reader.onload = (ev) => {
-            // Assume this function exists and handles adding the thumbnail to the DOM
             addPhotoToEditFindModal(ev.target.result);
         };
         reader.readAsDataURL(file);
     });
 
-    // --- 2. ROBUST INPUT RESET (Clone and Replace) ---
-    const oldInput = e.target;
-    
-    // Create a deep copy of the original input element
-    const newInput = oldInput.cloneNode(true);
-    
-    // Replace the old input with the new, clean input
-    oldInput.parentNode.replaceChild(newInput, oldInput);
-    
-    // Crucially, re-attach the event listener to the new input element.
-    // Listeners are NOT copied by cloneNode.
-    newInput.addEventListener('change', handleEditFindPhotoInputChange);
-}        /** Renders the current page content into the main container. */
+    // ✅ Defer clearing the input to the next tick
+    // This avoids subtle mobile/browser bugs when clearing immediately.
+    setTimeout(() => {
+        input.value = '';
+    }, 0);
+}
+
+        /** Renders the current page content into the main container. */
         function render() {
             const appContent = document.getElementById('app-content');
             let contentHtml = '';
