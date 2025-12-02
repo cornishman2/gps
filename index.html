@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo in finds 1  - Metal Detecting Survey Log</title>
+    <title>Photo in finds 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -214,6 +214,7 @@
           name="findAccuracy"
           class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
       </div>
+        <div id="edit-find-photo-preview" class="mb-4"></div>
 
       <div class="pt-2 flex justify-end gap-2">
         <button
@@ -719,7 +720,7 @@ function computeMovementBearingDegrees() {
 
         // --- HELPER FUNCTIONS ---
 
-        function openEditFindModal(findId) {
+function openEditFindModal(findId) {
     const find = finds.find(f => f.id === findId);
     if (!find) {
         showMessage('Find not found.', 'error');
@@ -730,6 +731,7 @@ function computeMovementBearingDegrees() {
     const form  = document.getElementById('edit-find-form');
     if (!modal || !form) return;
 
+    // Fill fields
     form['findId'].value           = find.id;
     form['findDescription'].value  = find.description || '';
     form['findType'].value         = find.type || 'Unknown';
@@ -738,11 +740,21 @@ function computeMovementBearingDegrees() {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
+    // ---- NEW: Show photo preview ----
+    const preview = document.getElementById('edit-find-photo-preview');
+    const photoSrc = find.targetPhotoData || '';
+
+    if (preview) {
+        preview.innerHTML = photoSrc
+            ? `<img src="${photoSrc}" class="w-full max-h-60 object-cover rounded border" />`
+            : '';
+    }
+
+    // Show modal
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
-
-function closeEditFindModal() {
+        function closeEditFindModal() {
     const modal = document.getElementById('edit-find-modal');
     if (!modal) return;
     modal.classList.add('hidden');
