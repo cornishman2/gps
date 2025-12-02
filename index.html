@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photos 3  - Metal Detecting Survey Log</title>
+    <title>Photos 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1018,21 +1018,30 @@ function removeEditFindPhoto(btn) {
     }
 }
 
+/** Handles the file input change for adding photos to the Edit Find modal. */
 function handleEditFindPhotoInputChange(e) {
-    const files = Array.from(e.target.files || []);
-    files.forEach(file => {
+    const files = e.target.files;
+    if (!files) return;
+
+    // Iterate through all selected files and read them as data URLs
+    Array.from(files).forEach(file => {
         if (!file.type || !file.type.startsWith('image/')) return;
         const reader = new FileReader();
+        
+        // When the file is loaded, add the photo to the modal's container
         reader.onload = (ev) => {
             addPhotoToEditFindModal(ev.target.result);
         };
         reader.readAsDataURL(file);
     });
 
-    // Allow re-selecting the same file later
-    e.target.value = '';
+    // FIX: Delay clearing the input value to prevent modal button unresponsiveness issues.
+    // By wrapping this in setTimeout(0), we defer the reset action until the browser 
+    // has completed the current event cycle and released the modal's focus/state lock.
+    setTimeout(() => {
+        e.target.value = '';
+    }, 0);
 }
-
         
         /** Renders the current page content into the main container. */
         function render() {
