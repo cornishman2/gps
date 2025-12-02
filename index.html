@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photos 2  - Metal Detecting Survey Log</title>
+    <title>Photos 3  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -783,7 +783,9 @@ function closeEditFindModal() {
 
 function handleEditFindSubmit(event) {
     event.preventDefault();
-    const form = event.target;
+
+    // Always use the form the listener is attached to
+    const form = event.currentTarget || event.target;
 
     const id = form['findId'].value;
     const find = finds.find(f => f.id === id);
@@ -810,13 +812,11 @@ function handleEditFindSubmit(event) {
     const photoThumbs = document.querySelectorAll('#edit-find-photo-container .edit-find-photo-thumb');
     const photos = Array.from(photoThumbs).map(img => img.src);
 
-    // Store all photos and keep first as main
     find.photos = photos;
-    find.targetPhotoData = photos[0] || '';
+    find.targetPhotoData = photos[0] || ''; // use first as main
 
     find.updatedAt = Date.now();
 
-    // ✅ The missing bits: persist, close, toast, refresh UI
     saveFindsToLocalStorage();
     closeEditFindModal();
     showMessage('Find updated.', 'success');
