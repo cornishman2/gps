@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 3  - Metal Detecting Survey Log</title>
+    <title>Step 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -820,25 +820,16 @@ function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
-    // Photo UI (mirroring Edit Target logic)
-    const photoData      = find.targetPhotoData;
-    const statusSpan     = document.getElementById('edit-find-photo-status');
-    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
-    const previewImg     = document.getElementById('edit-find-photo-preview');
-    const hiddenField    = document.getElementById('edit-find-photo-data');
-
-    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
-        if (hiddenField)    hiddenField.value = photoData;
-        if (previewImg)     previewImg.src = photoData;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-        if (statusSpan)     statusSpan.textContent =
-            'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
-    } else {
-        if (hiddenField)    hiddenField.value = '';
-        if (previewImg)     previewImg.src = '';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
-    }
+      // Photo UI (via shared helper, mirroring Edit Target)
+    initPhotoUI(find.targetPhotoData, {
+        statusId:  'edit-find-photo-status',
+        wrapperId: 'edit-find-photo-preview-wrapper',
+        imgId:     'edit-find-photo-preview',
+        hiddenId:  'edit-find-photo-data'
+    }, {
+        existing: 'Existing photo loaded. Tap "Take / Choose Photo" to replace.',
+        empty:    'No photo captured yet.'
+    });
 
     // Attach the submit handler via shared helper
     attachFormSubmitHandler('edit-find-form', handleEditFindSubmit);
@@ -1528,6 +1519,38 @@ function updateMapWithUserLocationAndRender() {
   // --- TARGET PHOTO HELPERS ---
 
 // --- SHARED PHOTO HELPERS ---
+// ======================================
+// SHARED PHOTO-UI INITIALISER
+// ======================================
+function initPhotoUI(photoData, {
+    statusId,
+    wrapperId,
+    imgId,
+    hiddenId
+}, messages = {}) {
+    const statusSpan     = statusId   ? document.getElementById(statusId)   : null;
+    const previewWrapper = wrapperId  ? document.getElementById(wrapperId)  : null;
+    const previewImg     = imgId      ? document.getElementById(imgId)      : null;
+    const hiddenField    = hiddenId   ? document.getElementById(hiddenId)   : null;
+
+    const existingMessage = messages.existing || 'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
+    const emptyMessage    = messages.empty    || 'No photo captured yet.';
+
+    // Valid Base64 data URLs are usually fairly long strings
+    const hasValidPhoto = photoData && typeof photoData === 'string' && photoData.length > 50;
+
+    if (hasValidPhoto) {
+        if (hiddenField)    hiddenField.value = photoData;
+        if (previewImg)     previewImg.src = photoData;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan)     statusSpan.textContent = existingMessage;
+    } else {
+        if (hiddenField)    hiddenField.value = '';
+        if (previewImg)     previewImg.src = '';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (statusSpan)     statusSpan.textContent = emptyMessage;
+    }
+}
 
 /**
  * Generic helper to trigger a hidden file input by ID.
@@ -1665,26 +1688,16 @@ function showEditTargetModal(targetId, surveyId) {
     }
 
     // --- REVISED PHOTO LOGIC ADDITION ---
-    const photoData = target.targetPhotoData;
-    const statusSpan = document.getElementById('edit-target-photo-status');
-    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
-    const previewImg = document.getElementById('edit-target-photo-preview');
-    const hiddenField = document.getElementById('edit-target-photo-data');
-
-    // Load existing photo data if it's a valid, non-empty string (Base64 data is usually > 50 chars)
-    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
-        if (hiddenField) hiddenField.value = photoData;
-        if (previewImg) previewImg.src = photoData;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-        if (statusSpan) statusSpan.textContent = 'Existing photo loaded. Click "Take / Choose Photo" to replace.';
-    } else {
-        // Explicitly hide preview and clear fields if no valid photo data exists
-        if (hiddenField) hiddenField.value = '';
-        if (previewImg) previewImg.src = ''; 
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
-    }
-    // --- END REVISED PHOTO LOGIC ADDITION ---
+    // --- PHOTO UI (via shared helper) ---
+    initPhotoUI(target.targetPhotoData, {
+        statusId:  'edit-target-photo-status',
+        wrapperId: 'edit-target-photo-preview-wrapper',
+        imgId:     'edit-target-photo-preview',
+        hiddenId:  'edit-target-photo-data'
+    }, {
+        existing: 'Existing photo loaded. Click "Take / Choose Photo" to replace.',
+        empty:    'No photo captured yet.'
+    });
 
    // 2. Display the modal
     const modal = document.getElementById('edit-target-modal');
