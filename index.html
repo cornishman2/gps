@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 4  - Metal Detecting Survey Log</title>
+    <title>Step 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1422,23 +1422,25 @@ function updateMapWithUserLocationAndRender() {
             document.getElementById('confirmation-modal').style.display = 'none';
         }
 
-        /** Shows the New Survey Modal and attaches the submit listener. */
-        function showNewSurveyModal() {
-            // Reset the form whenever the modal is opened
-            document.getElementById('new-survey-form').reset();
-            document.getElementById('new-survey-modal').style.display = 'block';
+    /** Shows the New Survey Modal and attaches the submit listener. */
+function showNewSurveyModal() {
+    // Reset the form whenever the modal is opened
+    const form = document.getElementById('new-survey-form');
+    if (form) {
+        form.reset();
+    }
 
-            // Ensure the submit listener is attached only once
-            const form = document.getElementById('new-survey-form');
-            // Remove previous listener to prevent multiple submissions
-            form.removeEventListener('submit', handleNewSurveySubmit); 
-            form.addEventListener('submit', handleNewSurveySubmit); 
-        }
+    // Use shared helper to attach the submit listener safely
+    attachFormSubmitHandler('new-survey-form', handleNewSurveySubmit);
 
-        /** Closes the New Survey Modal. */
-        function closeNewSurveyModal() {
-            document.getElementById('new-survey-modal').style.display = 'none';
-        }
+    // Show the modal via shared helper
+    openModal('new-survey-modal');
+}
+
+/** Closes the New Survey Modal. */
+function closeNewSurveyModal() {
+    closeModal('new-survey-modal');
+}
 
         /** Handles the submission of the New Survey form. */
         function handleNewSurveySubmit(event) {
@@ -1483,36 +1485,43 @@ function updateMapWithUserLocationAndRender() {
             render();
         }
 
-        /** Shows the New Target Modal. */
-        function showNewTargetModal() {
-            const openSurvey = surveys.find(s => s.status === 'Open');
-            if (!openSurvey) {
-                return showMessage('Cannot log target. Please open a survey first on the Home page.', 'warning');
-            }
+ /** Shows the New Target Modal. */
+function showNewTargetModal() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey) {
+        return showMessage(
+            'Cannot log target. Please open a survey first on the Home page.',
+            'warning'
+        );
+    }
 
-            // 1. Set survey name in the modal header
-            document.getElementById('current-target-survey-name').textContent = openSurvey.name;
-            
-            // 2. Reset the form
-            document.getElementById('new-target-form').reset();
-            
-            // 3. Request GPS location
-            startTargetLocationWatch();
-            
-            // 4. Display modal
-            document.getElementById('new-target-modal').style.display = 'block';
+    // 1. Set survey name in the modal header
+    const headerSpan = document.getElementById('current-target-survey-name');
+    if (headerSpan) {
+        headerSpan.textContent = openSurvey.name;
+    }
+    
+    // 2. Reset the form
+    const form = document.getElementById('new-target-form');
+    if (form) {
+        form.reset();
+    }
+    
+    // 3. Request GPS location
+    startTargetLocationWatch();
+    
+    // 4. Attach the submit listener via shared helper
+    attachFormSubmitHandler('new-target-form', handleNewTargetSubmit);
 
-            // 5. Attach the submit listener
-            const form = document.getElementById('new-target-form');
-            form.removeEventListener('submit', handleNewTargetSubmit); 
-            form.addEventListener('submit', handleNewTargetSubmit); 
-        }
+    // 5. Display modal via shared helper
+    openModal('new-target-modal');
+}
 
-        /** Closes the New Target Modal. */
-        function closeNewTargetModal() {
-            stopTargetLocationWatch();
-            document.getElementById('new-target-modal').style.display = 'none';
-        }
+/** Closes the New Target Modal. */
+function closeNewTargetModal() {
+    stopTargetLocationWatch();
+    closeModal('new-target-modal');
+}
 
         /** Handles the submission of the New Target form. */
 
