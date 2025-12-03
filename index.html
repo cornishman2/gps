@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 5  - Metal Detecting Survey Log</title>
+    <title>Tracks 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -587,7 +587,11 @@
 // NEW: smoothed position for the live map
         let smoothedUserCoords = null;
         const USER_SMOOTHING_ALPHA = 0.15; // 0 < alpha ≤ 1 (lower = smoother, slower)
-//
+// --- TRACK RECORDING STATE ---
+        let activeTrackSurveyId = null;
+        let activeTrackId = null;
+        const TRACK_POINT_MIN_DISTANCE_METERS = 3; // only log a point if you've moved at least this far
+
         function updateSmoothedUserCoords(newLat, newLon) {
     // First reading: snap straight to the new value
     if (!smoothedUserCoords) {
@@ -602,7 +606,32 @@
         smoothedUserCoords.lon + USER_SMOOTHING_ALPHA * (newLon - smoothedUserCoords.lon);
 }
 
-        
+ // ======================================
+// SHARED STORAGE HELPERS
+// ======================================
+function saveCollectionToStorage(key, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (err) {
+        console.error(`Error saving ${key} to localStorage:`, err);
+        showMessage(`Could not save ${key} to local storage.`, 'error');
+    }
+}
+
+function loadCollectionFromStorage(key, fallback = []) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : fallback;
+    } catch (err) {
+        console.error(`Error loading ${key} from localStorage:`, err);
+        showMessage(`Could not load ${key} from local storage. Using defaults.`, 'warning');
+        return fallback;
+    }
+}
+       
 // --- GEOGRAPHY HELPER FUNCTIONS ---
 
 /** Converts degrees to radians. */
@@ -1036,6 +1065,8 @@ function saveSurveysToLocalStorage() {
                 }
 
                 saveSurveysToLocalStorage(); // Ensure initial data and ID are saved
+                refreshActiveTrackFromSurveys(); // NEW: hydrate any persisted active track
+
             } catch (e) {
                 console.error("Error loading from Local Storage:", e);
                 showMessage("Error loading data. Data may be reset.", 'error');
@@ -1075,6 +1106,18 @@ function saveSurveysToLocalStorage() {
             smoothedUserCoords = null;
             console.log("Live Map GPS Watch stopped.");
         }
+// If we leave the Compass page, clear any "recording" flag
+        if (activeTrackId && activeTrackSurveyId && currentPage !== 'Compass') {
+            const active = getActiveTrack();
+            if (active && active.track) {
+                active.track.isRecording = false;
+                saveSurveysToLocalStorage();
+            }
+            activeTrackId = null;
+            activeTrackSurveyId = null;
+            console.log("Active track recording stopped because Compass page was left.");
+        }
+
 
 switch (currentPage) {
     case 'Home':
@@ -1156,6 +1199,26 @@ function attachPageEventListeners() {
                 render();
             });
         }
+    }
+    // Compass Page – track controls
+    const startTrackBtn = document.getElementById('start-track-btn');
+    if (startTrackBtn) {
+        startTrackBtn.addEventListener('click', handleStartTrackClick);
+    }
+
+    const stopTrackBtn = document.getElementById('stop-track-btn');
+    if (stopTrackBtn) {
+        stopTrackBtn.addEventListener('click', handleStopTrackClick);
+    }
+
+    const trackCheckboxes = document.querySelectorAll('.track-visibility-toggle');
+    if (trackCheckboxes && trackCheckboxes.length > 0) {
+        trackCheckboxes.forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const trackId = e.target.getAttribute('data-track-id');
+                toggleTrackVisibility(trackId, e.target.checked);
+            });
+        });
     }
 
  
@@ -1318,6 +1381,11 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             // Record this smoothed point into the movement history
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
+            }
+
+            // NEW: if we’re recording a track, log a point using the smoothed location
+            if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
+                logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
             }
 
             // Track best accuracy (for logging/info)
@@ -2709,8 +2777,54 @@ function renderTargetPlot(targets) {
     let allCoords = [...parsedCoords];
     let userCoord = null;
 
+    // NEW: include any visible track points from the open survey in the bounding box
+    let visibleTracks = [];
+    const openSurveyForMap = surveys.find(s => s.status === 'Open');
+    if (openSurveyForMap && Array.isArray(openSurveyForMap.tracks)) {
+        visibleTracks = openSurveyForMap.tracks.filter(t =>
+            t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1
+        );
+
+        visibleTracks.forEach(track => {
+            track.points.forEach(p => {
+                if (
+                    p &&
+                    typeof p.lat === 'number' &&
+                    typeof p.lon === 'number' &&
+                    !isNaN(p.lat) &&
+                    !isNaN(p.lon)
+                ) {
+                    allCoords.push({
+                        id: track.id,
+                        lat: p.lat,
+                        lon: p.lon,
+                        description: track.name || 'Track',
+                        type: 'Track',
+                        vdi: '',
+                        status: '',
+                        accuracy: p.accuracy || 0,
+                        centerOnMap: false,
+                        isUser: false,
+                        isTrackPoint: true
+                    });
+                }
+            });
+        });
+    }
+
     // Add user's location if available (smoothed preferred)
     if (hasUserGPS && effectiveUserCoords) {
+        userCoord = {
+            lat: effectiveUserCoords.lat,
+            lon: effectiveUserCoords.lon,
+            description: 'Your Current Location',
+            type: 'User',
+            vdi: 'N/A',
+            accuracy: userAccuracy,
+            isUser: true
+        };
+        allCoords.push(userCoord);
+    }
         userCoord = {
             lat: effectiveUserCoords.lat,
             lon: effectiveUserCoords.lon,
@@ -2881,9 +2995,72 @@ let navTargetLat = null;
 let navTargetLon = null;
 let navTargetAccuracy = null;
 
-    // 2. Normalize and generate pins HTML
-        const pinsHtml = allCoords.map(t => {
-        const xRaw = ((t.lon - minLon) / lonRange) * 100;
+// NEW: SVG overlay for any selected tracks
+let trackSvgHtml = '';
+
+// Precompute SVG polylines for each visible track (if we have a valid map window)
+if (visibleTracks && visibleTracks.length > 0 && latRange > 0 && lonRange > 0) {
+    const trackPolylines = visibleTracks.map(track => {
+        if (!Array.isArray(track.points) || track.points.length < 2) return '';
+
+        const pointsAttr = track.points.map(p => {
+            if (
+                typeof p.lat !== 'number' ||
+                typeof p.lon !== 'number' ||
+                isNaN(p.lat) ||
+                isNaN(p.lon)
+            ) {
+                return null;
+            }
+
+            const xRaw = ((p.lon - minLon) / lonRange) * 100;
+            const yRaw = ((maxLat - p.lat) / latRange) * 100;
+
+            const xPercent = clamp(xRaw, 0, 100);
+            const yPercent = clamp(yRaw, 0, 100);
+
+            return `${xPercent.toFixed(2)},${yPercent.toFixed(2)}`;
+        }).filter(Boolean);
+
+        if (pointsAttr.length < 2) return '';
+
+        return `
+            <polyline
+                fill="none"
+                stroke="rgba(37, 99, 235, 0.8)"
+                stroke-width="0.6"
+                points="${pointsAttr.join(' ')}"
+            ></polyline>
+        `;
+    }).filter(Boolean).join('');
+
+    if (trackPolylines) {
+        trackSvgHtml = `
+            <svg
+                class="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+            >
+                ${trackPolylines}
+            </svg>
+        `;
+    }
+}
+
+// 2. Normalize and generate pins HTML (targets + user)
+const coordsForPins = [...parsedCoords];
+if (userCoord) {
+    coordsForPins.push(userCoord);
+}
+
+const pinsHtml = coordsForPins.map(t => {
+    const xRaw = ((t.lon - minLon) / lonRange) * 100;
+    const yRaw = ((maxLat - t.lat) / latRange) * 100;
+
+    const xPercent = clamp(xRaw, 0, 100);
+    const yPercent = clamp(yRaw, 0, 100);
+
+    // ... keep the rest of your existing pin logic unchanged ...
         const yRaw = ((maxLat - t.lat) / latRange) * 100;
 
         const xPercent = clamp(xRaw, 0, 100);
@@ -3123,7 +3300,8 @@ if (isNavTarget) {
 
 
     // Combine all elements for the map container
-    const finalMapContent = userConfidenceCircleHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
+     // Combine all elements for the map container
+    const finalMapContent = userConfidenceCircleHtml + trackSvgHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
 
     // --- Container with grid background & zoom/pan controls ---
     let containerClasses =
@@ -3381,9 +3559,266 @@ if (movementBearingDeg !== null) {
     `;
 
 }
-        
+
+        // ======================================
+// TRACK RECORDING HELPERS
+// ======================================
+
+function refreshActiveTrackFromSurveys() {
+    activeTrackSurveyId = null;
+    activeTrackId = null;
+
+    if (!Array.isArray(surveys)) return;
+
+    for (const survey of surveys) {
+        if (!survey || !Array.isArray(survey.tracks)) continue;
+        const active = survey.tracks.find(t => t && t.isRecording);
+        if (active) {
+            activeTrackSurveyId = survey.id;
+            activeTrackId = active.id;
+            break;
+        }
+    }
+}
+
+function ensureSurveyTracksArray(survey) {
+    if (!survey) return;
+    if (!Array.isArray(survey.tracks)) {
+        survey.tracks = [];
+    }
+}
+
+function findTrackById(trackId) {
+    if (!trackId || !Array.isArray(surveys)) return null;
+    for (const survey of surveys) {
+        if (!survey || !Array.isArray(survey.tracks)) continue;
+        const track = survey.tracks.find(t => t.id === trackId);
+        if (track) {
+            return { survey, track };
+        }
+    }
+    return null;
+}
+
+function getActiveTrack() {
+    if (!activeTrackId || !activeTrackSurveyId) return null;
+    const survey = surveys.find(s => s.id === activeTrackSurveyId);
+    if (!survey || !Array.isArray(survey.tracks)) return null;
+    const track = survey.tracks.find(t => t.id === activeTrackId);
+    if (!track) return null;
+    return { survey, track };
+}
+
+/**
+ * Log a point to the currently active track, if any.
+ * Uses distanceMeters helper so we only record when you move a few metres.
+ */
+function logPointToActiveTrack(lat, lon, accuracy) {
+    const active = getActiveTrack();
+    if (!active) return;
+
+    const { track } = active;
+    if (!Array.isArray(track.points)) {
+        track.points = [];
+    }
+
+    const now = Date.now();
+    const last = track.points[track.points.length - 1];
+
+    if (last) {
+        const dist = distanceMeters(last.lat, last.lon, lat, lon);
+        if (dist < TRACK_POINT_MIN_DISTANCE_METERS) {
+            // Too small a move – don’t clutter the track
+            return;
+        }
+    }
+
+    track.points.push({
+        time: now,
+        lat,
+        lon,
+        accuracy: typeof accuracy === 'number' ? accuracy : null
+    });
+
+    saveSurveysToLocalStorage();
+}
+
+/**
+ * Start recording a new track for the current open survey.
+ */
+function handleStartTrackClick() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+
+    if (!openSurvey) {
+        showMessage('You must have an open survey to record a track.', 'error');
+        return;
+    }
+
+    if (activeTrackId && activeTrackSurveyId) {
+        showMessage('A track is already being recorded. Stop it before starting a new one.', 'warning');
+        return;
+    }
+
+    ensureSurveyTracksArray(openSurvey);
+
+    const nextIndex = openSurvey.tracks.length + 1;
+    const name = `Track ${nextIndex}`;
+
+    const newTrack = {
+        id: generateId(),
+        name,
+        createdAt: Date.now(),
+        isRecording: true,
+        isVisible: true,   // shown on the map by default
+        points: []
+    };
+
+    openSurvey.tracks.push(newTrack);
+
+    activeTrackSurveyId = openSurvey.id;
+    activeTrackId = newTrack.id;
+
+    saveSurveysToLocalStorage();
+    showMessage(`Started recording ${name}.`, 'success');
+    render();
+}
+
+/**
+ * Stop recording the active track (if any).
+ */
+function handleStopTrackClick() {
+    const active = getActiveTrack();
+    if (!active) {
+        showMessage('No active track to stop.', 'warning');
+        return;
+    }
+
+    active.track.isRecording = false;
+    saveSurveysToLocalStorage();
+
+    const name = active.track.name || 'track';
+
+    activeTrackSurveyId = null;
+    activeTrackId = null;
+
+    showMessage(`Stopped recording ${name}.`, 'info');
+    render();
+}
+
+/**
+ * Toggle whether a track is drawn on the map.
+ */
+function toggleTrackVisibility(trackId, isVisible) {
+    const found = findTrackById(trackId);
+    if (!found) return;
+
+    found.track.isVisible = !!isVisible;
+    saveSurveysToLocalStorage();
+
+    if (currentPage === 'Compass') {
+        render();
+    }
+}
+
      
-function renderCompassPage(isAutoRefresh = false) {
+function renderTracksPanel(openSurvey) {
+    if (!openSurvey) return '';
+
+    const tracks = Array.isArray(openSurvey.tracks) ? openSurvey.tracks : [];
+    const hasTracks = tracks.length > 0;
+    const active = tracks.find(t => t.isRecording);
+
+    const startButtonClass = active
+        ? 'px-3 py-1 rounded-lg bg-gray-200 text-gray-500 text-xs font-semibold cursor-not-allowed opacity-60'
+        : 'px-3 py-1 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/90';
+    const stopButtonExtraClasses = active ? '' : ' hidden';
+
+    const recordingStatusHtml = active
+        ? `<span class="flex items-center text-[11px] text-red-600 font-semibold">
+                <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
+                Recording: ${active.name || 'Track'}
+           </span>`
+        : `<span class="text-[11px] text-gray-500">Not currently recording</span>`;
+
+    let tracksListHtml = '';
+
+    if (hasTracks) {
+        tracksListHtml = tracks.map(track => {
+            const isVisible = track.isVisible !== false;
+            const pointsCount = Array.isArray(track.points) ? track.points.length : 0;
+            const created = track.createdAt
+                ? new Date(track.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '';
+            const activeBadge = track.isRecording
+                ? `<span class="ml-2 inline-flex items-center text-[10px] text-red-600 font-semibold">
+                        <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
+                        recording
+                   </span>`
+                : '';
+
+            return `
+                <label class="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
+                    <div class="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            class="track-visibility-toggle h-4 w-4 text-primary"
+                            data-track-id="${track.id}"
+                            ${isVisible ? 'checked' : ''}
+                        >
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-700">${track.name || 'Track'}</span>
+                            <span class="text-xs text-gray-500">
+                                ${pointsCount} points${created ? ` · ${created}` : ''}
+                            </span>
+                        </div>
+                    </div>
+                    ${activeBadge}
+                </label>
+            `;
+        }).join('');
+    } else {
+        tracksListHtml = `
+            <p class="text-xs text-gray-500">
+                No tracks recorded yet for this survey. Use <strong>Start new track</strong> to begin logging your path.
+            </p>
+        `;
+    }
+
+    return `
+        <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-700 flex items-center gap-2">
+                        <i class="fas fa-route text-primary"></i>
+                        Tracks for this survey
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Select which tracks to overlay on the map. Tracks use your live GPS position.
+                    </p>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                    ${recordingStatusHtml}
+                    <div class="flex items-center gap-2 mt-1">
+                        <button id="start-track-btn" class="${startButtonClass}">
+                            <i class="fas fa-play mr-1"></i> Start new track
+                        </button>
+                        <button
+                            id="stop-track-btn"
+                            class="px-3 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold border border-red-300 hover:bg-red-100${stopButtonExtraClasses}"
+                        >
+                            <i class="fas fa-stop mr-1"></i> Stop
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2 space-y-1">
+                ${tracksListHtml}
+            </div>
+        </div>
+    `;
+}
+
+    function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
     if (!openSurvey) {
@@ -3428,6 +3863,7 @@ function renderCompassPage(isAutoRefresh = false) {
                     </p>` : ''
                 }
             </div>
+              ${renderTracksPanel(openSurvey)}
 
             <!-- Map first -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
@@ -3545,10 +3981,14 @@ function renderCompassPage(isAutoRefresh = false) {
                     `Are you sure you want to import data? This will **permanently overwrite** your ${surveys.length} existing local surveys.`,
                     () => {
                         // Overwrite global state
+                        // Overwrite global state
                         surveys = importedData.surveys;
                         userProfile = importedData.profile;
                         userId = importedData.userId || generateId(); // Use existing ID or generate a new one
-                        
+
+                        // NEW: re-evaluate any active track
+                        refreshActiveTrackFromSurveys();
+
                         saveSurveysToLocalStorage();
                         dataArea.value = ''; // Clear the input area
                         showMessage('Data successfully imported and saved!', 'success');
