@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracks 4  - Metal Detecting Survey Log</title>
+    <title>Tracks 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3729,43 +3729,12 @@ function renderTracksPanel(openSurvey) {
     let tracksListHtml = '';
 
     if (hasTracks) {
-        tracksListHtml = tracks.map(track => {
-            const isVisible = track.isVisible !== false;
-            const pointsCount = Array.isArray(track.points) ? track.points.length : 0;
-            const created = track.createdAt
-                ? new Date(track.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : '';
-            const activeBadge = track.isRecording
-                ? `<span class="ml-2 inline-flex items-center text-[10px] text-red-600 font-semibold">
-                        <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
-                        recording
-                   </span>`
-                : '';
-
-            return `
-                <label class="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
-                    <div class="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            class="track-visibility-toggle h-4 w-4 text-primary"
-                            data-track-id="${track.id}"
-                            ${isVisible ? 'checked' : ''}
-                        >
-                        <div class="flex flex-col">
-                            <span class="text-sm font-medium text-gray-700">${track.name || 'Track'}</span>
-                            <span class="text-xs text-gray-500">
-                                ${pointsCount} points${created ? ` · ${created}` : ''}
-                            </span>
-                        </div>
-                    </div>
-                    ${activeBadge}
-                </label>
-            `;
-        }).join('');
+        // ... your existing map over tracks ...
     } else {
         tracksListHtml = `
-            <p class="text-xs text-gray-500">
-                No tracks recorded yet for this survey. Use <strong>Start new track</strong> to begin logging your path.
+            <p class="text-xs text-gray-500 italic">
+                You don't have any tracks recorded yet for this survey.
+                Use <strong>Start new track</strong> to begin logging your path.
             </p>
         `;
     }
@@ -3785,13 +3754,18 @@ function renderTracksPanel(openSurvey) {
                 <div class="flex flex-col items-end gap-1">
                     ${recordingStatusHtml}
                     <div class="flex items-center gap-2 mt-1">
-                        <button id="start-track-btn" class="${startButtonClass}">
+                        <button
+                            id="start-track-btn"
+                            type="button"
+                            onclick="handleStartTrackClick()"
+                            class="${startButtonClass}">
                             <i class="fas fa-play mr-1"></i> Start new track
                         </button>
                         <button
                             id="stop-track-btn"
-                            class="px-3 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold border border-red-300 hover:bg-red-100${stopButtonExtraClasses}"
-                        >
+                            type="button"
+                            onclick="handleStopTrackClick()"
+                            class="px-3 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold border border-red-300 hover:bg-red-100${stopButtonExtraClasses}">
                             <i class="fas fa-stop mr-1"></i> Stop
                         </button>
                     </div>
@@ -3803,7 +3777,6 @@ function renderTracksPanel(openSurvey) {
         </div>
     `;
 }
-
     function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
