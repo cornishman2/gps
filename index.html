@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo in finds 12  - Metal Detecting Survey Log</title>
+    <title>Step 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1547,117 +1547,39 @@ function updateMapWithUserLocationAndRender() {
 
   // --- TARGET PHOTO HELPERS ---
 
-/** Opens the hidden file input to let the user take / choose a photo. */
-function triggerTargetPhotoInput() {
-    const fileInput = document.getElementById('target-photo-input');
+// --- SHARED PHOTO HELPERS ---
+
+/**
+ * Generic helper to trigger a hidden file input by ID.
+ * Clears any previous selection before opening.
+ */
+function triggerPhotoInput(inputId) {
+    const fileInput = document.getElementById(inputId);
     if (!fileInput) return;
 
-    // Clear previous selection
-    fileInput.value = '';
-    fileInput.click();
+    fileInput.value = '';   // clear previous selection
+    fileInput.click();      // open camera / gallery
 }
 
-/** Handles the file selection or camera capture from the input field. */
-function handleTargetPhotoSelected(event) {
+/**
+ * Generic helper to handle a selected photo and update:
+ * - status text
+ * - preview wrapper + image
+ * - hidden data field
+ */
+function handlePhotoSelected(event, {
+    statusId,
+    wrapperId,
+    imgId,
+    hiddenId
+}) {
     const fileInput = event.target;
-    const file = fileInput.files[0];
+    const file = fileInput.files && fileInput.files[0];
 
-    // References to UI elements
-    const statusSpan = document.getElementById('target-photo-status');
-    const previewWrapper = document.getElementById('target-photo-preview-wrapper');
-    const previewImg = document.getElementById('target-photo-preview');
-    const hiddenField = document.getElementById('target-photo-data');
-
-    if (!file) {
-        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-        return;
-    }
-
-    // NOTE: The previous explicit file type check was removed here
-    // because it was causing issues with camera captures on some devices.
-    // The input's accept="image/*" attribute provides enough file type restriction.
-
-    // Use FileReader to convert the file to a Base64 data URL
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        if (hiddenField) hiddenField.value = dataUrl;
-        if (statusSpan) statusSpan.textContent = 'Photo captured.';
-        if (previewImg) previewImg.src = dataUrl;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-    };
-    reader.onerror = () => {
-        console.error('Error reading photo file:', reader.error);
-        showMessage('Could not read the photo file.', 'error');
-        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-    };
-    reader.readAsDataURL(file);
-} 
-
-/** Triggers the hidden file input for the Edit Target modal. */
-function triggerEditTargetPhotoInput() {
-    document.getElementById('edit-target-photo-input').click();
-}
-
-/** Handles file selection/camera capture for the Edit Target modal. */
-function handleEditTargetPhotoSelected(event) {
-    const fileInput = event.target;
-    const file = fileInput.files[0];
-
-    // References to UI elements for the EDIT modal
-    const statusSpan = document.getElementById('edit-target-photo-status');
-    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
-    const previewImg = document.getElementById('edit-target-photo-preview');
-    const hiddenField = document.getElementById('edit-target-photo-data');
-
-    if (!file) {
-        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-        return;
-    }
-
-    // Use FileReader to convert the file to a Base64 data URL
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        if (hiddenField) hiddenField.value = dataUrl;
-        if (statusSpan) statusSpan.textContent = 'Photo captured.';
-        if (previewImg) previewImg.src = dataUrl;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-    };
-    reader.onerror = () => {
-        console.error('Error reading photo file:', reader.error);
-        showMessage('Could not read the photo file.', 'error');
-        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-    };
-    reader.readAsDataURL(file);
-}
-// --- EDIT FIND PHOTO HELPERS ---
-
-function triggerEditFindPhotoInput() {
-    const fileInput = document.getElementById('edit-find-photo-input');
-    if (!fileInput) return;
-
-    // Clear previous selection
-    fileInput.value = '';
-    fileInput.click();
-}
-
-function handleEditFindPhotoSelected(event) {
-    const fileInput = event.target;
-    const file = fileInput.files[0];
-
-    const statusSpan     = document.getElementById('edit-find-photo-status');
-    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
-    const previewImg     = document.getElementById('edit-find-photo-preview');
-    const hiddenField    = document.getElementById('edit-find-photo-data');
+    const statusSpan     = statusId   ? document.getElementById(statusId)   : null;
+    const previewWrapper = wrapperId  ? document.getElementById(wrapperId)  : null;
+    const previewImg     = imgId      ? document.getElementById(imgId)      : null;
+    const hiddenField    = hiddenId   ? document.getElementById(hiddenId)   : null;
 
     if (!file) {
         if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
@@ -1682,6 +1604,51 @@ function handleEditFindPhotoSelected(event) {
         if (hiddenField)    hiddenField.value = '';
     };
     reader.readAsDataURL(file);
+}
+
+// --- TARGET PHOTO HELPERS (new target form) ---
+
+function triggerTargetPhotoInput() {
+    triggerPhotoInput('target-photo-input');
+}
+
+function handleTargetPhotoSelected(event) {
+    handlePhotoSelected(event, {
+        statusId:  'target-photo-status',
+        wrapperId: 'target-photo-preview-wrapper',
+        imgId:     'target-photo-preview',
+        hiddenId:  'target-photo-data'
+    });
+}
+
+// --- EDIT TARGET PHOTO HELPERS ---
+
+function triggerEditTargetPhotoInput() {
+    triggerPhotoInput('edit-target-photo-input');
+}
+
+function handleEditTargetPhotoSelected(event) {
+    handlePhotoSelected(event, {
+        statusId:  'edit-target-photo-status',
+        wrapperId: 'edit-target-photo-preview-wrapper',
+        imgId:     'edit-target-photo-preview',
+        hiddenId:  'edit-target-photo-data'
+    });
+}
+
+// --- EDIT FIND PHOTO HELPERS ---
+
+function triggerEditFindPhotoInput() {
+    triggerPhotoInput('edit-find-photo-input');
+}
+
+function handleEditFindPhotoSelected(event) {
+    handlePhotoSelected(event, {
+        statusId:  'edit-find-photo-status',
+        wrapperId: 'edit-find-photo-preview-wrapper',
+        imgId:     'edit-find-photo-preview',
+        hiddenId:  'edit-find-photo-data'
+    });
 }
         
 function showEditTargetModal(targetId, surveyId) {
