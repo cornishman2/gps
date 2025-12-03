@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracks 7  - Metal Detecting Survey Log</title>
+    <title>Tracks 8  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2987,12 +2987,26 @@ let navTargetLon = null;
 let navTargetAccuracy = null;
 
 // NEW: SVG overlay for any selected tracks
+// NEW: SVG overlay for any selected tracks
 let trackSvgHtml = '';
 
 // Precompute SVG polylines for each visible track (if we have a valid map window)
 if (visibleTracks && visibleTracks.length > 0 && latRange > 0 && lonRange > 0) {
-    const trackPolylines = visibleTracks.map(track => {
+    // Palette used to colour different tracks
+    const trackColors = [
+        'rgba(239, 68, 68, 0.9)',   // red
+        'rgba(34, 197, 94, 0.9)',   // green
+        'rgba(59, 130, 246, 0.9)',  // blue
+        'rgba(234, 179, 8, 0.9)',   // amber
+        'rgba(168, 85, 247, 0.9)',  // purple
+        'rgba(16, 185, 129, 0.9)'   // teal
+    ];
+
+    const trackPolylines = visibleTracks.map((track, index) => {
         if (!Array.isArray(track.points) || track.points.length < 2) return '';
+
+        // Use stored colour if ever added in future, otherwise pick from palette
+        const strokeColor = track.color || trackColors[index % trackColors.length];
 
         const pointsAttr = track.points.map(p => {
             if (
@@ -3018,8 +3032,10 @@ if (visibleTracks && visibleTracks.length > 0 && latRange > 0 && lonRange > 0) {
         return `
             <polyline
                 fill="none"
-                stroke="rgba(37, 99, 235, 0.8)"
-                stroke-width="0.6"
+                stroke="${strokeColor}"
+                stroke-width="0.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
                 points="${pointsAttr.join(' ')}"
             ></polyline>
         `;
@@ -3868,8 +3884,7 @@ function renderTracksPanel(openSurvey) {
                         <i class="fas fa-redo fa-spin mr-1"></i> Auto-refreshing map every 3 seconds...
                     </p>` : ''
                 }
-            </div>
-              ${renderTracksPanel(openSurvey)}
+                       </div>
 
             <!-- Map first -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
@@ -3879,8 +3894,11 @@ function renderTracksPanel(openSurvey) {
                 ${renderTargetPlot(targets)}
             </div>
 
+            <!-- Tracks below the map -->
+            ${renderTracksPanel(openSurvey)}
+
             <!-- Then navigation panel -->
-            ${renderNavigationPanel(openSurvey)}
+            ${renderNavigationPanel(openSurvey, hasUserGPS, effectiveUserCoords)}
 
             <!-- Explanatory text at the bottom -->
             <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 text-xs text-gray-600 mt-4">
