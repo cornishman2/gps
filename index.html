@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 2  - Metal Detecting Survey Log</title>
+    <title>Step 2b  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -832,49 +832,9 @@ function openEditFindModal(findId) {
     form.addEventListener('submit', handleEditFindSubmit);
 
     // Show the modal (same as Edit Target)
-    modal.style.display = 'block';
-}
-
-    const modal = document.getElementById('edit-find-modal');
-    const form  = document.getElementById('edit-find-form');
-    if (!modal || !form) return;
-
-    // Core fields
-    form['findId'].value           = find.id;
-    form['findDescription'].value  = find.description || '';
-    form['findType'].value         = find.type || 'Unknown';
-    form['findVDI'].value          = find.vdi || '';
-    form['findDepth'].value        = find.depth || '';
-    form['findCoords'].value       = find.coordinates || '';
-    form['findAccuracy'].value     = find.accuracy || '';
-
-    // Photo UI (mirroring Edit Target logic)
-    const photoData      = find.targetPhotoData;
-    const statusSpan     = document.getElementById('edit-find-photo-status');
-    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
-    const previewImg     = document.getElementById('edit-find-photo-preview');
-    const hiddenField    = document.getElementById('edit-find-photo-data');
-
-    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
-        if (hiddenField)    hiddenField.value = photoData;
-        if (previewImg)     previewImg.src = photoData;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-        if (statusSpan)     statusSpan.textContent =
-            'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
-    } else {
-        if (hiddenField)    hiddenField.value = '';
-        if (previewImg)     previewImg.src = '';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
-    }
-
-    // Attach the submit handler in the same pattern as Targets / Profile
-    form.removeEventListener('submit', handleEditFindSubmit);
-    form.addEventListener('submit', handleEditFindSubmit);
-
-    // Show the modal (same as Edit Target)
     openModal('edit-find-modal');
 }
+
 
 function closeEditFindModal() {
     closeModal('edit-find-modal');
@@ -1730,29 +1690,6 @@ function showEditTargetModal(targetId, surveyId) {
 }
 
         
-/** Triggers the hidden file input for the Edit Target modal. */
-function triggerEditTargetPhotoInput() {
-    document.getElementById('edit-target-photo-input').click();
-}
-
-/** Handles file selection/camera capture for the Edit Target modal. */
-function handleEditTargetPhotoSelected(event) {
-    const fileInput = event.target;
-    const file = fileInput.files[0];
-
-    // References to UI elements for the EDIT modal
-    const statusSpan = document.getElementById('edit-target-photo-status');
-    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
-    const previewImg = document.getElementById('edit-target-photo-preview');
-    const hiddenField = document.getElementById('edit-target-photo-data');
-
-    if (!file) {
-        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField) hiddenField.value = '';
-        return;
-    }
-
     // Use FileReader to convert the file to a Base64 data URL
     const reader = new FileReader();
     reader.onload = (e) => {
