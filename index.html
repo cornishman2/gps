@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Target type 1  - Metal Detecting Survey Log</title>
+    <title>Edit button 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1791,10 +1791,6 @@ function handleEditTargetSubmit(event) {
     const newCoords   = form['targetCoords'].value.trim() || 'No GPS logged';
     const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
 
-    // Radio group is already called editTargetCenterOnMap in the HTML
-    const centerOnMapValue = form['editTargetCenterOnMap'].value;
-    const centerOnMap      = centerOnMapValue === 'Yes';
-
     // Hidden photo field is called targetPhotoData
     const newPhotoData = form['targetPhotoData']?.value || '';
 
@@ -1822,15 +1818,24 @@ function handleEditTargetSubmit(event) {
     // Update photo data (can be empty string if user cleared it)
     target.targetPhotoData = newPhotoData;
 
-    // Enforce single "Centre on map" within this survey
-    if (centerOnMap) {
-        survey.targets.forEach(t => {
-            if (t.id !== targetId) {
-                t.centerOnMap = false;
-            }
-        });
+    // --- Centre on map: make this safe if radios are gone ---
+    const centerField = form['editTargetCenterOnMap'];
+    if (centerField) {
+        // Only enforce / change centreOnMap if the field actually exists
+        const centerOnMapValue = centerField.value;
+        const centerOnMap      = centerOnMapValue === 'Yes';
+
+        if (centerOnMap) {
+            // Enforce single "Centre on map" within this survey
+            survey.targets.forEach(t => {
+                if (t.id !== targetId) {
+                    t.centerOnMap = false;
+                }
+            });
+        }
+        target.centerOnMap = centerOnMap;
     }
-    target.centerOnMap = centerOnMap;
+    // If the radios have been removed, we leave target.centerOnMap as-is
 
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
@@ -1838,25 +1843,28 @@ function handleEditTargetSubmit(event) {
     showMessage(`Target ${target.description} updated successfully.`, 'success');
     render();
 }
-
-/** Handles the submission (save) of the New Target form. */
 function handleNewTargetSubmit(event) {
     event.preventDefault();
-    const form = document.getElementById('new-target-form');
-    
-    const newDescription = form['targetDescription'].value.trim();
-    const newVDI = form['targetVDI'].value.trim() || 'N/A';
-    const newDepth = form['targetDepth'].value.trim() || 'Unknown';
-    const newType = form['targetType'].value;
-    const newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
-    const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
-    const centerOnMapValue = form['targetCenterOnMap'].value;
-    const centerOnMap = centerOnMapValue === 'Yes';
+    const form = event.target;  // more robust than document.getElementById
 
-    // *** CRITICAL ADDITION 1: GET PHOTO DATA FROM HIDDEN INPUT ***
-    const newPhotoData = form['targetPhotoData'].value || '';
-    // *************************************************************
-    
+    const newDescription = form['targetDescription'].value.trim();
+    const newVDI         = form['targetVDI'].value.trim() || 'N/A';
+    const newDepth       = form['targetDepth'].value.trim() || 'Unknown';
+    const newType        = form['targetType'].value;
+    const newCoords      = form['targetCoords'].value.trim() || 'No GPS logged';
+    const newAccuracy    = form['targetAccuracy'].value.trim() || 'N/A';
+
+    // Centre on Map radios may or may not exist now
+    let centerOnMap = false;
+    const centerField = form['targetCenterOnMap'];
+    if (centerField) {
+        const centerOnMapValue = centerField.value;
+        centerOnMap = (centerOnMapValue === 'Yes');
+    }
+
+    // Photo data from hidden field
+    const newPhotoData = form['targetPhotoData']?.value || '';
+
     if (!newDescription) {
         showMessage('Description / Find Name is required.', 'error');
         return;
@@ -1879,11 +1887,8 @@ function handleNewTargetSubmit(event) {
         accuracy: newAccuracy,
         user: userProfile.name,
         detector: userProfile.detector,
-        centerOnMap: centerOnMap,
-        
-        // *** CRITICAL ADDITION 2: SAVE PHOTO DATA TO THE NEW TARGET ***
-        targetPhotoData: newPhotoData 
-        // *************************************************************
+        centerOnMap: centerOnMap,   // will just be false if there is no radio group
+        targetPhotoData: newPhotoData
     };
 
     openSurvey.targets.unshift(newTarget);
@@ -1893,7 +1898,7 @@ function handleNewTargetSubmit(event) {
     closeNewTargetModal();
     showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
     render();
-}            
+}
         /** Shows the Edit Profile Modal and loads current data. */
         function showEditProfileModal() {
             const modal = document.getElementById('edit-profile-modal');
