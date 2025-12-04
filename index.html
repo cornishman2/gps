@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buttons 1  - Metal Detecting Survey Log</title>
+    <title>Buttons 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2526,7 +2526,7 @@ function renderTargetCard(target, surveyId) {
             statusClass = 'bg-green-100 text-green-800';
             break;
         case 'Hole Dug':
-            statusClass = 'bg-yellow-100 text-yellow-800';
+            statusClass = 'bg-amber-100 text-amber-800';
             statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10"></path></svg>`;
             break;
         case 'Hole Refilled':
@@ -2539,9 +2539,7 @@ function renderTargetCard(target, surveyId) {
             break;
     }
 
-    // Use whichever photo field is present on the Target
     const photoSrc = target.targetPhotoData || target.photoDataUrl || '';
-
     const photoHtml = photoSrc
         ? `
             <div class="mt-3">
@@ -2554,15 +2552,15 @@ function renderTargetCard(target, surveyId) {
         `
         : '';
 
-    const vdiText = target.vdi && target.vdi !== 'N/A' ? target.vdi : 'N/A';
-    const depthText = target.depth && target.depth !== 'Unknown' ? target.depth : 'Unknown';
+    const vdiText    = target.vdi && target.vdi !== 'N/A' ? target.vdi : 'N/A';
+    const depthText  = target.depth && target.depth !== 'Unknown' ? target.depth : 'Unknown';
     const coordsText = target.coordinates || 'No GPS logged';
-    const accText = target.accuracy || 'N/A';
+    const accText    = target.accuracy || 'N/A';
     const createdText = target.time ? formatDate(target.time) : '';
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-lg border-l-4" style="border-left-color: rgb(59,130,246);">
-            <!-- Header: description + status -->
+            <!-- Header -->
             <div class="flex justify-between items-start mb-2">
                 <h4 class="text-xl font-bold text-gray-800 flex items-center">
                     <i class="${typeIcon} mr-2 text-lg ${typeColor} text-white rounded-full p-1"></i>
@@ -2612,13 +2610,13 @@ function renderTargetCard(target, surveyId) {
                 </div>
             </div>
 
-            <!-- NEW: Big button rows (glove-friendly) -->
+            <!-- NEW: Button rows (glove-friendly, coloured) -->
             <div class="mt-4 space-y-2">
-                <!-- Row 1: Status buttons -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <!-- Row 1: Status buttons (4) -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 bg-gray-50 hover:bg-gray-100"
+                        class="w-full inline-flex items-center justify-center px-2 py-2 text-xs sm:text-[0.8rem] font-semibold rounded-md bg-green-600 text-white hover:bg-green-700"
                         data-action="setStatus"
                         data-status="Signal Detected"
                         data-id="${target.id}"
@@ -2628,7 +2626,17 @@ function renderTargetCard(target, surveyId) {
                     </button>
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 bg-gray-50 hover:bg-gray-100"
+                        class="w-full inline-flex items-center justify-center px-2 py-2 text-xs sm:text-[0.8rem] font-semibold rounded-md bg-amber-500 text-white hover:bg-amber-600"
+                        data-action="setStatus"
+                        data-status="Hole Dug"
+                        data-id="${target.id}"
+                        data-survey-id="${surveyId}"
+                        onclick="handleTargetAction(this)">
+                        Mark: Hole dug
+                    </button>
+                    <button
+                        type="button"
+                        class="w-full inline-flex items-center justify-center px-2 py-2 text-xs sm:text-[0.8rem] font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700"
                         data-action="setStatus"
                         data-status="Hole Refilled"
                         data-id="${target.id}"
@@ -2638,7 +2646,7 @@ function renderTargetCard(target, surveyId) {
                     </button>
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 bg-gray-50 hover:bg-gray-100"
+                        class="w-full inline-flex items-center justify-center px-2 py-2 text-xs sm:text-[0.8rem] font-semibold rounded-md bg-gray-500 text-white hover:bg-gray-600"
                         data-action="setStatus"
                         data-status="Signal Ignored"
                         data-id="${target.id}"
@@ -2652,7 +2660,7 @@ function renderTargetCard(target, surveyId) {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-primary/40 bg-primary/5 hover:bg-primary/10"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
                         data-action="navigate"
                         data-id="${target.id}"
                         data-survey-id="${surveyId}"
@@ -2661,7 +2669,7 @@ function renderTargetCard(target, surveyId) {
                     </button>
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-blue-400 bg-blue-50 hover:bg-blue-100"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md bg-sky-600 text-white hover:bg-sky-700"
                         data-action="centerOnMap"
                         data-id="${target.id}"
                         data-survey-id="${surveyId}"
@@ -2674,7 +2682,7 @@ function renderTargetCard(target, surveyId) {
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-gray-300 bg-white hover:bg-gray-100"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md bg-white border border-gray-300 text-gray-800 hover:bg-gray-100"
                         data-action="edit"
                         data-id="${target.id}"
                         data-survey-id="${surveyId}"
@@ -2683,7 +2691,7 @@ function renderTargetCard(target, surveyId) {
                     </button>
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-indigo-400 bg-indigo-50 hover:bg-indigo-100"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
                         data-action="saveFind"
                         data-id="${target.id}"
                         data-survey-id="${surveyId}"
@@ -2692,7 +2700,7 @@ function renderTargetCard(target, surveyId) {
                     </button>
                     <button
                         type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md border border-red-400 bg-red-50 hover:bg-red-100 text-red-700"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-semibold rounded-md bg-red-600 text-white hover:bg-red-700"
                         data-action="delete"
                         data-id="${target.id}"
                         data-survey-id="${surveyId}"
