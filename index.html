@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds 1  - Metal Detecting Survey Log</title>
+    <title>Finds photos 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -657,19 +657,22 @@
         // --- GLOBAL STATE & INITIALIZATION ---
         
 // --- GLOBAL STATE & INITIALIZATION ---
-    let surveys = [];
-    let finds = [];  // <--- NEW: permanent library of Finds
-    let currentPage = 'Home';
-    let isMapFullscreen = false;
-    let targetWatchId = null; // track the specific GPS process for the modal
+let surveys = [];
+let finds = [];  // permanent library of Finds
+let currentPage = 'Home';
+let isMapFullscreen = false;
+let targetWatchId = null;
 
 // Simple filter state for the Finds page
-    let findsFilter = {
-        query: '',
-        type: 'All',
-        surveyId: 'All'
-    };
-        
+let findsFilter = {
+    query: '',
+    type: 'All',
+    surveyId: 'All'
+};
+
+// NEW: holds photos while the Edit Find modal is open
+let currentEditFindPhotos = [];
+     
         // Profile initialized with default data
         let userProfile = {
             name: "New User",
@@ -959,29 +962,36 @@ function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
-      // Photo UI (via shared helper, mirroring Edit Target)
-    initPhotoUI(find.targetPhotoData, {
-        statusId:  'edit-find-photo-status',
-        wrapperId: 'edit-find-photo-preview-wrapper',
-        imgId:     'edit-find-photo-preview',
-        hiddenId:  'edit-find-photo-data'
-    }, {
-        existing: 'Existing photo loaded. Tap "Take / Choose Photo" to replace.',
-        empty:    'No photo captured yet.'
-    });
+    // --- Photos: prefer array, fall back to legacy single string ---
+    if (Array.isArray(find.photos) && find.photos.length > 0) {
+        currentEditFindPhotos = [...find.photos];
+    } else if (find.targetPhotoData) {
+        currentEditFindPhotos = [find.targetPhotoData];
+    } else if (find.photoData) {
+        // in case any older data used photoData
+        currentEditFindPhotos = [find.photoData];
+    } else {
+        currentEditFindPhotos = [];
+    }
+
+    // Update preview + hidden field from currentEditFindPhotos
+    updateEditFindPhotoPreview();
 
     // Attach the submit handler via shared helper
     attachFormSubmitHandler('edit-find-form', handleEditFindSubmit);
 
-    // Show the modal (same as Edit Target)
+    // Show the modal
     openModal('edit-find-modal');
 }
-
 
 function closeEditFindModal() {
     closeModal('edit-find-modal');
 }
 
+/**
+ * Save changes from Edit Find form back into the find object.
+ * This now supports multiple photos via find.photos.
+ */
 function handleEditFindSubmit(event) {
     event.preventDefault();
     const form = event.target;
@@ -1008,9 +1018,30 @@ function handleEditFindSubmit(event) {
     find.coordinates = form['findCoords'].value.trim();
     find.accuracy    = form['findAccuracy'].value.trim();
 
-    // Photo data
+    // --- Photos: read JSON array from hidden field (with fallback) ---
     if (form['findPhotoData']) {
-        find.targetPhotoData = form['findPhotoData'].value || '';
+        const raw = form['findPhotoData'].value;
+        let parsed = [];
+
+        if (raw) {
+            try {
+                const temp = JSON.parse(raw);
+                if (Array.isArray(temp)) {
+                    parsed = temp.filter(p => typeof p === 'string' && p.length > 0);
+                } else if (typeof temp === 'string' && temp.length > 0) {
+                    parsed = [temp];
+                }
+            } catch (e) {
+                // If it's not valid JSON, fall back to treating it as a single data URL
+                if (typeof raw === 'string' && raw.length > 0) {
+                    parsed = [raw];
+                }
+            }
+        }
+
+        find.photos = parsed;
+        // Keep legacy field in sync so older rendering logic (if any) still works
+        find.targetPhotoData = parsed[0] || '';
     }
 
     find.updatedAt = Date.now();
@@ -1053,7 +1084,15 @@ function handleEditFindSubmit(event) {
  * Takes a target + its parent survey and snapshots it into the permanent Finds library.
  * The Find is independent: if the survey/target are later deleted, this record remains.
  */
+/**
+ * Takes a target + its parent survey and snapshots it into the permanent Finds library.
+ * The Find is independent: if the survey/target are later deleted, this record remains.
+ */
 function createFindFromTarget(target, survey) {
+    // Base photo from the target (if any)
+    const basePhoto = target.targetPhotoData || target.photoDataUrl || '';
+    const photos = basePhoto ? [basePhoto] : [];
+
     const find = {
         id: generateId(),
         createdAt: Date.now(),
@@ -1074,7 +1113,8 @@ function createFindFromTarget(target, survey) {
         centerOnMap: !!target.centerOnMap,
 
         // Media
-        targetPhotoData: target.targetPhotoData || '',
+        targetPhotoData: basePhoto,
+        photos: photos,
 
         // Metadata
         statusAtSave: target.status || '',
@@ -1938,12 +1978,88 @@ function triggerEditFindPhotoInput() {
     triggerPhotoInput('edit-find-photo-input');
 }
 
+// === MULTI-PHOTO SUPPORT FOR EDIT FIND MODAL ===
+
+/**
+ * Re-renders the thumbnails + status text for the Edit Find modal,
+ * based on currentEditFindPhotos.
+ */
+function updateEditFindPhotoPreview() {
+    const statusSpan  = document.getElementById('edit-find-photo-status');
+    const wrapper     = document.getElementById('edit-find-photo-preview-wrapper');
+    const hiddenField = document.getElementById('edit-find-photo-data');
+
+    if (!statusSpan || !wrapper || !hiddenField) return;
+
+    const photos = currentEditFindPhotos || [];
+
+    // Store the array as JSON in the hidden field
+    hiddenField.value = JSON.stringify(photos);
+
+    if (!photos.length) {
+        statusSpan.textContent = 'No photo captured yet.';
+        wrapper.classList.add('hidden');
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    statusSpan.textContent = photos.length === 1
+        ? '1 photo selected.'
+        : `${photos.length} photos selected.`;
+
+    const thumbsHtml = photos.map((src, index) => `
+        <div class="relative">
+            <img
+                src="${src}"
+                alt="Find photo ${index + 1}"
+                class="w-24 h-24 object-cover rounded-md border border-gray-300"
+            />
+        </div>
+    `).join('');
+
+    wrapper.innerHTML = `
+        <div class="flex flex-wrap gap-2 justify-center w-full">
+            ${thumbsHtml}
+        </div>
+    `;
+    wrapper.classList.remove('hidden');
+}
+
+/**
+ * Called when the user picks one or more photos in the Edit Find modal.
+ * Appends them to currentEditFindPhotos and refreshes the preview.
+ */
 function handleEditFindPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'edit-find-photo-status',
-        wrapperId: 'edit-find-photo-preview-wrapper',
-        imgId:     'edit-find-photo-preview',
-        hiddenId:  'edit-find-photo-data'
+    const files = Array.from(event.target.files || []);
+    if (!files.length) {
+        return;
+    }
+
+    // Allow picking again later (including the same file)
+    event.target.value = '';
+
+    let remaining = files.length;
+
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            if (typeof dataUrl === 'string') {
+                currentEditFindPhotos.push(dataUrl);
+            }
+            remaining -= 1;
+            if (remaining === 0) {
+                updateEditFindPhotoPreview();
+            }
+        };
+        reader.onerror = () => {
+            console.error('Error reading find photo file:', reader.error);
+            remaining -= 1;
+            if (remaining === 0) {
+                updateEditFindPhotoPreview();
+            }
+        };
+        reader.readAsDataURL(file);
     });
 }
 
@@ -2659,26 +2775,62 @@ function renderFindsPage() {
         return true;
     });
 
-const cardsHtml = filteredFinds.map(find => {
-    const dateText = find.createdAt ? formatDate(find.createdAt) : '';
-    const typeLabel = find.type || 'Unknown';
+    const cardsHtml = filteredFinds.map(find => {
+        const dateText  = find.createdAt ? formatDate(find.createdAt) : '';
+        const typeLabel = find.type || 'Unknown';
 
-    // Use whichever photo field is present on the Find
-    const photoSrc = find.targetPhotoData || find.photoData || '';
+        // Normalise photos: prefer array, fall back to single fields
+        const photos = (Array.isArray(find.photos) && find.photos.length > 0)
+            ? find.photos
+            : (find.targetPhotoData
+                ? [find.targetPhotoData]
+                : (find.photoData ? [find.photoData] : []));
 
-    const photoHtml = photoSrc
-        ? `
-            <div class="mt-3">
-                <img
-                    src="${photoSrc}"
-                    alt="Find photo"
-                    class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
-                />
-            </div>
-          `
-        : '';
+        let photoHtml = '';
 
-           return `
+        if (photos.length === 1) {
+            const src = photos[0];
+            photoHtml = src
+                ? `
+                    <div class="mt-3">
+                        <img
+                            src="${src}"
+                            alt="Find photo"
+                            class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
+                        />
+                    </div>
+                  `
+                : '';
+        } else if (photos.length > 1) {
+            const visible = photos.slice(0, 4);
+            const extra   = photos.length - visible.length;
+
+            const gridHtml = visible.map((src, idx) => `
+                <div class="relative">
+                    <img
+                        src="${src}"
+                        alt="Find photo ${idx + 1}"
+                        class="w-full h-24 object-cover rounded-lg border border-gray-200"
+                    />
+                    ${extra > 0 && idx === visible.length - 1
+                        ? `<div class="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-sm font-semibold rounded-lg">
+                               +${extra} more
+                           </div>`
+                        : ''}
+                </div>
+            `).join('');
+
+            photoHtml = `
+                <div class="mt-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        ${gridHtml}
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">${photos.length} photos</p>
+                </div>
+            `;
+        }
+
+        return `
             <div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-gray-100">
                 <div class="flex items-start justify-between">
                     <div>
@@ -2694,6 +2846,8 @@ const cardsHtml = filteredFinds.map(find => {
                     </span>
                 </div>
 
+                ${photoHtml}
+
                 <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-700">
                     <div><span class="font-semibold">VDI:</span> ${find.vdi || '—'}</div>
                     <div><span class="font-semibold">Depth:</span> ${find.depth || '—'}</div>
@@ -2704,26 +2858,23 @@ const cardsHtml = filteredFinds.map(find => {
                         <span class="break-all">${find.coordinates || '—'}</span>
                     </div>
                 </div>
-                 ${photoHtml}
-                <div class="mt-3 flex justify-end gap-2 text-xs">
+
+                <div class="mt-3 flex justify-end gap-2">
                     <button
                         type="button"
-                        class="px-3 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
-                        onclick="openEditFindModal('${find.id}')">
-                        Edit
+                        class="px-3 py-1 rounded-md bg-gray-100 text-gray-800 text-xs font-semibold hover:bg-gray-200 find-card-edit-btn"
+                        data-find-id="${find.id}">
+                        View / edit this Find
                     </button>
                     <button
                         type="button"
-                        class="px-3 py-1 rounded-md border border-red-500 text-red-600 hover:bg-red-50"
-                        onclick="deleteFind('${find.id}')">
+                        class="px-3 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 find-card-delete-btn"
+                        data-find-id="${find.id}">
                         Delete
                     </button>
                 </div>
-
-               
             </div>
         `;
-
     }).join('');
 
     return `
