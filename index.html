@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds photos 6  - Metal Detecting Survey Log</title>
+    <title>Finds photos 9  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -689,6 +689,9 @@ let findsFilter = {
     surveyId: 'All'
 };
 
+// NEW: dedicated storage key for Finds
+const FINDS_STORAGE_KEY = 'geoFindFinds_v2';
+        
 // NEW: holds photos while the Edit Find modal is open
 let currentEditFindPhotos = [];
      
@@ -1184,16 +1187,45 @@ function createFindFromTarget(target, survey) {
     // Immediate, strong feedback
     showMessage(`Find created from target: "${find.description}".`, 'success');
 }
-        /** Saves the current surveys and profile data to Local Storage. */
 function saveFindsToLocalStorage() {
     try {
-        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
+        // Save under the new key
+        localStorage.setItem(FINDS_STORAGE_KEY, JSON.stringify(finds));
+        // Debug info – useful if you peek in the console
+        console.log(`Saved ${finds.length} finds to Local Storage.`);
     } catch (e) {
         console.error("Error saving Finds to Local Storage:", e);
         // No toast here – we don't want to confuse the user
     }
 }
+function loadFindsFromLocalStorage() {
+    try {
+        // Prefer the new v2 key
+        let stored = localStorage.getItem(FINDS_STORAGE_KEY);
 
+        // One-time fallback to the old key if v2 is empty
+        if (!stored) {
+            stored = localStorage.getItem('geoFindFinds');
+        }
+
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                finds = parsed;
+            } else {
+                console.warn('Stored finds data was not an array, resetting to empty.');
+                finds = [];
+            }
+        } else {
+            finds = [];
+        }
+
+        console.log(`Loaded ${finds.length} finds from Local Storage.`);
+    } catch (e) {
+        console.error('Error loading Finds from Local Storage, resetting to empty:', e);
+        finds = [];
+    }
+}
         
 function saveSurveysToLocalStorage() {
     try {
@@ -1237,12 +1269,8 @@ function saveSurveysToLocalStorage() {
                         }
                     ];
                 }
-        // Load Finds (can be empty even if surveys exist)
-        if (storedFinds) {
-            finds = JSON.parse(storedFinds);
-        } else {
-            finds = [];
-        }
+          // Load Finds from Local Storage (can be empty even if surveys exist)
+        loadFindsFromLocalStorage();
 
                 if (storedProfile) {
                     // Update userProfile only if storedProfile exists and is valid
