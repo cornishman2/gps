@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Survey photo 6  - Metal Detecting Survey Log</title>
+    <title>Survey photo 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2444,10 +2444,10 @@ function renderHomePage() {
     </div>`; // Note the closing backtick here
 }        
         /** Renders a single survey card with action buttons based on status. */
+/** Renders a single survey card with action buttons based on status. */
 function renderSurveyCard(survey, isOpen = false) {
     let actions = '';
     let statusBadge = '';
-    // Get the secondary color variable for inline styles
     const secondaryColor = 'rgb(var(--color-secondary))';
 
     switch (survey.status) {
@@ -2532,8 +2532,20 @@ function renderSurveyCard(survey, isOpen = false) {
             break;
     }
 
+    // Optional survey photo thumbnail
+    const photoHtml = survey.surveyPhotoData
+        ? `
+            <div class="mt-3">
+                <img
+                    src="${survey.surveyPhotoData}"
+                    alt="Survey photo"
+                    class="w-full max-h-40 object-cover rounded-lg border border-gray-200"
+                />
+            </div>
+        `
+        : '';
+
     // For the Open survey card on the dashboard, we *don’t* repeat the name
-    // (that’s the “second name” you didn’t want).
     const titleName = isOpen ? '' : survey.name;
 
     return `
@@ -2547,6 +2559,7 @@ function renderSurveyCard(survey, isOpen = false) {
                 </div>
             </div>
             <p class="text-sm text-gray-600 mb-2">${survey.description}</p>
+            ${photoHtml}
             <div class="flex justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 mt-2">
                 <span>Created: ${formatDate(survey.creationDate)}</span>
                 <span>Targets: ${survey.targets.length}</span>
@@ -2555,7 +2568,6 @@ function renderSurveyCard(survey, isOpen = false) {
         </div>
     `;
 }
-
 
         /** Renders the content for the Targets page. */
         function renderTargetsPage() {
