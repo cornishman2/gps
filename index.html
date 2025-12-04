@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit button 1  - Metal Detecting Survey Log</title>
+    <title>Survey photo 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -124,7 +124,101 @@
         </div>
     </div>
 
-<!-- Edit Find Modal -->
+<div id="edit-survey-modal" class="modal">
+    <div class="modal-content bg-white p-6 shadow-2xl">
+        <h3 class="text-xl font-bold text-primary mb-4">Edit Open Survey</h3>
+        <form id="edit-survey-form">
+            <input type="hidden" id="edit-survey-id" name="surveyId">
+
+            <div class="mb-4">
+                <label for="edit-survey-name" class="block text-sm font-medium text-gray-700">
+                    Survey Name *
+                </label>
+                <input
+                    type="text"
+                    id="edit-survey-name"
+                    name="surveyName"
+                    required
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                >
+            </div>
+
+            <div class="mb-4">
+                <label for="edit-survey-description" class="block text-sm font-medium text-gray-700">
+                    Description / Location
+                </label>
+                <textarea
+                    id="edit-survey-description"
+                    name="surveyDescription"
+                    rows="3"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                ></textarea>
+            </div>
+
+            <!-- Survey Photo -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">
+                    Survey Photo (optional)
+                </label>
+                <p id="edit-survey-photo-status" class="text-xs text-gray-500 mt-1">
+                    No photo captured yet.
+                </p>
+
+                <div
+                    id="edit-survey-photo-preview-wrapper"
+                    class="mt-2 hidden"
+                >
+                    <img
+                        id="edit-survey-photo-preview"
+                        alt="Survey photo preview"
+                        class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                </div>
+
+                <input
+                    type="hidden"
+                    id="edit-survey-photo-data"
+                    name="surveyPhotoData"
+                >
+
+                <input
+                    type="file"
+                    id="edit-survey-photo-input"
+                    accept="image/*"
+                    capture="environment"
+                    class="hidden"
+                    onchange="handleEditSurveyPhotoSelected(event)"
+                >
+
+                <button
+                    type="button"
+                    onclick="triggerEditSurveyPhotoInput()"
+                    class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100"
+                >
+                    <i class="fas fa-camera mr-2"></i>
+                    Take / Choose Photo
+                </button>
+            </div>
+
+            <div class="flex justify-end space-x-3 mt-6">
+                <button
+                    type="button"
+                    onclick="closeEditSurveyModal()"
+                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="submit"
+                    class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                    style="background-color: rgb(var(--color-secondary));"
+                >
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 <!-- Edit Find Modal (now matches Target modal structure) -->
 <div id="edit-find-modal" class="modal">
   <div class="modal-content bg-white p-6 shadow-2xl">
@@ -1006,7 +1100,8 @@ function saveSurveysToLocalStorage() {
                                 { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.256800, -5.234500", accuracy: "5.5", user: userProfile.name, detector: userProfile.detector },
                                 { id: generateId(), description: "Lead Button", vdi: "30", depth: "6in", type: "Relic", status: "Signal Detected", time: Date.now() - 100000, coordinates: "50.257000, -5.234100", accuracy: "2.1", user: userProfile.name, detector: userProfile.detector },
                                 { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.256700, -5.234800", accuracy: "10.0", user: userProfile.name, detector: userProfile.detector }
-                            ]
+                            ],
+                            surveyPhotoData: ''
                         }
                     ];
                 }
@@ -1502,16 +1597,18 @@ function closeNewSurveyModal() {
                 }
             });
 
-            // 2. Create the new survey object
-            const newSurvey = {
-                id: generateId(),
-                name: name,
-                description: description,
-                status: 'Open', // Automatically opens the new survey
-                creationDate: now,
-                dateLastChanged: now,
-                targets: []
-            };
+// 2. Create the new survey object
+const newSurvey = {
+    id: generateId(),
+    name: name,
+    description: description,
+    status: 'Open', // Automatically opens the new survey
+    creationDate: now,
+    dateLastChanged: now,
+    targets: [],
+    // Optional single survey photo (Base64 data URL)
+    surveyPhotoData: ''
+};
 
             // 3. Add the new survey to the start of the list
             surveys.unshift(newSurvey);
@@ -1522,7 +1619,85 @@ function closeNewSurveyModal() {
             showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
             render();
         }
+// ============================
+// EDIT OPEN SURVEY (NAME + PHOTO)
+// ============================
 
+function showEditSurveyModal() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey) {
+        showMessage('There is no open survey to edit.', 'warning');
+        return;
+    }
+
+    const form = document.getElementById('edit-survey-form');
+    if (!form) return;
+
+    // Populate fields
+    form['surveyId'].value          = openSurvey.id;
+    form['surveyName'].value        = openSurvey.name || '';
+    form['surveyDescription'].value = openSurvey.description || '';
+
+    // Initialise photo UI
+    initPhotoUI(
+        openSurvey.surveyPhotoData,
+        {
+            statusId:  'edit-survey-photo-status',
+            wrapperId: 'edit-survey-photo-preview-wrapper',
+            imgId:     'edit-survey-photo-preview',
+            hiddenId:  'edit-survey-photo-data'
+        },
+        {
+            existing: 'Existing survey photo loaded. Tap "Take / Choose Photo" to replace.',
+            empty:    'No survey photo captured yet.'
+        }
+    );
+
+    // Safely attach submit handler
+    attachFormSubmitHandler('edit-survey-form', handleEditSurveySubmit);
+
+    openModal('edit-survey-modal');
+}
+
+function closeEditSurveyModal() {
+    closeModal('edit-survey-modal');
+}
+
+function handleEditSurveySubmit(event) {
+    event.preventDefault();
+    const form = event.target;
+
+    const id = form['surveyId'].value;
+    const survey = surveys.find(s => s.id === id);
+
+    // Enforce "only edit the Open survey"
+    if (!survey || survey.status !== 'Open') {
+        showMessage('Only the open survey can be edited.', 'error');
+        closeEditSurveyModal();
+        return;
+    }
+
+    const name = form['surveyName'].value.trim();
+    if (!name) {
+        showMessage('Survey Name is required.', 'error');
+        return;
+    }
+
+    const description = form['surveyDescription'].value.trim() || 'No description provided.';
+    const photoData   = form['surveyPhotoData']?.value || '';
+
+    survey.name           = name;
+    survey.description    = description;
+    survey.surveyPhotoData = photoData;
+    survey.dateLastChanged = Date.now();
+
+    saveSurveysToLocalStorage();
+    closeEditSurveyModal();
+    showMessage('Open survey updated.', 'success');
+    render();
+}
+
+        
  /** Shows the New Target Modal. */
 function showNewTargetModal() {
     const openSurvey = surveys.find(s => s.status === 'Open');
@@ -1657,6 +1832,20 @@ function handlePhotoSelected(event, {
 }
 
 // --- TARGET PHOTO HELPERS (new target form) ---
+// --- EDIT SURVEY PHOTO HELPERS ---
+
+function triggerEditSurveyPhotoInput() {
+    triggerPhotoInput('edit-survey-photo-input');
+}
+
+function handleEditSurveyPhotoSelected(event) {
+    handlePhotoSelected(event, {
+        statusId:  'edit-survey-photo-status',
+        wrapperId: 'edit-survey-photo-preview-wrapper',
+        imgId:     'edit-survey-photo-preview',
+        hiddenId:  'edit-survey-photo-data'
+    });
+}
 
 function triggerTargetPhotoInput() {
     triggerPhotoInput('target-photo-input');
@@ -2181,7 +2370,9 @@ function renderHomePage() {
             ${renderSurveyList(archivedSurveys)}
         </div>
     </div>`; // Note the closing backtick here
-}        /** Renders a single survey card with action buttons based on status. */
+}        
+        
+/** Renders a single survey card with action buttons based on status. */
         function renderSurveyCard(survey, isOpen = false) {
             let actions = '';
             let statusBadge = '';
@@ -2190,13 +2381,35 @@ function renderHomePage() {
 
             switch (survey.status) {
                 case 'Open':
-                    statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
-                    // 'Close' button is yellow
-                    actions = `
-                        <button class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="close" data-name="${survey.name}">Close</button>
-                        <button class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm" onclick="handleSurveyAction(this)" data-id="${survey.id}" data-action="archive" data-name="${survey.name}">Archive</button>
-                    `;
-                    break;
+    statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
+    actions = `
+        <button
+            class="survey-action-btn bg-blue-500 hover:bg-blue-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm"
+            type="button"
+            onclick="showEditSurveyModal()">
+            Edit
+        </button>
+        <button
+            class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm"
+            type="button"
+            onclick="handleSurveyAction(this)"
+            data-id="${survey.id}"
+            data-action="close"
+            data-name="${survey.name}">
+            Close
+        </button>
+        <button
+            class="survey-action-btn bg-red-500 hover:bg-red-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm"
+            type="button"
+            onclick="handleSurveyAction(this)"
+            data-id="${survey.id}"
+            data-action="archive"
+            data-name="${survey.name}">
+            Archive
+        </button>
+    `;
+    break;
+
                 case 'Active': // Active but Closed
                     statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
                     // 'Open' button uses the secondary (green) color via inline style
@@ -2214,6 +2427,18 @@ function renderHomePage() {
                     `;
                     break;
             }
+// Optional small survey photo thumbnail
+const photoHtml = survey.surveyPhotoData
+    ? `
+        <div class="mt-3">
+            <img
+                src="${survey.surveyPhotoData}"
+                alt="Survey photo"
+                class="w-full max-h-40 object-cover rounded-lg border border-gray-200"
+            />
+        </div>
+      `
+    : '';
 
             return `
                 <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-yellow-500' : 'border-primary'}">
@@ -2224,6 +2449,7 @@ function renderHomePage() {
                         </div>
                     </div>
                     <p class="text-sm text-gray-600 mb-2">${survey.description}</p>
+                    ${photoHtml}
                     <div class="flex justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 mt-2">
                         <span>Created: ${formatDate(survey.creationDate)}</span>
                         <span>Targets: ${survey.targets.length}</span>
