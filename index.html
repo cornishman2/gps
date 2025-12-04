@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds photos 4  - Metal Detecting Survey Log</title>
+    <title>Finds photos 5  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1127,11 +1127,23 @@ function handleEditFindSubmit(event) {
  * Takes a target + its parent survey and snapshots it into the permanent Finds library.
  * The Find is independent: if the survey/target are later deleted, this record remains.
  */
+/**
+ * Takes a target + its parent survey and snapshots it into the permanent Finds library.
+ * The Find is independent: if the survey/target are later deleted, this record remains.
+ */
 function createFindFromTarget(target, survey) {
-    // Base photo from the target (if any)
+    // 1) Prevent duplicate Finds for the same target in the same survey
+    const existing = finds.find(f => f.targetId === target.id && f.surveyId === survey.id);
+    if (existing) {
+        showMessage('This target is already saved in Finds.', 'info');
+        return;
+    }
+
+    // 2) Base photo from the target (if any)
     const basePhoto = target.targetPhotoData || target.photoDataUrl || '';
     const photos = basePhoto ? [basePhoto] : [];
 
+    // 3) Build the new Find object
     const find = {
         id: generateId(),
         createdAt: Date.now(),
@@ -1161,7 +1173,8 @@ function createFindFromTarget(target, survey) {
         detector: target.detector || userProfile.detector || ''
     };
 
-    finds.push(find);
+    // 4) Add to Finds (newest at the top of the list)
+    finds.unshift(find);
 
     // Save finds separately (no scary warnings)
     saveFindsToLocalStorage();
@@ -1173,10 +1186,9 @@ function createFindFromTarget(target, survey) {
 
     // Slight delay helps ensure UI is settled before message appears
     setTimeout(() => {
-        showMessage(`Find saved: "${find.description}"`, 'success');
+        showMessage(`Target copied – Find created: "${find.description}".`, 'success');
     }, 120);
 }
-        
         /** Saves the current surveys and profile data to Local Storage. */
 function saveFindsToLocalStorage() {
     try {
@@ -2559,6 +2571,15 @@ function handleTargetAction(element) {
             `Confirm Delete Target: ${target.description}`,
             `Are you sure you want to permanently delete this target?`,
             executeAction
+        );
+    } else if (action === 'saveFind') {
+        // New: confirm before creating a Find
+        showConfirmationModal(
+            'Create Find from Target',
+            `Copy this target into your Finds library as a permanent record?<br><br><strong>${target.description || 'Unnamed target'}</strong>`,
+            () => {
+                executeAction(); // this will call createFindFromTarget(...)
+            }
         );
     } else {
         executeAction();
