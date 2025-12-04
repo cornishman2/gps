@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Survey photo 5  - Metal Detecting Survey Log</title>
+    <title>Survey photo 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2443,24 +2443,29 @@ function renderHomePage() {
         </div>
     </div>`; // Note the closing backtick here
 }        
-        
-/** Renders a single survey card with action buttons based on status. */
+        /** Renders a single survey card with action buttons based on status. */
 function renderSurveyCard(survey, isOpen = false) {
     let actions = '';
     let statusBadge = '';
+    // Get the secondary color variable for inline styles
     const secondaryColor = 'rgb(var(--color-secondary))';
 
     switch (survey.status) {
         case 'Open':
             statusBadge = `<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">OPEN</span>`;
+            // Only the OPEN survey can be edited
             actions = `
+                <button
+                    class="survey-action-btn bg-indigo-500 hover:bg-indigo-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm"
+                    onclick="showEditSurveyModal('${survey.id}')">
+                    Edit
+                </button>
                 <button
                     class="survey-action-btn bg-yellow-500 hover:bg-yellow-600 p-2 text-black text-sm font-semibold rounded-md shadow-sm"
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="close"
-                    data-name="${survey.name}"
-                >
+                    data-name="${survey.name}">
                     Close
                 </button>
                 <button
@@ -2468,8 +2473,7 @@ function renderSurveyCard(survey, isOpen = false) {
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="archive"
-                    data-name="${survey.name}"
-                >
+                    data-name="${survey.name}">
                     Archive
                 </button>
             `;
@@ -2479,22 +2483,19 @@ function renderSurveyCard(survey, isOpen = false) {
             statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">ACTIVE</span>`;
             actions = `
                 <button
-                    class="survey-action-btn p-2 text-white text-sm font-semibold rounded-md shadow-sm"
+                    class="survey-action-btn bg-green-500 hover:bg-green-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm"
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="open"
-                    data-name="${survey.name}"
-                    style="background-color: ${secondaryColor};"
-                >
-                    Open
+                    data-name="${survey.name}">
+                    Re-open
                 </button>
                 <button
                     class="survey-action-btn bg-gray-500 hover:bg-gray-600 p-2 text-white text-sm font-semibold rounded-md shadow-sm"
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="archive"
-                    data-name="${survey.name}"
-                >
+                    data-name="${survey.name}">
                     Archive
                 </button>
                 <button
@@ -2502,8 +2503,7 @@ function renderSurveyCard(survey, isOpen = false) {
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="delete"
-                    data-name="${survey.name}"
-                >
+                    data-name="${survey.name}">
                     Delete
                 </button>
             `;
@@ -2517,8 +2517,7 @@ function renderSurveyCard(survey, isOpen = false) {
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="restore"
-                    data-name="${survey.name}"
-                >
+                    data-name="${survey.name}">
                     Restore
                 </button>
                 <button
@@ -2526,39 +2525,28 @@ function renderSurveyCard(survey, isOpen = false) {
                     onclick="handleSurveyAction(this)"
                     data-id="${survey.id}"
                     data-action="delete"
-                    data-name="${survey.name}"
-                >
+                    data-name="${survey.name}">
                     Delete
                 </button>
             `;
             break;
     }
 
-    // Optional survey photo thumbnail
-    const photoHtml = survey.surveyPhotoData
-        ? `
-            <div class="mt-3">
-                <img
-                    src="${survey.surveyPhotoData}"
-                    alt="Survey photo"
-                    class="w-full max-h-40 object-cover rounded-lg border border-gray-200"
-                />
-            </div>
-        `
-        : '';
+    // For the Open survey card on the dashboard, we *don’t* repeat the name
+    // (that’s the “second name” you didn’t want).
+    const titleName = isOpen ? '' : survey.name;
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-yellow-500' : 'border-primary'}">
             <div class="flex justify-between items-start mb-2">
                 <h4 class="text-lg font-bold text-gray-800">
-                    ${statusBadge}${isOpen ? '' : survey.name}
+                    ${statusBadge}${titleName}
                 </h4>
                 <div class="flex space-x-2">
                     ${actions}
                 </div>
             </div>
             <p class="text-sm text-gray-600 mb-2">${survey.description}</p>
-            ${photoHtml}
             <div class="flex justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 mt-2">
                 <span>Created: ${formatDate(survey.creationDate)}</span>
                 <span>Targets: ${survey.targets.length}</span>
@@ -2567,6 +2555,8 @@ function renderSurveyCard(survey, isOpen = false) {
         </div>
     `;
 }
+
+
         /** Renders the content for the Targets page. */
         function renderTargetsPage() {
             const openSurvey = surveys.find(s => s.status === 'Open');
