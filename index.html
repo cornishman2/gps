@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds photos 5  - Metal Detecting Survey Log</title>
+    <title>Finds photos 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1132,10 +1132,12 @@ function handleEditFindSubmit(event) {
  * The Find is independent: if the survey/target are later deleted, this record remains.
  */
 function createFindFromTarget(target, survey) {
+    if (!target || !survey) return;
+
     // 1) Prevent duplicate Finds for the same target in the same survey
     const existing = finds.find(f => f.targetId === target.id && f.surveyId === survey.id);
     if (existing) {
-        showMessage('This target is already saved in Finds.', 'info');
+        showMessage('This target is already saved as a Find.', 'info');
         return;
     }
 
@@ -1179,15 +1181,8 @@ function createFindFromTarget(target, survey) {
     // Save finds separately (no scary warnings)
     saveFindsToLocalStorage();
 
-    // Optional small vibration for mobile feedback (safe no-op on desktop)
-    if (navigator.vibrate) {
-        navigator.vibrate(40);
-    }
-
-    // Slight delay helps ensure UI is settled before message appears
-    setTimeout(() => {
-        showMessage(`Target copied – Find created: "${find.description}".`, 'success');
-    }, 120);
+    // Immediate, strong feedback
+    showMessage(`Find created from target: "${find.description}".`, 'success');
 }
         /** Saves the current surveys and profile data to Local Storage. */
 function saveFindsToLocalStorage() {
@@ -1655,27 +1650,31 @@ function updateMapWithUserLocationAndRender() {
         // --- MODAL & TOAST FUNCTIONS ---
 
         /** Shows a temporary notification toast. */
-        function showMessage(message, type = 'info') {
-            const toast = document.getElementById('message-toast');
-            toast.textContent = message;
+function showMessage(message, type = 'info') {
+    const toast = document.getElementById('message-toast');
+    if (!toast) return;
 
-            let bgColor = 'bg-gray-700'; // Default info
-            if (type === 'success') {
-                bgColor = 'bg-secondary';
-            } else if (type === 'error') {
-                bgColor = 'bg-red-600';
-            } else if (type === 'warning') {
-                bgColor = 'bg-yellow-500';
-            }
+    toast.textContent = message;
 
-            toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 opacity-100 ${bgColor}`;
+    // Strong, high-contrast background colours
+    let bgColor = 'bg-gray-900'; // Default info
+    if (type === 'success') {
+        bgColor = 'bg-green-600';
+    } else if (type === 'error') {
+        bgColor = 'bg-red-600';
+    } else if (type === 'warning') {
+        bgColor = 'bg-yellow-600';
+    }
 
-            setTimeout(() => {
-                toast.classList.remove('opacity-100');
-                toast.classList.add('opacity-0');
-            }, 3000);
-        }
+    // Centre the toast near the top, make it big and obvious
+    toast.className = `fixed top-24 left-1/2 transform -translate-x-1/2 z-50 px-4 py-3 rounded-xl shadow-2xl transition-opacity duration-300 opacity-100 text-white text-base font-semibold pointer-events-none ${bgColor}`;
 
+    // Auto-fade after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+    }, 3000);
+}
         /** Shows the generic confirmation modal. */
         function showConfirmationModal(title, message, onConfirmCallback) {
             const modal = document.getElementById('confirmation-modal');
