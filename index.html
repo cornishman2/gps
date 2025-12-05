@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buttons 3  - Metal Detecting Survey Log</title>
+    <title>Tracks 9  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2087,80 +2087,55 @@ function handleMapTargetClick(event, targetId) {
 }
 
 
-function handleTargetAction(element) {
-    const action   = element.dataset.action;
-    const targetId = element.dataset.id;
-    const surveyId = element.dataset.surveyId;
+        function handleTargetAction(element) {
+            const action = element.dataset.action;
+            const targetId = element.dataset.id;
+            const surveyId = element.dataset.surveyId;
+            const survey = surveys.find(s => s.id === surveyId);
+            if (!survey) return;
+            const target = survey.targets.find(t => t.id === targetId);
+            if (!target) return;
 
-    const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return;
+            if (action === 'edit') {
+                // Special case: open the edit modal
+                showEditTargetModal(targetId, surveyId);
+                return;
+            }
 
-    const target = survey.targets.find(t => t.id === targetId);
-    if (!target) return;
-
-    // Special case: open the edit modal
-    if (action === 'edit') {
-        showEditTargetModal(targetId, surveyId);
-        return;
-    }
-
-    const executeAction = () => {
-        switch (action) {
-            case 'setStatus': {
+            const executeAction = () => {
+                        switch (action) {
+            case 'setStatus':
                 const newStatus = element.dataset.status;
                 target.status = newStatus;
                 showMessage(`Target status updated to: ${newStatus}`, 'success');
                 break;
-            }
 
-            case 'saveFind': {
-                // Copy this target into the Finds library
+            case 'saveFind':   // <--- NEW
                 createFindFromTarget(target, survey);
-                // No change to target/survey status
+                // We DO NOT change the target or survey status here
                 break;
-            }
 
-            case 'navigate': {
-                // Set this target as the active navigation target
-                navigationTargetId = targetId;
-                showMessage(`Navigation target set: "${target.description}".`, 'success');
-
-                // Jump straight to the Compass page so navigation is visible
-                currentPage = 'Compass';
-                break;
-            }
-
-            case 'centerOnMap': {
-                // Ensure only this target is the "centre on map" one for this survey
-                survey.targets.forEach(t => {
-                    t.centerOnMap = (t.id === targetId);
-                });
-                showMessage('Centre on map updated for this target.', 'success');
-                break;
-            }
-
-            case 'delete': {
+            case 'delete':
                 survey.targets = survey.targets.filter(t => t.id !== targetId);
-                showMessage('Target deleted.', 'error');
+                showMessage(`Target deleted.`, 'error');
                 break;
+        }
+                survey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                render();
+            };
+
+            if (action === 'delete') {
+                showConfirmationModal(
+                    `Confirm Delete Target: ${target.description}`,
+                    `Are you sure you want to permanently delete this target?`,
+                    executeAction
+                );
+            } else {
+                executeAction();
             }
         }
 
-        survey.dateLastChanged = Date.now();
-        saveSurveysToLocalStorage();
-        render();
-    };
-
-    if (action === 'delete') {
-        showConfirmationModal(
-            `Confirm Delete Target: ${target.description}`,
-            `Are you sure you want to permanently delete this target?`,
-            executeAction
-        );
-    } else {
-        executeAction();
-    }
-}
         // --- PAGE RENDER FUNCTIONS ---
 
 function renderHomePage() {
@@ -2484,9 +2459,8 @@ const cardsHtml = filteredFinds.map(find => {
 }
 
         
-/** Renders a single target card. */
-function renderTargetCard(target, surveyId) {
-    // --- Type icon & colour chip ---
+        /** Renders a single target card. */
+ function renderTargetCard(target, surveyId) {
     let typeColor = 'bg-primary';
     let typeIcon = 'fas fa-gem';
 
@@ -2517,227 +2491,141 @@ function renderTargetCard(target, surveyId) {
             break;
     }
 
-    // --- Status badge styling (matches existing colours) ---
     let statusClass = 'bg-green-100 text-green-800';
     let statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+    let actionDropdown = '';
 
     switch (target.status) {
         case 'Signal Detected':
             statusClass = 'bg-green-100 text-green-800';
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                                <a href="#"
+                   onclick="handleTargetAction(this)"
+                   data-action="saveFind"
+                   data-id="${target.id}"
+                   data-survey-id="${surveyId}"
+                   class="block px-4 py-2 text-sm text-indigo-700 hover:bg-gray-100">
+                    Save as Find
+                </a>
+
+            `;
             break;
         case 'Hole Dug':
-            statusClass = 'bg-amber-100 text-amber-800';
-            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10"></path></svg>`;
+            statusClass = 'bg-yellow-100 text-yellow-800';
+            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>`;
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                            <a href="#"
+                   onclick="handleTargetAction(this)"
+                   data-action="saveFind"
+                   data-id="${target.id}"
+                   data-survey-id="${surveyId}"
+                   class="block px-4 py-2 text-sm text-indigo-700 hover:bg-gray-100">
+                    Save as Find
+                </a>
+
+            `;
             break;
         case 'Hole Refilled':
-            statusClass = 'bg-blue-100 text-blue-800';
-            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+            statusClass = 'bg-secondary/10 text-secondary';
+            statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4M18 5h2M17 19h4m-7-6l-3-3 6-6m-3 9l3-3 6-6"></path></svg>`;
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Mark: Signal Ignored </a>
+                <a href="#"
+                   onclick="handleTargetAction(this)"
+                   data-action="saveFind"
+                   data-id="${target.id}"
+                   data-survey-id="${surveyId}"
+                   class="block px-4 py-2 text-sm text-indigo-700 hover:bg-gray-100">
+                    Save as Find
+                </a>
+
+            `;
             break;
         case 'Signal Ignored':
             statusClass = 'bg-gray-100 text-gray-800';
             statusIcon = `<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+            actionDropdown = `
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Signal Detected" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-green-700 hover:bg-gray-100"> Mark: Signal Detected </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Dug" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-yellow-700 hover:bg-gray-100"> Mark: Hole Dug </a>
+                <a href="#" onclick="handleTargetAction(this)" data-action="setStatus" data-status="Hole Refilled" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100"> Mark: Hole Refilled </a>
+            `;
             break;
     }
 
-    // --- Photo preview (supports both fields you use) ---
-    const photoSrc = target.targetPhotoData || target.photoDataUrl || '';
-    const photoHtml = photoSrc
+    // NEW: photo thumbnail HTML (if a photo exists)
+    const photoHtml = target.photoDataUrl
         ? `
             <div class="mt-3">
                 <img
-                    src="${photoSrc}"
+                    src="${target.photoDataUrl}"
                     alt="Target photo"
-                    class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
-                />
+                    class="h-24 w-auto rounded-md border border-gray-200 object-cover"
+                >
             </div>
         `
         : '';
 
-    // --- Core text fields with safe fallbacks ---
-    const vdiText     = target.vdi && target.vdi !== 'N/A' ? target.vdi : 'N/A';
-    const depthText   = target.depth && target.depth !== 'Unknown' ? target.depth : 'Unknown';
-    const coordsText  = target.coordinates || 'No GPS logged';
-    const accText     = target.accuracy || 'N/A';
-    const createdText = target.time ? formatDate(target.time) : '';
-
-    // --- Card template ---
     return `
-        <div class="bg-white p-4 rounded-xl shadow-lg border-l-4" style="border-left-color: rgb(59,130,246);">
-            <!-- Header: description + status -->
+        <div class="bg-white p-4 rounded-xl shadow-lg border-l-4" style="border-left-color: ${typeColor};">
             <div class="flex justify-between items-start mb-2">
                 <h4 class="text-xl font-bold text-gray-800 flex items-center">
-                    <i class="${typeIcon} mr-2 text-lg text-white rounded-full p-1 ${typeColor}"></i>
+                    <i class="${typeIcon} mr-2 text-lg" style="color: ${typeColor};"></i>
                     ${target.description}
+                    <span class="ml-3 text-sm text-white font-semibold px-2 py-0.5 rounded-full" style="background-color: ${typeColor};">${target.type}</span>
                 </h4>
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${statusClass}">
-                    ${statusIcon}
-                    <span>${target.status || 'Unknown status'}</span>
-                </span>
+                
+                <div class="relative inline-block text-left target-dropdown-container">
+                    <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-2 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-primary" id="dropdownMenuButton-${target.id}" aria-expanded="true" aria-haspopup="true" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    
+                    <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-10">
+                        <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownMenuButton-${target.id}">
+                            ${actionDropdown}
+                            <div class="border-t border-gray-100"></div>
+                            <a href="#" onclick="handleTargetAction(this)" data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"> Edit Details </a>
+                            <a href="#" onclick="handleTargetAction(this)" data-action="delete" data-id="${target.id}" data-name="${target.description}" data-survey-id="${surveyId}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"> Delete Target </a>
+                        </div>
+                    </div>
+                </div>
             </div>
+            
+            <p class="text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center ${statusClass}">
+                ${statusIcon} ${target.status}
+            </p>
 
             ${photoHtml}
 
-            <!-- Core details grid -->
-            <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-700">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3 pt-3 border-t border-gray-100">
                 <div>
-                    <span class="font-semibold">Target ID:</span>
-                    <span class="ml-1">${target.id}</span>
-                </div>
-                <div>
-                    <span class="font-semibold">VDI:</span>
-                    <span class="ml-1">${vdiText}</span>
+                    <strong class="text-gray-500">Target ID:</strong>
+                    <span class="text-gray-800">${target.vdi}</span>
                 </div>
                 <div>
-                    <span class="font-semibold">Depth:</span>
-                    <span class="ml-1">${depthText}</span>
+                    <strong class="text-gray-500">Depth:</strong>
+                    <span class="text-gray-800">${target.depth}</span>
                 </div>
                 <div>
-                    <span class="font-semibold">Logged:</span>
-                    <span class="ml-1">${createdText}</span>
+                    <strong class="text-gray-500">Accuracy:</strong>
+                    <span class="text-gray-800">${target.accuracy && target.accuracy !== 'N/A' ? target.accuracy + 'm' : 'N/A'}</span>
                 </div>
-                <div class="col-span-2">
-                    <span class="font-semibold">GPS:</span>
-                    <span class="ml-1">${coordsText}</span>
-                </div>
-                <div class="col-span-2">
-                    <span class="font-semibold">Accuracy (m):</span>
-                    <span class="ml-1">${accText}</span>
-                </div>
+                
                 <div>
-                    <span class="font-semibold">User:</span>
-                    <span class="ml-1">${target.user || userProfile.name || ''}</span>
-                </div>
-                <div>
-                    <span class="font-semibold">Detector:</span>
-                    <span class="ml-1">${target.detector || userProfile.detector || ''}</span>
-                </div>
-            </div>
-
-            <!-- Button rows (glove-friendly, colour-matched) -->
-            <div class="mt-4 space-y-2">
-
-                <!-- Row 1: Status buttons (4, light colours to match badges) -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-2 py-2 rounded-md
-                               bg-green-100 text-green-800 hover:bg-green-200
-                               text-xs sm:text-[0.8rem] font-semibold"
-                        data-action="setStatus"
-                        data-status="Signal Detected"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Mark signal detected
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-2 py-2 rounded-md
-                               bg-amber-100 text-amber-800 hover:bg-amber-200
-                               text-xs sm:text-[0.8rem] font-semibold"
-                        data-action="setStatus"
-                        data-status="Hole Dug"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Mark: Hole dug
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-2 py-2 rounded-md
-                               bg-blue-200 text-blue-900 hover:bg-blue-300
-                               text-xs sm:text-[0.8rem] font-semibold"
-                        data-action="setStatus"
-                        data-status="Hole Refilled"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Mark: Hole refilled
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-2 py-2 rounded-md
-                               bg-gray-100 text-gray-800 hover:bg-gray-200
-                               text-xs sm:text-[0.8rem] font-semibold"
-                        data-action="setStatus"
-                        data-status="Signal Ignored"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Mark – Signal ignored
-                    </button>
+                    <strong class="text-gray-500">Coords:</strong>
+                    <span class="text-gray-800 break-all">${target.coordinates.split(',')[0] || target.coordinates}...</span>
                 </div>
 
-                <!-- Row 2: Navigation -->
-                <div class="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-emerald-600 text-white hover:bg-emerald-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="navigate"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Navigate to Target
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-sky-600 text-white hover:bg-sky-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="centerOnMap"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Centre on Map
-                    </button>
+                <div class="col-span-2 sm:col-span-4 text-xs text-gray-400">
+                    Logged at ${new Date(target.time).toLocaleTimeString()} on ${formatDate(target.time)} by ${target.user} (${target.detector})
                 </div>
-
-                <!-- Row 3: Edit / Copy / Delete -->
-                <div class="grid grid-cols-3 sm:grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-purple-100 text-purple-800 hover:bg-purple-200
-                               border border-purple-300
-                               text-xs sm:text-sm font-semibold"
-                        data-action="edit"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Edit details
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-indigo-600 text-white hover:bg-indigo-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="saveFind"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Copy to finds
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-red-600 text-white hover:bg-red-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="delete"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Delete Target
-                    </button>
-                </div>
-
             </div>
         </div>
     `;
