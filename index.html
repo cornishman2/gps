@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 5  - Metal Detecting Survey Log</title>
+    <title>Photo in finds 12  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -771,35 +771,12 @@ function computeMovementBearingDegrees() {
 
         // --- HELPER FUNCTIONS ---
 
-// ======================================
-// SHARED MODAL HELPERS
-// ======================================
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
-    modal.style.display = 'block';
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
-    modal.style.display = 'none';
-}
-// ======================================
-// SHARED FORM HELPERS
-// ======================================
-
-function attachFormSubmitHandler(formId, handler) {
-    const form = document.getElementById(formId);
-    if (!form) return null;
-
-    form.removeEventListener('submit', handler);
-    form.addEventListener('submit', handler);
-
-    return form;
-}
-
-        
+function openEditFindModal(findId) {
+    const find = finds.find(f => f.id === findId);
+    if (!find) {
+        showMessage('Find not found.', 'error');
+        return;
+    }
 function openEditFindModal(findId) {
     const find = finds.find(f => f.id === findId);
     if (!find) {
@@ -820,27 +797,79 @@ function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
-      // Photo UI (via shared helper, mirroring Edit Target)
-    initPhotoUI(find.targetPhotoData, {
-        statusId:  'edit-find-photo-status',
-        wrapperId: 'edit-find-photo-preview-wrapper',
-        imgId:     'edit-find-photo-preview',
-        hiddenId:  'edit-find-photo-data'
-    }, {
-        existing: 'Existing photo loaded. Tap "Take / Choose Photo" to replace.',
-        empty:    'No photo captured yet.'
-    });
+    // Photo UI (mirroring Edit Target logic)
+    const photoData      = find.targetPhotoData;
+    const statusSpan     = document.getElementById('edit-find-photo-status');
+    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
+    const previewImg     = document.getElementById('edit-find-photo-preview');
+    const hiddenField    = document.getElementById('edit-find-photo-data');
 
-    // Attach the submit handler via shared helper
-    attachFormSubmitHandler('edit-find-form', handleEditFindSubmit);
+    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
+        if (hiddenField)    hiddenField.value = photoData;
+        if (previewImg)     previewImg.src = photoData;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan)     statusSpan.textContent =
+            'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
+    } else {
+        if (hiddenField)    hiddenField.value = '';
+        if (previewImg)     previewImg.src = '';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
+    }
+
+    // Attach the submit handler in the same pattern as Targets / Profile
+    form.removeEventListener('submit', handleEditFindSubmit);
+    form.addEventListener('submit', handleEditFindSubmit);
 
     // Show the modal (same as Edit Target)
-    openModal('edit-find-modal');
+    modal.style.display = 'block';
 }
 
+    const modal = document.getElementById('edit-find-modal');
+    const form  = document.getElementById('edit-find-form');
+    if (!modal || !form) return;
+
+    // Core fields
+    form['findId'].value           = find.id;
+    form['findDescription'].value  = find.description || '';
+    form['findType'].value         = find.type || 'Unknown';
+    form['findVDI'].value          = find.vdi || '';
+    form['findDepth'].value        = find.depth || '';
+    form['findCoords'].value       = find.coordinates || '';
+    form['findAccuracy'].value     = find.accuracy || '';
+
+    // Photo UI (mirroring Edit Target logic)
+    const photoData      = find.targetPhotoData;
+    const statusSpan     = document.getElementById('edit-find-photo-status');
+    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
+    const previewImg     = document.getElementById('edit-find-photo-preview');
+    const hiddenField    = document.getElementById('edit-find-photo-data');
+
+    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
+        if (hiddenField)    hiddenField.value = photoData;
+        if (previewImg)     previewImg.src = photoData;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan)     statusSpan.textContent =
+            'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
+    } else {
+        if (hiddenField)    hiddenField.value = '';
+        if (previewImg)     previewImg.src = '';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
+    }
+
+    // Attach the submit handler in the same pattern as Targets / Profile
+    form.removeEventListener('submit', handleEditFindSubmit);
+    form.addEventListener('submit', handleEditFindSubmit);
+
+    // Show the modal (same as Edit Target)
+    modal.style.display = 'block';
+}
 
 function closeEditFindModal() {
-    closeModal('edit-find-modal');
+    const modal = document.getElementById('edit-find-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
 }
 
 function handleEditFindSubmit(event) {
@@ -1422,25 +1451,23 @@ function updateMapWithUserLocationAndRender() {
             document.getElementById('confirmation-modal').style.display = 'none';
         }
 
-    /** Shows the New Survey Modal and attaches the submit listener. */
-function showNewSurveyModal() {
-    // Reset the form whenever the modal is opened
-    const form = document.getElementById('new-survey-form');
-    if (form) {
-        form.reset();
-    }
+        /** Shows the New Survey Modal and attaches the submit listener. */
+        function showNewSurveyModal() {
+            // Reset the form whenever the modal is opened
+            document.getElementById('new-survey-form').reset();
+            document.getElementById('new-survey-modal').style.display = 'block';
 
-    // Use shared helper to attach the submit listener safely
-    attachFormSubmitHandler('new-survey-form', handleNewSurveySubmit);
+            // Ensure the submit listener is attached only once
+            const form = document.getElementById('new-survey-form');
+            // Remove previous listener to prevent multiple submissions
+            form.removeEventListener('submit', handleNewSurveySubmit); 
+            form.addEventListener('submit', handleNewSurveySubmit); 
+        }
 
-    // Show the modal via shared helper
-    openModal('new-survey-modal');
-}
-
-/** Closes the New Survey Modal. */
-function closeNewSurveyModal() {
-    closeModal('new-survey-modal');
-}
+        /** Closes the New Survey Modal. */
+        function closeNewSurveyModal() {
+            document.getElementById('new-survey-modal').style.display = 'none';
+        }
 
         /** Handles the submission of the New Survey form. */
         function handleNewSurveySubmit(event) {
@@ -1485,113 +1512,152 @@ function closeNewSurveyModal() {
             render();
         }
 
- /** Shows the New Target Modal. */
-function showNewTargetModal() {
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey) {
-        return showMessage(
-            'Cannot log target. Please open a survey first on the Home page.',
-            'warning'
-        );
-    }
+        /** Shows the New Target Modal. */
+        function showNewTargetModal() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (!openSurvey) {
+                return showMessage('Cannot log target. Please open a survey first on the Home page.', 'warning');
+            }
 
-    // 1. Set survey name in the modal header
-    const headerSpan = document.getElementById('current-target-survey-name');
-    if (headerSpan) {
-        headerSpan.textContent = openSurvey.name;
-    }
-    
-    // 2. Reset the form
-    const form = document.getElementById('new-target-form');
-    if (form) {
-        form.reset();
-    }
-    
-    // 3. Request GPS location
-    startTargetLocationWatch();
-    
-    // 4. Attach the submit listener via shared helper
-    attachFormSubmitHandler('new-target-form', handleNewTargetSubmit);
+            // 1. Set survey name in the modal header
+            document.getElementById('current-target-survey-name').textContent = openSurvey.name;
+            
+            // 2. Reset the form
+            document.getElementById('new-target-form').reset();
+            
+            // 3. Request GPS location
+            startTargetLocationWatch();
+            
+            // 4. Display modal
+            document.getElementById('new-target-modal').style.display = 'block';
 
-    // 5. Display modal via shared helper
-    openModal('new-target-modal');
-}
+            // 5. Attach the submit listener
+            const form = document.getElementById('new-target-form');
+            form.removeEventListener('submit', handleNewTargetSubmit); 
+            form.addEventListener('submit', handleNewTargetSubmit); 
+        }
 
-/** Closes the New Target Modal. */
-function closeNewTargetModal() {
-    stopTargetLocationWatch();
-    closeModal('new-target-modal');
-}
+        /** Closes the New Target Modal. */
+        function closeNewTargetModal() {
+            stopTargetLocationWatch();
+            document.getElementById('new-target-modal').style.display = 'none';
+        }
 
         /** Handles the submission of the New Target form. */
 
   // --- TARGET PHOTO HELPERS ---
 
-// --- SHARED PHOTO HELPERS ---
-// ======================================
-// SHARED PHOTO-UI INITIALISER
-// ======================================
-function initPhotoUI(photoData, {
-    statusId,
-    wrapperId,
-    imgId,
-    hiddenId
-}, messages = {}) {
-    const statusSpan     = statusId   ? document.getElementById(statusId)   : null;
-    const previewWrapper = wrapperId  ? document.getElementById(wrapperId)  : null;
-    const previewImg     = imgId      ? document.getElementById(imgId)      : null;
-    const hiddenField    = hiddenId   ? document.getElementById(hiddenId)   : null;
-
-    const existingMessage = messages.existing || 'Existing photo loaded. Tap "Take / Choose Photo" to replace.';
-    const emptyMessage    = messages.empty    || 'No photo captured yet.';
-
-    // Valid Base64 data URLs are usually fairly long strings
-    const hasValidPhoto = photoData && typeof photoData === 'string' && photoData.length > 50;
-
-    if (hasValidPhoto) {
-        if (hiddenField)    hiddenField.value = photoData;
-        if (previewImg)     previewImg.src = photoData;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-        if (statusSpan)     statusSpan.textContent = existingMessage;
-    } else {
-        if (hiddenField)    hiddenField.value = '';
-        if (previewImg)     previewImg.src = '';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (statusSpan)     statusSpan.textContent = emptyMessage;
-    }
-}
-
-/**
- * Generic helper to trigger a hidden file input by ID.
- * Clears any previous selection before opening.
- */
-function triggerPhotoInput(inputId) {
-    const fileInput = document.getElementById(inputId);
+/** Opens the hidden file input to let the user take / choose a photo. */
+function triggerTargetPhotoInput() {
+    const fileInput = document.getElementById('target-photo-input');
     if (!fileInput) return;
 
-    fileInput.value = '';   // clear previous selection
-    fileInput.click();      // open camera / gallery
+    // Clear previous selection
+    fileInput.value = '';
+    fileInput.click();
 }
 
-/**
- * Generic helper to handle a selected photo and update:
- * - status text
- * - preview wrapper + image
- * - hidden data field
- */
-function handlePhotoSelected(event, {
-    statusId,
-    wrapperId,
-    imgId,
-    hiddenId
-}) {
+/** Handles the file selection or camera capture from the input field. */
+function handleTargetPhotoSelected(event) {
     const fileInput = event.target;
-    const file = fileInput.files && fileInput.files[0];
+    const file = fileInput.files[0];
 
-    const statusSpan     = statusId   ? document.getElementById(statusId)   : null;
-    const previewWrapper = wrapperId  ? document.getElementById(wrapperId)  : null;
-    const previewImg     = imgId      ? document.getElementById(imgId)      : null;
-    const hiddenField    = hiddenId   ? document.getElementById(hiddenId)   : null;
+    // References to UI elements
+    const statusSpan = document.getElementById('target-photo-status');
+    const previewWrapper = document.getElementById('target-photo-preview-wrapper');
+    const previewImg = document.getElementById('target-photo-preview');
+    const hiddenField = document.getElementById('target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // NOTE: The previous explicit file type check was removed here
+    // because it was causing issues with camera captures on some devices.
+    // The input's accept="image/*" attribute provides enough file type restriction.
+
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
+} 
+
+/** Triggers the hidden file input for the Edit Target modal. */
+function triggerEditTargetPhotoInput() {
+    document.getElementById('edit-target-photo-input').click();
+}
+
+/** Handles file selection/camera capture for the Edit Target modal. */
+function handleEditTargetPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements for the EDIT modal
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+// --- EDIT FIND PHOTO HELPERS ---
+
+function triggerEditFindPhotoInput() {
+    const fileInput = document.getElementById('edit-find-photo-input');
+    if (!fileInput) return;
+
+    // Clear previous selection
+    fileInput.value = '';
+    fileInput.click();
+}
+
+function handleEditFindPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    const statusSpan     = document.getElementById('edit-find-photo-status');
+    const previewWrapper = document.getElementById('edit-find-photo-preview-wrapper');
+    const previewImg     = document.getElementById('edit-find-photo-preview');
+    const hiddenField    = document.getElementById('edit-find-photo-data');
 
     if (!file) {
         if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
@@ -1616,51 +1682,6 @@ function handlePhotoSelected(event, {
         if (hiddenField)    hiddenField.value = '';
     };
     reader.readAsDataURL(file);
-}
-
-// --- TARGET PHOTO HELPERS (new target form) ---
-
-function triggerTargetPhotoInput() {
-    triggerPhotoInput('target-photo-input');
-}
-
-function handleTargetPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'target-photo-status',
-        wrapperId: 'target-photo-preview-wrapper',
-        imgId:     'target-photo-preview',
-        hiddenId:  'target-photo-data'
-    });
-}
-
-// --- EDIT TARGET PHOTO HELPERS ---
-
-function triggerEditTargetPhotoInput() {
-    triggerPhotoInput('edit-target-photo-input');
-}
-
-function handleEditTargetPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'edit-target-photo-status',
-        wrapperId: 'edit-target-photo-preview-wrapper',
-        imgId:     'edit-target-photo-preview',
-        hiddenId:  'edit-target-photo-data'
-    });
-}
-
-// --- EDIT FIND PHOTO HELPERS ---
-
-function triggerEditFindPhotoInput() {
-    triggerPhotoInput('edit-find-photo-input');
-}
-
-function handleEditFindPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'edit-find-photo-status',
-        wrapperId: 'edit-find-photo-preview-wrapper',
-        imgId:     'edit-find-photo-preview',
-        hiddenId:  'edit-find-photo-data'
-    });
 }
         
 function showEditTargetModal(targetId, surveyId) {
@@ -1697,33 +1718,85 @@ function showEditTargetModal(targetId, surveyId) {
     }
 
     // --- REVISED PHOTO LOGIC ADDITION ---
-    // --- PHOTO UI (via shared helper) ---
-    initPhotoUI(target.targetPhotoData, {
-        statusId:  'edit-target-photo-status',
-        wrapperId: 'edit-target-photo-preview-wrapper',
-        imgId:     'edit-target-photo-preview',
-        hiddenId:  'edit-target-photo-data'
-    }, {
-        existing: 'Existing photo loaded. Click "Take / Choose Photo" to replace.',
-        empty:    'No photo captured yet.'
-    });
+    const photoData = target.targetPhotoData;
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    // Load existing photo data if it's a valid, non-empty string (Base64 data is usually > 50 chars)
+    if (photoData && typeof photoData === 'string' && photoData.length > 50) {
+        if (hiddenField) hiddenField.value = photoData;
+        if (previewImg) previewImg.src = photoData;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+        if (statusSpan) statusSpan.textContent = 'Existing photo loaded. Click "Take / Choose Photo" to replace.';
+    } else {
+        // Explicitly hide preview and clear fields if no valid photo data exists
+        if (hiddenField) hiddenField.value = '';
+        if (previewImg) previewImg.src = ''; 
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+    }
+    // --- END REVISED PHOTO LOGIC ADDITION ---
 
    // 2. Display the modal
     const modal = document.getElementById('edit-target-modal');
     modal.style.display = 'block';
 
     // 3. Attach the submit listener
-    // Attach submit handler via shared helper
-    attachFormSubmitHandler('edit-target-form', handleEditTargetSubmit);
-
-    // Show the modal via shared helper
-    openModal('edit-target-modal');
+    const form = document.getElementById('edit-target-form');
+    // REMOVE any previous listener to prevent multiple submissions
+    form.removeEventListener('submit', handleEditTargetSubmit);  
+    // Add the new listener
+    form.addEventListener('submit', handleEditTargetSubmit); 
+}        
+    /** Triggers the hidden file input for the Edit Target modal. */
+function triggerEditTargetPhotoInput() {
+    document.getElementById('edit-target-photo-input').click();
 }
 
-        
-function closeEditTargetModal() {
-    closeModal('edit-target-modal');
+/** Handles file selection/camera capture for the Edit Target modal. */
+function handleEditTargetPhotoSelected(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    // References to UI elements for the EDIT modal
+    const statusSpan = document.getElementById('edit-target-photo-status');
+    const previewWrapper = document.getElementById('edit-target-photo-preview-wrapper');
+    const previewImg = document.getElementById('edit-target-photo-preview');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    if (!file) {
+        if (statusSpan) statusSpan.textContent = 'No photo captured yet.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+        return;
+    }
+
+    // Use FileReader to convert the file to a Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        if (hiddenField) hiddenField.value = dataUrl;
+        if (statusSpan) statusSpan.textContent = 'Photo captured.';
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrapper) previewWrapper.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+        console.error('Error reading photo file:', reader.error);
+        showMessage('Could not read the photo file.', 'error');
+        if (statusSpan) statusSpan.textContent = 'Error capturing photo.';
+        if (previewWrapper) previewWrapper.classList.add('hidden');
+        if (hiddenField) hiddenField.value = '';
+    };
+    reader.readAsDataURL(file);
 }
+
+/** Closes the Edit Target Modal. */
+function closeEditTargetModal() {            
+    document.getElementById('edit-target-modal').style.display = 'none';
+        }
+
         /** Handles the submission of the Edit Target form. */
 /** Handles the submission of the Edit Target form. */
 /** Handles the submission of the Edit Target form. */
