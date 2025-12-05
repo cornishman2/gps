@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 1  - Metal Detecting Survey Log</title>
+    <title>Targets 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1611,28 +1611,27 @@ function updateMapWithUserLocationAndRender() {
         // --- MODAL & TOAST FUNCTIONS ---
 
         /** Shows a temporary notification toast. */
-        function showMessage(message, type = 'info') {
-            const toast = document.getElementById('message-toast');
-            toast.textContent = message;
+  function showMessage(message, type = 'info') {
+    const toast = document.getElementById('message-toast');
+    toast.textContent = message;
 
-            let bgColor = 'bg-gray-700'; // Default info
-            if (type === 'success') {
-                bgColor = 'bg-secondary';
-            } else if (type === 'error') {
-                bgColor = 'bg-red-600';
-            } else if (type === 'warning') {
-                bgColor = 'bg-yellow-500';
-            }
+    let bgColor = 'bg-gray-700'; // Default info
+    if (type === 'success') {
+        bgColor = 'bg-secondary';
+    } else if (type === 'error') {
+        bgColor = 'bg-red-600';
+    } else if (type === 'warning') {
+        bgColor = 'bg-yellow-500';
+    }
 
-            toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 opacity-100 ${bgColor}`;
+    toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 opacity-100 ${bgColor}`;
 
-            setTimeout(() => {
-                toast.classList.remove('opacity-100');
-                toast.classList.add('opacity-0');
-            }, 3000);
-        }
-
-        /** Shows the generic confirmation modal. */
+    setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+    }, 3000);
+}
+      /** Shows the generic confirmation modal. */
         function showConfirmationModal(title, message, onConfirmCallback) {
             const modal = document.getElementById('confirmation-modal');
             document.getElementById('confirm-title').innerHTML = title;
@@ -2163,17 +2162,33 @@ function closeEditTargetModal() {
 function handleEditTargetSubmit(event) {
     event.preventDefault();
 
-    const form = event.target;
-
-    // 🔹 Use the actual form field *names* from the HTML
-    const targetId = form['targetId']?.value;
-    const surveyId = form['surveyId']?.value;
-
-    if (!targetId || !surveyId) {
-        showMessage('Error: Target or Survey not found (missing IDs).', 'error');
+    // Always grab the real form element by ID (more robust on mobile)
+    const form = document.getElementById('edit-target-form');
+    if (!form) {
+        showMessage('Error: Edit Target form not found.', 'error');
+        console.error('Edit Target form not found in DOM.');
         return;
     }
 
+    // Read IDs directly from the hidden inputs
+    const targetIdInput = document.getElementById('edit-target-id');
+    const surveyIdInput = document.getElementById('edit-survey-id');
+
+    const targetId = targetIdInput?.value;
+    const surveyId = surveyIdInput?.value;
+
+    if (!targetId || !surveyId) {
+        console.error('Edit target submit missing IDs:', {
+            targetId,
+            surveyId,
+            targetIdInput,
+            surveyIdInput
+        });
+        showMessage('Error: Target or Survey not found (missing IDs in form).', 'error');
+        return;
+    }
+
+    // The rest of the fields can still come from the form
     const newDescription = form['targetDescription'].value.trim();
     if (!newDescription) {
         showMessage('Description / Find Name is required.', 'error');
@@ -2216,7 +2231,6 @@ function handleEditTargetSubmit(event) {
     // --- Centre on map: make this safe if radios are gone ---
     const centerField = form['editTargetCenterOnMap'];
     if (centerField) {
-        // Only enforce / change centreOnMap if the field actually exists
         const centerOnMapValue = centerField.value;
         const centerOnMap      = centerOnMapValue === 'Yes';
 
@@ -2238,7 +2252,8 @@ function handleEditTargetSubmit(event) {
     showMessage(`Target ${target.description} updated successfully.`, 'success');
     render();
 }
-function handleNewTargetSubmit(event) {
+
+    function handleNewTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;  // more robust than document.getElementById
 
