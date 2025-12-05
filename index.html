@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finds photos 2  - Metal Detecting Survey Log</title>
+    <title>Targets 1  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -722,6 +722,13 @@ let currentEditFindPhotos = [];
  // ======================================
 // SHARED STORAGE HELPERS
 // ======================================
+
+// Helper: return only non-deleted targets for a survey
+function getActiveTargets(survey) {
+    if (!survey || !Array.isArray(survey.targets)) return [];
+    return survey.targets.filter(t => !t.deleted);
+}
+
 function saveCollectionToStorage(key, data) {
     try {
         localStorage.setItem(key, JSON.stringify(data));
@@ -2263,21 +2270,23 @@ function handleNewTargetSubmit(event) {
         return showMessage('Error: Open survey not found.', 'error');
     }
 
-    const newTarget = {
-        id: generateId(),
-        description: newDescription,
-        vdi: newVDI,
-        depth: newDepth,
-        type: newType,
-        status: "Hole Dug", // Default initial status
-        time: Date.now(),
-        coordinates: newCoords,
-        accuracy: newAccuracy,
-        user: userProfile.name,
-        detector: userProfile.detector,
-        centerOnMap: centerOnMap,   // will just be false if there is no radio group
-        targetPhotoData: newPhotoData
-    };
+   const newTarget = {
+    id: generateId(),
+    description: newDescription,
+    vdi: newVDI,
+    depth: newDepth,
+    type: newType,
+    status: "Hole Dug", // Default initial status
+    time: Date.now(),
+    coordinates: newCoords,
+    accuracy: newAccuracy,
+    user: userProfile.name,
+    detector: userProfile.detector,
+    centerOnMap: centerOnMap,   // will just be false if there is no radio group
+    targetPhotoData: newPhotoData,
+    deleted: false,
+    isFind: false
+};
 
     openSurvey.targets.unshift(newTarget);
     openSurvey.dateLastChanged = Date.now();
@@ -2477,11 +2486,14 @@ function handleTargetAction(element) {
             }
 
             case 'saveFind': {
-                // Copy this target into the Finds library
+            // Mark this target as also being a Find
+                target.isFind = true;
+                // Copy this target into the Finds library (legacy behaviour for now)
                 createFindFromTarget(target, survey);
                 // No change to target/survey status
                 break;
             }
+
 
             case 'navigate': {
                 // Set this target as the active navigation target
@@ -2503,10 +2515,16 @@ function handleTargetAction(element) {
             }
 
             case 'delete': {
-                survey.targets = survey.targets.filter(t => t.id !== targetId);
+            // Soft-delete: keep the record but hide it from views
+                target.deleted = true;
+                // If this target was the current navigation target, clear it
+                if (navigationTargetId === targetId) {
+                navigationTargetId = null;
+                }
                 showMessage('Target deleted.', 'error');
                 break;
-            }
+                }
+
         }
 
         survey.dateLastChanged = Date.now();
@@ -2548,7 +2566,8 @@ function renderHomePage() {
                 ${openSurvey ? openSurvey.name : 'No Open Survey'}
             </h3>
             ${openSurvey ? 
-                `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${openSurvey.targets.length} targets logged)</p>
+                `<p class="text-gray-700">Open since: ${formatDate(openSurvey.creationDate)} (${getActiveTargets(openSurvey).length} targets logged)</p>
+
                  ${renderSurveyCard(openSurvey, true)}` 
                 : 
                 '<p class="text-gray-600">You must open or create a survey to log new targets.</p>'
@@ -2689,7 +2708,7 @@ function renderSurveyCard(survey, isOpen = false) {
             ${photoHtml}
             <div class="flex justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 mt-2">
                 <span>Created: ${formatDate(survey.creationDate)}</span>
-                <span>Targets: ${survey.targets.length}</span>
+               <span>Targets: ${getActiveTargets(survey).length}</span>
                 <span>Last Change: ${formatDate(survey.dateLastChanged)}</span>
             </div>
         </div>
@@ -2712,7 +2731,8 @@ function renderSurveyCard(survey, isOpen = false) {
                 `;
             }
 
-            const targets = openSurvey.targets;
+            const targets = getActiveTargets(openSurvey);
+
 
             return `
                 <div class="p-4">
@@ -4452,8 +4472,10 @@ function renderTracksPanel(openSurvey) {
         startLiveMapLocationWatch();
     }
     
-    // Filter for targets that actually have usable coordinates
-    const targets = openSurvey.targets.filter(t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged');
+   // Filter for targets that actually have usable coordinates
+const targets = getActiveTargets(openSurvey).filter(
+    t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
+);
 
     // Second return path (renders the map view)
     // Second return path (renders the map view)
