@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 2  - Metal Detecting Survey Log</title>
+    <title>Targets 3  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -923,10 +923,17 @@ function computeMovementBearingDegrees() {
 // ======================================
 // SHARED MODAL HELPERS
 // ======================================
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
-    modal.style.display = 'block';
+function openModal(modalEl) {
+    if (!modalEl) return;
+
+    modalEl.style.display = 'block';
+
+    // Wait for the modal content to render,
+    // then scroll both modal & page to top
+    setTimeout(() => {
+        modalEl.scrollTop = 0;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
 }
 
 function closeModal(modalId) {
