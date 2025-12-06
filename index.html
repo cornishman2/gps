@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 8  - Metal Detecting Survey Log</title>
+    <title>Targets 9  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1771,25 +1771,56 @@ function updateMapWithUserLocationAndRender() {
         // --- MODAL & TOAST FUNCTIONS ---
 
         /** Shows a temporary notification toast. */
-  function showMessage(message, type = 'info') {
+/** Shows a temporary, highly visible notification toast (top-centre). */
+function showMessage(message, type = 'info') {
     const toast = document.getElementById('message-toast');
-    toast.textContent = message;
-
-    let bgColor = 'bg-gray-700'; // Default info
-    if (type === 'success') {
-        bgColor = 'bg-secondary';
-    } else if (type === 'error') {
-        bgColor = 'bg-red-600';
-    } else if (type === 'warning') {
-        bgColor = 'bg-yellow-500';
+    if (!toast) {
+        // Emergency fallback if the toast element is missing
+        alert(message);
+        return;
     }
 
-    toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg text-white shadow-xl transition-opacity duration-300 opacity-100 ${bgColor}`;
+    toast.textContent = message;
 
+    // Strong background colours by type
+    let bgColor = 'bg-gray-900'; // Default info
+    if (type === 'success') {
+        bgColor = 'bg-green-600';
+    } else if (type === 'error') {
+        bgColor = 'bg-red-700';
+    } else if (type === 'warning') {
+        bgColor = 'bg-yellow-600';
+    }
+
+    toast.className = [
+        'fixed',
+        'top-20',                 // just under the header
+        'left-1/2',
+        '-translate-x-1/2',
+        'z-50',
+        'px-4',
+        'py-3',
+        'rounded-xl',
+        'text-white',
+        'text-sm',
+        'md:text-base',
+        'font-semibold',
+        'shadow-2xl',
+        'border',
+        'border-white/40',
+        'transition-opacity',
+        'duration-300',
+        'opacity-100',
+        bgColor
+    ].join(' ');
+
+    // Make sure it can receive clicks if needed
+    toast.style.pointerEvents = 'auto';
+
+    // Fade it out after a short delay
     setTimeout(() => {
-        toast.classList.remove('opacity-100');
         toast.classList.add('opacity-0');
-    }, 3000);
+    }, 2500);
 }
       /** Shows the generic confirmation modal. */
         function showConfirmationModal(title, message, onConfirmCallback) {
@@ -2965,14 +2996,14 @@ function handleTargetAction(element) {
             }
 
             case 'saveFind': {
-            // Mark this target as also being a Find
+                // Mark this target as also being a Find for future filtering
                 target.isFind = true;
-                // Copy this target into the Finds library (legacy behaviour for now)
+
+                // Copy this target into the Finds library
                 createFindFromTarget(target, survey);
                 // No change to target/survey status
                 break;
             }
-
 
             case 'navigate': {
                 // Set this target as the active navigation target
@@ -2994,16 +3025,16 @@ function handleTargetAction(element) {
             }
 
             case 'delete': {
-            // Soft-delete: keep the record but hide it from views
+                // Soft-delete: keep the record but hide it from views
                 target.deleted = true;
+
                 // If this target was the current navigation target, clear it
                 if (navigationTargetId === targetId) {
-                navigationTargetId = null;
+                    navigationTargetId = null;
                 }
                 showMessage('Target deleted.', 'error');
                 break;
-                }
-
+            }
         }
 
         survey.dateLastChanged = Date.now();
@@ -3011,10 +3042,20 @@ function handleTargetAction(element) {
         render();
     };
 
+    // Use confirmation modal for significant actions
     if (action === 'delete') {
         showConfirmationModal(
             `Confirm Delete Target: ${target.description}`,
             `Are you sure you want to permanently delete this target?`,
+            executeAction
+        );
+    } else if (action === 'saveFind') {
+        showConfirmationModal(
+            'Promote to Find',
+            `Save <strong>${target.description}</strong> to your Finds library?<br>
+             <span class="text-sm text-gray-600">
+                 You can review and edit it later on the <strong>Finds</strong> tab.
+             </span>`,
             executeAction
         );
     } else {
