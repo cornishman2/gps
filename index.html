@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 11  - Metal Detecting Survey Log</title>
+    <title>Targets 12  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2163,6 +2163,31 @@ function openTargetPhotoGallery(targetId, surveyId) {
     openPhotoGallery(photos, 0);
 }
 
+        function openFindPhotoGallery(findId) {
+    const find = finds.find(f => f.id === findId);
+    if (!find) {
+        showMessage('Find not found.', 'error');
+        return;
+    }
+
+    let photos = [];
+    if (Array.isArray(find.photos) && find.photos.length) {
+        photos = find.photos.slice();
+    } else if (find.targetPhotoData || find.photoData) {
+        const basePhoto = find.targetPhotoData || find.photoData;
+        if (basePhoto) {
+            photos = [basePhoto];
+        }
+    }
+
+    if (!photos.length) {
+        showMessage('This find has no photos yet.', 'info');
+        return;
+    }
+
+    openPhotoGallery(photos, 0);
+}
+
 function openPhotoGallery(photos, startIndex) {
     if (!Array.isArray(photos) || !photos.length) return;
 
@@ -3343,49 +3368,33 @@ function renderFindsPage() {
                 ? [find.targetPhotoData]
                 : (find.photoData ? [find.photoData] : []));
 
-        let photoHtml = '';
+      let photoHtml = '';
 
-        if (photos.length === 1) {
-            const src = photos[0];
-            photoHtml = src
-                ? `
-                    <div class="mt-3">
+    if (photos.length) {
+        const mainPhoto = photos[0];
+        photoHtml = mainPhoto
+            ? `
+                <div class="mt-3">
+                    <div class="flex justify-center">
                         <img
-                            src="${src}"
+                            src="${mainPhoto}"
                             alt="Find photo"
-                            class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
+                            class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                            onclick="openFindPhotoGallery('${find.id}')"
                         />
                     </div>
-                  `
-                : '';
-        } else if (photos.length > 1) {
-            const visible = photos.slice(0, 4);
-            const extra   = photos.length - visible.length;
-
-            const gridHtml = visible.map((src, idx) => `
-                <div class="relative">
-                    <img
-                        src="${src}"
-                        alt="Find photo ${idx + 1}"
-                        class="w-full h-24 object-cover rounded-lg border border-gray-200"
-                    />
-                    ${extra > 0 && idx === visible.length - 1
-                        ? `<div class="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-sm font-semibold rounded-lg">
-                               +${extra} more
-                           </div>`
-                        : ''}
+                    ${
+                        photos.length > 1
+                            ? `<p class="mt-1 text-xs text-gray-600 text-center">
+                                   ${photos.length} photos — tap to view gallery.
+                               </p>`
+                            : ''
+                    }
                 </div>
-            `).join('');
+              `
+            : '';
+    }
 
-            photoHtml = `
-                <div class="mt-3">
-                    <div class="grid grid-cols-2 gap-2">
-                        ${gridHtml}
-                    </div>
-                    <p class="mt-1 text-xs text-gray-500">${photos.length} photos</p>
-                </div>
-            `;
-        }
 
         return `
             <div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-gray-100">
