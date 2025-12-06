@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 6  - Metal Detecting Survey Log</title>
+    <title>Targets 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -475,101 +475,153 @@
         <div class="modal-content bg-white p-6 shadow-2xl">
             <h3 class="text-xl font-bold text-primary mb-4">Log New Target</h3>
             <form id="new-target-form">
-                
-                <div id="target-survey-display" class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
-                    Logging for: <span id="current-target-survey-name" class="text-primary">Loading...</span>
-                </div>
+    <!-- Which survey this target belongs to -->
+    <input type="hidden" id="new-target-survey-id" name="targetSurveyId" />
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="mb-4 col-span-2">
-                        <label for="target-description" class="block text-sm font-medium text-gray-700">Description / Find Name *</label>
-                        <input type="text" id="target-description" name="targetDescription" required 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
-                    </div>
-                    <div class="mb-4">
-                        <label for="target-vdi" class="block text-sm font-medium text-gray-700">Target ID</label>
-                        <input type="text" id="target-vdi" name="targetVDI" placeholder="e.g., 28" 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
-                    </div>
-                    <div class="mb-4">
-                        <label for="target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
-                        <input type="text" id="target-depth" name="targetDepth" placeholder="e.g., 6 inches"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
-                    </div>
- <div class="mb-4 col-span-2">
-    <label for="target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
-    <select id="target-type" name="targetType" required
-            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary bg-white">
-        <option value="Unidentified">Unidentified</option>
-        <option value="Iron Junk">Iron Junk</option>
-        <option value="Modern Junk">Modern Junk</option>
-         <option value="Coin">Coin</option>
-        <option value="Ring">Ring</option>
-        <option value="Jewelry">Jewelry</option>
-        <option value="Relic">Relic</option>
-        <option value="Something else.">Something else</option>
-
-    </select>
-</div>
-<div class="mb-4 col-span-2">
-    <label class="block text-sm font-medium text-gray-700 mb-1">
-        Target Photographs
-    </label>
-
-    <input
-        type="file"
-        id="target-photo-input"
-        accept="image/*;capture=camera"
-        class="hidden"
-        multiple
-        onchange="handleNewTargetPhotoSelected(event)"
-    >
-
-    <input
-        type="hidden"
-        id="target-photo-data"
-        name="targetPhotoData"
-    >
-
-    <div class="flex items-center space-x-3">
-        <button
-            type="button"
-            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
-            onclick="triggerTargetPhotoInput()"
-        >
-            <i class="fas fa-camera mr-1"></i> Take / Choose Photo(s)
-        </button>
-        <span id="target-photo-status" class="text-xs text-gray-500">
-            No photo captured yet.
-        </span>
+    <div id="target-survey-display"
+         class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
+        Logging for: 
+        <span id="current-target-survey-name" class="text-primary">Loading...</span>
     </div>
 
-    <!-- Thumbnails (stacked, nearly full width) -->
-    <div id="target-photo-preview-wrapper" class="mt-2 hidden w-full"></div>
-</div>
-</div>
+    <div class="grid grid-cols-2 gap-4">
+        <!-- Description -->
         <div class="mb-4 col-span-2">
-                        <label for="target-coords" class="block text-sm font-medium text-gray-700 flex items-center">
-                            GPS Coordinates
-                            <span id="gps-loading-indicator" class="ml-2 text-primary text-xs hidden">
-                                <i class="fas fa-spinner fa-spin mr-1"></i> Locating...
-                            </span>
-                        </label>
-                        <input type="text" id="target-coords" name="targetCoords" placeholder="Requesting location..." 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
-                        <input type="hidden" id="target-accuracy" name="targetAccuracy">
-                        <p id="gps-accuracy-display" class="text-xs text-gray-500 mt-1 hidden">Accuracy (Radius): <span class="font-semibold text-red-600">N/A</span></p>
-                    </div>
-                </div>
+            <label for="target-description"
+                   class="block text-sm font-medium text-gray-700">
+                Description / Find Name *
+            </label>
+            <input type="text"
+                   id="target-description"
+                   name="targetDescription"
+                   required
+                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2
+                          focus:ring-primary focus:border-primary">
+        </div>
 
-                <div class="flex justify-end space-x-3 mt-6">
-                    <button type="button" onclick="closeNewTargetModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
-                            style="background-color: rgb(var(--color-secondary));">
-                        Log Target
-                    </button>
-                </div>
-            </form>
+        <!-- VDI -->
+        <div class="mb-4">
+            <label for="target-vdi"
+                   class="block text-sm font-medium text-gray-700">
+                Target ID
+            </label>
+            <input type="text"
+                   id="target-vdi"
+                   name="targetVDI"
+                   placeholder="e.g., 28"
+                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2
+                          focus:ring-primary focus:border-primary">
+        </div>
+
+        <!-- Depth -->
+        <div class="mb-4">
+            <label for="target-depth"
+                   class="block text-sm font-medium text-gray-700">
+                Depth
+            </label>
+            <input type="text"
+                   id="target-depth"
+                   name="targetDepth"
+                   placeholder="e.g., 4 inches"
+                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2
+                          focus:ring-primary focus:border-primary">
+        </div>
+
+        <!-- Type -->
+        <div class="mb-4">
+            <label for="target-type"
+                   class="block text-sm font-medium text-gray-700">
+                Type
+            </label>
+            <select id="target-type"
+                    name="targetType"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2
+                           focus:ring-primary focus:border-primary">
+                <option value="Coin">Coin</option>
+                <option value="Relic">Relic</option>
+                <option value="Junk">Junk</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+
+        <!-- GPS + accuracy -->
+        <div class="mb-4 col-span-2">
+            <label for="target-coords"
+                   class="block text-sm font-medium text-gray-700">
+                GPS Location
+            </label>
+            <input type="text"
+                   id="target-coords"
+                   name="targetCoords"
+                   placeholder="Requesting location..."
+                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2
+                          focus:ring-primary focus:border-primary">
+            <input type="hidden"
+                   id="target-accuracy"
+                   name="targetAccuracy">
+            <p id="gps-accuracy-display"
+               class="text-xs text-gray-600 mt-1">
+                Accuracy (Radius): 
+                <span class="font-semibold text-red-600">N/A</span>
+            </p>
+        </div>
+
+        <!-- Photo section (current single-photo UI) -->
+        <div class="mb-4 col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+                Target Photo
+            </label>
+
+            <p id="new-target-photo-status"
+               class="text-xs text-gray-600 mb-2">
+                No photo captured yet.
+            </p>
+
+            <div id="new-target-photo-preview-wrapper"
+                 class="hidden mb-2">
+                <img id="new-target-photo-preview"
+                     alt="Target preview"
+                     class="w-full max-h-64 object-contain rounded-lg border border-gray-300" />
+            </div>
+
+            <input type="hidden"
+                   id="target-photo-data"
+                   name="targetPhotoData">
+
+            <input type="file"
+                   id="new-target-photo-input"
+                   accept="image/*"
+                   capture="environment"
+                   class="hidden"
+                   onchange="handleNewTargetPhotoSelected(event)">
+
+            <button type="button"
+                    class="px-3 py-2 text-sm font-semibold rounded-lg shadow
+                           text-white"
+                    style="background-color: rgb(var(--color-secondary));"
+                    onclick="triggerNewTargetPhotoInput()">
+                Take / Choose Photo
+            </button>
+        </div>
+    </div>
+
+    <!-- Button bar: force white background -->
+    <div class="mt-6 pt-4 flex justify-end space-x-3 bg-white">
+        <button type="button"
+                onclick="closeNewTargetModal()"
+                class="px-4 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-lg
+                       hover:bg-gray-300">
+            Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 text-sm font-semibold rounded-lg shadow-md hover:opacity-90
+                       transition duration-150 text-white"
+                style="background-color: rgb(var(--color-secondary));">
+            Log Target
+        </button>
+    </div>
+</form>
+
         </div>
     </div>
     
@@ -1886,36 +1938,54 @@ function handleEditSurveySubmit(event) {
     render();
 }
 
-        
+        /** Shows the New Target Modal. */
 function showNewTargetModal() {
-    // 0. You must have an open survey
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
-        showMessage('You must have an open survey before logging targets.', 'error');
-        return;
+        return showMessage(
+            'Cannot log target. Please open a survey first on the Home page.',
+            'warning'
+        );
     }
 
-    // 1. Set survey name in the modal header
+    // 1. Set survey name + id in the modal
     const headerSpan = document.getElementById('current-target-survey-name');
     if (headerSpan) {
-        headerSpan.textContent = openSurvey.name || 'Current survey';
+        headerSpan.textContent = openSurvey.name;
+    }
+    const surveyIdHidden = document.getElementById('new-target-survey-id');
+    if (surveyIdHidden) {
+        surveyIdHidden.value = openSurvey.id;
     }
 
-    // 2. Reset the form fields
+    // 2. Reset the form
     const form = document.getElementById('new-target-form');
     if (form) {
         form.reset();
     }
 
-    // 3. Reset photos for new target (multi-photo state + UI)
-    currentNewTargetPhotos = [];
-    updateNewTargetPhotoPreview();
+    // 3. Reset photo UI
+    initPhotoUI(
+        '',
+        {
+            statusId:  'new-target-photo-status',
+            wrapperId: 'new-target-photo-preview-wrapper',
+            imgId:     'new-target-photo-preview',
+            hiddenId:  'target-photo-data'
+        },
+        {
+            empty: 'No photo captured yet.'
+        }
+    );
 
-    // 4. Open the modal (this also scrolls the view to the top via openModal)
-    openModal('new-target-modal');
-
-    // 5. Request GPS location for this new Target
+    // 4. Request GPS location
     startTargetLocationWatch();
+
+    // 5. Attach the submit listener via shared helper
+    attachFormSubmitHandler('new-target-form', handleNewTargetSubmit);
+
+    // 6. Display modal via shared helper
+    openModal('new-target-modal');
 }
 
 /** Closes the New Target Modal. */
@@ -1924,10 +1994,77 @@ function closeNewTargetModal() {
     closeModal('new-target-modal');
 }
 
-        /** Handles the submission of the New Target form. */
+/** Handles the submission of the New Target form. This is the new one*/
+function handleNewTargetSubmit(event) {
+    event.preventDefault();
+    const form = event.target;
 
-// --- SHARED PHOTO GALLERY (Targets & others) ---
+    // Which survey are we saving to?
+    const surveyId = form['targetSurveyId']?.value;
+    const survey = surveys.find(s => s.id === surveyId);
 
+    if (!survey) {
+        showMessage('Error: Survey not found for this target.', 'error');
+        return;
+    }
+
+    const newDescription = form['targetDescription'].value.trim();
+    const newVDI         = form['targetVDI'].value.trim() || 'N/A';
+    const newDepth       = form['targetDepth'].value.trim() || 'Unknown';
+    const newType        = form['targetType'].value;
+    const newCoords      = form['targetCoords'].value.trim() || 'No GPS logged';
+    const newAccuracy    = form['targetAccuracy'].value.trim() || 'N/A';
+
+    if (!newDescription) {
+        showMessage('Description / Find Name is required.', 'error');
+        return;
+    }
+
+    // Centre on Map radios may or may not exist now
+    let centerOnMap = false;
+    const centerField = form['targetCenterOnMap'];
+    if (centerField) {
+        const centerOnMapValue = centerField.value;
+        centerOnMap = (centerOnMapValue === 'Yes');
+    }
+
+    // Photo data from hidden field (single-photo for now)
+    const newPhotoData = form['targetPhotoData']?.value || '';
+
+    const newTarget = {
+        id: generateId(),
+        description: newDescription,
+        vdi: newVDI,
+        depth: newDepth,
+        type: newType,
+        status: 'Hole Dug', // Default initial status
+        time: Date.now(),
+        coordinates: newCoords,
+        accuracy: newAccuracy,
+        user: userProfile.name,
+        detector: userProfile.detector,
+        centerOnMap: centerOnMap,
+        targetPhotoData: newPhotoData
+    };
+
+    if (!Array.isArray(survey.targets)) {
+        survey.targets = [];
+    }
+    survey.targets.unshift(newTarget);
+    survey.dateLastChanged = Date.now();
+
+    saveSurveysToLocalStorage();
+    closeNewTargetModal();
+
+    // Make sure we land back on the Targets screen
+    currentPage = 'Targets';
+    showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
+    render();
+}
+
+
+
+        
 function openTargetPhotoGallery(targetId, surveyId) {
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) {
@@ -2606,85 +2743,6 @@ function handleEditTargetSubmit(event) {
     render();
 }
 
-function handleNewTargetSubmit(event) {
-    event.preventDefault();
-    const form = event.target;  // more robust than document.getElementById
-
-    const newDescription = form['targetDescription'].value.trim();
-    const newVDI         = form['targetVDI'].value.trim() || 'N/A';
-    const newDepth       = form['targetDepth'].value.trim() || 'Unknown';
-    const newType        = form['targetType'].value;
-    const newCoords      = form['targetCoords'].value.trim() || 'No GPS logged';
-    const newAccuracy    = form['targetAccuracy'].value.trim() || 'N/A';
-
-    // Centre on Map radios may or may not exist now
-    let centerOnMap = false;
-    const centerField = form['targetCenterOnMap'];
-    if (centerField) {
-        const centerOnMapValue = centerField.value;
-        centerOnMap = (centerOnMapValue === 'Yes');
-    }
-
-    if (!newDescription) {
-        showMessage('Description / Find Name is required.', 'error');
-        return;
-    }
-
-    // Parse photos from hidden field (JSON array or single string)
-    let photos = [];
-    const rawPhotoField = form['targetPhotoData']?.value;
-    if (rawPhotoField) {
-        try {
-            const parsed = JSON.parse(rawPhotoField);
-            if (Array.isArray(parsed)) {
-                photos = parsed.filter(p => typeof p === 'string' && p.length > 0);
-            } else if (typeof parsed === 'string' && parsed.length > 0) {
-                photos = [parsed];
-            }
-        } catch (e) {
-            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
-                photos = [rawPhotoField];
-            }
-        }
-    }
-    const primaryPhoto = photos[0] || '';
-
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey) {
-        return showMessage('Error: Open survey not found.', 'error');
-    }
-
-    const newTarget = {
-        id: generateId(),
-        description: newDescription,
-        vdi: newVDI,
-        depth: newDepth,
-        type: newType,
-        status: "Hole Dug", // Default initial status
-        time: Date.now(),
-        coordinates: newCoords,
-        accuracy: newAccuracy,
-        user: userProfile.name,
-        detector: userProfile.detector,
-        centerOnMap: centerOnMap,   // will just be false if there is no radio group
-
-        // Photos
-        photos: photos,
-        targetPhotoData: primaryPhoto,
-
-        // Soft-delete & find flags already discussed
-        deleted: false,
-        isFind: false
-    };
-
-    openSurvey.targets.unshift(newTarget);
-    openSurvey.dateLastChanged = Date.now();
-
-    saveSurveysToLocalStorage();
-    closeNewTargetModal();
-    showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
-    render();
-}
         /** Shows the Edit Profile Modal and loads current data. */
         function showEditProfileModal() {
             const modal = document.getElementById('edit-profile-modal');
