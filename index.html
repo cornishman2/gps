@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 3  - Metal Detecting Survey Log</title>
+    <title>Targets 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -98,7 +98,49 @@
             </div>
         </div>
     </div>
-    
+        <div id="photo-gallery-modal" class="modal">
+        <div class="modal-content bg-black bg-opacity-90 text-white p-4 shadow-2xl relative max-w-full">
+            <!-- Close button -->
+            <button
+                type="button"
+                class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-800 bg-opacity-80 hover:bg-opacity-100 flex items-center justify-center"
+                onclick="closePhotoGallery()"
+            >
+                <i class="fas fa-times text-sm"></i>
+            </button>
+
+            <!-- Image area (swipe here) -->
+            <div id="photo-gallery-image-wrapper" class="flex items-center justify-center mt-4">
+                <img
+                    id="photo-gallery-image"
+                    alt="Photo"
+                    class="max-h-screen w-auto rounded-lg border border-gray-700"
+                >
+            </div>
+
+            <!-- “1 of N” text -->
+            <p id="photo-gallery-caption" class="mt-3 text-center text-sm text-gray-300"></p>
+
+            <!-- Prev / Next buttons -->
+            <div class="mt-4 flex justify-between items-center">
+                <button
+                    type="button"
+                    class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-semibold"
+                    onclick="showGalleryPhoto(-1)"
+                >
+                    ‹ Previous
+                </button>
+                <button
+                    type="button"
+                    class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-semibold"
+                    onclick="showGalleryPhoto(1)"
+                >
+                    Next ›
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="new-survey-modal" class="modal">
         <div class="modal-content bg-white p-6 shadow-2xl">
             <h3 class="text-xl font-bold text-primary mb-4">Create New Survey</h3>
@@ -466,7 +508,7 @@
 </div>
 <div class="mb-4 col-span-2">
     <label class="block text-sm font-medium text-gray-700 mb-1">
-        Target Photograph
+        Target Photographs
     </label>
 
     <input
@@ -474,7 +516,8 @@
         id="target-photo-input"
         accept="image/*;capture=camera"
         class="hidden"
-        onchange="handleTargetPhotoSelected(event)"
+        multiple
+        onchange="handleNewTargetPhotoSelected(event)"
     >
 
     <input
@@ -489,16 +532,16 @@
             class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
             onclick="triggerTargetPhotoInput()"
         >
-            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+            <i class="fas fa-camera mr-1"></i> Take / Choose Photo(s)
         </button>
         <span id="target-photo-status" class="text-xs text-gray-500">
             No photo captured yet.
         </span>
     </div>
 
-    <div id="target-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
-        <img id="target-photo-preview" class="w-11/12 h-auto rounded-md border border-gray-300 object-cover" alt="Target photo preview">
-    </div>
+    <!-- Thumbnails (stacked, nearly full width) -->
+    <div id="target-photo-preview-wrapper" class="mt-2 hidden w-full"></div>
+</div>
 </div>
         <div class="mb-4 col-span-2">
                         <label for="target-coords" class="block text-sm font-medium text-gray-700 flex items-center">
@@ -569,7 +612,7 @@
 </div>
 <div class="mb-4 col-span-2">
     <label class="block text-sm font-medium text-gray-700 mb-1">
-        Target Photograph
+        Target Photographs
     </label>
 
     <input
@@ -577,6 +620,7 @@
         id="edit-target-photo-input"
         accept="image/*;capture=camera"
         class="hidden"
+        multiple
         onchange="handleEditTargetPhotoSelected(event)"
     >
 
@@ -592,16 +636,15 @@
             class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
             onclick="triggerEditTargetPhotoInput()"
         >
-            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+            <i class="fas fa-camera mr-1"></i> Take / Choose Photo(s)
         </button>
         <span id="edit-target-photo-status" class="text-xs text-gray-500">
             No photo captured yet.
         </span>
     </div>
 
-    <div id="edit-target-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
-        <img id="edit-target-photo-preview" class="w-11/12 h-auto rounded-md border border-gray-300 object-cover" alt="Target photo preview">
-    </div>
+    <!-- Thumbnails (stacked, nearly full width) -->
+    <div id="edit-target-photo-preview-wrapper" class="mt-2 hidden w-full"></div>
 </div>
                     
 <div class="mb-4 col-span-2">
@@ -672,6 +715,19 @@ let findsFilter = {
 
 // NEW: holds photos while the Edit Find modal is open
 let currentEditFindPhotos = [];
+
+// NEW: holds photos while the New Target modal is open
+let currentNewTargetPhotos = [];
+
+// NEW: holds photos while the Edit Target modal is open
+let currentEditTargetPhotos = [];
+
+// Shared gallery state
+let currentGalleryPhotos = [];
+let currentGalleryIndex = 0;
+let gallerySwipeInitialized = false;
+let galleryTouchStartX = null;
+
      
         // Profile initialized with default data
         let userProfile = {
@@ -923,15 +979,15 @@ function computeMovementBearingDegrees() {
 // ======================================
 // SHARED MODAL HELPERS
 // ======================================
-function openModal(modalEl) {
-    if (!modalEl) return;
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
 
-    modalEl.style.display = 'block';
+    modal.style.display = 'block';
 
-    // Wait for the modal content to render,
-    // then scroll both modal & page to top
+    // Make sure we start at the top of the modal + page
     setTimeout(() => {
-        modalEl.scrollTop = 0;
+        modal.scrollTop = 0;
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 50);
 }
@@ -1103,9 +1159,18 @@ function handleEditFindSubmit(event) {
  * The Find is independent: if the survey/target are later deleted, this record remains.
  */
 function createFindFromTarget(target, survey) {
-    // Base photo from the target (if any)
-    const basePhoto = target.targetPhotoData || target.photoDataUrl || '';
-    const photos = basePhoto ? [basePhoto] : [];
+    // Photos from the target (multiple or single)
+    let photos = [];
+    if (Array.isArray(target.photos) && target.photos.length) {
+        photos = target.photos.slice();
+    } else if (target.targetPhotoData || target.photoDataUrl) {
+        const basePhoto = target.targetPhotoData || target.photoDataUrl;
+        if (basePhoto) {
+            photos = [basePhoto];
+        }
+    }
+
+    const primaryPhoto = photos[0] || '';
 
     const find = {
         id: generateId(),
@@ -1127,7 +1192,7 @@ function createFindFromTarget(target, survey) {
         centerOnMap: !!target.centerOnMap,
 
         // Media
-        targetPhotoData: basePhoto,
+        targetPhotoData: primaryPhoto,
         photos: photos,
 
         // Metadata
@@ -1151,7 +1216,6 @@ function createFindFromTarget(target, survey) {
         showMessage(`Find saved: "${find.description}"`, 'success');
     }, 120);
 }
-        
         /** Saves the current surveys and profile data to Local Storage. */
 function saveFindsToLocalStorage() {
     try {
@@ -1834,11 +1898,13 @@ function showNewTargetModal() {
         headerSpan.textContent = openSurvey.name;
     }
     
-    // 2. Reset the form
-    const form = document.getElementById('new-target-form');
     if (form) {
         form.reset();
     }
+
+    // Reset photos for new target
+    currentNewTargetPhotos = [];
+    updateNewTargetPhotoPreview();
     
     // 3. Request GPS location
     startTargetLocationWatch();
@@ -1858,7 +1924,101 @@ function closeNewTargetModal() {
 
         /** Handles the submission of the New Target form. */
 
-  // --- TARGET PHOTO HELPERS ---
+// --- SHARED PHOTO GALLERY (Targets & others) ---
+
+function openTargetPhotoGallery(targetId, surveyId) {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) {
+        showMessage('Survey not found for this target.', 'error');
+        return;
+    }
+    const target = survey.targets.find(t => t.id === targetId);
+    if (!target) {
+        showMessage('Target not found.', 'error');
+        return;
+    }
+
+    let photos = [];
+    if (Array.isArray(target.photos) && target.photos.length) {
+        photos = target.photos.slice();
+    } else if (target.targetPhotoData || target.photoDataUrl) {
+        const basePhoto = target.targetPhotoData || target.photoDataUrl;
+        if (basePhoto) photos = [basePhoto];
+    }
+
+    if (!photos.length) {
+        showMessage('This target has no photos yet.', 'info');
+        return;
+    }
+
+    openPhotoGallery(photos, 0);
+}
+
+function openPhotoGallery(photos, startIndex) {
+    if (!Array.isArray(photos) || !photos.length) return;
+
+    currentGalleryPhotos = photos.slice();
+    currentGalleryIndex = Math.max(0, Math.min(startIndex || 0, currentGalleryPhotos.length - 1));
+
+    const modal   = document.getElementById('photo-gallery-modal');
+    const img     = document.getElementById('photo-gallery-image');
+    const caption = document.getElementById('photo-gallery-caption');
+
+    if (!modal || !img || !caption) return;
+
+    // Ensure swipe handlers are attached
+    ensureGallerySwipeHandlers();
+
+    // Update the displayed image
+    img.src = currentGalleryPhotos[currentGalleryIndex];
+    caption.textContent = `${currentGalleryIndex + 1} of ${currentGalleryPhotos.length}`;
+
+    openModal('photo-gallery-modal');
+}
+
+function showGalleryPhoto(delta) {
+    if (!currentGalleryPhotos.length) return;
+    if (typeof delta !== 'number' || delta === 0) return;
+
+    const nextIndex = (currentGalleryIndex + delta + currentGalleryPhotos.length) % currentGalleryPhotos.length;
+    currentGalleryIndex = nextIndex;
+
+    const img     = document.getElementById('photo-gallery-image');
+    const caption = document.getElementById('photo-gallery-caption');
+    if (!img || !caption) return;
+
+    img.src = currentGalleryPhotos[currentGalleryIndex];
+    caption.textContent = `${currentGalleryIndex + 1} of ${currentGalleryPhotos.length}`;
+}
+
+function closePhotoGallery() {
+    closeModal('photo-gallery-modal');
+}
+
+function ensureGallerySwipeHandlers() {
+    if (gallerySwipeInitialized) return;
+
+    const wrapper = document.getElementById('photo-gallery-image-wrapper');
+    if (!wrapper) return;
+
+    wrapper.addEventListener('touchstart', (e) => {
+        if (!e.touches || !e.touches.length) return;
+        galleryTouchStartX = e.touches[0].clientX;
+    });
+
+    wrapper.addEventListener('touchend', (e) => {
+        if (galleryTouchStartX === null || !e.changedTouches || !e.changedTouches.length) return;
+        const dx = e.changedTouches[0].clientX - galleryTouchStartX;
+        galleryTouchStartX = null;
+
+        if (Math.abs(dx) > 40) {
+            // Swipe left => next, swipe right => previous
+            showGalleryPhoto(dx < 0 ? 1 : -1);
+        }
+    });
+
+    gallerySwipeInitialized = true;
+}
 
 // --- SHARED PHOTO HELPERS ---
 // ======================================
@@ -1967,32 +2127,200 @@ function handleEditSurveyPhotoSelected(event) {
     });
 }
 
+// --- NEW: MULTI-PHOTO SUPPORT FOR NEW TARGET MODAL ---
+
+function updateNewTargetPhotoPreview() {
+    const statusSpan  = document.getElementById('target-photo-status');
+    const wrapper     = document.getElementById('target-photo-preview-wrapper');
+    const hiddenField = document.getElementById('target-photo-data');
+
+    if (!statusSpan || !wrapper || !hiddenField) return;
+
+    const photos = currentNewTargetPhotos || [];
+
+    // Store as JSON in the hidden field
+    hiddenField.value = JSON.stringify(photos);
+
+    if (!photos.length) {
+        statusSpan.textContent = 'No photo captured yet.';
+        wrapper.classList.add('hidden');
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    statusSpan.textContent = photos.length === 1
+        ? '1 photo selected.'
+        : `${photos.length} photos selected.`;
+
+    const thumbsHtml = photos.map((src, index) => `
+        <div class="relative mb-2 flex justify-center">
+            <img
+                src="${src}"
+                alt="Target photo ${index + 1}"
+                class="w-11/12 max-h-64 object-cover rounded-lg border border-gray-300 cursor-pointer"
+                onclick="openNewTargetPhotoGallery(${index})"
+            />
+            <button
+                type="button"
+                class="absolute top-2 right-6 bg-black bg-opacity-60 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
+                onclick="event.stopPropagation(); removeNewTargetPhoto(${index});"
+            >
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    `).join('');
+
+    wrapper.innerHTML = `
+        <div class="flex flex-col items-center w-full">
+            ${thumbsHtml}
+        </div>
+    `;
+    wrapper.classList.remove('hidden');
+}
+
+function handleNewTargetPhotoSelected(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    // Allow selecting the same file again later
+    event.target.value = '';
+
+    let remaining = files.length;
+
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            if (typeof dataUrl === 'string') {
+                currentNewTargetPhotos.push(dataUrl);
+            }
+            remaining -= 1;
+            if (remaining === 0) {
+                updateNewTargetPhotoPreview();
+            }
+        };
+        reader.onerror = () => {
+            console.error('Error reading target photo file:', reader.error);
+            remaining -= 1;
+            if (remaining === 0) {
+                updateNewTargetPhotoPreview();
+            }
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function removeNewTargetPhoto(index) {
+    if (!Array.isArray(currentNewTargetPhotos)) return;
+    currentNewTargetPhotos.splice(index, 1);
+    updateNewTargetPhotoPreview();
+}
+
+// Called from button in the New Target form
 function triggerTargetPhotoInput() {
     triggerPhotoInput('target-photo-input');
 }
 
-function handleTargetPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'target-photo-status',
-        wrapperId: 'target-photo-preview-wrapper',
-        imgId:     'target-photo-preview',
-        hiddenId:  'target-photo-data'
+function openNewTargetPhotoGallery(startIndex) {
+    if (!currentNewTargetPhotos.length) return;
+    openPhotoGallery(currentNewTargetPhotos, startIndex || 0);
+}
+
+// --- NEW: MULTI-PHOTO SUPPORT FOR EDIT TARGET MODAL ---
+
+function updateEditTargetPhotoPreview() {
+    const statusSpan  = document.getElementById('edit-target-photo-status');
+    const wrapper     = document.getElementById('edit-target-photo-preview-wrapper');
+    const hiddenField = document.getElementById('edit-target-photo-data');
+
+    if (!statusSpan || !wrapper || !hiddenField) return;
+
+    const photos = currentEditTargetPhotos || [];
+    hiddenField.value = JSON.stringify(photos);
+
+    if (!photos.length) {
+        statusSpan.textContent = 'No photo captured yet.';
+        wrapper.classList.add('hidden');
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    statusSpan.textContent = photos.length === 1
+        ? '1 photo selected.'
+        : `${photos.length} photos selected.`;
+
+    const thumbsHtml = photos.map((src, index) => `
+        <div class="relative mb-2 flex justify-center">
+            <img
+                src="${src}"
+                alt="Target photo ${index + 1}"
+                class="w-11/12 max-h-64 object-cover rounded-lg border border-gray-300 cursor-pointer"
+                onclick="openEditTargetPhotoGallery(${index})"
+            />
+            <button
+                type="button"
+                class="absolute top-2 right-6 bg-black bg-opacity-60 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
+                onclick="event.stopPropagation(); removeEditTargetPhoto(${index});"
+            >
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    `).join('');
+
+    wrapper.innerHTML = `
+        <div class="flex flex-col items-center w-full">
+            ${thumbsHtml}
+        </div>
+    `;
+    wrapper.classList.remove('hidden');
+}
+
+function handleEditTargetPhotoSelected(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    // Allow selecting the same file again later
+    event.target.value = '';
+
+    let remaining = files.length;
+
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            if (typeof dataUrl === 'string') {
+                currentEditTargetPhotos.push(dataUrl);
+            }
+            remaining -= 1;
+            if (remaining === 0) {
+                updateEditTargetPhotoPreview();
+            }
+        };
+        reader.onerror = () => {
+            console.error('Error reading edit target photo file:', reader.error);
+            remaining -= 1;
+            if (remaining === 0) {
+                updateEditTargetPhotoPreview();
+            }
+        };
+        reader.readAsDataURL(file);
     });
 }
 
-// --- EDIT TARGET PHOTO HELPERS ---
+function removeEditTargetPhoto(index) {
+    if (!Array.isArray(currentEditTargetPhotos)) return;
+    currentEditTargetPhotos.splice(index, 1);
+    updateEditTargetPhotoPreview();
+}
 
+// Called from button in the Edit Target form
 function triggerEditTargetPhotoInput() {
     triggerPhotoInput('edit-target-photo-input');
 }
 
-function handleEditTargetPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'edit-target-photo-status',
-        wrapperId: 'edit-target-photo-preview-wrapper',
-        imgId:     'edit-target-photo-preview',
-        hiddenId:  'edit-target-photo-data'
-    });
+function openEditTargetPhotoGallery(startIndex) {
+    if (!currentEditTargetPhotos.length) return;
+    openPhotoGallery(currentEditTargetPhotos, startIndex || 0);
 }
 
 // --- EDIT FIND PHOTO HELPERS ---
@@ -2135,17 +2463,17 @@ function showEditTargetModal(targetId, surveyId) {
         noRadio.checked = !shouldCenterOnMap;
     }
 
-    // --- REVISED PHOTO LOGIC ADDITION ---
-    // --- PHOTO UI (via shared helper) ---
-    initPhotoUI(target.targetPhotoData, {
-        statusId:  'edit-target-photo-status',
-        wrapperId: 'edit-target-photo-preview-wrapper',
-        imgId:     'edit-target-photo-preview',
-        hiddenId:  'edit-target-photo-data'
-    }, {
-        existing: 'Existing photo loaded. Click "Take / Choose Photo" to replace.',
-        empty:    'No photo captured yet.'
-    });
+    // --- Photos: prefer array, fall back to legacy single string ---
+    if (Array.isArray(target.photos) && target.photos.length > 0) {
+        currentEditTargetPhotos = [...target.photos];
+    } else if (target.targetPhotoData) {
+        currentEditTargetPhotos = [target.targetPhotoData];
+    } else if (target.photoDataUrl) {
+        currentEditTargetPhotos = [target.photoDataUrl];
+    } else {
+        currentEditTargetPhotos = [];
+    }
+    updateEditTargetPhotoPreview();
 
    // 2. Display the modal
     const modal = document.getElementById('edit-target-modal');
@@ -2195,7 +2523,6 @@ function handleEditTargetSubmit(event) {
         return;
     }
 
-    // The rest of the fields can still come from the form
     const newDescription = form['targetDescription'].value.trim();
     if (!newDescription) {
         showMessage('Description / Find Name is required.', 'error');
@@ -2208,8 +2535,24 @@ function handleEditTargetSubmit(event) {
     const newCoords   = form['targetCoords'].value.trim() || 'No GPS logged';
     const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
 
-    // Hidden photo field is called targetPhotoData
-    const newPhotoData = form['targetPhotoData']?.value || '';
+    // Photos: parse JSON array (or single string) from hidden field
+    let photos = [];
+    const rawPhotoField = form['targetPhotoData']?.value;
+    if (rawPhotoField) {
+        try {
+            const parsed = JSON.parse(rawPhotoField);
+            if (Array.isArray(parsed)) {
+                photos = parsed.filter(p => typeof p === 'string' && p.length > 0);
+            } else if (typeof parsed === 'string' && parsed.length > 0) {
+                photos = [parsed];
+            }
+        } catch (e) {
+            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
+                photos = [rawPhotoField];
+            }
+        }
+    }
+    const primaryPhoto = photos[0] || '';
 
     // Look up survey + target
     const survey = surveys.find(s => s.id === surveyId);
@@ -2232,8 +2575,9 @@ function handleEditTargetSubmit(event) {
     target.coordinates = newCoords;
     target.accuracy    = newAccuracy;
 
-    // Update photo data (can be empty string if user cleared it)
-    target.targetPhotoData = newPhotoData;
+    // Update photos
+    target.photos = photos;
+    target.targetPhotoData = primaryPhoto;
 
     // --- Centre on map: make this safe if radios are gone ---
     const centerField = form['editTargetCenterOnMap'];
@@ -2260,7 +2604,7 @@ function handleEditTargetSubmit(event) {
     render();
 }
 
-    function handleNewTargetSubmit(event) {
+function handleNewTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;  // more robust than document.getElementById
 
@@ -2279,36 +2623,57 @@ function handleEditTargetSubmit(event) {
         centerOnMap = (centerOnMapValue === 'Yes');
     }
 
-    // Photo data from hidden field
-    const newPhotoData = form['targetPhotoData']?.value || '';
-
     if (!newDescription) {
         showMessage('Description / Find Name is required.', 'error');
         return;
     }
+
+    // Parse photos from hidden field (JSON array or single string)
+    let photos = [];
+    const rawPhotoField = form['targetPhotoData']?.value;
+    if (rawPhotoField) {
+        try {
+            const parsed = JSON.parse(rawPhotoField);
+            if (Array.isArray(parsed)) {
+                photos = parsed.filter(p => typeof p === 'string' && p.length > 0);
+            } else if (typeof parsed === 'string' && parsed.length > 0) {
+                photos = [parsed];
+            }
+        } catch (e) {
+            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
+                photos = [rawPhotoField];
+            }
+        }
+    }
+    const primaryPhoto = photos[0] || '';
 
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         return showMessage('Error: Open survey not found.', 'error');
     }
 
-   const newTarget = {
-    id: generateId(),
-    description: newDescription,
-    vdi: newVDI,
-    depth: newDepth,
-    type: newType,
-    status: "Hole Dug", // Default initial status
-    time: Date.now(),
-    coordinates: newCoords,
-    accuracy: newAccuracy,
-    user: userProfile.name,
-    detector: userProfile.detector,
-    centerOnMap: centerOnMap,   // will just be false if there is no radio group
-    targetPhotoData: newPhotoData,
-    deleted: false,
-    isFind: false
-};
+    const newTarget = {
+        id: generateId(),
+        description: newDescription,
+        vdi: newVDI,
+        depth: newDepth,
+        type: newType,
+        status: "Hole Dug", // Default initial status
+        time: Date.now(),
+        coordinates: newCoords,
+        accuracy: newAccuracy,
+        user: userProfile.name,
+        detector: userProfile.detector,
+        centerOnMap: centerOnMap,   // will just be false if there is no radio group
+
+        // Photos
+        photos: photos,
+        targetPhotoData: primaryPhoto,
+
+        // Soft-delete & find flags already discussed
+        deleted: false,
+        isFind: false
+    };
 
     openSurvey.targets.unshift(newTarget);
     openSurvey.dateLastChanged = Date.now();
@@ -3054,16 +3419,31 @@ function renderTargetCard(target, surveyId) {
             break;
     }
 
-    // --- Photo preview (supports both fields you use) ---
-    const photoSrc = target.targetPhotoData || target.photoDataUrl || '';
-    const photoHtml = photoSrc
+    // --- Photo preview (supports multiple photos) ---
+    let photos = [];
+    if (Array.isArray(target.photos) && target.photos.length) {
+        photos = target.photos;
+    } else if (target.targetPhotoData || target.photoDataUrl) {
+        const single = target.targetPhotoData || target.photoDataUrl;
+        if (single) photos = [single];
+    }
+
+    const photoHtml = photos.length
         ? `
             <div class="mt-3">
-                <img
-                    src="${photoSrc}"
-                    alt="Target photo"
-                    class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
-                />
+                <div class="flex justify-center">
+                    <img
+                        src="${photos[0]}"
+                        alt="Target photo"
+                        class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
+                        onclick="openTargetPhotoGallery('${target.id}', '${surveyId}')"
+                    />
+                </div>
+                ${
+                    photos.length > 1
+                        ? `<p class="mt-1 text-xs text-gray-600 text-center">${photos.length} photos — tap to view gallery.</p>`
+                        : ''
+                }
             </div>
         `
         : '';
