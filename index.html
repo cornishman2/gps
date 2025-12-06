@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 5  - Metal Detecting Survey Log</title>
+    <title>Targets 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1887,38 +1887,35 @@ function handleEditSurveySubmit(event) {
 }
 
         
- /** Shows the New Target Modal. */
 function showNewTargetModal() {
+    // 0. You must have an open survey
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
-        return showMessage(
-            'Cannot log target. Please open a survey first on the Home page.',
-            'warning'
-        );
+        showMessage('You must have an open survey before logging targets.', 'error');
+        return;
     }
 
     // 1. Set survey name in the modal header
     const headerSpan = document.getElementById('current-target-survey-name');
     if (headerSpan) {
-        headerSpan.textContent = openSurvey.name;
+        headerSpan.textContent = openSurvey.name || 'Current survey';
     }
-    
+
+    // 2. Reset the form fields
+    const form = document.getElementById('new-target-form');
     if (form) {
         form.reset();
     }
 
-    // Reset photos for new target
+    // 3. Reset photos for new target (multi-photo state + UI)
     currentNewTargetPhotos = [];
     updateNewTargetPhotoPreview();
-    
-    // 3. Request GPS location
-    startTargetLocationWatch();
-    
-    // 4. Attach the submit listener via shared helper
-    attachFormSubmitHandler('new-target-form', handleNewTargetSubmit);
 
-    // 5. Display modal via shared helper
+    // 4. Open the modal (this also scrolls the view to the top via openModal)
     openModal('new-target-modal');
+
+    // 5. Request GPS location for this new Target
+    startTargetLocationWatch();
 }
 
 /** Closes the New Target Modal. */
