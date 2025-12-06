@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 9  - Metal Detecting Survey Log</title>
+    <title>Targets 10  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1772,55 +1772,61 @@ function updateMapWithUserLocationAndRender() {
 
         /** Shows a temporary notification toast. */
 /** Shows a temporary, highly visible notification toast (top-centre). */
+/** Shows a temporary, highly visible notification toast (top-centre). */
 function showMessage(message, type = 'info') {
     const toast = document.getElementById('message-toast');
-    if (!toast) {
-        // Emergency fallback if the toast element is missing
-        alert(message);
-        return;
+    if (!toast) return;
+
+    // Clear any old fade timers
+    if (toast._hideTimer) {
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = null;
+    }
+    if (toast._removeTimer) {
+        clearTimeout(toast._removeTimer);
+        toast._removeTimer = null;
     }
 
     toast.textContent = message;
 
-    // Strong background colours by type
-    let bgColor = 'bg-gray-900'; // Default info
-    if (type === 'success') {
-        bgColor = 'bg-green-600';
-    } else if (type === 'error') {
-        bgColor = 'bg-red-700';
-    } else if (type === 'warning') {
-        bgColor = 'bg-yellow-600';
-    }
+    // Strong background colours
+    const bgColor =
+        type === 'success' ? 'bg-green-600'
+        : type === 'error' ? 'bg-red-700'
+        : type === 'warning' ? 'bg-yellow-600'
+        : 'bg-gray-900';
 
     toast.className = [
         'fixed',
-        'top-20',                 // just under the header
+        'top-20',
         'left-1/2',
         '-translate-x-1/2',
         'z-50',
-        'px-4',
+        'px-5',
         'py-3',
         'rounded-xl',
         'text-white',
-        'text-sm',
-        'md:text-base',
         'font-semibold',
         'shadow-2xl',
         'border',
-        'border-white/40',
-        'transition-opacity',
-        'duration-300',
+        'border-white/30',
         'opacity-100',
-        bgColor
-    ].join(' ');
+        'transition-opacity',
+        'duration-400'
+    ].join(' ') + ' ' + bgColor;
 
-    // Make sure it can receive clicks if needed
-    toast.style.pointerEvents = 'auto';
-
-    // Fade it out after a short delay
-    setTimeout(() => {
+    // Fade out after 2.5 seconds
+    toast._hideTimer = setTimeout(() => {
         toast.classList.add('opacity-0');
     }, 2500);
+
+    // Remove (display:none) after the fade finishes
+    toast._removeTimer = setTimeout(() => {
+        toast.style.display = 'none';
+    }, 3000);
+
+    // Ensure it's visible again on next message
+    toast.style.display = 'block';
 }
       /** Shows the generic confirmation modal. */
         function showConfirmationModal(title, message, onConfirmCallback) {
@@ -5189,7 +5195,7 @@ const targets = getActiveTargets(openSurvey).filter(
         
         // 1. Load data first
         loadDataFromLocalStorage();
-        showMessage("Data loaded instantly from local storage.", 'success'); // Show initial load message
+  //      showMessage("Data loaded instantly from local storage.", 'success'); // Show initial load message
 
         // 2. Initial render call
         render();
