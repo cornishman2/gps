@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 10  - Metal Detecting Survey Log</title>
+    <title>Targets 11  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1622,24 +1622,25 @@ function startTargetLocationWatch() {
         },
 
         // Error Callback
-        (error) => {
-            console.error('GPS Watch Error:', error);
+  (error) => {
+    console.error('GPS Watch Error:', error);
 
-            if (loadingIndicator) {
-                loadingIndicator.classList.add('hidden');
-            }
-            if (accuracyDisplayP && accuracyValueSpan) {
-                accuracyDisplayP.classList.remove('hidden');
-                accuracyValueSpan.textContent = 'Error';
-                accuracyValueSpan.className = 'font-semibold text-red-600';
-            }
-            if (coordsInput) {
-                coordsInput.placeholder = 'GPS Error (Type Manually)';
-                coordsInput.disabled = false;
-            }
+    if (loadingIndicator) {
+        loadingIndicator.classList.add('hidden');
+    }
+    if (accuracyDisplayP && accuracyValueSpan) {
+        accuracyDisplayP.classList.remove('hidden');
+        accuracyValueSpan.textContent = 'Error';
+        accuracyValueSpan.className = "font-semibold text-red-600";
+    }
+    if (coordsInput) {
+        coordsInput.placeholder = 'GPS Error (Type Manually)';
+        coordsInput.disabled = false;
+    }
 
-            showMessage(`GPS Error: ${error.message}. Please input coordinates manually.`, 'error');
-        },
+    // Quiet the UI: no toast, just console + placeholder guidance
+    // (User sees "GPS Error (Type Manually)" in the field itself.)
+},
 
         // Options
         {
