@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database 2  - Metal Detecting Survey Log</title>
+    <title>Database 3  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2284,9 +2284,8 @@ function closeNewTargetModal() {
     closeModal('new-target-modal');
 }
 
-/** Handles the submission of the New Target form. This is the new one*/
-/** Handles the submission of the New Target form. */
-function handleNewTargetSubmit(event) {
+// NOTE: now async because we talk to IndexedDB
+async function handleNewTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;
 
@@ -2311,7 +2310,7 @@ function handleNewTargetSubmit(event) {
         return;
     }
 
-    // Centre on Map radios may or may not exist now
+    // Centre on Map radios may or may not exist
     let centerOnMap = false;
     const centerField = form['targetCenterOnMap'];
     if (centerField) {
@@ -2319,28 +2318,40 @@ function handleNewTargetSubmit(event) {
         centerOnMap = (centerOnMapValue === 'Yes');
     }
 
-    // --- Photos: parse JSON array (or single string) from hidden field ---
-    let photos = [];
+    // --- PHOTO HANDLING (Step 1: still uses data URLs in memory) ---
+
+    // Hidden field currently stores JSON.stringify(currentNewTargetPhotos)
+    let photosDataUrls = [];
     const rawPhotoField = form['targetPhotoData']?.value;
 
     if (rawPhotoField) {
         try {
             const parsed = JSON.parse(rawPhotoField);
             if (Array.isArray(parsed)) {
-                photos = parsed.filter(p => typeof p === 'string' && p.length > 0);
+                photosDataUrls = parsed.filter(p => typeof p === 'string' && p.length > 0);
             } else if (typeof parsed === 'string' && parsed.length > 0) {
-                // In case it’s just a single data URL
-                photos = [parsed];
+                photosDataUrls = [parsed];
             }
         } catch (e) {
-            // Not valid JSON? Treat it as a single data URL
+            // Not valid JSON? Treat as single data URL
             if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
-                photos = [rawPhotoField];
+                photosDataUrls = [rawPhotoField];
             }
         }
     }
 
-    const primaryPhoto = photos[0] || '';
+    // Save these data URLs into IndexedDB and get back lightweight references
+    let photoRefs = [];
+    try {
+        photoRefs = await saveDataUrlsAsPhotoRefs(photosDataUrls);
+    } catch (e) {
+        console.error('Error saving photos to IndexedDB:', e);
+        // We can still proceed, just without IDB refs.
+        photoRefs = [];
+    }
+
+    const primaryDataUrl = photosDataUrls[0] || '';
+    const primaryRef     = photoRefs[0] || '';
 
     const newTarget = {
         id: generateId(),
@@ -2356,9 +2367,12 @@ function handleNewTargetSubmit(event) {
         detector: userProfile.detector,
         centerOnMap: centerOnMap,
 
-        // NEW: full photo array + primary (for backwards compatibility)
-        photos: photos,
-        targetPhotoData: primaryPhoto
+        // NEW: IndexedDB references (not yet used by UI, but ready)
+        photos: photoRefs,
+        targetPhotoRef: primaryRef,
+
+        // OLD: keep the primary base64 for now so existing UI continues to work
+        targetPhotoData: primaryDataUrl
     };
 
     if (!Array.isArray(survey.targets)) {
@@ -2367,7 +2381,7 @@ function handleNewTargetSubmit(event) {
     survey.targets.unshift(newTarget);
     survey.dateLastChanged = Date.now();
 
-    // Clear the temp photo buffer so it can't bleed into the next target
+    // Clear temp buffer so it doesn't leak into the next target
     currentNewTargetPhotos = [];
 
     saveSurveysToLocalStorage();
@@ -2378,7 +2392,6 @@ function handleNewTargetSubmit(event) {
     showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
     render();
 }
-
 
         
 function openTargetPhotoGallery(targetId, surveyId) {
