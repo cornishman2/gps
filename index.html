@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 17  - Metal Detecting Survey Log</title>
+    <title>Database 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -836,6 +836,199 @@ let galleryTouchStartX = null;
         smoothedUserCoords.lon + USER_SMOOTHING_ALPHA * (newLon - smoothedUserCoords.lon);
 }
 
+// =====================
+//  INDEXEDDB FOR PHOTOS
+// =====================
+
+// DB / store names
+const PHOTO_DB_NAME    = 'geoFindDB';
+const PHOTO_DB_VERSION = 1;
+const PHOTO_STORE_NAME = 'photos';
+
+// Simple prefix to mark "this is an IndexedDB photo reference"
+const PHOTO_REF_PREFIX = 'idb:';
+
+function resetAllAppData() {
+    if (!confirm("⚠️ WARNING:\n\nThis will permanently delete ALL saved Surveys, Targets, Finds and Photos stored locally on THIS device.\n\nThis cannot be undone.\n\nDo you want to continue?")) {
+        return;
+    }
+
+    try {
+        // Clear localStorage keys
+        localStorage.clear();
+
+        // Clear IndexedDB photo database
+        indexedDB.deleteDatabase('geoFindDB');
+
+        alert("All local app data has been deleted.\nThe app will now restart.");
+        location.reload();
+    } catch (e) {
+        console.error("Failed to reset app data:", e);
+        alert("Could not reset app data.");
+    }
+}
+        
+/**
+ * Opens (or creates) our photo database.
+ * Returns a Promise that resolves to the DB instance.
+ */
+function openPhotoDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(PHOTO_DB_NAME, PHOTO_DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(PHOTO_STORE_NAME)) {
+                // Simple auto-increment numeric key: 1, 2, 3, ...
+                db.createObjectStore(PHOTO_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror   = () => reject(request.error);
+    });
+}
+
+/**
+ * Save a Blob (photo) into IndexedDB.
+ * Resolves to the numeric ID.
+ */
+async function savePhotoBlob(blob) {
+    const db = await openPhotoDB();
+    return new Promise((resolve, reject) => {
+        const tx    = db.transaction(PHOTO_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(PHOTO_STORE_NAME);
+
+        const request = store.add({
+            blob,
+            createdAt: Date.now()
+        });
+
+        request.onsuccess = () => resolve(request.result); // numeric ID
+        request.onerror   = () => reject(request.error);
+    });
+}
+
+/**
+ * Load a Blob (photo) from IndexedDB by ID.
+ * Resolves to the Blob or null.
+ */
+async function loadPhotoBlob(id) {
+    const db = await openPhotoDB();
+    return new Promise((resolve, reject) => {
+        const tx    = db.transaction(PHOTO_STORE_NAME, 'readonly');
+        const store = tx.objectStore(PHOTO_STORE_NAME);
+
+        const request = store.get(id);
+        request.onsuccess = () => {
+            const record = request.result;
+            resolve(record ? record.blob : null);
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+/**
+ * Optional: delete a photo blob by ID (for when you delete targets/finds later).
+ */
+async function deletePhotoBlob(id) {
+    const db = await openPhotoDB();
+    return new Promise((resolve, reject) => {
+        const tx    = db.transaction(PHOTO_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(PHOTO_STORE_NAME);
+
+        const request = store.delete(id);
+        request.onsuccess = () => resolve(true);
+        request.onerror   = () => reject(request.error);
+    });
+}
+
+
+// ========================
+//  PHOTO REFERENCE HELPERS
+// ========================
+
+/**
+ * Build a reference string from a numeric ID, eg "idb:5".
+ */
+function makePhotoRef(id) {
+    return `${PHOTO_REF_PREFIX}${id}`;
+}
+
+/**
+ * Check if a string is an IndexedDB photo reference.
+ */
+function isIndexedDbPhotoRef(ref) {
+    return typeof ref === 'string' && ref.startsWith(PHOTO_REF_PREFIX);
+}
+
+/**
+ * Extract the numeric ID from a reference string, eg "idb:5" -> 5.
+ */
+function parsePhotoRef(ref) {
+    if (!isIndexedDbPhotoRef(ref)) return null;
+    const num = Number(ref.slice(PHOTO_REF_PREFIX.length));
+    return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Convert a data URL (base64) to a Blob using fetch.
+ * Works offline because it's a data: URL.
+ */
+async function dataUrlToBlob(dataUrl) {
+    const response = await fetch(dataUrl);
+    return await response.blob();
+}
+
+/**
+ * Given an array of data URLs, store them in IndexedDB and
+ * return an array of references, e.g. ["idb:1", "idb:2"].
+ */
+async function saveDataUrlsAsPhotoRefs(dataUrls) {
+    const refs = [];
+    for (const url of dataUrls) {
+        if (typeof url !== 'string' || !url) continue;
+        const blob = await dataUrlToBlob(url);
+        const id   = await savePhotoBlob(blob);
+        refs.push(makePhotoRef(id));
+    }
+    return refs;
+}
+
+/**
+ * Given a single reference ("idb:5"), return an object URL you can use as img.src.
+ * Resolves to null if not found.
+ */
+async function getPhotoUrlFromRef(ref) {
+    // If we ever had plain data URLs in refs, we could handle them here:
+    if (typeof ref !== 'string' || !ref) return null;
+
+    // In the new world we only use "idb:NNN"
+    const id = parsePhotoRef(ref);
+    if (id == null) {
+        // If you *later* want to support old base64 refs, you could:
+        // if (ref.startsWith('data:image/')) return ref;
+        return null;
+    }
+
+    const blob = await loadPhotoBlob(id);
+    if (!blob) return null;
+
+    return URL.createObjectURL(blob);
+}
+
+/**
+ * For galleries: turn ["idb:1", "idb:2"] into an array of object URLs.
+ */
+async function loadPhotoUrlsFromRefs(refs) {
+    const urls = [];
+    for (const ref of refs || []) {
+        const url = await getPhotoUrlFromRef(ref);
+        if (url) urls.push(url);
+    }
+    return urls;
+}
+
  // ======================================
 // SHARED STORAGE HELPERS
 // ======================================
@@ -1074,6 +1267,7 @@ function attachFormSubmitHandler(formId, handler) {
 
         
 function openEditFindModal(findId) {
+    
     const find = finds.find(f => f.id === findId);
     if (!find) {
         showMessage('Find not found.', 'error');
@@ -1104,6 +1298,8 @@ function openEditFindModal(findId) {
     } else {
         currentEditFindPhotos = [];
     }
+
+    
 
     // Update preview + hidden field from currentEditFindPhotos
     updateEditFindPhotoPreview();
@@ -1461,6 +1657,11 @@ function attachPageEventListeners() {
     if (importBtn) {
         importBtn.addEventListener('click', importData);
     }
+    const resetBtn = document.getElementById('reset-all-data-btn');
+    if (resetBtn) {
+    resetBtn.addEventListener('click', resetAllAppData);
+}
+
 
     // --- FINDS PAGE: search + filters ---
     const findsSearchInput  = document.getElementById('finds-search-input');
@@ -5167,6 +5368,18 @@ const targets = getActiveTargets(openSurvey).filter(
                             <i class="fas fa-upload mr-1"></i> Import & Overwrite Local Data
                         </button>
                     </div>
+                    <!-- Danger Zone: Reset All Data -->
+                    <div class="mt-8 border-t border-gray-300 pt-6">
+                    <h3 class="text-lg font-semibold text-red-600 mb-3">Danger Zone</h3>
+                    <button id="reset-all-data-btn"
+                        class="w-full px-4 py-3 rounded-lg font-semibold bg-red-600 text-white active:bg-red-700">
+                    🗑️ Reset ALL local app data
+                    </button>
+                    <p class="text-xs text-gray-600 mt-2">
+                    Deletes ALL surveys, targets, finds and stored photos on THIS device. Cannot be undone.
+                    </p>
+                    </div>
+
                 </div>
             `;
         }
