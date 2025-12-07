@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 6  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 7  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2417,28 +2417,28 @@ async function handleNewTargetSubmit(event) {
     const primaryDataUrl = photosDataUrls[0] || '';
     const primaryRef     = photoRefs[0] || '';
 
-    const newTarget = {
-        id: generateId(),
-        description: newDescription,
-        vdi: newVDI,
-        depth: newDepth,
-        type: newType,
-        status: 'Hole Dug', // Default initial status
-        time: Date.now(),
-        coordinates: newCoords,
-        accuracy: newAccuracy,
-        user: userProfile.name,
-        detector: userProfile.detector,
-        centerOnMap: centerOnMap,
+  const newTarget = {
+    id: generateId(),
+    description: newDescription,
+    vdi: newVDI,
+    depth: newDepth,
+    type: newType,
+    status: 'Hole Dug',
+    time: Date.now(),
+    coordinates: newCoords,
+    accuracy: newAccuracy,
+    user: userProfile.name,
+    detector: userProfile.detector,
+    centerOnMap: centerOnMap,
 
-        // NEW: IndexedDB references (not yet used by UI, but ready)
-        photos: photoRefs,
-        targetPhotoRef: primaryRef,
+    // NEW: IndexedDB references
+    photos: photoRefs,
+    targetPhotoRef: primaryRef,
 
-        // OLD: keep the primary base64 for now so existing UI continues to work
-        targetPhotoData: primaryDataUrl
-    };
-
+    // CHANGED: Only store data URL if IndexedDB save failed
+    targetPhotoData: photoRefs.length > 0 ? '' : primaryDataUrl
+};
+    
     if (!Array.isArray(survey.targets)) {
         survey.targets = [];
     }
