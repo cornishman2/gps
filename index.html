@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 16  - Metal Detecting Survey Log</title>
+    <title>Targets 17  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2018,6 +2018,7 @@ function handleEditSurveySubmit(event) {
 }
 
         /** Shows the New Target Modal. */
+/** Shows the New Target Modal. */
 function showNewTargetModal() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -2043,19 +2044,28 @@ function showNewTargetModal() {
         form.reset();
     }
 
-    // 3. Reset photo UI
-    initPhotoUI(
-        '',
-        {
-            statusId:  'new-target-photo-status',
-            wrapperId: 'new-target-photo-preview-wrapper',
-            imgId:     'new-target-photo-preview',
-            hiddenId:  'target-photo-data'
-        },
-        {
-            empty: 'No photo captured yet.'
-        }
-    );
+    // 3. Reset NEW TARGET photo state + UI (IMPORTANT!)
+    currentNewTargetPhotos = [];
+
+    const statusSpan  = document.getElementById('new-target-photo-status');
+    const wrapper     = document.getElementById('new-target-photo-preview-wrapper');
+    const hiddenField = document.getElementById('target-photo-data');
+    const fileInput   = document.getElementById('new-target-photo-input');
+
+    if (statusSpan) {
+        statusSpan.textContent = 'No photo captured yet.';
+    }
+    if (wrapper) {
+        wrapper.classList.add('hidden');
+        wrapper.innerHTML = ''; // clear any old thumbnails
+    }
+    if (hiddenField) {
+        // store an empty array, ready for JSON.parse
+        hiddenField.value = '[]';
+    }
+    if (fileInput) {
+        fileInput.value = ''; // clear any previous selection
+    }
 
     // 4. Request GPS location
     startTargetLocationWatch();
@@ -2074,6 +2084,7 @@ function closeNewTargetModal() {
 }
 
 /** Handles the submission of the New Target form. This is the new one*/
+/** Handles the submission of the New Target form. */
 function handleNewTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;
@@ -2107,8 +2118,28 @@ function handleNewTargetSubmit(event) {
         centerOnMap = (centerOnMapValue === 'Yes');
     }
 
-    // Photo data from hidden field (single-photo for now)
-    const newPhotoData = form['targetPhotoData']?.value || '';
+    // --- Photos: parse JSON array (or single string) from hidden field ---
+    let photos = [];
+    const rawPhotoField = form['targetPhotoData']?.value;
+
+    if (rawPhotoField) {
+        try {
+            const parsed = JSON.parse(rawPhotoField);
+            if (Array.isArray(parsed)) {
+                photos = parsed.filter(p => typeof p === 'string' && p.length > 0);
+            } else if (typeof parsed === 'string' && parsed.length > 0) {
+                // In case it’s just a single data URL
+                photos = [parsed];
+            }
+        } catch (e) {
+            // Not valid JSON? Treat it as a single data URL
+            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
+                photos = [rawPhotoField];
+            }
+        }
+    }
+
+    const primaryPhoto = photos[0] || '';
 
     const newTarget = {
         id: generateId(),
@@ -2123,7 +2154,10 @@ function handleNewTargetSubmit(event) {
         user: userProfile.name,
         detector: userProfile.detector,
         centerOnMap: centerOnMap,
-        targetPhotoData: newPhotoData
+
+        // NEW: full photo array + primary (for backwards compatibility)
+        photos: photos,
+        targetPhotoData: primaryPhoto
     };
 
     if (!Array.isArray(survey.targets)) {
@@ -2131,6 +2165,9 @@ function handleNewTargetSubmit(event) {
     }
     survey.targets.unshift(newTarget);
     survey.dateLastChanged = Date.now();
+
+    // Clear the temp photo buffer so it can't bleed into the next target
+    currentNewTargetPhotos = [];
 
     saveSurveysToLocalStorage();
     closeNewTargetModal();
@@ -2140,7 +2177,6 @@ function handleNewTargetSubmit(event) {
     showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
     render();
 }
-
 
 
         
