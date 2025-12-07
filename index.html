@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 2  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2955,63 +2955,86 @@ function handleNewSurveyPhotoSelected(event) {
 }
 
         
-function showEditTargetModal(targetId, surveyId) {
+async function showEditTargetModal(targetId, surveyId) {
     const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return showMessage('Error: Survey not found.', 'error');
-    
-    const target = survey.targets.find(t => t.id === targetId);
-    if (!target) return showMessage('Error: Target not found.', 'error');
+    if (!survey) {
+        showMessage('Error: Survey not found.', 'error');
+        return;
+    }
 
-    // 1. Populate the form
+    const target = survey.targets.find(t => t.id === targetId);
+    if (!target) {
+        showMessage('Error: Target not found.', 'error');
+        return;
+    }
+
+    // 1. Populate the form fields
     document.getElementById('edit-target-id').value = target.id;
     document.getElementById('edit-survey-id').value = survey.id;
     document.getElementById('current-edit-survey-name').textContent = survey.name;
-    
-    document.getElementById('edit-target-description').value = target.description;
-    document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' ? '' : target.vdi;
-    document.getElementById('edit-target-depth').value = target.depth === 'Unknown' ? '' : target.depth;
-    document.getElementById('edit-target-type').value = target.type;
-    document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' ? '' : target.coordinates;
-    
-    // NEW: Populate accuracy field
-    document.getElementById('edit-target-accuracy').value = target.accuracy === 'N/A' ? '' : target.accuracy;
 
-    // NEW: Populate Centre on Map radio buttons (Robust Check)
-    const shouldCenterOnMap = target.centerOnMap === true;  
-    
+    document.getElementById('edit-target-description').value =
+        typeof target.description === 'string' ? target.description : '';
+
+    document.getElementById('edit-target-vdi').value =
+        target.vdi === 'N/A' || target.vdi == null ? '' : String(target.vdi);
+
+    document.getElementById('edit-target-depth').value =
+        target.depth === 'Unknown' || target.depth == null ? '' : String(target.depth);
+
+    document.getElementById('edit-target-type').value = target.type || 'Coin';
+
+    document.getElementById('edit-target-coords').value =
+        target.coordinates === 'No GPS logged' || !target.coordinates
+            ? ''
+            : String(target.coordinates);
+
+    // Accuracy
+    document.getElementById('edit-target-accuracy').value =
+        target.accuracy === 'N/A' || target.accuracy == null ? '' : String(target.accuracy);
+
+    // Centre on map radios
+    const shouldCenterOnMap = target.centerOnMap === true;
     const yesRadio = document.getElementById('edit-target-center-yes');
-    const noRadio = document.getElementById('edit-target-center-no');
-    
-    // Check if the elements exist before trying to set properties
+    const noRadio  = document.getElementById('edit-target-center-no');
+
     if (yesRadio && noRadio) {
         yesRadio.checked = shouldCenterOnMap;
-        noRadio.checked = !shouldCenterOnMap;
+        noRadio.checked  = !shouldCenterOnMap;
     }
 
-    // --- Photos: prefer array, fall back to legacy single string ---
-    if (Array.isArray(target.photos) && target.photos.length > 0) {
-        currentEditTargetPhotos = [...target.photos];
-    } else if (target.targetPhotoData) {
-        currentEditTargetPhotos = [target.targetPhotoData];
-    } else if (target.photoDataUrl) {
-        currentEditTargetPhotos = [target.photoDataUrl];
-    } else {
+    // 2. Photos: convert stored data into displayable thumbnails
+    try {
+        if (Array.isArray(target.photos) && target.photos.length > 0) {
+            const first = target.photos[0];
+
+            if (isIndexedDbPhotoRef(first)) {
+                // NEW: load from IndexedDB, get object URLs
+                currentEditTargetPhotos = await loadPhotoUrlsFromRefs(target.photos);
+            } else {
+                // Old style: already data URLs
+                currentEditTargetPhotos = target.photos.slice();
+            }
+        } else if (target.targetPhotoData) {
+            currentEditTargetPhotos = [target.targetPhotoData];
+        } else if (target.photoDataUrl) {
+            currentEditTargetPhotos = [target.photoDataUrl];
+        } else {
+            currentEditTargetPhotos = [];
+        }
+    } catch (e) {
+        console.error('Error preparing edit target photos:', e);
         currentEditTargetPhotos = [];
     }
+
     updateEditTargetPhotoPreview();
 
-   // 2. Display the modal
-    const modal = document.getElementById('edit-target-modal');
-    modal.style.display = 'block';
-
-    // 3. Attach the submit listener
-    // Attach submit handler via shared helper
+    // 3. Attach the submit listener (via your shared helper)
     attachFormSubmitHandler('edit-target-form', handleEditTargetSubmit);
 
-    // Show the modal via shared helper
+    // 4. Show the modal
     openModal('edit-target-modal');
 }
-
         
 function closeEditTargetModal() {
     closeModal('edit-target-modal');
@@ -3019,7 +3042,7 @@ function closeEditTargetModal() {
         /** Handles the submission of the Edit Target form. */
 /** Handles the submission of the Edit Target form. */
 /** Handles the submission of the Edit Target form. */
-function handleEditTargetSubmit(event) {
+async function handleEditTargetSubmit(event) {
     event.preventDefault();
 
     // Always grab the real form element by ID (more robust on mobile)
@@ -3038,7 +3061,7 @@ function handleEditTargetSubmit(event) {
     const surveyId = surveyIdInput?.value;
 
     if (!targetId || !surveyId) {
-        console.error('Edit target submit missing IDs:', {
+        console.error('Missing targetId or surveyId in edit form.', {
             targetId,
             surveyId,
             targetIdInput,
@@ -3060,24 +3083,38 @@ function handleEditTargetSubmit(event) {
     const newCoords   = form['targetCoords'].value.trim() || 'No GPS logged';
     const newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
 
-    // Photos: parse JSON array (or single string) from hidden field
-    let photos = [];
+    // --- Photos: parse JSON array (or single string) from hidden field ---
+    let photosDataUrls = [];
     const rawPhotoField = form['targetPhotoData']?.value;
+
     if (rawPhotoField) {
         try {
             const parsed = JSON.parse(rawPhotoField);
             if (Array.isArray(parsed)) {
-                photos = parsed.filter(p => typeof p === 'string' && p.length > 0);
+                photosDataUrls = parsed.filter(p => typeof p === 'string' && p.length > 0);
             } else if (typeof parsed === 'string' && parsed.length > 0) {
-                photos = [parsed];
+                photosDataUrls = [parsed];
             }
         } catch (e) {
+            // Not valid JSON? Treat it as a single URL (data: or blob:)
             if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
-                photos = [rawPhotoField];
+                photosDataUrls = [rawPhotoField];
             }
         }
     }
-    const primaryPhoto = photos[0] || '';
+
+    // Save these URLs into IndexedDB and get back lightweight references
+    let photoRefs = [];
+    try {
+        photoRefs = await saveDataUrlsAsPhotoRefs(photosDataUrls);
+    } catch (e) {
+        console.error('Error saving edited target photos to IndexedDB:', e);
+        // We can still proceed, but with no IDB refs
+        photoRefs = [];
+    }
+
+    const primaryDataUrl = photosDataUrls[0] || '';
+    const primaryRef     = photoRefs[0] || '';
 
     // Look up survey + target
     const survey = surveys.find(s => s.id === surveyId);
@@ -3100,27 +3137,30 @@ function handleEditTargetSubmit(event) {
     target.coordinates = newCoords;
     target.accuracy    = newAccuracy;
 
-    // Update photos
-    target.photos = photos;
-    target.targetPhotoData = primaryPhoto;
+    // Update photos (new IndexedDB-backed structure)
+    target.photos         = photoRefs;
+    target.targetPhotoRef = primaryRef;
+    target.targetPhotoData = primaryDataUrl; // keep base64/URL for thumbnails for now
 
-    // --- Centre on map: make this safe if radios are gone ---
-    const centerField = form['editTargetCenterOnMap'];
-    if (centerField) {
-        const centerOnMapValue = centerField.value;
-        const centerOnMap      = centerOnMapValue === 'Yes';
+    // Centre-on-map handling (only one per survey)
+    const yesRadio = document.getElementById('edit-target-center-yes');
+    const noRadio  = document.getElementById('edit-target-center-no');
+
+    if (yesRadio && noRadio) {
+        const centerOnMap = !!yesRadio.checked;
 
         if (centerOnMap) {
-            // Enforce single "Centre on map" within this survey
+            // Ensure only this target is centred in this survey
             survey.targets.forEach(t => {
                 if (t.id !== targetId) {
                     t.centerOnMap = false;
                 }
             });
         }
+
         target.centerOnMap = centerOnMap;
     }
-    // If the radios have been removed, we leave target.centerOnMap as-is
+    // If radios are missing, we leave target.centerOnMap unchanged
 
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
