@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database 3  - Metal Detecting Survey Log</title>
+    <title>Database thumbs  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2394,12 +2394,14 @@ async function handleNewTargetSubmit(event) {
 }
 
         
-function openTargetPhotoGallery(targetId, surveyId) {
+// Now async, so it can talk to IndexedDB
+async function openTargetPhotoGallery(targetId, surveyId) {
     const survey = surveys.find(s => s.id === surveyId);
     if (!survey) {
         showMessage('Survey not found for this target.', 'error');
         return;
     }
+
     const target = survey.targets.find(t => t.id === targetId);
     if (!target) {
         showMessage('Target not found.', 'error');
@@ -2407,11 +2409,27 @@ function openTargetPhotoGallery(targetId, surveyId) {
     }
 
     let photos = [];
+
     if (Array.isArray(target.photos) && target.photos.length) {
-        photos = target.photos.slice();
+        const first = target.photos[0];
+
+        // NEW: if these are IndexedDB refs ("idb:..."), load blobs and make real URLs
+        if (isIndexedDbPhotoRef(first)) {
+            try {
+                photos = await loadPhotoUrlsFromRefs(target.photos);
+            } catch (e) {
+                console.error('Error loading target photos from IndexedDB:', e);
+                photos = [];
+            }
+        } else {
+            // Old style: already data URLs, just copy them
+            photos = target.photos.slice();
+        }
     } else if (target.targetPhotoData || target.photoDataUrl) {
         const basePhoto = target.targetPhotoData || target.photoDataUrl;
-        if (basePhoto) photos = [basePhoto];
+        if (basePhoto) {
+            photos = [basePhoto];
+        }
     }
 
     if (!photos.length) {
@@ -2421,8 +2439,8 @@ function openTargetPhotoGallery(targetId, surveyId) {
 
     openPhotoGallery(photos, 0);
 }
-
-        function openFindPhotoGallery(findId) {
+// Also async, to be ready for IndexedDB-backed find photos
+async function openFindPhotoGallery(findId) {
     const find = finds.find(f => f.id === findId);
     if (!find) {
         showMessage('Find not found.', 'error');
@@ -2430,8 +2448,21 @@ function openTargetPhotoGallery(targetId, surveyId) {
     }
 
     let photos = [];
+
     if (Array.isArray(find.photos) && find.photos.length) {
-        photos = find.photos.slice();
+        const first = find.photos[0];
+
+        if (isIndexedDbPhotoRef(first)) {
+            try {
+                photos = await loadPhotoUrlsFromRefs(find.photos);
+            } catch (e) {
+                console.error('Error loading find photos from IndexedDB:', e);
+                photos = [];
+            }
+        } else {
+            // Old style: direct data URLs
+            photos = find.photos.slice();
+        }
     } else if (find.targetPhotoData || find.photoData) {
         const basePhoto = find.targetPhotoData || find.photoData;
         if (basePhoto) {
@@ -3834,28 +3865,32 @@ function renderTargetCard(target, surveyId) {
     }
 
     // --- Photo preview (supports multiple photos) ---
-    let photos = [];
-    if (Array.isArray(target.photos) && target.photos.length) {
-        photos = target.photos;
-    } else if (target.targetPhotoData || target.photoDataUrl) {
-        const single = target.targetPhotoData || target.photoDataUrl;
-        if (single) photos = [single];
-    }
+       // --- Photo thumbnail block (uses base64 for display, refs for count) ---
+    const thumbSrc =
+        target.targetPhotoData ||
+        target.photoDataUrl ||
+        '';
 
-    const photoHtml = photos.length
+    const photosCount = Array.isArray(target.photos) && target.photos.length
+        ? target.photos.length
+        : (thumbSrc ? 1 : 0);
+
+    const hasAnyPhotos = !!photosCount && !!thumbSrc;
+
+    const photoHtml = hasAnyPhotos
         ? `
             <div class="mt-3">
-                <div class="flex justify-center">
+                <div class="relative">
                     <img
-                        src="${photos[0]}"
+                        src="${thumbSrc}"
                         alt="Target photo"
                         class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
                         onclick="openTargetPhotoGallery('${target.id}', '${surveyId}')"
                     />
                 </div>
                 ${
-                    photos.length > 1
-                        ? `<p class="mt-1 text-xs text-gray-600 text-center">${photos.length} photos — tap to view gallery.</p>`
+                    photosCount > 1
+                        ? `<p class="mt-1 text-xs text-gray-600 text-center">${photosCount} photos — tap to view gallery.</p>`
                         : ''
                 }
             </div>
