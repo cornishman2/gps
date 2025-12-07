@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 5  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 6  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1266,8 +1266,7 @@ function attachFormSubmitHandler(formId, handler) {
 }
 
         
-function openEditFindModal(findId) {
-    
+async function openEditFindModal(findId) {
     const find = finds.find(f => f.id === findId);
     if (!find) {
         showMessage('Find not found.', 'error');
@@ -1287,19 +1286,28 @@ function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
-    // --- Photos: prefer array, fall back to legacy single string ---
-    if (Array.isArray(find.photos) && find.photos.length > 0) {
-        currentEditFindPhotos = [...find.photos];
-    } else if (find.targetPhotoData) {
-        currentEditFindPhotos = [find.targetPhotoData];
-    } else if (find.photoData) {
-        // in case any older data used photoData
-        currentEditFindPhotos = [find.photoData];
-    } else {
+    // Photos for editing: resolve IndexedDB refs -> object URLs, or use existing data URLs
+    try {
+        if (Array.isArray(find.photos) && find.photos.length > 0) {
+            const first = find.photos[0];
+            if (isIndexedDbPhotoRef(first)) {
+                // Load from IndexedDB
+                currentEditFindPhotos = await loadPhotoUrlsFromRefs(find.photos);
+            } else {
+                // Legacy: direct data URLs
+                currentEditFindPhotos = find.photos.slice();
+            }
+        } else if (find.targetPhotoData) {
+            currentEditFindPhotos = [find.targetPhotoData];
+        } else if (find.photoData) {
+            currentEditFindPhotos = [find.photoData];
+        } else {
+            currentEditFindPhotos = [];
+        }
+    } catch (e) {
+        console.error('Error preparing edit find photos:', e);
         currentEditFindPhotos = [];
     }
-
-    
 
     // Update preview + hidden field from currentEditFindPhotos
     updateEditFindPhotoPreview();
@@ -1310,7 +1318,6 @@ function openEditFindModal(findId) {
     // Show the modal
     openModal('edit-find-modal');
 }
-
 function closeEditFindModal() {
     closeModal('edit-find-modal');
 }
@@ -1319,7 +1326,7 @@ function closeEditFindModal() {
  * Save changes from Edit Find form back into the find object.
  * This now supports multiple photos via find.photos.
  */
-function handleEditFindSubmit(event) {
+async function handleEditFindSubmit(event) {
     event.preventDefault();
     const form = event.target;
 
@@ -1345,35 +1352,48 @@ function handleEditFindSubmit(event) {
     find.coordinates = form['findCoords'].value.trim();
     find.accuracy    = form['findAccuracy'].value.trim();
 
-    // --- Photos: read JSON array from hidden field (with fallback) ---
+    // --- Photos: read JSON array from hidden field, then save into IndexedDB ---
+    let photosDataUrls = [];
     if (form['findPhotoData']) {
         const raw = form['findPhotoData'].value;
-        let parsed = [];
 
         if (raw) {
             try {
                 const temp = JSON.parse(raw);
                 if (Array.isArray(temp)) {
-                    parsed = temp.filter(p => typeof p === 'string' && p.length > 0);
+                    photosDataUrls = temp.filter(p => typeof p === 'string' && p.length > 0);
                 } else if (typeof temp === 'string' && temp.length > 0) {
-                    parsed = [temp];
+                    photosDataUrls = [temp];
                 }
             } catch (e) {
-                // If it's not valid JSON, fall back to treating it as a single data URL
+                // If it's not valid JSON, fall back to treating it as a single URL
                 if (typeof raw === 'string' && raw.length > 0) {
-                    parsed = [raw];
+                    photosDataUrls = [raw];
                 }
             }
         }
-
-        find.photos = parsed;
-        // Keep legacy field in sync so older rendering logic (if any) still works
-        find.targetPhotoData = parsed[0] || '';
     }
+
+    let photoRefs = [];
+    try {
+        photoRefs = await saveDataUrlsAsPhotoRefs(photosDataUrls);
+    } catch (e) {
+        console.error('Error saving edited find photos to IndexedDB:', e);
+        photoRefs = [];
+    }
+
+    const primaryDataUrl = photosDataUrls[0] || '';
+    const primaryRef     = photoRefs[0] || '';
+
+    // Store new IndexedDB-backed structure
+    find.photos         = photoRefs;
+    find.findPhotoRef   = primaryRef;
+    find.targetPhotoData = primaryDataUrl; // keep thumbnail field for UI
 
     find.updatedAt = Date.now();
 
     saveFindsToLocalStorage();
+
     closeEditFindModal();
     showMessage('Find updated.', 'success');
     render();
@@ -1420,23 +1440,42 @@ function handleEditFindSubmit(event) {
  * Takes a target + its parent survey and snapshots it into the permanent Finds library.
  * The Find is independent: if the survey/target are later deleted, this record remains.
  */
+        /** Saves the current surveys and profile data to Local Storage. */
+function saveFindsToLocalStorage() {
+    try {
+        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
+    } catch (e) {
+        console.error("Error saving Finds to Local Storage:", e);
+        // No toast here – we don't want to confuse the user
+    }
+}
+
 function createFindFromTarget(target, survey) {
-    // Photos from the target (multiple or single)
-    let photos = [];
+    // Photos from the target (we now prefer IndexedDB refs)
+    let photoRefs = [];
+    let thumbDataUrl = '';
+
     if (Array.isArray(target.photos) && target.photos.length) {
-        photos = target.photos.slice();
-    } else if (target.targetPhotoData || target.photoDataUrl) {
-        const basePhoto = target.targetPhotoData || target.photoDataUrl;
-        if (basePhoto) {
-            photos = [basePhoto];
+        const first = target.photos[0];
+
+        if (isIndexedDbPhotoRef(first)) {
+            // New style: photos already refer to IndexedDB blobs
+            photoRefs = target.photos.slice();
+            thumbDataUrl = target.targetPhotoData || target.photoDataUrl || '';
+        } else {
+            // Legacy style: target.photos are data URLs (very rare now)
+            photoRefs = []; // we won't convert them here
+            thumbDataUrl = target.photos[0] || target.targetPhotoData || target.photoDataUrl || '';
         }
+    } else if (target.targetPhotoData || target.photoDataUrl) {
+        // No array, just a single thumbnail
+        thumbDataUrl = target.targetPhotoData || target.photoDataUrl;
     }
 
-    const primaryPhoto = photos[0] || '';
+    const primaryRef = photoRefs[0] || '';
 
     const find = {
         id: generateId(),
-        createdAt: Date.now(),
 
         // Links back to original context (not required to still exist)
         surveyId: survey.id,
@@ -1454,8 +1493,9 @@ function createFindFromTarget(target, survey) {
         centerOnMap: !!target.centerOnMap,
 
         // Media
-        targetPhotoData: primaryPhoto,
-        photos: photos,
+        targetPhotoData: thumbDataUrl,  // thumbnail for UI
+        photos: photoRefs,              // IndexedDB references
+        findPhotoRef: primaryRef,       // first ref for convenience
 
         // Metadata
         statusAtSave: target.status || '',
@@ -1468,26 +1508,11 @@ function createFindFromTarget(target, survey) {
     // Save finds separately (no scary warnings)
     saveFindsToLocalStorage();
 
-    // Optional small vibration for mobile feedback (safe no-op on desktop)
+    // Optional small vibration for mobile feedback (safe no-op on unsupported devices)
     if (navigator.vibrate) {
-        navigator.vibrate(40);
-    }
-
-    // Slight delay helps ensure UI is settled before message appears
-    setTimeout(() => {
-        showMessage(`Find saved: "${find.description}"`, 'success');
-    }, 120);
-}
-        /** Saves the current surveys and profile data to Local Storage. */
-function saveFindsToLocalStorage() {
-    try {
-        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
-    } catch (e) {
-        console.error("Error saving Finds to Local Storage:", e);
-        // No toast here – we don't want to confuse the user
+        navigator.vibrate(120);
     }
 }
-
         
 function saveSurveysToLocalStorage() {
     try {
@@ -2516,7 +2541,6 @@ async function openFindPhotoGallery(findId) {
 
     openPhotoGallery(photos, 0);
 }
-
 function openPhotoGallery(photos, startIndex) {
     if (!Array.isArray(photos) || !photos.length) return;
 
@@ -3758,39 +3782,39 @@ function renderFindsPage() {
         const dateText  = find.createdAt ? formatDate(find.createdAt) : '';
         const typeLabel = find.type || 'Unknown';
 
-        // Normalise photos: prefer array, fall back to single fields
-        const photos = (Array.isArray(find.photos) && find.photos.length > 0)
-            ? find.photos
-            : (find.targetPhotoData
-                ? [find.targetPhotoData]
-                : (find.photoData ? [find.photoData] : []));
+         // Thumbnail + photo count (IndexedDB-aware)
+        const thumbSrc =
+            find.targetPhotoData ||
+            find.photoData ||
+            '';
 
-      let photoHtml = '';
+        const photosCount = Array.isArray(find.photos) && find.photos.length
+            ? find.photos.length
+            : (thumbSrc ? 1 : 0);
 
-    if (photos.length) {
-        const mainPhoto = photos[0];
-        photoHtml = mainPhoto
+        const hasAnyPhotos = !!thumbSrc && photosCount > 0;
+
+        const photoHtml = hasAnyPhotos
             ? `
                 <div class="mt-3">
                     <div class="flex justify-center">
                         <img
-                            src="${mainPhoto}"
+                            src="${thumbSrc}"
                             alt="Find photo"
                             class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
                             onclick="openFindPhotoGallery('${find.id}')"
                         />
                     </div>
                     ${
-                        photos.length > 1
+                        photosCount > 1
                             ? `<p class="mt-1 text-xs text-gray-600 text-center">
-                                   ${photos.length} photos — tap to view gallery.
+                                   ${photosCount} photos — tap to view gallery.
                                </p>`
                             : ''
                     }
                 </div>
               `
             : '';
-    }
 
 
         return `
