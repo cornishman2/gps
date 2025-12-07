@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 3  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 4  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3268,69 +3268,66 @@ async function handleEditTargetSubmit(event) {
         // --- SURVEY & TARGET LOGIC (Action Handlers) ---
 
         /** Handles actions like 'open', 'close', 'archive', 'restore', 'delete'. */
-        function handleSurveyAction(button) {
-            const id = button.dataset.id;
-            const action = button.dataset.action;
-            const name = button.dataset.name;
-            const survey = surveys.find(s => s.id === id);
-            if (!survey) return;
+ async function handleSurveyAction(button) {
+    const id = button.dataset.id;
+    const action = button.dataset.action;
+    const name = button.dataset.name;
+    const survey = surveys.find(s => s.id === id);
+    if (!survey) return;
 
-            const executeAction = () => {
-                const now = Date.now();
-                switch (action) {
-                    case 'open':
-                        // Close any currently open survey first
-                        surveys.forEach(s => {
-                            if (s.status === 'Open') {
-                                s.status = 'Active';
-                                s.dateLastChanged = now;
-                            }
-                        });
-                        survey.status = 'Open';
-                        showMessage(`Survey '${name}' is now OPEN.`, 'success');
-                        break;
-                    case 'close':
-                        survey.status = 'Active';
-                        showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
-                        break;
-                    case 'archive':
-                        survey.status = 'Archived';
-                        showMessage(`Survey '${name}' has been Archived.`, 'info');
-                        break;
-                    case 'restore':
-                        survey.status = 'Active';
-                        showMessage(`Survey '${name}' Restored to Active.`, 'success');
-                        break;
-                   case 'delete':
-                        surveys = surveys.filter(s => s.id !== id);
-                        showMessage(`Survey '${name}' permanently deleted.`, 'error');
-                        break;
-
-                }
-                survey.dateLastChanged = now;
-                saveSurveysToLocalStorage();
-                render();
-            };
-
-            // Use confirmation modal for irreversible or significant actions
-            if (action === 'delete') {
-                showConfirmationModal(
-                    `Confirm Delete: ${name}`,
-                    `Are you sure you want to permanently delete the survey **${name}** and all its targets? This action cannot be undone.`,
-                    executeAction
-                );
-            } else if (action === 'archive') {
-                showConfirmationModal(
-                    `Confirm Archive: ${name}`,
-                    `Are you sure you want to Archive the survey **${name}**? You can restore it later.`,
-                    executeAction
-                );
-            } else {
-                executeAction();
-            }
+    const executeAction = async () => {
+        const now = Date.now();
+        switch (action) {
+            case 'open':
+                // Close any currently open survey first
+                surveys.forEach(s => {
+                    if (s.status === 'Open') {
+                        s.status = 'Active';
+                        s.dateLastChanged = now;
+                    }
+                });
+                survey.status = 'Open';
+                showMessage(`Survey '${name}' is now OPEN.`, 'success');
+                break;
+            case 'close':
+                survey.status = 'Active';
+                showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
+                break;
+            case 'archive':
+                survey.status = 'Archived';
+                showMessage(`Survey '${name}' has been Archived.`, 'info');
+                break;
+            case 'restore':
+                survey.status = 'Active';
+                showMessage(`Survey '${name}' Restored to Active.`, 'success');
+                break;
+            case 'delete':
+                surveys = surveys.filter(s => s.id !== id);
+                showMessage(`Survey '${name}' permanently deleted.`, 'error');
+                break;
         }
+        survey.dateLastChanged = now;
+        saveSurveysToLocalStorage();
+        render();
+    };
 
-        /** Handles actions on individual targets. */
+    // Use confirmation modal for irreversible or significant actions
+    if (action === 'delete') {
+        showConfirmationModal(
+            `Confirm Delete: ${name}`,
+            `Are you sure you want to permanently delete the survey **${name}** and all its targets? This action cannot be undone.`,
+            executeAction
+        );
+    } else if (action === 'archive') {
+        showConfirmationModal(
+            `Confirm Archive: ${name}`,
+            `Are you sure you want to Archive the survey **${name}**? You can restore it later.`,
+            executeAction
+        );
+    } else {
+        await executeAction();
+    }
+}       /** Handles actions on individual targets. */
 function handleMapTargetClick(event, targetId) {
     // Don’t let this click bubble up to the map container,
     // so it does NOT trigger toggleMapFullscreen().
