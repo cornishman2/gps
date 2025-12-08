@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 16  - Metal Detecting Survey Log</title>
+    <title>Finds buttons  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3808,33 +3808,48 @@ function renderFindsPage() {
     // Build distinct Survey options (by ID)
     const surveyMap = new Map();
     finds.forEach(f => {
-        const id = f.surveyId || 'unknown';
+        const id   = f.surveyId   || 'unknown';
         const name = f.surveyName || 'Unknown survey';
         if (!surveyMap.has(id)) {
             surveyMap.set(id, name);
         }
     });
     const surveyOptions = Array.from(surveyMap.entries())
-        .map(([id, name]) => ({ id, name }));
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     // Apply filters
     const filteredFinds = finds.filter(f => {
-        // Text search in description
+        // Text search (in several fields)
         if (findsFilter.query) {
             const q = findsFilter.query.toLowerCase();
-            const d = (f.description || '').toLowerCase();
-            if (!d.includes(q)) return false;
+            const haystack = [
+                f.description,
+                f.vdi,
+                f.depth,
+                f.type,
+                f.surveyName,
+                f.surveyDescription
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+
+            if (!haystack.includes(q)) return false;
         }
+
         // Type filter
         if (findsFilter.type !== 'All') {
             const t = f.type || 'Unknown';
             if (t !== findsFilter.type) return false;
         }
+
         // Survey filter
         if (findsFilter.surveyId !== 'All') {
             const id = f.surveyId || 'unknown';
             if (id !== findsFilter.surveyId) return false;
         }
+
         return true;
     });
 
@@ -3845,7 +3860,7 @@ function renderFindsPage() {
         const dateText  = find.createdAt ? formatDate(find.createdAt) : '';
         const typeLabel = find.type || 'Unknown';
 
-        // --- Thumbnail + photo count (IndexedDB-aware) ---
+        // --- Thumbnail + photo count (IndexedDB-aware, like Targets) ---
         let thumbRef    = '';
         let photosCount = 0;
 
@@ -3884,6 +3899,9 @@ function renderFindsPage() {
               `
             : '';
 
+        const coordsText = find.coordinates || 'No GPS logged';
+        const accText    = find.accuracy   || 'N/A';
+
         return `
             <div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-gray-100">
                 <div class="flex items-start justify-between">
@@ -3894,6 +3912,11 @@ function renderFindsPage() {
                         <p class="text-xs text-gray-500 mt-1">
                             ${find.surveyName || 'Unknown survey'}
                         </p>
+                        ${
+                            dateText
+                                ? `<p class="text-xs text-gray-400 mt-1">Saved: ${dateText}</p>`
+                                : ''
+                        }
                     </div>
                     <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
                         ${typeLabel}
@@ -3903,14 +3926,41 @@ function renderFindsPage() {
                 ${photoHtml}
 
                 <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-700">
-                    <div><span class="font-semibold">VDI:</span> ${find.vdi || '—'}</div>
-                    <div><span class="font-semibold">Depth:</span> ${find.depth || '—'}</div>
-                    <div><span class="font-semibold">Date:</span> ${dateText || '—'}</div>
-                    <div><span class="font-semibold">Detector:</span> ${find.detector || '—'}</div>
-                    <div class="col-span-2">
-                        <span class="font-semibold">Coords:</span>
-                        <span class="break-all">${find.coordinates || '—'}</span>
+                    <div>
+                        <span class="font-semibold">VDI:</span> ${find.vdi || '—'}
                     </div>
+                    <div>
+                        <span class="font-semibold">Depth:</span> ${find.depth || '—'}
+                    </div>
+                    <div>
+                        <span class="font-semibold">Coords:</span>
+                        <span class="break-all">${coordsText}</span>
+                    </div>
+                    <div>
+                        <span class="font-semibold">Accuracy:</span> ${accText}
+                    </div>
+                </div>
+
+                <!-- Actions row: Edit / Delete (same style language as Targets) -->
+                <div class="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                        type="button"
+                        class="find-card-edit-btn w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+                               bg-purple-100 text-purple-800 hover:bg-purple-200
+                               border border-purple-300
+                               text-xs sm:text-sm font-semibold"
+                        data-find-id="${find.id}">
+                        Edit details
+                    </button>
+
+                    <button
+                        type="button"
+                        class="find-card-delete-btn w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+                               bg-red-600 text-white hover:bg-red-700
+                               text-xs sm:text-sm font-semibold"
+                        data-find-id="${find.id}">
+                        Delete Find
+                    </button>
                 </div>
             </div>
         `;
@@ -3936,7 +3986,7 @@ function renderFindsPage() {
             <p class="text-sm text-gray-600 mb-4">
                 ${
                     hasFinds
-                        ? `Showing ${filteredCount} of ${totalCount} finds.`
+                        ? \`Showing ${filteredCount} of ${totalCount} finds.\`
                         : 'No finds have been saved yet.'
                 }
             </p>
@@ -3945,7 +3995,7 @@ function renderFindsPage() {
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <div class="flex-1">
                         <label class="block text-xs font-semibold text-gray-600 mb-1" for="finds-search-input">
-                            Search description
+                            Search description / notes
                         </label>
                         <input
                             id="finds-search-input"
