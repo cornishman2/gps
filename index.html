@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 10  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 11  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1408,7 +1408,7 @@ async function handleEditFindSubmit(event) {
     // Store new IndexedDB-backed structure
     find.photos         = photoRefs;
     find.findPhotoRef   = primaryRef;
-    find.targetPhotoData = primaryDataUrl; // keep thumbnail field for UI
+    find.targetPhotoData = photoRefs.length > 0 ? '' : primaryDataUrl;
 
     find.updatedAt = Date.now();
 
@@ -1481,11 +1481,11 @@ function createFindFromTarget(target, survey) {
         if (isIndexedDbPhotoRef(first)) {
             // New style: photos already refer to IndexedDB blobs
             photoRefs = target.photos.slice();
-            thumbDataUrl = target.targetPhotoData || target.photoDataUrl || '';
+            thumbDataUrl = '';
         } else {
             // Legacy style: target.photos are data URLs (very rare now)
             photoRefs = []; // we won't convert them here
-            thumbDataUrl = target.photos[0] || target.targetPhotoData || target.photoDataUrl || '';
+            thumbDataUrl = target.photos[0] || target.targetPhotoData || large
         }
     } else if (target.targetPhotoData || target.photoDataUrl) {
         // No array, just a single thumbnail
@@ -2186,8 +2186,8 @@ async function handleNewSurveySubmit(event) {
         dateLastChanged: now,
         targets: [],
         surveyPhotoRef: surveyPhotoRef,           // NEW: IndexedDB reference
-        surveyPhotoData: surveyPhotoDataUrl       // KEEP: for backward compatibility and display
-    };
+        surveyPhotoData: surveyPhotoRef ? '' : surveyPhotoDataUrl
+  };
 
     // 3. Add the new survey to the start of the list
     surveys.unshift(newSurvey);
@@ -2294,7 +2294,7 @@ async function handleEditSurveySubmit(event) {
     survey.name = name;
     survey.description = description;
     survey.surveyPhotoRef = surveyPhotoRef;     // NEW: IndexedDB reference
-    survey.surveyPhotoData = photoDataUrl;       // KEEP: for display
+    surveyPhotoData: surveyPhotoRef ? '' : surveyPhotoDataUrl
     survey.dateLastChanged = Date.now();
 
     saveSurveysToLocalStorage();
@@ -2435,10 +2435,10 @@ async function handleNewTargetSubmit(event) {
         photoRefs = [];
     }
 
-    const primaryDataUrl = photosDataUrls[0] || '';
-    const primaryRef     = photoRefs[0] || '';
+ const primaryDataUrl = photosDataUrls[0] || '';
+const primaryRef     = photoRefs[0] || '';
 
-  const newTarget = {
+const newTarget = {
     id: generateId(),
     description: newDescription,
     vdi: newVDI,
@@ -2450,16 +2450,19 @@ async function handleNewTargetSubmit(event) {
     accuracy: newAccuracy,
     user: userProfile.name,
     detector: userProfile.detector,
-    centerOnMap: centerOnMap,
+    centerOnMap,
 
-    // NEW: IndexedDB references
+    // Photos: use IndexedDB refs as the truth
     photos: photoRefs,
     targetPhotoRef: primaryRef,
 
-    // CHANGED: Only store data URL if IndexedDB save failed
-    targetPhotoData: primaryDataUrl
+    // IMPORTANT:
+    // If we successfully saved to IndexedDB (photoRefs.length > 0),
+    // DO NOT keep a base64 copy in localStorage.
+    // Only keep base64 if IDB save failed.
+    targetPhotoData: photoRefs.length > 0 ? '' : primaryDataUrl
 };
-    
+  
     if (!Array.isArray(survey.targets)) {
         survey.targets = [];
     }
@@ -3222,9 +3225,9 @@ async function handleEditTargetSubmit(event) {
     target.accuracy    = newAccuracy;
 
     // Update photos (new IndexedDB-backed structure)
-    target.photos         = photoRefs;
-    target.targetPhotoRef = primaryRef;
-    target.targetPhotoData = primaryDataUrl; // keep base64/URL for thumbnails for now
+    target.photos          = photoRefs;
+    target.targetPhotoRef  = primaryRef;
+    target.targetPhotoData = photoRefs.length > 0 ? '' : primaryDataUrl;
 
     // Centre-on-map handling (only one per survey)
     const yesRadio = document.getElementById('edit-target-center-yes');
