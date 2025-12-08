@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 9  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 10  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1539,6 +1539,8 @@ function saveSurveysToLocalStorage() {
         localStorage.setItem('geoFindSurveys', JSON.stringify(surveys));
         localStorage.setItem('geoFindProfile', JSON.stringify(userProfile));
         localStorage.setItem('geoFindUserId', userId);
+        // CRITICAL: Also save finds here to ensure they persist on refresh
+        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
     } catch (e) {
         console.error("Error saving to Local Storage:", e);
         // Only show message for actual localStorage errors (like quota exceeded)
@@ -1546,8 +1548,7 @@ function saveSurveysToLocalStorage() {
             showMessage("Storage quota exceeded. Consider exporting and clearing old data.", 'error');
         }
     }
-}
-        /** Loads data from Local Storage. Initializes if no data found. */
+}        /** Loads data from Local Storage. Initializes if no data found. */
     function loadDataFromLocalStorage() {
     try {
         const storedSurveys = localStorage.getItem('geoFindSurveys');
