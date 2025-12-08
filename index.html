@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 11  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 12  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1485,7 +1485,8 @@ function createFindFromTarget(target, survey) {
         } else {
             // Legacy style: target.photos are data URLs (very rare now)
             photoRefs = []; // we won't convert them here
-            thumbDataUrl = target.photos[0] || target.targetPhotoData || large
+            thumbDataUrl = target.photos[0] || target.targetPhotoData || target.photoDataUrl || '';
+
         }
     } else if (target.targetPhotoData || target.photoDataUrl) {
         // No array, just a single thumbnail
@@ -1782,7 +1783,13 @@ function attachPageEventListeners() {
             });
         });
     }
+        // After wiring up page-specific buttons, resolve any thumbnails
+    if (typeof initialiseCardThumbnails === 'function') {
+        initialiseCardThumbnails();
+    }
 }
+
+
 
         
 function startTargetLocationWatch() {
@@ -2293,8 +2300,8 @@ async function handleEditSurveySubmit(event) {
 
     survey.name = name;
     survey.description = description;
-    survey.surveyPhotoRef = surveyPhotoRef;     // NEW: IndexedDB reference
-    surveyPhotoData: surveyPhotoRef ? '' : surveyPhotoDataUrl
+    survey.surveyPhotoRef  = surveyPhotoRef;                       // NEW: IndexedDB reference
+    survey.surveyPhotoData = surveyPhotoRef ? '' : photoDataUrl;   // Keep base64 only if IDB failed
     survey.dateLastChanged = Date.now();
 
     saveSurveysToLocalStorage();
@@ -2663,6 +2670,45 @@ function initPhotoUI(photoData, {
         if (previewWrapper) previewWrapper.classList.add('hidden');
         if (statusSpan)     statusSpan.textContent = emptyMessage;
     }
+}
+
+    // ======================================
+// CARD THUMBNAIL INITIALISER (Targets & Finds)
+// ======================================
+async function initialiseCardThumbnails() {
+    const thumbImgs = document.querySelectorAll('img[data-photo-ref]');
+    if (!thumbImgs.length) return;
+
+    thumbImgs.forEach(async (img) => {
+        const ref = img.getAttribute('data-photo-ref');
+        if (!ref) return;
+
+        try {
+            let url = '';
+
+            // New style: an IndexedDB reference like "idb:123"
+            if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(ref)) {
+                if (typeof getPhotoUrlFromRef === 'function') {
+                    url = await getPhotoUrlFromRef(ref);
+                }
+            } else {
+                // Legacy: direct data URL or normal URL
+                url = ref;
+            }
+
+            if (url) {
+                img.src = url;
+            } else {
+                // If we couldn't resolve anything, hide the broken image
+                const container = img.closest('.mt-3');
+                if (container) {
+                    container.classList.add('hidden');
+                }
+            }
+        } catch (e) {
+            console.error('Error resolving thumbnail for ref', ref, e);
+        }
+    });
 }
 
 /**
@@ -3802,28 +3848,33 @@ function renderFindsPage() {
         return true;
     });
 
-    const cardsHtml = filteredFinds.map(find => {
+       const cardsHtml = filteredFinds.map(find => {
         const dateText  = find.createdAt ? formatDate(find.createdAt) : '';
         const typeLabel = find.type || 'Unknown';
 
-         // Thumbnail + photo count (IndexedDB-aware)
-        const thumbSrc =
-            find.targetPhotoData ||
-            find.photoData ||
-            '';
+        // --- Thumbnail + photo count (IndexedDB-aware) ---
+        let thumbRef = '';
+        let photosCount = 0;
 
-        const photosCount = Array.isArray(find.photos) && find.photos.length
-            ? find.photos.length
-            : (thumbSrc ? 1 : 0);
+        if (Array.isArray(find.photos) && find.photos.length) {
+            // New style: array of refs or data URLs
+            thumbRef    = find.photos[0];
+            photosCount = find.photos.length;
+        } else if (find.targetPhotoData || find.photoData) {
+            // Legacy / fallback
+            thumbRef    = find.targetPhotoData || find.photoData;
+            photosCount = thumbRef ? 1 : 0;
+        }
 
-        const hasAnyPhotos = !!thumbSrc && photosCount > 0;
-
-        const photoHtml = hasAnyPhotos
+        const photoHtml = thumbRef
             ? `
                 <div class="mt-3">
                     <div class="flex justify-center">
                         <img
-                            src="${thumbSrc}"
+                            src=""  <!-- will be filled by initialiseCardThumbnails() -->
+                            data-photo-ref="${thumbRef}"
+                            data-photo-kind="find"
+                            data-find-id="${find.id}"
                             alt="Find photo"
                             class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
                             onclick="openFindPhotoGallery('${find.id}')"
@@ -3839,6 +3890,38 @@ function renderFindsPage() {
                 </div>
               `
             : '';
+
+        return `
+            <div class="bg-white rounded-xl shadow-md p-4 mb-4 border border-gray-100">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-primary">
+                            ${find.description || 'Unnamed Find'}
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-1">
+                            ${find.surveyName || 'Unknown survey'}
+                        </p>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                        ${typeLabel}
+                    </span>
+                </div>
+
+                ${photoHtml}
+
+                <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-700">
+                    <div><span class="font-semibold">VDI:</span> ${find.vdi || '—'}</div>
+                    <div><span class="font-semibold">Depth:</span> ${find.depth || '—'}</div>
+                    <div><span class="font-semibold">Date:</span> ${dateText || '—'}</div>
+                    <div><span class="font-semibold">Detector:</span> ${find.detector || '—'}</div>
+                    <div class="col-span-2">
+                        <span class="font-semibold">Coords:</span>
+                        <span class="break-all">${find.coordinates || '—'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 
 
         return `
@@ -4020,23 +4103,30 @@ function renderTargetCard(target, surveyId) {
 
     // --- Photo preview (supports multiple photos) ---
        // --- Photo thumbnail block (uses base64 for display, refs for count) ---
-    const thumbSrc =
-        target.targetPhotoData ||
-        target.photoDataUrl ||
-        '';
+       // --- Photo preview (supports multiple photos + IndexedDB refs) ---
+    let thumbRef = '';
+    let photosCount = 0;
 
-    const photosCount = Array.isArray(target.photos) && target.photos.length
-        ? target.photos.length
-        : (thumbSrc ? 1 : 0);
+    if (Array.isArray(target.photos) && target.photos.length) {
+        // New style: photos is an array of refs (e.g. "idb:...") or data URLs
+        thumbRef    = target.photos[0];
+        photosCount = target.photos.length;
+    } else if (target.targetPhotoData || target.photoDataUrl) {
+        // Legacy / fallback: single base64 or URL
+        thumbRef    = target.targetPhotoData || target.photoDataUrl;
+        photosCount = thumbRef ? 1 : 0;
+    }
 
-    const hasAnyPhotos = !!photosCount && !!thumbSrc;
-
-    const photoHtml = hasAnyPhotos
+    const photoHtml = thumbRef
         ? `
             <div class="mt-3">
-                <div class="relative">
+                <div class="flex justify-center">
                     <img
-                        src="${thumbSrc}"
+                        src=""  <!-- will be filled by initialiseCardThumbnails() -->
+                        data-photo-ref="${thumbRef}"
+                        data-photo-kind="target"
+                        data-target-id="${target.id}"
+                        data-survey-id="${surveyId}"
                         alt="Target photo"
                         class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
                         onclick="openTargetPhotoGallery('${target.id}', '${surveyId}')"
@@ -4044,7 +4134,9 @@ function renderTargetCard(target, surveyId) {
                 </div>
                 ${
                     photosCount > 1
-                        ? `<p class="mt-1 text-xs text-gray-600 text-center">${photosCount} photos — tap to view gallery.</p>`
+                        ? `<p class="mt-1 text-xs text-gray-600 text-center">
+                               ${photosCount} photos — tap to view gallery.
+                           </p>`
                         : ''
                 }
             </div>
