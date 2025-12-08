@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database thumbs 8  - Metal Detecting Survey Log</title>
+    <title>Database thumbs 9  - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1044,7 +1044,27 @@ function saveCollectionToStorage(key, data) {
         localStorage.setItem(key, JSON.stringify(data));
     } catch (err) {
         console.error(`Error saving ${key} to localStorage:`, err);
-        showMessage(`Could not save ${key} to local storage.`, 'error');
+
+        // Detect quota errors across different browsers
+        const isQuotaError =
+            err &&
+            (
+                err.name === 'QuotaExceededError' ||
+                err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+                err.code === 22 ||          // some WebKit
+                err.code === 1014           // some Firefox
+            );
+
+        if (isQuotaError) {
+            showMessage(
+                "Storage quota exceeded. Consider exporting and clearing old data.",
+                'error'
+            );
+        } else {
+            // For other errors, just log them.
+            // If you really want a toast, you could downgrade it to 'warning':
+            // showMessage(`Problem saving ${key}. See console for details.`, 'warning');
+        }
     }
 }
 
