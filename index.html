@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import/Export 1 - Metal Detecting Survey Log</title>
+    <title>Import/Export 2 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -5627,6 +5627,7 @@ const targets = getActiveTargets(openSurvey).filter(
     `;
 }
 /** Renders the content for the Settings page. */
+/** Renders the content for the Settings page. */
 function renderSettingsPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
     return `
@@ -5655,7 +5656,8 @@ function renderSettingsPage() {
                 <p class="text-sm text-gray-600 mb-3">
                     Export all your surveys, finds and profile data as JSON text to back it up or move it to another device.
                     <br><span class="text-xs text-gray-500">
-                    This export <strong>does not include photo blobs</strong> – only references. Use the survey export below to move photos.
+                    This export <strong>does not include photo blobs</strong> – only references.
+                    Use the survey export below if you need photos as well.
                     </span>
                 </p>
                 <button id="export-data-btn" 
@@ -5692,11 +5694,9 @@ function renderSettingsPage() {
             <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds (with photos)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    This creates a JSON block containing the <strong>currently open survey</strong>, all its targets, 
-                    any finds linked to that survey, <strong>and all associated photos</strong> as embedded data.
-                    <br><span class="text-xs text-gray-500">
-                    Paste this JSON into a text file as a backup, or import it on another device using the panel below.
-                    </span>
+                    This will create a <strong>.json file</strong> containing the currently open survey, all its targets,
+                    any finds linked to that survey, <strong>and all associated photos</strong> (embedded as data URLs).
+                    You will be prompted to download the file. A small log below shows export progress.
                 </p>
                 <button id="export-open-survey-with-photos-btn"
                         onclick="exportOpenSurveyWithPhotos()"
@@ -5706,21 +5706,36 @@ function renderSettingsPage() {
                 <textarea id="export-open-survey-with-photos-area" 
                           rows="6" 
                           readonly 
-                          placeholder="Exported survey JSON (with photos) will appear here." 
+                          placeholder="Export progress will appear here."
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4 hidden"></textarea>
             </div>
 
             <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey (with photos)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    Paste a survey export (created by the button above) and click Import.
+                    Import a survey export (created by the button above). You can either choose a file or paste the JSON.
                     The survey and its finds will be <strong>added</strong> to your existing local data.
                 </p>
+
+                <div class="mb-3">
+                    <input type="file"
+                           id="import-survey-with-photos-file"
+                           accept=".json,application/json"
+                           class="block w-full text-xs text-gray-700 mb-2" />
+                    <button type="button"
+                            onclick="importSurveyWithPhotosFromFile()"
+                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+                        <i class="fas fa-file-import mr-1"></i> Import Survey from File
+                    </button>
+                    <p class="text-[11px] text-gray-500 mt-1">
+                        Or paste JSON manually into the box below and click "Import Survey (add to existing)".
+                    </p>
+                </div>
                 
                 <textarea id="import-survey-with-photos-area" 
                           rows="10" 
-                          placeholder="Paste a survey JSON (with photos) created by this app." 
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mb-4"></textarea>
+                          placeholder="Paste a survey JSON (with photos) created by this app, or load it from a file above." 
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mb-3"></textarea>
                 <button id="import-survey-with-photos-btn"
                         onclick="importSurveyWithPhotos()"
                         class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
@@ -5869,6 +5884,11 @@ async function buildPhotoDataUrlsFromRefs(refs, fallbackSingleDataUrl) {
  * Export the currently OPEN survey + its linked finds, including all photos
  * as base64 data URLs embedded in JSON.
  */
+/**
+ * Export the currently OPEN survey + its linked finds, including all photos
+ * as base64 data URLs embedded in JSON, and download it as a .json file.
+ * Progress is shown in the textarea on the Settings page.
+ */
 async function exportOpenSurveyWithPhotos() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -5876,11 +5896,36 @@ async function exportOpenSurveyWithPhotos() {
         return;
     }
 
+    const btn    = document.getElementById('export-open-survey-with-photos-btn');
+    const logBox = document.getElementById('export-open-survey-with-photos-area');
+
+    const log = (msg) => {
+        if (!logBox) return;
+        logBox.classList.remove('hidden');
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    if (logBox) {
+        logBox.value = '';   // clear previous log
+        logBox.classList.remove('hidden');
+    }
+
+    let originalBtnText = '';
+    if (btn) {
+        originalBtnText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Exporting...';
+    }
+
     try {
+        log(`Starting export for survey: ${openSurvey.name || 'Unnamed survey'}`);
+
         // 1) Deep copy the survey so we don't mutate live data
         const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
 
         // 2) Survey-level photo (if present)
+        log('Processing survey photo...');
         let surveyPhotoDataUrl = surveyCopy.surveyPhotoData || '';
         if (!surveyPhotoDataUrl && openSurvey.surveyPhotoRef && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
             const id = parsePhotoRef(openSurvey.surveyPhotoRef);
@@ -5896,9 +5941,13 @@ async function exportOpenSurveyWithPhotos() {
         // 3) Targets (with photos)
         surveyCopy.targets = [];
         if (Array.isArray(openSurvey.targets)) {
+            log(`Processing ${openSurvey.targets.length} targets...`);
+            let index = 0;
             for (const t of openSurvey.targets) {
-                const tCopy = JSON.parse(JSON.stringify(t));
+                index++;
+                log(`  Target ${index}/${openSurvey.targets.length}: ${t.description || t.id || ''}`);
 
+                const tCopy = JSON.parse(JSON.stringify(t));
                 const targetThumb = t.targetPhotoData || t.photoDataUrl || '';
                 const photoDataUrls = await buildPhotoDataUrlsFromRefs(t.photos || [], targetThumb);
 
@@ -5910,9 +5959,14 @@ async function exportOpenSurveyWithPhotos() {
         // 4) Finds linked to this survey
         const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
         const findsCopy = [];
-        for (const f of linkedFinds) {
-            const fCopy = JSON.parse(JSON.stringify(f));
+        log(`Processing ${linkedFinds.length} linked finds...`);
 
+        let findIndex = 0;
+        for (const f of linkedFinds) {
+            findIndex++;
+            log(`  Find ${findIndex}/${linkedFinds.length}: ${f.description || f.id || ''}`);
+
+            const fCopy = JSON.parse(JSON.stringify(f));
             const findThumb = f.targetPhotoData || f.photoDataUrl || '';
             const photoDataUrls = await buildPhotoDataUrlsFromRefs(f.photos || [], findThumb);
 
@@ -5921,38 +5975,59 @@ async function exportOpenSurveyWithPhotos() {
         }
 
         // 5) Build the export payload
+        log('Building final JSON payload...');
         const payload = {
             version: 'geoFind-open-survey-v1',
             exportedAt: new Date().toISOString(),
-            profile: userProfile,          // your profile at time of export
+            profile: userProfile,
             survey: surveyCopy,
             finds: findsCopy
         };
 
-        const jsonString = JSON.stringify(payload, null, 2);
-        const area = document.getElementById('export-open-survey-with-photos-area');
+        const jsonString = JSON.stringify(payload);
+        log(`Payload size: ~${Math.round(jsonString.length / 1024)} KB`);
 
-        if (area) {
-            area.value = jsonString;
-            area.classList.remove('hidden');
-            area.focus();
-            area.select();
-        }
+        // 6) Create a file download
+        const safeName = (openSurvey.name || 'survey')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            || 'survey';
 
-        // Try to copy to clipboard as a convenience
-        try {
-            await navigator.clipboard.writeText(jsonString);
-            showMessage('Open survey (with photos) copied to clipboard.', 'success');
-        } catch (err) {
-            console.warn('Could not copy survey export to clipboard:', err);
-            showMessage('Survey export ready. Please copy the text from the box.', 'info');
-        }
+        const timestamp = new Date()
+            .toISOString()
+            .replace(/[:.]/g, '')
+            .replace('T', '_')
+            .replace('Z', '');
+
+        const filename = `geoFind_${safeName}_${timestamp}.json`;
+
+        log(`Creating download file: ${filename} ...`);
+
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log('Download triggered. Check your browser downloads.');
+        showMessage('Survey export file created and download started.', 'success');
     } catch (e) {
         console.error('Error exporting open survey with photos:', e);
+        log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Could not export open survey: ${e.message || 'Unknown error'}`, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalBtnText || 'Export Open Survey (with photos)';
+        }
     }
 }
-
 /**
  * Import a previously exported survey (with photos) and ADD it to existing data.
  * Photos are written back into IndexedDB and standard refs/fields are rebuilt.
@@ -6069,6 +6144,41 @@ async function importSurveyWithPhotos() {
         showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
     }
 }
+
+/**
+ * Convenience helper: read a chosen .json file and feed its contents into
+ * importSurveyWithPhotos(), so users don't have to paste the JSON manually.
+ */
+async function importSurveyWithPhotosFromFile() {
+    const fileInput = document.getElementById('import-survey-with-photos-file');
+    if (!fileInput || !fileInput.files || !fileInput.files.length) {
+        showMessage('Please choose a survey .json file to import.', 'error');
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    try {
+        const text = await file.text();
+        const area = document.getElementById('import-survey-with-photos-area');
+        if (area) {
+            area.value = text;
+        }
+        // Reuse the existing import logic
+        await importSurveyWithPhotos();
+    } catch (e) {
+        console.error('Error reading survey import file:', e);
+        showMessage(`Could not read import file: ${e.message || 'Unknown error'}`, 'error');
+    } finally {
+        // Optional: clear the file input so the same file can be chosen again if needed
+        try {
+            fileInput.value = '';
+        } catch (_) {
+            // ignore
+        }
+    }
+}
+
 
         // --- INITIALIZATION & EVENT LISTENERS ---
 
