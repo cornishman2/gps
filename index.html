@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import/Export 3 - Metal Detecting Survey Log</title>
+    <title>Import/Export 4 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -5665,7 +5665,7 @@ function renderSettingsPage() {
                           rows="6" 
                           readonly 
                           placeholder="Export log will appear here."
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4 hidden"></textarea>
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
             </div>
 
             <!-- IMPORT SURVEY (WITH PHOTOS) -->
@@ -5844,9 +5844,9 @@ async function exportOpenSurveyWithPhotos() {
         return;
     }
 
-    // Confirmation before doing anything heavy
+    // Confirmation in the same style as other actions
     const proceed = confirm(
-        'This will export the currently open survey, its targets, finds and photos as a .json file.\n\nContinue with export?'
+        'Are you sure you want to export the open survey, its targets, finds and photos?'
     );
     if (!proceed) return;
 
@@ -5855,14 +5855,12 @@ async function exportOpenSurveyWithPhotos() {
 
     const log = (msg) => {
         if (!logBox) return;
-        logBox.classList.remove('hidden');
         logBox.value += msg + '\n';
         logBox.scrollTop = logBox.scrollHeight;
     };
 
     if (logBox) {
         logBox.value = '';   // clear previous log
-        logBox.classList.remove('hidden');
     }
 
     let originalBtnText = '';
@@ -5968,7 +5966,6 @@ async function exportOpenSurveyWithPhotos() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        // Final log line, no popup about "downloads"
         log(`Export complete. "${filename}" has been saved in your Downloads folder.`);
         showMessage('Survey export completed.', 'success');
     } catch (e) {
@@ -5984,7 +5981,6 @@ async function exportOpenSurveyWithPhotos() {
         }
     }
 }
-
 /**
  * Internal worker to import a survey JSON string (with photos) and add it
  * to existing data. Uses a log function to report progress.
@@ -6080,7 +6076,7 @@ async function performSurveyImport(text, filename, log) {
             }
         }
 
-        // 4) Merge into live data (ADD, do not overwrite existing)
+              // 4) Merge into live data (ADD, do not overwrite existing)
         log('Merging imported survey into local data...');
         surveys.push(importedSurvey);
         finds = finds.concat(importedFinds);
@@ -6096,8 +6092,8 @@ async function performSurveyImport(text, filename, log) {
             'success'
         );
 
-        currentPage = 'Home';
-        render();
+        // Stay on Settings so the user can read the log.
+        // They can navigate manually when ready.
     } catch (e) {
         console.error('Error importing survey with photos:', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
