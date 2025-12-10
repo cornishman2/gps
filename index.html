@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import/Export 5 - Metal Detecting Survey Log</title>
+    <title>Import/Export 6 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2099,26 +2099,6 @@ function showMessage(message, type = 'info') {
     toast.style.display = 'block';
 }
 
-// ------------------------------------------------------
-// Confirmation modals for Export + Import
-// ------------------------------------------------------
-function showExportConfirmModal(onConfirm) {
-    showConfirmModal(
-        "Export survey",
-        "Export the open survey, its targets, finds and photos?",
-        "Yes, export",
-        onConfirm
-    );
-}
-
-function showImportConfirmModal(filename, onConfirm) {
-    showConfirmModal(
-        "Import survey",
-        `Import survey from file "${filename}"?<br><br>This will add all targets, finds and photos to your local data.`,
-        "Yes, import",
-        onConfirm
-    );
-}
         
       /** Shows the generic confirmation modal. */
         function showConfirmationModal(title, message, onConfirmCallback) {
@@ -5866,27 +5846,52 @@ async function buildPhotoDataUrlsFromRefs(refs, fallbackSingleDataUrl) {
     return result;
 }
 
-/**
- * Export the currently OPEN survey + its linked finds, including all photos
- * as base64 data URLs embedded in JSON, and save it as a .json file.
- * Progress is shown in the export log on the Settings page.
- */
-function exportOpenSurveyWithPhotos() {
-    showExportConfirmModal(() => {
-        actuallyExportOpenSurvey();
-    });
+// ------------------------------------------------------
+// Confirmation modals for Export + Import
+// (reuse the generic showConfirmationModal)
+// ------------------------------------------------------
+function showExportConfirmModal(onConfirmCallback) {
+    showConfirmationModal(
+        "Export survey",
+        "Export the open survey, its targets, finds and photos?",
+        onConfirmCallback
+    );
 }
 
-    async function actuallyExportOpenSurvey() {
+function showImportConfirmModal(filename, onConfirmCallback) {
+    showConfirmationModal(
+        "Import survey",
+        `Import survey from file "<strong>${filename}</strong>"?<br><br>` +
+        `This will add the survey and its finds (with photos) to your local data.`,
+        onConfirmCallback
+    );
+}
+
+/**
+ * Entry point for the Export button.
+ * Checks there is an open survey, then shows a confirmation modal.
+ */
+function exportOpenSurveyWithPhotos() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('No open survey to export.', 'error');
         return;
     }
 
- return showExportConfirmModal(() => {
-    actuallyExportOpenSurvey();
-});
+    showExportConfirmModal(() => {
+        actuallyExportOpenSurvey();
+    });
+}
+
+/**
+ * Worker that does the actual export once the user has confirmed.
+ */
+async function actuallyExportOpenSurvey() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey) {
+        showMessage('No open survey to export.', 'error');
+        return;
+    }
 
     const btn    = document.getElementById('export-open-survey-with-photos-btn');
     const logBox = document.getElementById('export-open-survey-log');
@@ -5897,8 +5902,9 @@ function exportOpenSurveyWithPhotos() {
         logBox.scrollTop = logBox.scrollHeight;
     };
 
+    // Clear previous log
     if (logBox) {
-        logBox.value = '';   // clear previous log
+        logBox.value = '';
     }
 
     let originalBtnText = '';
@@ -6015,7 +6021,8 @@ function exportOpenSurveyWithPhotos() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerText = originalBtnText || 'Export Open Survey (with photos)';
+            // No "(with photos)" anymore:
+            btn.innerText = originalBtnText || 'Export Open Survey';
         }
     }
 }
@@ -6166,16 +6173,12 @@ async function importSurveyWithPhotosFromFile() {
         logBox.value = '';
     }
 
-showImportConfirmModal(file.name, () => {
-    performSurveyImport(text, file.name, log);
-});
-
     log(`Reading file "${file.name}"...`);
 
     let text;
     try {
         text = await file.text();
-        log('File read successfully. Starting import...');
+        log('File read successfully. Ready to import.');
     } catch (e) {
         console.error('Error reading survey import file:', e);
         log(`ERROR: Could not read file (${e.message || 'Unknown error'})`);
@@ -6183,14 +6186,12 @@ showImportConfirmModal(file.name, () => {
         return;
     }
 
-    await performSurveyImport(text, file.name, log);
-
-    // Optional: clear the file input so the same file can be chosen again
-    try {
-        fileInput.value = '';
-    } catch (_) {
-        // ignore
-    }
+    // Now ask for confirmation using the existing modal
+    showImportConfirmModal(file.name, async () => {
+        log('Starting import...');
+        await performSurveyImport(text, file.name, log);
+        // We stay on Settings so the user can read the log
+    });
 }
 
         // --- INITIALIZATION & EVENT LISTENERS ---
