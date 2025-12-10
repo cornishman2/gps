@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import/Export 4 - Metal Detecting Survey Log</title>
+    <title>Import/Export 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2022,7 +2022,12 @@ liveMapWatchId = navigator.geolocation.watchPosition(
 }
 
 /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
-function updateMapWithUserLocationAndRender() {
+function triggerImportSurvey() {
+    importSurveyWithPhotosFromFile();
+}
+
+        
+    function updateMapWithUserLocationAndRender() {
     // The GPS data is updated asynchronously by startLiveMapLocationWatch().
     // We just trigger the re-render here.
     const appContent = document.getElementById('app-content');
@@ -2093,6 +2098,28 @@ function showMessage(message, type = 'info') {
     // Ensure it's visible again on next message
     toast.style.display = 'block';
 }
+
+// ------------------------------------------------------
+// Confirmation modals for Export + Import
+// ------------------------------------------------------
+function showExportConfirmModal(onConfirm) {
+    showConfirmModal(
+        "Export survey",
+        "Export the open survey, its targets, finds and photos?",
+        "Yes, export",
+        onConfirm
+    );
+}
+
+function showImportConfirmModal(filename, onConfirm) {
+    showConfirmModal(
+        "Import survey",
+        `Import survey from file "${filename}"?<br><br>This will add all targets, finds and photos to your local data.`,
+        "Yes, import",
+        onConfirm
+    );
+}
+        
       /** Shows the generic confirmation modal. */
         function showConfirmationModal(title, message, onConfirmCallback) {
             const modal = document.getElementById('confirmation-modal');
@@ -5647,11 +5674,11 @@ function renderSettingsPage() {
                 </div>
             </div>
 
-            <h3 class="text-2xl font-bold text-gray-700 mb-3">Survey Export &amp; Import (with photos)</h3>
+            <h3 class="text-2xl font-bold text-gray-700 mb-3">Survey Export &amp; Import </h3>
 
             <!-- EXPORT OPEN SURVEY (WITH PHOTOS) -->
             <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds (with photos)</h4>
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds </h4>
                 <p class="text-sm text-gray-600 mb-3">
                     This creates a <strong>.json file</strong> containing the currently open survey, all its targets,
                     any finds linked to that survey, and all associated photos. A log below shows export progress.
@@ -5659,7 +5686,7 @@ function renderSettingsPage() {
                 <button id="export-open-survey-with-photos-btn"
                         onclick="exportOpenSurveyWithPhotos()"
                         class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                    <i class="fas fa-download mr-1"></i> Export Open Survey (with photos)
+                    <i class="fas fa-download mr-1"></i> Export Open Survey 
                 </button>
                 <textarea id="export-open-survey-log" 
                           rows="6" 
@@ -5670,22 +5697,29 @@ function renderSettingsPage() {
 
             <!-- IMPORT SURVEY (WITH PHOTOS) -->
             <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey (with photos)</h4>
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey </h4>
                 <p class="text-sm text-gray-600 mb-3">
                     Import a survey export file (created by the button above). The survey and its finds will be
                     <strong>added</strong> to your existing local data. Progress is shown in the log below.
                 </p>
 
                 <div class="mb-3">
-                    <input type="file"
-                           id="import-survey-with-photos-file"
-                           accept=".json,application/json"
-                           class="block w-full text-xs text-gray-700 mb-2" />
-                    <button type="button"
-                            onclick="importSurveyWithPhotosFromFile()"
-                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                        <i class="fas fa-file-import mr-1"></i> Import Survey from File
-                    </button>
+                   <div class="w-full mb-3 flex flex-col gap-2">
+    <label for="import-survey-with-photos-file"
+           class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md text-center hover:bg-sky-700 transition duration-150 cursor-pointer">
+        <i class="fas fa-file mr-1"></i>Select Survey File
+    </label>
+    <input type="file"
+           id="import-survey-with-photos-file"
+           accept=".json,application/json"
+           class="hidden" />
+
+    <button type="button"
+            onclick="triggerImportSurvey()"
+            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+        <i class="fas fa-upload mr-1"></i> Import Survey
+    </button>
+</div>
                 </div>
                 
                 <textarea id="import-survey-log" 
@@ -5837,18 +5871,22 @@ async function buildPhotoDataUrlsFromRefs(refs, fallbackSingleDataUrl) {
  * as base64 data URLs embedded in JSON, and save it as a .json file.
  * Progress is shown in the export log on the Settings page.
  */
-async function exportOpenSurveyWithPhotos() {
+function exportOpenSurveyWithPhotos() {
+    showExportConfirmModal(() => {
+        actuallyExportOpenSurvey();
+    });
+}
+
+    async function actuallyExportOpenSurvey() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('No open survey to export.', 'error');
         return;
     }
 
-    // Confirmation in the same style as other actions
-    const proceed = confirm(
-        'Are you sure you want to export the open survey, its targets, finds and photos?'
-    );
-    if (!proceed) return;
+ return showExportConfirmModal(() => {
+    actuallyExportOpenSurvey();
+});
 
     const btn    = document.getElementById('export-open-survey-with-photos-btn');
     const logBox = document.getElementById('export-open-survey-log');
@@ -6128,15 +6166,9 @@ async function importSurveyWithPhotosFromFile() {
         logBox.value = '';
     }
 
-    // Confirmation before import
-    const proceed = confirm(
-        `Import survey from file "${file.name}"?\n\n` +
-        'This will add the survey and its finds (with photos) to your existing local data.'
-    );
-    if (!proceed) {
-        log('Import cancelled by user.');
-        return;
-    }
+showImportConfirmModal(file.name, () => {
+    performSurveyImport(text, file.name, log);
+});
 
     log(`Reading file "${file.name}"...`);
 
