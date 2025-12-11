@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import/Export 6 - Metal Detecting Survey Log</title>
+    <title>QR 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -104,24 +104,24 @@
         </div>
     </div>
         <div id="photo-gallery-modal" class="modal modal-gallery">
-        <div class="modal-content bg-black bg-opacity-90 text-white p-4 shadow-2xl relative max-w-full">
-            <!-- Close button -->
-            <button
-                type="button"
-                class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-800 bg-opacity-80 hover:bg-opacity-100 flex items-center justify-center"
-                onclick="closePhotoGallery()"
-            >
-                <i class="fas fa-times text-sm"></i>
-            </button>
+                <div class="modal-content bg-black bg-opacity-90 text-white p-4 shadow-2xl relative max-w-full">
+                <!-- Close button -->
+                    <button
+                    type="button"
+                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-800 bg-opacity-80 hover:bg-opacity-100 flex items-center justify-center"
+                    onclick="closePhotoGallery()"
+                    >
+                    < i class="fas fa-times text-sm"></i>
+                    </button>
 
-            <!-- Image area (swipe here) -->
-            <div id="photo-gallery-image-wrapper" class="flex items-center justify-center mt-4">
-                <img
-                    id="photo-gallery-image"
-                    alt="Photo"
-                    class="max-h-screen w-auto rounded-lg border border-gray-700"
-                >
-            </div>
+                    <!-- Image area (swipe here) -->
+                    <div id="photo-gallery-image-wrapper" class="flex items-center justify-center mt-4">
+                    <img
+                        id="photo-gallery-image"
+                        alt="Photo"
+                        class="max-h-screen w-auto rounded-lg border border-gray-700"
+                    >
+                </div>
 
             <!-- “1 of N” text -->
             <p id="photo-gallery-caption" class="mt-3 text-center text-sm text-gray-300"></p>
@@ -145,6 +145,41 @@
             </div>
         </div>
     </div>
+<!-- Target QR modal -->
+<div id="target-qr-modal" class="modal">
+  <div class="modal-content bg-white p-6 shadow-2xl max-w-sm">
+    <h3 id="target-qr-title" class="text-xl font-bold text-primary mb-4">
+      Target QR
+    </h3>
+
+    <div
+      id="target-qr-code-container"
+      class="w-full flex items-center justify-center mb-4"
+    >
+      <!-- QR code will be inserted here -->
+    </div>
+
+    <p class="text-xs text-gray-500 mb-2">
+      This QR encodes the main details of this target so it can be imported on another device.
+    </p>
+
+    <textarea
+      id="target-qr-raw-text"
+      class="w-full h-24 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md p-2 mb-4"
+      readonly
+    ></textarea>
+
+    <div class="flex justify-end">
+      <button
+        type="button"
+        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+        onclick="closeTargetQrModal()"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+</div>
 
     <div id="new-survey-modal" class="modal">
         <div class="modal-content bg-white p-6 shadow-2xl">
@@ -3467,6 +3502,95 @@ function handleMapTargetClick(event, targetId) {
         attachPageEventListeners();
     }
 }
+// ------------------------------------------------------
+// Target QR helpers
+// ------------------------------------------------------
+
+/**
+ * Build a compact JSON string representing a single target
+ * plus minimal survey + profile info.
+ */
+function buildTargetQrPayload(target, survey) {
+    const payload = {
+        kind: 'geoFind-target',
+        version: 1,
+
+        surveyId: survey.id,
+        surveyName: survey.name || '',
+        surveyDescription: survey.description || '',
+
+        targetId: target.id,
+        description: target.description || '',
+        type: target.type || '',
+        vdi: target.vdi || '',
+        depth: target.depth || '',
+        coordinates: target.coordinates || '',
+        accuracy: target.accuracy || '',
+        status: target.status || '',
+        createdAt: target.createdAt || target.timestamp || null,
+
+        user: (userProfile && userProfile.name) ? userProfile.name : '',
+        detector: (userProfile && userProfile.detector) ? userProfile.detector : ''
+    };
+
+    // Keep it compact for QR efficiency
+    return JSON.stringify(payload);
+}
+
+/**
+ * Given a target + survey, populate and show the QR modal.
+ */
+function showTargetQrModalFor(target, survey) {
+    const modal        = document.getElementById('target-qr-modal');
+    const titleEl      = document.getElementById('target-qr-title');
+    const codeContainer = document.getElementById('target-qr-code-container');
+    const textArea     = document.getElementById('target-qr-raw-text');
+
+    if (!modal || !titleEl || !codeContainer) {
+        console.error('Target QR modal elements not found.');
+        showMessage('QR modal not found in page.', 'error');
+        return;
+    }
+
+    const qrText = buildTargetQrPayload(target, survey);
+
+    // Title
+    titleEl.textContent = `Target QR: ${target.description || 'Unnamed target'}`;
+
+    // Raw JSON text (for debugging / copy-paste)
+    if (textArea) {
+        textArea.value = qrText;
+    }
+
+    // Clear any previous QR code
+    codeContainer.innerHTML = '';
+
+    // Use the QRCode library if available
+    if (typeof QRCode === 'function') {
+        try {
+            new QRCode(codeContainer, {
+                text: qrText,
+                width: 256,
+                height: 256,
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } catch (e) {
+            console.error('Error creating QR code:', e);
+            codeContainer.innerHTML =
+                '<p class="text-xs text-red-600">Could not generate QR code.</p>';
+        }
+    } else {
+        // Fallback if library not loaded
+        codeContainer.innerHTML =
+            '<p class="text-xs text-red-600">QR library not loaded. The raw text below can be copied manually.</p>';
+    }
+
+    openModal('target-qr-modal');
+}
+
+function closeTargetQrModal() {
+    closeModal('target-qr-modal');
+}
 
 
 function handleTargetAction(element) {
@@ -3487,7 +3611,7 @@ function handleTargetAction(element) {
     }
 
     const executeAction = () => {
-        switch (action) {
+          switch (action) {
             case 'setStatus': {
                 const newStatus = element.dataset.status;
                 target.status = newStatus;
@@ -3496,27 +3620,19 @@ function handleTargetAction(element) {
             }
 
             case 'saveFind': {
-                // Mark this target as also being a Find for future filtering
                 target.isFind = true;
-
-                // Copy this target into the Finds library
                 createFindFromTarget(target, survey);
-                // No change to target/survey status
                 break;
             }
 
             case 'navigate': {
-                // Set this target as the active navigation target
                 navigationTargetId = targetId;
                 showMessage(`Navigation target set: "${target.description}".`, 'success');
-
-                // Jump straight to the Compass page so navigation is visible
                 currentPage = 'Compass';
                 break;
             }
 
             case 'centerOnMap': {
-                // Ensure only this target is the "centre on map" one for this survey
                 survey.targets.forEach(t => {
                     t.centerOnMap = (t.id === targetId);
                 });
@@ -3524,11 +3640,14 @@ function handleTargetAction(element) {
                 break;
             }
 
-            case 'delete': {
-                // Soft-delete: keep the record but hide it from views
-                target.deleted = true;
+            case 'showQr': {
+                // No state change — just show the QR modal
+                showTargetQrModalFor(target, survey);
+                break;
+            }
 
-                // If this target was the current navigation target, clear it
+            case 'delete': {
+                target.deleted = true;
                 if (navigationTargetId === targetId) {
                     navigationTargetId = null;
                 }
@@ -4276,7 +4395,20 @@ function renderTargetCard(target, surveyId) {
                 </div>
 
                 <!-- Row 2: Navigation -->
-                <div class="grid grid-cols-2 gap-2">
+                     <!-- Row 2: QR + Navigation -->
+                <div class="grid grid-cols-3 gap-2">
+                    <button
+                        type="button"
+                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+                               bg-gray-800 text-white hover:bg-gray-900
+                               text-xs sm:text-sm font-semibold"
+                        data-action="showQr"
+                        data-id="${target.id}"
+                        data-survey-id="${surveyId}"
+                        onclick="handleTargetAction(this)">
+                        Show QR
+                    </button>
+
                     <button
                         type="button"
                         class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
@@ -6215,5 +6347,7 @@ async function importSurveyWithPhotosFromFile() {
         render();
 
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
 </body>
 </html>
