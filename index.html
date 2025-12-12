@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat 4 - Metal Detecting Survey Log</title>
+    <title>Chat 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -866,6 +866,9 @@ let currentGalleryPhotos = [];
 let currentGalleryIndex = 0;
 let gallerySwipeInitialized = false;
 let galleryTouchStartX = null;
+
+let suppressCompassAutoRefresh = false;
+
 
      
         // Profile initialized with default data
@@ -1823,6 +1826,19 @@ function attachPageEventListeners() {
     });
 
     // --- COMPASS PAGE: track controls ---
+const quickInput = document.getElementById('compass-quick-target-vdi');
+if (quickInput) {
+    quickInput.addEventListener('focus', () => {
+        suppressCompassAutoRefresh = true;
+    });
+
+    quickInput.addEventListener('blur', () => {
+        suppressCompassAutoRefresh = false;
+
+        // Optional: redraw once immediately after finishing typing
+        updateMapWithUserLocationAndRender();
+    });
+}
 
     // Compass quick-log target button
 const quickBtn = document.getElementById('compass-log-target-btn');
@@ -2148,8 +2164,9 @@ function triggerImportSurvey() {
 }
 
         
-  function updateMapWithUserLocationAndRender() {
+function updateMapWithUserLocationAndRender() {
     if (currentPage !== 'Compass') return;
+    if (suppressCompassAutoRefresh) return; // <-- NEW: don't re-render while typing
 
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
