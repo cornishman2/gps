@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat 5 - Metal Detecting Survey Log</title>
+    <title>Chat 6 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1332,6 +1332,22 @@ function computeMovementBearingDegrees() {
 
 
         // --- HELPER FUNCTIONS ---
+function stopCompassAutoRefresh() {
+    if (autoRefreshIntervalId) {
+        clearInterval(autoRefreshIntervalId);
+        autoRefreshIntervalId = null;
+        console.log("Compass auto-refresh paused (user input).");
+    }
+}
+
+function startCompassAutoRefresh() {
+    if (!autoRefreshIntervalId) {
+        autoRefreshIntervalId = setInterval(() => {
+            updateMapWithUserLocationAndRender();
+        }, 3000);
+        console.log("Compass auto-refresh resumed.");
+    }
+}
 
 // ======================================
 // SHARED MODAL HELPERS
@@ -1843,7 +1859,7 @@ if (quickInput) {
     // Compass quick-log target button
 const quickBtn = document.getElementById('compass-log-target-btn');
 if (quickBtn) {
-    quickBtn.addEventListener('click', () => {
+    quickBtn.addEventListener('focus', () => {
         const openSurvey = surveys.find(s => s.status === 'Open');
         if (!openSurvey) {
             showMessage('You must have an open survey to log a target.', 'error');
@@ -1892,11 +1908,14 @@ if (quickBtn) {
 
         saveSurveysToLocalStorage();
 
+       // After saving the new target:
         if (input) input.value = '';
-
         showMessage(`New Target logged (VDI ${raw}).`, 'success');
 
-        // Refresh Compass without changing page
+        // Now that logging is done, resume auto-refresh
+        startCompassAutoRefresh();
+
+        // Re-render compass once so the new target pin appears immediately
         updateMapWithUserLocationAndRender();
     });
 }
