@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat 6 - Metal Detecting Survey Log</title>
+    <title>Chat 7 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -844,6 +844,8 @@ let finds = [];  // permanent library of Finds
 let currentPage = 'Home';
 let isMapFullscreen = false;
 let targetWatchId = null;
+let compassQuickTargetIdDraft = '';
+
 
 // Simple filter state for the Finds page
 let findsFilter = {
@@ -1844,15 +1846,14 @@ function attachPageEventListeners() {
     // --- COMPASS PAGE: track controls ---
 const quickInput = document.getElementById('compass-quick-target-vdi');
 if (quickInput) {
-    quickInput.addEventListener('focus', () => {
-        suppressCompassAutoRefresh = true;
-    });
+    // Restore any draft text after a re-render
+    if (compassQuickTargetIdDraft.trim().length > 0 && quickInput.value !== compassQuickTargetIdDraft) {
+        quickInput.value = compassQuickTargetIdDraft;
+    }
 
-    quickInput.addEventListener('blur', () => {
-        suppressCompassAutoRefresh = false;
-
-        // Optional: redraw once immediately after finishing typing
-        updateMapWithUserLocationAndRender();
+    // Keep draft up to date while typing
+    quickInput.addEventListener('input', () => {
+        compassQuickTargetIdDraft = quickInput.value;
     });
 }
 
@@ -1910,6 +1911,7 @@ if (quickBtn) {
 
        // After saving the new target:
         if (input) input.value = '';
+        compassQuickTargetIdDraft=''l
         showMessage(`New Target logged (VDI ${raw}).`, 'success');
 
         // Now that logging is done, resume auto-refresh
@@ -2185,7 +2187,19 @@ function triggerImportSurvey() {
         
 function updateMapWithUserLocationAndRender() {
     if (currentPage !== 'Compass') return;
-    if (suppressCompassAutoRefresh) return; // <-- NEW: don't re-render while typing
+
+    const input = document.getElementById('compass-quick-target-vdi');
+
+    // If user has typed anything, do NOT refresh (prevents field clearing + keyboard drop)
+    if (input && input.value.trim().length > 0) {
+        compassQuickTargetIdDraft = input.value; // keep latest draft
+        return;
+    }
+
+    // Also skip if we have a stored draft (extra safety)
+    if (compassQuickTargetIdDraft.trim().length > 0) {
+        return;
+    }
 
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
@@ -2193,7 +2207,6 @@ function updateMapWithUserLocationAndRender() {
     appContent.innerHTML = renderCompassPage(true);
     attachPageEventListeners();
 }
-
         // --- MODAL & TOAST FUNCTIONS ---
 
         /** Shows a temporary notification toast. */
