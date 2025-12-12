@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat 9 - Metal Detecting Survey Log</title>
+    <title>Chat 10 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1889,7 +1889,7 @@ if (quickBtn) {
             vdi: raw,
             depth: 'Unknown',
             type: 'Unidentified',
-            status: 'Hole Dug',
+            status: 'Not dug',
             time: now,
             coordinates: coords,
             accuracy: acc,
@@ -2627,7 +2627,7 @@ const newTarget = {
     vdi: newVDI,
     depth: newDepth,
     type: newType,
-    status: 'Hole Dug',
+    status: 'Not dug',
     time: Date.now(),
     coordinates: newCoords,
     accuracy: newAccuracy,
@@ -4705,44 +4705,65 @@ function renderTargetCard(target, surveyId) {
             <!-- Actions -->
             <div class="mt-4 space-y-2">
                 <!-- Row 1: Hole status buttons -->
-                <div class="grid grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-amber-100 text-amber-800 hover:bg-amber-200
-                               text-xs sm:text-sm font-semibold"
-                        data-action="setStatus"
-                        data-status="Hole Dug"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Hole Dug
-                    </button>
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-blue-100 text-blue-800 hover:bg-blue-200
-                               text-xs sm:text-sm font-semibold"
-                        data-action="setStatus"
-                        data-status="Hole Refilled"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Hole Refilled
-                    </button>
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-gray-100 text-gray-800 hover:bg-gray-200
-                               text-xs sm:text-sm font-semibold"
-                        data-action="setStatus"
-                        data-status="Signal Ignored"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Ignore Signal
-                    </button>
-                </div>
+            <div class="grid grid-cols-4 gap-2 mt-3">
+
+    <!-- Not dug -->
+    <button
+        type="button"
+        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+               bg-green-100 text-green-800 hover:bg-green-200
+               text-xs sm:text-sm font-semibold"
+        data-action="setStatus"
+        data-status="Not dug"
+        data-id="${target.id}"
+        data-survey-id="${surveyId}"
+        onclick="handleTargetAction(this)">
+        Not dug
+    </button>
+
+    <!-- Dug -->
+    <button
+        type="button"
+        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+               bg-amber-100 text-amber-800 hover:bg-amber-200
+               text-xs sm:text-sm font-semibold"
+        data-action="setStatus"
+        data-status="Hole Dug"
+        data-id="${target.id}"
+        data-survey-id="${surveyId}"
+        onclick="handleTargetAction(this)">
+        Dug
+    </button>
+
+    <!-- Refilled -->
+    <button
+        type="button"
+        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+               bg-blue-100 text-blue-800 hover:bg-blue-200
+               text-xs sm:text-sm font-semibold"
+        data-action="setStatus"
+        data-status="Hole Refilled"
+        data-id="${target.id}"
+        data-survey-id="${surveyId}"
+        onclick="handleTargetAction(this)">
+        Refilled
+    </button>
+
+    <!-- Ignored -->
+    <button
+        type="button"
+        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
+               bg-gray-100 text-gray-700 hover:bg-gray-200
+               text-xs sm:text-sm font-semibold"
+        data-action="setStatus"
+        data-status="Signal Ignored"
+        data-id="${target.id}"
+        data-survey-id="${surveyId}"
+        onclick="handleTargetAction(this)">
+        Ignored
+    </button>
+
+</div>
 
                 <!-- Row 2: Navigation -->
                      <!-- Row 2: QR + Navigation -->
