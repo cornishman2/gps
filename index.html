@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat 13 - Metal Detecting Survey Log</title>
+    <title>Map 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2099,7 +2099,23 @@ function startTargetLocationWatch() {
 /** Starts a continuous, high-accuracy GPS stream for the live map
  *  and starts the auto-refresh interval to redraw the map.
  */
-function startLiveMapLocationWatch() {
+function stopLiveMapLocationWatch() {
+    if (liveMapWatchId) {
+        navigator.geolocation.clearWatch(liveMapWatchId);
+        liveMapWatchId = null;
+        bestLiveAccuracy = Infinity;
+    }
+
+    // Clear all live-user map state so it cannot affect the bounding box
+    currentUserCoords = null;
+    currentUserAccuracy = null;
+    smoothedUserCoords = null;
+    movementHistory = [];
+
+    console.log("Live Map GPS Watch stopped and user map state cleared.");
+}
+
+    function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
         currentUserCoords = null;
         currentUserAccuracy = null;
@@ -4980,7 +4996,12 @@ function renderTargetPlot(targets) {
     
     // Prefer smoothed coords if available, fall back to raw
     const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
-    const hasUserGPS = !!effectiveUserCoords && typeof currentUserAccuracy === 'number';
+
+    // IMPORTANT: only treat GPS as "present" for the map when tracking is active
+    const hasUserGPS =
+    isTrackingActive &&
+    !!effectiveUserCoords &&
+    typeof currentUserAccuracy === 'number';
     const userAccuracy = hasUserGPS ? (currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05; // 5% buffer around the entire calculated area
@@ -5889,6 +5910,9 @@ function handleStartTrackClick() {
         showMessage('A track is already being recorded. Stop it before starting a new one.', 'warning');
         return;
     }
+    isTrackingActive = true;
+    startLiveMapLocationWatch();
+    startCompassAutoRefresh();
 
     ensureSurveyTracksArray(openSurvey);
 
@@ -5923,6 +5947,10 @@ function handleStopTrackClick() {
         showMessage('No active track to stop.', 'warning');
         return;
     }
+
+    isTrackingActive = false;
+    stopLiveMapLocationWatch();   // clears user coords so map zoom is based on targets/tracks only
+    startCompassAutoRefresh();    // optional, but keeps redraw behaviour consistent
 
     active.track.isRecording = false;
     saveSurveysToLocalStorage();
@@ -6073,9 +6101,12 @@ function renderTracksPanel(openSurvey) {
         `;
     }
 
- // Always keep live GPS position running while on the Compass/Map page
-if (!liveMapWatchId) {
-    startLiveMapLocationWatch();
+// Only run live GPS while tracking is active
+if (isTrackingActive) {
+    if (!liveMapWatchId) startLiveMapLocationWatch();
+} else {
+    // If tracking is OFF, make sure user position is NOT influencing the map
+    stopLiveMapLocationWatch(); // (we add/confirm this function in step 3)
 }
 // Start Compass redraw loop (does NOT stop/start GPS; only redraws UI)
 if (!isAutoRefresh && !autoRefreshIntervalId) {
