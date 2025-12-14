@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 14 - Metal Detecting Survey Log</title>
+    <title>Export 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6195,12 +6195,12 @@ function renderSettingsPage() {
 
             <h3 class="text-2xl font-bold text-gray-700 mb-3">Survey Export &amp; Import </h3>
 
-            <!-- EXPORT OPEN SURVEY (WITH PHOTOS) -->
+            <!-- EXPORT OPEN SURVEY  -->
             <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds </h4>
                 <p class="text-sm text-gray-600 mb-3">
                     This creates a <strong>.json file</strong> containing the currently open survey, all its targets,
-                    any finds linked to that survey, and all associated photos. A log below shows export progress.
+                    any finds linked to that survey. A log below shows export progress.
                 </p>
                 <button id="export-open-survey-with-photos-btn"
                         onclick="exportOpenSurveyWithPhotos()"
@@ -6214,7 +6214,7 @@ function renderSettingsPage() {
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
             </div>
 
-            <!-- IMPORT SURVEY (WITH PHOTOS) -->
+            <!-- IMPORT SURVEY  -->
             <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey </h4>
                 <p class="text-sm text-gray-600 mb-3">
@@ -6363,7 +6363,7 @@ function blobToDataUrl(blob) {
         }
 
 // ------------------------------------------------------
-//  SURVEY-LEVEL EXPORT / IMPORT (WITH PHOTOS EMBEDDED)
+//  SURVEY-LEVEL EXPORT / IMPORT 
 // ------------------------------------------------------
 
 /**
@@ -6409,7 +6409,7 @@ async function buildPhotoDataUrlsFromRefs(refs, fallbackSingleDataUrl) {
 function showExportConfirmModal(onConfirmCallback) {
     showConfirmationModal(
         "Export survey",
-        "Export the open survey, its targets, finds and photos?",
+        "Export the open survey, its targets and finds?",
         onConfirmCallback
     );
 }
@@ -6418,7 +6418,7 @@ function showImportConfirmModal(filename, onConfirmCallback) {
     showConfirmationModal(
         "Import survey",
         `Import survey from file "<strong>${filename}</strong>"?<br><br>` +
-        `This will add the survey and its finds (with photos) to your local data.`,
+        `This will add the survey and its finds  to your local data.`,
         onConfirmCallback
     );
 }
@@ -6458,10 +6458,7 @@ async function actuallyExportOpenSurvey() {
         logBox.scrollTop = logBox.scrollHeight;
     };
 
-    // Clear previous log
-    if (logBox) {
-        logBox.value = '';
-    }
+    if (logBox) logBox.value = '';
 
     let originalBtnText = '';
     if (btn) {
@@ -6471,65 +6468,51 @@ async function actuallyExportOpenSurvey() {
     }
 
     try {
-        log(`Starting export for survey: ${openSurvey.name || 'Unnamed survey'}`);
+        log(`Starting export (NO PHOTOS) for survey: ${openSurvey.name || 'Unnamed survey'}`);
 
-        // 1) Deep copy the survey so we don't mutate live data
+        // 1) Deep copy so we don't mutate live data
         const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
 
-        // 2) Survey-level photo (if present)
-        log('Processing survey photo...');
-        let surveyPhotoDataUrl = surveyCopy.surveyPhotoData || '';
-        if (!surveyPhotoDataUrl && openSurvey.surveyPhotoRef && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
-            const id = parsePhotoRef(openSurvey.surveyPhotoRef);
-            if (id != null) {
-                const blob = await loadPhotoBlob(id);
-                if (blob) {
-                    surveyPhotoDataUrl = await blobToDataUrl(blob);
-                }
-            }
-        }
-        surveyCopy.exportSurveyPhotoDataUrl = surveyPhotoDataUrl || null;
+        // 2) Strip survey-level photo fields
+        delete surveyCopy.surveyPhotoRef;
+        delete surveyCopy.surveyPhotoData;
+        delete surveyCopy.exportSurveyPhotoDataUrl; // (if it ever existed)
 
-        // 3) Targets (with photos)
-        surveyCopy.targets = [];
-        if (Array.isArray(openSurvey.targets)) {
-            log(`Processing ${openSurvey.targets.length} targets...`);
-            let index = 0;
-            for (const t of openSurvey.targets) {
-                index++;
-                log(`  Target ${index}/${openSurvey.targets.length}: ${t.description || t.id || ''}`);
+        // 3) Strip photo fields from targets
+        if (!Array.isArray(surveyCopy.targets)) surveyCopy.targets = [];
+        surveyCopy.targets = surveyCopy.targets.map(t => {
+            const tCopy = JSON.parse(JSON.stringify(t));
 
-                const tCopy = JSON.parse(JSON.stringify(t));
-                const targetThumb = t.targetPhotoData || t.photoDataUrl || '';
-                const photoDataUrls = await buildPhotoDataUrlsFromRefs(t.photos || [], targetThumb);
+            // Remove anything photo-related (covers old + new naming)
+            delete tCopy.photos;
+            delete tCopy.targetPhotoRef;
+            delete tCopy.targetPhotoData;
+            delete tCopy.photoDataUrl;
+            delete tCopy.exportPhotosDataUrls;
 
-                tCopy.exportPhotosDataUrls = photoDataUrls;
-                surveyCopy.targets.push(tCopy);
-            }
-        }
+            return tCopy;
+        });
 
-        // 4) Finds linked to this survey
+        // 4) Finds linked to this survey (strip photo fields)
         const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
-        const findsCopy = [];
-        log(`Processing ${linkedFinds.length} linked finds...`);
-
-        let findIndex = 0;
-        for (const f of linkedFinds) {
-            findIndex++;
-            log(`  Find ${findIndex}/${linkedFinds.length}: ${f.description || f.id || ''}`);
-
+        const findsCopy = linkedFinds.map(f => {
             const fCopy = JSON.parse(JSON.stringify(f));
-            const findThumb = f.targetPhotoData || f.photoDataUrl || '';
-            const photoDataUrls = await buildPhotoDataUrlsFromRefs(f.photos || [], findThumb);
 
-            fCopy.exportPhotosDataUrls = photoDataUrls;
-            findsCopy.push(fCopy);
-        }
+            delete fCopy.photos;
+            delete fCopy.findPhotoRef;
+            delete fCopy.targetPhotoData;
+            delete fCopy.photoDataUrl;
+            delete fCopy.exportPhotosDataUrls;
 
-        // 5) Build the export payload
-        log('Building final JSON payload...');
+            return fCopy;
+        });
+
+        log(`Targets: ${surveyCopy.targets.length}`);
+        log(`Linked finds: ${findsCopy.length}`);
+
+        // 5) Build export payload (NO photos embedded)
         const payload = {
-            version: 'geoFind-open-survey-v1',
+            version: 'geoFind-open-survey-no-photos-v1',
             exportedAt: new Date().toISOString(),
             profile: userProfile,
             survey: surveyCopy,
@@ -6540,7 +6523,7 @@ async function actuallyExportOpenSurvey() {
         const sizeKb = Math.round(jsonString.length / 1024);
         log(`Payload size: ~${sizeKb} KB`);
 
-        // 6) Create the export file
+        // 6) Download the file
         const safeName = (openSurvey.name || 'survey')
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
@@ -6553,7 +6536,7 @@ async function actuallyExportOpenSurvey() {
             .replace('T', '_')
             .replace('Z', '');
 
-        const filename = `geoFind_${safeName}_${timestamp}.json`;
+        const filename = `geoFind_${safeName}_${timestamp}_no_photos.json`;
 
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
@@ -6566,24 +6549,23 @@ async function actuallyExportOpenSurvey() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        log(`Export complete. "${filename}" has been saved in your Downloads folder.`);
-        showMessage('Survey export completed.', 'success');
+        log(`Export complete. "${filename}" saved to Downloads.`);
+        showMessage('Survey export completed (no photos).', 'success');
+
     } catch (e) {
-        console.error('Error exporting open survey with photos:', e);
-        if (logBox) {
-            log(`ERROR: ${e.message || 'Unknown error'}`);
-        }
+        console.error('Error exporting open survey (no photos):', e);
+        log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Could not export open survey: ${e.message || 'Unknown error'}`, 'error');
+
     } finally {
         if (btn) {
             btn.disabled = false;
-            // No "(with photos)" anymore:
             btn.innerText = originalBtnText || 'Export Open Survey';
         }
     }
 }
 /**
- * Internal worker to import a survey JSON string (with photos) and add it
+ * Internal worker to import a survey JSON string  and add it
  * to existing data. Uses a log function to report progress.
  */
 async function performSurveyImport(text, filename, log) {
@@ -6696,7 +6678,7 @@ async function performSurveyImport(text, filename, log) {
         // Stay on Settings so the user can read the log.
         // They can navigate manually when ready.
     } catch (e) {
-        console.error('Error importing survey with photos:', e);
+        console.error('Error importing survey :', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
     }
@@ -6704,7 +6686,7 @@ async function performSurveyImport(text, filename, log) {
 
 
 /**
- * Read a chosen .json file and import it as a survey (with photos),
+ * Read a chosen .json file and import it as a survey,
  * updating the import log as the process runs.
  */
 async function importSurveyWithPhotosFromFile() {
