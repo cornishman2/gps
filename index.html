@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 5 - Metal Detecting Survey Log</title>
+    <title>Map 6 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1337,23 +1337,6 @@ function computeMovementBearingDegrees() {
 // --- END GEOGRAPHY HELPER FUNCTIONS ---
 
 
-        // --- HELPER FUNCTIONS ---
-function stopCompassAutoRefresh() {
-    if (autoRefreshIntervalId) {
-        clearInterval(autoRefreshIntervalId);
-        autoRefreshIntervalId = null;
-        console.log("Compass auto-refresh paused (user input).");
-    }
-}
-
-function startCompassAutoRefresh() {
-    if (!autoRefreshIntervalId) {
-        autoRefreshIntervalId = setInterval(() => {
-            updateMapWithUserLocationAndRender();
-        }, 3000);
-        console.log("Compass auto-refresh resumed.");
-    }
-}
 
 // ======================================
 // SHARED MODAL HELPERS
@@ -1847,10 +1830,10 @@ function attachPageEventListeners() {
         });
     });
 
-    // --- COMPASS PAGE: track controls ---
+// --- COMPASS PAGE: quick Target ID input ---
 const quickInput = document.getElementById('compass-quick-target-vdi');
 if (quickInput) {
-    // Restore any draft text after a re-render
+    // Restore draft after a re-render
     if (compassQuickTargetIdDraft.trim().length > 0 && quickInput.value !== compassQuickTargetIdDraft) {
         quickInput.value = compassQuickTargetIdDraft;
     }
@@ -1859,18 +1842,18 @@ if (quickInput) {
     quickInput.addEventListener('input', () => {
         compassQuickTargetIdDraft = quickInput.value;
     });
+
+    // Optional: pause refresh immediately on focus (extra safety)
+    quickInput.addEventListener('focus', () => {
+        stopCompassAutoRefresh();
+    });
+
+    // Resume refresh when leaving the field
+    quickInput.addEventListener('blur', () => {
+        // Only resume if still on Compass
+        if (currentPage === 'Compass') startCompassAutoRefresh();
+    });
 }
-
-    // Compass quick-log target button
-const quickBtn = document.getElementById('compass-log-target-btn');
-if (quickBtn) {
-    quickBtn.addEventListener('focus', () => {
-        const openSurvey = surveys.find(s => s.status === 'Open');
-        if (!openSurvey) {
-            showMessage('You must have an open survey to log a target.', 'error');
-            return;
-        }
-
         const input = document.getElementById('compass-quick-target-vdi');
         const raw = (input ? input.value : '').trim();
 
@@ -2205,19 +2188,54 @@ function triggerImportSurvey() {
 }
 
         
+// --- HELPER FUNCTIONS ---
+function stopCompassAutoRefresh() {
+    if (autoRefreshIntervalId) {
+        clearInterval(autoRefreshIntervalId);
+        autoRefreshIntervalId = null;
+        console.log("Compass auto-refresh paused.");
+    }
+}
+
+function startCompassAutoRefresh() {
+    // Only run while actually on Compass
+    if (currentPage !== 'Compass') return;
+
+    if (!autoRefreshIntervalId) {
+        autoRefreshIntervalId = setInterval(() => {
+            updateMapWithUserLocationAndRender();
+        }, 3000);
+        console.log("Compass auto-refresh started/resumed.");
+    }
+}
+
+/**
+ * Re-render Compass only when safe.
+ * Key rule: NEVER re-render while the user is focused in an input/textarea/select,
+ * otherwise mobile keyboard will drop.
+ */
 function updateMapWithUserLocationAndRender() {
     if (currentPage !== 'Compass') return;
 
-    const input = document.getElementById('compass-quick-target-vdi');
+    // If user is interacting with any form control, do not refresh
+    const ae = document.activeElement;
+    if (ae) {
+        const tag = (ae.tagName || '').toUpperCase();
+        const isFormControl =
+            tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable;
 
-    // If user has typed anything, do NOT refresh (prevents field clearing + keyboard drop)
-    if (input && input.value.trim().length > 0) {
-        compassQuickTargetIdDraft = input.value; // keep latest draft
-        return;
+        // Extra safety: specifically protect the Target ID input on Compass
+        if (isFormControl) {
+            // Keep draft updated if it's the compass Target ID field
+            if (ae.id === 'compass-quick-target-vdi') {
+                compassQuickTargetIdDraft = ae.value || '';
+            }
+            return; // <-- THIS is what stops the keyboard from disappearing
+        }
     }
 
-    // Also skip if we have a stored draft (extra safety)
-    if (compassQuickTargetIdDraft.trim().length > 0) {
+    // Also skip if we have a draft (user typed something previously)
+    if (typeof compassQuickTargetIdDraft === 'string' && compassQuickTargetIdDraft.trim().length > 0) {
         return;
     }
 
@@ -2227,11 +2245,8 @@ function updateMapWithUserLocationAndRender() {
     appContent.innerHTML = renderCompassPage(true);
     attachPageEventListeners();
 }
-        // --- MODAL & TOAST FUNCTIONS ---
 
-        /** Shows a temporary notification toast. */
-/** Shows a temporary, highly visible notification toast (top-centre). */
-/** Shows a temporary, highly visible notification toast (top-centre). */
+    /** Shows a temporary, highly visible notification toast (top-centre). */
 function showMessage(message, type = 'info') {
     const toast = document.getElementById('message-toast');
     if (!toast) return;
@@ -5875,70 +5890,117 @@ function renderTracksPanel(openSurvey) {
         </div>
     `;
 }
-    function renderCompassPage(isAutoRefresh = false) {
+function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
     if (!openSurvey) {
-        // First return path (handles no open survey)
         return `
             <div class="p-4">
                 <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
                 <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
                     <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                    <p class="text-gray-700">Please open a survey on the **Home** page to view its targets on the plot.</p>
+                    <p class="text-gray-700">Please open a survey on the <strong>Home</strong> page to view its targets on the plot.</p>
                 </div>
             </div>
         `;
     }
 
-// Only run live GPS while tracking is active
-if (isTrackingActive) {
-    if (!liveMapWatchId) startLiveMapLocationWatch();
-} else {
-    // If tracking is OFF, make sure user position is NOT influencing the map
-    stopLiveMapLocationWatch(); // (we add/confirm this function in step 3)
-}
-// Start Compass redraw loop (does NOT stop/start GPS; only redraws UI)
-if (!isAutoRefresh && !autoRefreshIntervalId) {
-    autoRefreshIntervalId = setInterval(() => {
-        if (currentPage !== 'Compass') return;
+    // ------------------------------------------------------------
+    // IMPORTANT: prevent the "numeric keypad disappears" bug
+    // If the user is typing in the quick Target ID box, DO NOT auto-refresh.
+    // ------------------------------------------------------------
+    const activeEl = document.activeElement;
+    const isTypingInQuickBox =
+        activeEl && activeEl.id === 'compass-quick-target-vdi';
 
-        const appContent = document.getElementById('app-content');
-        if (!appContent) return;
+    // ------------------------------------------------------------
+    // GPS watch: only needed while tracking is active.
+    // If you stop tracking, we stop the live GPS watch so your location
+    // won’t keep changing anything in the UI while you’re at home.
+    // ------------------------------------------------------------
+    if (isTrackingActive) {
+        if (!liveMapWatchId) {
+            startLiveMapLocationWatch();
+        }
+    } else {
+        // Stop GPS watch when not tracking (if your helper exists)
+        if (typeof stopLiveMapLocationWatch === 'function') {
+            stopLiveMapLocationWatch();
+        } else if (liveMapWatchId) {
+            // Fallback safety (in case stopLiveMapLocationWatch is missing)
+            try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
+            liveMapWatchId = null;
+            bestLiveAccuracy = Infinity;
+            smoothedUserCoords = null;
+        }
+    }
 
-        appContent.innerHTML = renderCompassPage(true);
-        attachPageEventListeners(); // rewire map buttons/pins after redraw
-    }, 3000);
+    // ------------------------------------------------------------
+    // Auto-refresh loop:
+    // - Only runs while tracking is active
+    // - Never runs while the user is typing (prevents input blur)
+    // ------------------------------------------------------------
+    if (!isAutoRefresh) {
+        // If we should NOT be refreshing, ensure any old interval is stopped
+        if (!isTrackingActive || isTypingInQuickBox) {
+            if (autoRefreshIntervalId) {
+                clearInterval(autoRefreshIntervalId);
+                autoRefreshIntervalId = null;
+            }
+        } else {
+            // Start interval if needed
+            if (!autoRefreshIntervalId) {
+                autoRefreshIntervalId = setInterval(() => {
+                    if (currentPage !== 'Compass') return;
 
-    console.log("Compass auto-refresh started.");
-}
-       
-    
-   // Filter for targets that actually have usable coordinates
-const targets = getActiveTargets(openSurvey).filter(
-    t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
-);
+                    // If user starts typing, pause refresh immediately
+                    const ae = document.activeElement;
+                    if (ae && ae.id === 'compass-quick-target-vdi') return;
 
-    // Second return path (renders the map view)
-    // Second return path (renders the map view)
+                    const appContent = document.getElementById('app-content');
+                    if (!appContent) return;
+
+                    appContent.innerHTML = renderCompassPage(true);
+                    attachPageEventListeners(); // rewire map buttons/pins after redraw
+                }, 3000);
+
+                console.log("Compass auto-refresh started (tracking ON).");
+            }
+        }
+    }
+
+    // Filter for targets that actually have usable coordinates
+    const targets = getActiveTargets(openSurvey).filter(
+        t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
+    );
+
+    const showAutoRefreshNote = isTrackingActive && !isTypingInQuickBox;
+
     return `
         <div class="p-4">
-            <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
-            
-            <!-- Survey info -->
-            <div class="bg-card p-4 rounded-lg shadow-md mb-6 border-l-4 border-primary">
-                <h3 class="text-xl font-semibold mb-1 text-gray-700">
-                    Viewing Targets for: <span class="text-primary">${openSurvey.name}</span>
-                </h3>
-                <p class="text-sm text-gray-600">
-                    Targets with valid GPS logged: <strong>${targets.length}</strong>
-                </p>
-                ${isAutoRefresh ? 
-                    `<p class="text-sm text-green-600 mt-2">
-                        <i class="fas fa-redo fa-spin mr-1"></i> Auto-refreshing map every 3 seconds...
-                    </p>` : ''
-                }
-                       </div>
+            <h2 class="text-3xl font-bold text-primary mb-4">Targets Plot View</h2>
+
+            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            <span class="font-semibold">Survey:</span> ${openSurvey.name || 'Unnamed survey'}
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            ${targets.length} targets with GPS coordinates
+                        </p>
+                        ${
+                            showAutoRefreshNote
+                                ? `<p class="text-sm text-green-600 mt-2">
+                                        <i class="fas fa-redo fa-spin mr-1"></i> Auto-refreshing map every 3 seconds (tracking ON)
+                                   </p>`
+                                : `<p class="text-xs text-gray-400 mt-2">
+                                        Auto-refresh is paused (tracking OFF or you are typing).
+                                   </p>`
+                        }
+                    </div>
+                </div>
+            </div>
 
             <!-- QUICK LOG TARGET (Compass) -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
@@ -5964,8 +6026,10 @@ const targets = getActiveTargets(openSurvey).filter(
                         Log New Target
                     </button>
                 </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    Tip: while you are typing here, the map won’t auto-refresh (so the keypad won’t disappear).
+                </p>
             </div>
-
 
             <!-- Map first -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
@@ -5974,21 +6038,22 @@ const targets = getActiveTargets(openSurvey).filter(
                 </h3>
                 ${renderTargetPlot(targets)}
             </div>
-  
+
             <!-- Then navigation panel -->
             ${renderNavigationPanel(openSurvey)}
-          <!-- Tracks below the map -->
+
+            <!-- Tracks below the map -->
             ${renderTracksPanel(openSurvey)}
 
             <!-- Explanatory text at the bottom -->
             <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 text-xs text-gray-600 mt-4">
                 <h4 class="font-semibold mb-1">Plot & navigation notes</h4>
                 <ul class="list-disc list-inside space-y-1">
-                    <li>The plot shows relative positions within the survey area. Targets are dots; your position is the blue circle.</li>
-                    <li><span class="font-semibold">North</span> is towards the top of the box, and <span class="font-semibold">East</span> is towards the right.</li>
-                    <li>Use the <span class="font-semibold">+</span> and <span class="font-semibold">−</span> buttons to zoom, and drag the map to keep targets in view.</li>
+                    <li>The plot shows relative positions within the survey area. Targets are dots.</li>
+                    <li>Your position is only shown when <strong>tracking is ON</strong>.</li>
+                    <li>Use the <strong>+</strong> and <strong>−</strong> buttons to zoom, and drag the map to keep targets in view.</li>
                     <li>Tap a target pin on the map to select it for navigation. The dashed line and arrow show direction from your GPS position to the target.</li>
-                    <li>When you are inside the target’s confidence circle, the navigation line is hidden as you are already “on top” of the target.</li>
+                    <li>When you are inside the target’s confidence circle, the navigation line is hidden.</li>
                 </ul>
             </div>
         </div>
