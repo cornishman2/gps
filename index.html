@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 4 - Metal Detecting Survey Log</title>
+    <title>Map 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -4989,26 +4989,32 @@ function endMapDrag() {
 }
         
 /** Renders a static plot of targets based on relative coordinates, with optional centre target, grid, and nav line. */
+/** Renders a static plot of targets based on relative coordinates, with optional centre target, grid, and nav line. */
 function renderTargetPlot(targets) {
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
-    
+
+    // Current zoom (global), and inverse zoom for "keep-size-constant" overlays
+    const invZoom = 1 / (mapZoom || 1);
+
     // Prefer smoothed coords if available, fall back to raw
     const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
 
     // IMPORTANT: only treat GPS as "present" for the map when tracking is active
     const hasUserGPS =
-    isTrackingActive &&
-    !!effectiveUserCoords &&
-    typeof currentUserAccuracy === 'number';
+        isTrackingActive &&
+        !!effectiveUserCoords &&
+        typeof currentUserAccuracy === 'number';
+
     const userAccuracy = hasUserGPS ? (currentUserAccuracy || 0) : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05; // 5% buffer around the entire calculated area
 
     // 1. Parse targets and prepare for Bounding Box calculation
-    const parsedCoords = targets.map(t => {
-        const parts = t.coordinates.split(',').map(c => parseFloat(c.trim()));
+    const parsedCoords = (targets || []).map(t => {
+        const coordsStr = (t && t.coordinates) ? String(t.coordinates) : '';
+        const parts = coordsStr.split(',').map(c => parseFloat(String(c).trim()));
         return {
             id: t.id,
             lat: parts[0],
@@ -5021,12 +5027,12 @@ function renderTargetPlot(targets) {
             centerOnMap: !!t.centerOnMap,
             isUser: false
         };
-    }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+    }).filter(c => typeof c.lat === 'number' && typeof c.lon === 'number' && !isNaN(c.lat) && !isNaN(c.lon));
 
     let allCoords = [...parsedCoords];
     let userCoord = null;
 
-    // NEW: include any visible track points from the open survey in the bounding box
+    // Visible tracks from open survey (for bounding box + drawing)
     let visibleTracks = [];
     const openSurveyForMap = surveys.find(s => s.status === 'Open');
     if (openSurveyForMap && Array.isArray(openSurveyForMap.tracks)) {
@@ -5034,15 +5040,10 @@ function renderTargetPlot(targets) {
             t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1
         );
 
+        // Add track points into bounding box calculation
         visibleTracks.forEach(track => {
             track.points.forEach(p => {
-                if (
-                    p &&
-                    typeof p.lat === 'number' &&
-                    typeof p.lon === 'number' &&
-                    !isNaN(p.lat) &&
-                    !isNaN(p.lon)
-                ) {
+                if (p && typeof p.lat === 'number' && typeof p.lon === 'number' && !isNaN(p.lat) && !isNaN(p.lon)) {
                     allCoords.push({
                         id: track.id,
                         lat: p.lat,
@@ -5053,412 +5054,226 @@ function renderTargetPlot(targets) {
                         status: '',
                         accuracy: p.accuracy || 0,
                         centerOnMap: false,
-                        isUser: false,
-                        isTrackPoint: true
+                        isUser: false
                     });
                 }
             });
         });
     }
 
-    // Add user's location if available (smoothed preferred)
-    if (hasUserGPS && effectiveUserCoords) {
-        userCoord = {
-            lat: effectiveUserCoords.lat,
-            lon: effectiveUserCoords.lon,
-            description: 'Your Current Location',
+    // User coord: only if tracking is active
+    if (hasUserGPS && effectiveUserCoords && typeof effectiveUserCoords.lat === 'number' && typeof effectiveUserCoords.lon === 'number') {
+        userCoord = { lat: effectiveUserCoords.lat, lon: effectiveUserCoords.lon };
+        allCoords.push({
+            id: 'user',
+            lat: userCoord.lat,
+            lon: userCoord.lon,
+            description: 'You',
             type: 'User',
-            vdi: 'N/A',
+            vdi: '',
+            status: '',
             accuracy: userAccuracy,
+            centerOnMap: false,
             isUser: true
-        };
-        allCoords.push(userCoord);
+        });
     }
 
-    if (allCoords.length === 0) {
+    // If nothing to plot, show message
+    if (!allCoords.length) {
         return `
-            <div class="p-4 text-center bg-gray-100 rounded-lg">
-                <p class="text-lg text-gray-500 italic">
-                    No valid GPS coordinates found to plot (targets or user location).
-                </p>
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200">
+                <p class="text-sm text-gray-600">No valid target coordinates to plot.</p>
             </div>
         `;
     }
 
-    // --- Find the target (if any) that should be centered on the map ---
-    let centerTargetLat = null;
-    let centerTargetLon = null;
+    // 2. Convert all coordinates to relative metres (local tangent plane approximation)
+    const centerLat = allCoords.reduce((sum, c) => sum + c.lat, 0) / allCoords.length;
+    const mPerDegLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(centerLat * Math.PI / 180);
 
-    const centreTarget = targets.find(t => 
-        t.centerOnMap === true &&
-        t.coordinates &&
-        t.coordinates.includes(',')
-    );
+    const coordsMeters = allCoords.map(c => ({
+        ...c,
+        x: c.lon * mPerDegLon,
+        y: c.lat * M_PER_DEG_LAT
+    }));
 
-    if (centreTarget) {
-        const parts = centreTarget.coordinates.split(',').map(c => parseFloat(c.trim()));
-        if (!isNaN(parts[0]) && !isNaN(parts[1])) {
-            centerTargetLat = parts[0];
-            centerTargetLon = parts[1];
-        }
-    }
+    // 3. Determine bounding box in metres
+    let minX = Math.min(...coordsMeters.map(c => c.x));
+    let maxX = Math.max(...coordsMeters.map(c => c.x));
+    let minY = Math.min(...coordsMeters.map(c => c.y));
+    let maxY = Math.max(...coordsMeters.map(c => c.y));
 
-    // --- Build bounding box ---
-    let minLat, maxLat, minLon, maxLon;
-    let latRange, lonRange;
-    let mapHeightMeters, mapWidthMeters;
+    let mapWidthMeters = maxX - minX;
+    let mapHeightMeters = maxY - minY;
 
-    const toRad = deg => (deg * Math.PI) / 180;
+    // Avoid zero-size maps
+    if (mapWidthMeters === 0) mapWidthMeters = 1;
+    if (mapHeightMeters === 0) mapHeightMeters = 1;
 
-    if (centerTargetLat !== null && centerTargetLon !== null) {
-        // ============================================================
-        // CASE 1: Use centre target as map centre
-        // ============================================================
-        minLat = maxLat = centerTargetLat;
-        minLon = maxLon = centerTargetLon;
+    // Add buffer
+    minX -= mapWidthMeters * bufferPercentage;
+    maxX += mapWidthMeters * bufferPercentage;
+    minY -= mapHeightMeters * bufferPercentage;
+    maxY += mapHeightMeters * bufferPercentage;
 
-        let maxLatDelta = 0;
-        let maxLonDelta = 0;
+    mapWidthMeters = maxX - minX;
+    mapHeightMeters = maxY - minY;
 
-        allCoords.forEach(c => {
-            const dLat = Math.abs(c.lat - centerTargetLat);
-            const dLon = Math.abs(c.lon - centerTargetLon);
-            if (dLat > maxLatDelta) maxLatDelta = dLat;
-            if (dLon > maxLonDelta) maxLonDelta = dLon;
-        });
+    // Helper: map metres -> percent
+    const toPercent = (x, y) => {
+        const xPct = ((x - minX) / mapWidthMeters) * 100;
+        const yPct = 100 - (((y - minY) / mapHeightMeters) * 100); // invert Y for screen coords
+        return { xPct, yPct };
+    };
 
-        if (maxLatDelta < 0.00001) maxLatDelta = 0.00001;
-        if (maxLonDelta < 0.00001) maxLonDelta = 0.00001;
+    // 4. Build pins (targets)
+    const pinsHtml = coordsMeters
+        .filter(c => !c.isUser && c.type !== 'Track') // only target pins here
+        .map(t => {
+            const { xPct, yPct } = toPercent(t.x, t.y);
 
-        let targetLatRange = maxLatDelta * 2;
-        let targetLonRange = maxLonDelta * 2;
+            // pin style
+            let pinColor = 'bg-blue-500';
+            if ((t.type || '').toLowerCase().includes('coin')) pinColor = 'bg-yellow-500';
+            if ((t.type || '').toLowerCase().includes('iron')) pinColor = 'bg-gray-700';
+            if ((t.type || '').toLowerCase().includes('relic')) pinColor = 'bg-red-500';
 
-        let circleLatRange = 0;
-        let circleLonRange = 0;
+            const pinSize = 'w-4 h-4';
 
-        if (hasUserGPS && userAccuracy > 0) {
-            const requiredMeters = diameterInMeters * 1.1; // 10% padding
-            const meanLatForConversion = toRad(centerTargetLat);
-            const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
-
-            circleLatRange = requiredMeters / M_PER_DEG_LAT;
-            circleLonRange = requiredMeters / metersPerDegreeLonForConversion;
-        }
-
-        const finalLatRange = Math.max(targetLatRange, circleLatRange);
-        const finalLonRange = Math.max(targetLonRange, circleLonRange);
-
-        const latBuffer = finalLatRange * bufferPercentage;
-        const lonBuffer = finalLonRange * bufferPercentage;
-
-        minLat = centerTargetLat - (finalLatRange / 2) - latBuffer;
-        maxLat = centerTargetLat + (finalLatRange / 2) + latBuffer;
-        minLon = centerTargetLon - (finalLonRange / 2) - lonBuffer;
-        maxLon = centerTargetLon + (finalLonRange / 2) + lonBuffer;
-
-        latRange = maxLat - minLat;
-        lonRange = maxLon - minLon;
-
-        const finalMeanLat = toRad((minLat + maxLat) / 2);
-        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
-
-        mapHeightMeters = latRange * M_PER_DEG_LAT;
-        mapWidthMeters = lonRange * metersPerDegreeLon;
-    } else {
-        // ============================================================
-        // CASE 2: Auto-fit all points + user circle
-        // ============================================================
-        minLat = maxLat = allCoords[0].lat; 
-        minLon = maxLon = allCoords[0].lon;
-
-        allCoords.forEach(c => {
-            minLat = Math.min(minLat, c.lat);
-            maxLat = Math.max(maxLat, c.lat);
-            minLon = Math.min(minLon, c.lon);
-            maxLon = Math.max(maxLon, c.lon);
-        });
-
-        let targetLatRange = maxLat - minLat;
-        let targetLonRange = maxLon - minLon;
-
-        if (targetLatRange < 0.00001) targetLatRange = 0.00002;
-        if (targetLonRange < 0.00001) targetLonRange = 0.00002;
-
-        let userLatRange = 0;
-        let userLonRange = 0;
-
-        if (hasUserGPS && userAccuracy > 0) {
-            const requiredMeters = diameterInMeters * 1.1;
-            const meanLatForConversion = toRad(effectiveUserCoords.lat);
-            const metersPerDegreeLonForConversion = M_PER_DEG_LON_AT_EQUATOR * Math.cos(meanLatForConversion);
-
-            userLatRange = requiredMeters / M_PER_DEG_LAT;
-            userLonRange = requiredMeters / metersPerDegreeLonForConversion;
-        }
-
-        const finalLatRange = Math.max(targetLatRange, userLatRange);
-        const finalLonRange = Math.max(targetLonRange, userLonRange);
-
-        const centerLat = (minLat + maxLat) / 2;
-        const centerLon = (minLon + maxLon) / 2;
-
-        const latBuffer = finalLatRange * bufferPercentage;
-        const lonBuffer = finalLonRange * bufferPercentage;
-
-        minLat = centerLat - (finalLatRange / 2) - latBuffer; 
-        maxLat = centerLat + (finalLatRange / 2) + latBuffer;
-        minLon = centerLon - (finalLonRange / 2) - lonBuffer;
-        maxLon = centerLon + (finalLonRange / 2) + lonBuffer;
-
-        latRange = maxLat - minLat;
-        lonRange = maxLon - minLon;
-
-        const finalMeanLat = toRad((minLat + maxLat) / 2);
-        const metersPerDegreeLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(finalMeanLat);
-
-        mapHeightMeters = latRange * M_PER_DEG_LAT;
-        mapWidthMeters = lonRange * metersPerDegreeLon;
-    }
-
-    // ---------------------------------------------------------------------------------------
-    // Normalise and draw
-    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-let userXPercent = 0;
-let userYPercent = 0;
-let userPinAndLabelHtml = '';
-let userConfidenceCircleHtml = '';
-
-let navTargetXPercent = null;
-let navTargetYPercent = null;
-let navTargetLat = null;
-let navTargetLon = null;
-let navTargetAccuracy = null;
-
-// NEW: SVG overlay for any selected tracks
-// NEW: SVG overlay for any selected tracks
-let trackSvgHtml = '';
-
-// Precompute SVG polylines for each visible track (if we have a valid map window)
-if (visibleTracks && visibleTracks.length > 0 && latRange > 0 && lonRange > 0) {
-    // Palette used to colour different tracks
-    const trackColors = [
-        'rgba(239, 68, 68, 0.9)',   // red
-        'rgba(34, 197, 94, 0.9)',   // green
-        'rgba(59, 130, 246, 0.9)',  // blue
-        'rgba(234, 179, 8, 0.9)',   // amber
-        'rgba(168, 85, 247, 0.9)',  // purple
-        'rgba(16, 185, 129, 0.9)'   // teal
-    ];
-
-    const trackPolylines = visibleTracks.map((track, index) => {
-        if (!Array.isArray(track.points) || track.points.length < 2) return '';
-
-        // Use stored colour if ever added in future, otherwise pick from palette
-        const strokeColor = track.color || trackColors[index % trackColors.length];
-
-        const pointsAttr = track.points.map(p => {
-            if (
-                typeof p.lat !== 'number' ||
-                typeof p.lon !== 'number' ||
-                isNaN(p.lat) ||
-                isNaN(p.lon)
-            ) {
-                return null;
-            }
-
-            const xRaw = ((p.lon - minLon) / lonRange) * 100;
-            const yRaw = ((maxLat - p.lat) / latRange) * 100;
-
-            const xPercent = clamp(xRaw, 0, 100);
-            const yPercent = clamp(yRaw, 0, 100);
-
-            return `${xPercent.toFixed(2)},${yPercent.toFixed(2)}`;
-        }).filter(Boolean);
-
-        if (pointsAttr.length < 2) return '';
-
-        return `
-            <polyline
-                fill="none"
-                stroke="${strokeColor}"
-                stroke-width="0.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                points="${pointsAttr.join(' ')}"
-            ></polyline>
-        `;
-    }).filter(Boolean).join('');
-
-    if (trackPolylines) {
-     const invZoom = 1 / (mapZoom || 1);
-
-const trackSvgHtml = `
-<svg
-    class="absolute inset-0 w-full h-full pointer-events-none"
-    viewBox="0 0 100 100"
-    preserveAspectRatio="none"
-    style="transform: scale(${invZoom}); transform-origin: 0 0;"
->
-    ${trackPolylines}
-</svg>
-`;
-    }
-}
-
-// 2. Normalize and generate pins HTML (targets + user)
-const coordsForPins = [...parsedCoords];
-if (userCoord) {
-    coordsForPins.push(userCoord);
-}
-
-const pinsHtml = coordsForPins.map(t => {
-    const xRaw = ((t.lon - minLon) / lonRange) * 100;
-    const yRaw = ((maxLat - t.lat) / latRange) * 100;
-
-    const xPercent = clamp(xRaw, 0, 100);
-    const yPercent = clamp(yRaw, 0, 100);
-
-
-        if (t.isUser) {
-            // Store user position for circle and pin positioning
-            userXPercent = xPercent;
-            userYPercent = yPercent;
-
-            const pinSize = 'w-3 h-3';
-
-            // User pin
-            userPinAndLabelHtml = `
-                <div
-                    class="absolute"
-                    style="left: ${userXPercent.toFixed(2)}%; top: ${userYPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
-                    title="Your Current Location (Acc: ${userAccuracy.toFixed(1)}m)"
-                >
-                    <div class="relative">
-                    <div class="${pinSize} bg-blue-500 border-2 border-white shadow-lg rounded-full"></div>
-                    </div>
-                </div>
-            `;
-            return '';
-        } else {
-            // Target pin
-            let pinColor = 'bg-primary';
-            let pinSize = 'w-2 h-2';
-
-            switch (t.status) {
-                case 'Signal Detected':
-                    pinColor = 'bg-green-600';
-                    pinSize = 'w-3 h-3';
-                    break;
-                case 'Hole Dug':
-                    pinColor = 'bg-yellow-500';
-                    break;
-                case 'Hole Refilled':
-                    pinColor = 'bg-blue-600';
-                    break;
-                case 'Signal Ignored':
-                    pinColor = 'bg-gray-500';
-                    break;
-                default:
-                    pinColor = 'bg-primary';
-            }
-
-            // --- NEW: navigation-aware styling ---
-const isCentre = t.centerOnMap === true;
-const isNavTarget = navigationTargetId && t.id === navigationTargetId;
-
-if (isNavTarget) {
-    navTargetXPercent = xPercent;
-    navTargetYPercent = yPercent;
-    navTargetLat = t.lat;
-    navTargetLon = t.lon;
-    navTargetAccuracy = typeof t.accuracy === 'number' ? t.accuracy : null;
-}
-
-            const extraRing = isNavTarget
-                ? '<div class="absolute -inset-1 rounded-full border-2 border-blue-500 animate-ping"></div>'
-                : (isCentre
-                    ? '<div class="absolute -inset-1 rounded-full border-2 border-red-500 animate-pulse"></div>'
-                    : '');
-
-            // Dim everything except the active nav target (if one is set)
-      // Hide everything except the active nav target (if one is set)
-            const dimClass = (navigationTargetId && !isNavTarget)
-            ? 'opacity-0 pointer-events-none'
-              : '';
-
-            // --- OPTIONAL: confidence circle per target (using its accuracy) ---
-            let targetCircleHtml = '';
-            if (!isNaN(t.accuracy) && t.accuracy > 0 && mapWidthMeters && mapHeightMeters) {
+            // Accuracy ring (optional)
+            let extraRing = '';
+            if (typeof t.accuracy === 'number' && t.accuracy > 0 && mapWidthMeters && mapHeightMeters) {
                 const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
-                const tDiameterPercent = (t.accuracy * 2) / (scaleFactor || 1);
-
-                const circleBorder = isNavTarget ? 'border-blue-500' : 'border-gray-500';
-                const circleBg = isNavTarget ? 'bg-blue-500/10' : 'bg-gray-500/5';
-
-                targetCircleHtml = `
-                    <div class="absolute rounded-full ${circleBorder} ${circleBg} pointer-events-none"
-                        style="
-                            width: ${tDiameterPercent.toFixed(2)}%; 
-                            height: ${tDiameterPercent.toFixed(2)}%;
-                            left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%;
-                            transform: translate(-50%, -50%);
-                            z-index: 2;
-                        ">
+                const rPct = (t.accuracy / (scaleFactor || 1));
+                extraRing = `
+                    <div class="absolute rounded-full border border-blue-600/40 bg-blue-400/10 pointer-events-none"
+                         style="width:${(rPct*2).toFixed(2)}%; height:${(rPct*2).toFixed(2)}%; left:50%; top:50%; transform:translate(-50%,-50%);">
                     </div>
                 `;
             }
 
             return `
-                ${targetCircleHtml}
                 <div
-                    class="absolute map-pin ${dimClass}"
-                    style="left: ${xPercent.toFixed(2)}%; top: ${yPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
-                    title="${t.description} (Target ID: ${t.vdi}) - ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)} (Acc: ${t.accuracy.toFixed(1)}m)"
+                    class="absolute map-pin"
+                    style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
+                    title="${(t.description || '').replace(/"/g,'&quot;')} (Target ID: ${t.vdi || ''})"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
                     <div class="relative">
                         ${extraRing}
                         <div class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"></div>
                     </div>
-                   <span
-  class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
-  style="
-    left: 100%;
-    top: 50%;
-    transform-origin: left center;
-    transform: translateY(-50%) translateX(5px) scale(${invZoom});
-  "
->
-  ${t.vdi || 'N/A'}
-</span>
+
+                    <!-- Label: counter-scale so it stays the same size while zooming -->
+                    <span
+                        class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
+                        style="
+                            left: 100%;
+                            top: 50%;
+                            transform-origin: left center;
+                            transform: translateY(-50%) translateX(5px) scale(${invZoom});
+                        "
+                    >
+                        ${t.vdi || 'N/A'}
+                    </span>
                 </div>
             `;
-        }
-    }).join('');
-    
-    // --- Confidence circle for user accuracy ---
+        }).join('');
+
+    // 5. User pin + label (only when tracking)
+    let userPinAndLabelHtml = '';
+    let userXPercent = null;
+    let userYPercent = null;
+
+    if (userCoord) {
+        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
+        const userPct = toPercent(userMeters.x, userMeters.y);
+        userXPercent = userPct.xPct;
+        userYPercent = userPct.yPct;
+
+        userPinAndLabelHtml = `
+            <div class="absolute pointer-events-none"
+                 style="left:${userXPercent.toFixed(2)}%; top:${userYPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 12;">
+                <div class="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-lg"></div>
+            </div>
+        `;
+    }
+
+    // 6. Confidence circle for user accuracy (only when tracking)
+    let userConfidenceCircleHtml = '';
     if (userCoord && userAccuracy > 0 && mapWidthMeters && mapHeightMeters) {
         const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
         const diameterPercent = diameterInMeters / (scaleFactor || 1);
 
         userConfidenceCircleHtml = `
             <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
-                style="
-                    width: ${diameterPercent.toFixed(2)}%; 
-                    height: ${diameterPercent.toFixed(2)}%;
-                    left: ${userXPercent.toFixed(2)}%; top: ${userYPercent.toFixed(2)}%;
+                 style="
+                    width:${diameterPercent.toFixed(2)}%;
+                    height:${diameterPercent.toFixed(2)}%;
+                    left:${userXPercent.toFixed(2)}%; top:${userYPercent.toFixed(2)}%;
                     transform: translate(-50%, -50%);
-                    z-index: 5; 
-                "
-                title="Confidence Radius: ${userAccuracy.toFixed(1)}m">
+                    z-index: 5;
+                 "
+                 title="Confidence Radius: ${userAccuracy.toFixed(1)}m">
             </div>
         `;
     }
 
-     // --- NEW: line from user to navigation target (map-space, not true bearing) ---
-     // --- Line from user to current navigation target (with arrow, label, and proximity logic) ---
+    // 7. Track SVG (counter-scaled so stroke thickness doesn't grow)
+    let trackSvgHtml = '';
+    if (visibleTracks.length > 0) {
+        const polylines = visibleTracks.map(track => {
+            const pts = track.points
+                .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
+                .map(p => {
+                    const mx = p.lon * mPerDegLon;
+                    const my = p.lat * M_PER_DEG_LAT;
+                    const pct = toPercent(mx, my);
+                    return `${pct.xPct.toFixed(2)},${pct.yPct.toFixed(2)}`;
+                })
+                .join(' ');
+
+            if (!pts) return '';
+
+            const stroke = track.color || 'rgba(34,197,94,0.9)'; // fallback green
+            return `<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="0.8" vector-effect="non-scaling-stroke" />`;
+        }).join('');
+
+        trackSvgHtml = `
+            <svg
+                class="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style="transform: scale(${invZoom}); transform-origin: 0 0; z-index: 6;"
+            >
+                ${polylines}
+            </svg>
+        `;
+    }
+
+    // 8. Nav line SVG (counter-scaled so line + distance text don't grow)
     let navLineHtml = '';
+
+    // Need nav target percentages if nav target exists
+    let navTargetXPercent = null;
+    let navTargetYPercent = null;
+    let navTargetLat = null;
+    let navTargetLon = null;
+    let navTargetAccuracy = null;
+
+    if (navigationTargetId) {
+        const navTarget = parsedCoords.find(t => t.id === navigationTargetId);
+        if (navTarget) {
+            navTargetLat = navTarget.lat;
+            navTargetLon = navTarget.lon;
+            navTargetAccuracy = navTarget.accuracy;
+
+            const navMeters = { x: navTargetLon * mPerDegLon, y: navTargetLat * M_PER_DEG_LAT };
+            const navPct = toPercent(navMeters.x, navMeters.y);
+            navTargetXPercent = navPct.xPct;
+            navTargetYPercent = navPct.yPct;
+        }
+    }
 
     if (
         navigationTargetId &&
@@ -5468,92 +5283,67 @@ if (isNavTarget) {
         typeof navTargetLat === 'number' &&
         typeof navTargetLon === 'number'
     ) {
-        // Use smoothed coords if available, else raw userCoord
         const userLat = effectiveUserCoords ? effectiveUserCoords.lat : userCoord.lat;
         const userLon = effectiveUserCoords ? effectiveUserCoords.lon : userCoord.lon;
 
-        // Real-world distance in metres
         const distanceToNavMeters = distanceMeters(userLat, userLon, navTargetLat, navTargetLon);
 
-        // How big is the "inside the circle" threshold?
         const navAcc = (typeof navTargetAccuracy === 'number' && navTargetAccuracy > 0)
             ? navTargetAccuracy
             : null;
 
-        // If we know the nav target accuracy, use that. Otherwise fall back to user accuracy or a small default.
         const insideCircleThreshold =
             navAcc || (userAccuracy && userAccuracy > 0 ? userAccuracy : 0);
 
         const isInsideCircle =
             insideCircleThreshold && distanceToNavMeters <= insideCircleThreshold;
 
-        // If we're inside the target's confidence circle, hide the line entirely
         if (!isInsideCircle) {
-            // --- Scale-dependent arrow size based on mapZoom ---
-            const arrowScale = 1 + (mapZoom - 1) * 0.5; // grows as you zoom in
-            const clampedArrowScale = Math.max(0.75, Math.min(arrowScale, 2.0));
-
-            const baseMarkerSize = 6;
-            const markerWidth = baseMarkerSize * clampedArrowScale;
-            const markerHeight = baseMarkerSize * clampedArrowScale;
-            const refX = 4 * clampedArrowScale;
-            const refY = 3 * clampedArrowScale;
-
-            // --- Distance label position (midpoint) ---
             const midX = (userXPercent + navTargetXPercent) / 2;
             const midY = (userYPercent + navTargetYPercent) / 2;
 
-            // Human-friendly distance string
             const distLabel =
                 distanceToNavMeters >= 1000
                     ? (distanceToNavMeters / 1000).toFixed(2) + ' km'
                     : distanceToNavMeters.toFixed(1) + ' m';
 
-            // --- Pulse effect when "near" the circle but not inside it ---
-            const pulseThreshold = insideCircleThreshold ? insideCircleThreshold * 1.5 : 0;
-            const shouldPulse = pulseThreshold && distanceToNavMeters <= pulseThreshold;
-            const lineClass = shouldPulse ? 'animate-pulse' : '';
-
-const navLineHtml = `
-<svg
-    class="absolute inset-0 pointer-events-none"
-    viewBox="0 0 100 100"
-    preserveAspectRatio="none"
-    style="
-        z-index: 8;
-        transform: scale(${invZoom});
-        transform-origin: 0 0;
-    "
->
-    <line
-        x1="${x1}" y1="${y1}"
-        x2="${x2}" y2="${y2}"
-        stroke="red"
-        stroke-width="0.6"
-        vector-effect="non-scaling-stroke"
-    />
-    <text
-        x="${midX}"
-        y="${midY}"
-        text-anchor="middle"
-        dominant-baseline="central"
-        font-size="3"
-        fill="red"
-        vector-effect="non-scaling-stroke"
-    >
-        ${distanceText}
-    </text>
-</svg>
-`;
+            navLineHtml = `
+                <svg
+                    class="absolute inset-0 pointer-events-none"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    style="z-index: 8; transform: scale(${invZoom}); transform-origin: 0 0;"
+                >
+                    <line
+                        x1="${userXPercent.toFixed(2)}" y1="${userYPercent.toFixed(2)}"
+                        x2="${navTargetXPercent.toFixed(2)}" y2="${navTargetYPercent.toFixed(2)}"
+                        stroke="rgba(37,99,235,0.9)"
+                        stroke-width="1.0"
+                        stroke-dasharray="3 2"
+                        vector-effect="non-scaling-stroke"
+                    />
+                    <text
+                        x="${midX.toFixed(2)}"
+                        y="${midY.toFixed(2)}"
+                        text-anchor="middle"
+                        dominant-baseline="central"
+                        font-size="3"
+                        fill="#1f2937"
+                        stroke="white"
+                        stroke-width="0.3"
+                    >
+                        ${distLabel}
+                    </text>
+                </svg>
+            `;
         }
     }
 
-
     // Combine all elements for the map container
-     // Combine all elements for the map container
-    const finalMapContent = userConfidenceCircleHtml + trackSvgHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
+    const finalMapContent =
+        userConfidenceCircleHtml + trackSvgHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
 
-    // --- Container with grid background & zoom/pan controls ---
+    // Container with grid background
     let containerClasses =
         "relative overflow-hidden border-4 border-gray-400 rounded-lg my-4 bg-gray-200 w-full aspect-square";
 
@@ -5580,29 +5370,27 @@ const navLineHtml = `
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
                 ${finalMapContent}
             </div>
-
-          <!-- Zoom controls BELOW the map (big, glove-friendly) -->
         </div>
+
         <div class="mt-3 grid grid-cols-3 gap-3 map-zoom-controls">
-    <button
-        type="button"
-        class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
-        onclick="zoomMapOut(event)"
-    >−</button>
+            <button
+                type="button"
+                class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
+                onclick="zoomMapOut(event)"
+            >−</button>
 
-    <button
-        type="button"
-        class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
-        onclick="zoomMapIn(event)"
-    >+</button>
+            <button
+                type="button"
+                class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
+                onclick="zoomMapIn(event)"
+            >+</button>
 
-    <button
-        type="button"
-        class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
-        onclick="resetMapView(event)"
-    >Reset</button>
-</div>
-
+            <button
+                type="button"
+                class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
+                onclick="resetMapView(event)"
+            >Reset</button>
+        </div>
     `;
 }
        /** Toggles the map state and re-renders immediately. */
