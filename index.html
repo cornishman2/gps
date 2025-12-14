@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 15 - Metal Detecting Survey Log</title>
+    <title>Map 14 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6207,14 +6207,6 @@ function renderSettingsPage() {
                         class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
                     <i class="fas fa-download mr-1"></i> Export Open Survey 
                 </button>
-                <!-- NEW: SHARE OPEN SURVEY (WITH PHOTOS) -->
-<button id="share-open-survey-with-photos-btn"
-        type="button"
-        onclick="shareOpenSurveyExportWithPhotos()"
-        class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150 mt-2">
-    <i class="fas fa-share-alt mr-1"></i> Share Export (to another phone)
-</button>
-
                 <textarea id="export-open-survey-log" 
                           rows="6" 
                           readonly 
@@ -6450,17 +6442,6 @@ function exportOpenSurveyWithPhotos() {
 /**
  * Worker that does the actual export once the user has confirmed.
  */
-    function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 async function actuallyExportOpenSurvey() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -6468,7 +6449,7 @@ async function actuallyExportOpenSurvey() {
         return;
     }
 
-    const btn = document.getElementById('export-open-survey-with-photos-btn');
+    const btn    = document.getElementById('export-open-survey-with-photos-btn');
     const logBox = document.getElementById('export-open-survey-log');
 
     const log = (msg) => {
@@ -6478,7 +6459,9 @@ async function actuallyExportOpenSurvey() {
     };
 
     // Clear previous log
-    if (logBox) logBox.value = '';
+    if (logBox) {
+        logBox.value = '';
+    }
 
     let originalBtnText = '';
     if (btn) {
@@ -6488,184 +6471,117 @@ async function actuallyExportOpenSurvey() {
     }
 
     try {
-        const { blob, filename } = await buildOpenSurveyExportBlobWithPhotos(log);
+        log(`Starting export for survey: ${openSurvey.name || 'Unnamed survey'}`);
 
-        downloadBlob(blob, filename);
+        // 1) Deep copy the survey so we don't mutate live data
+        const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
 
-        log(`Export complete. "${filename}" has been saved (browser download).`);
+        // 2) Survey-level photo (if present)
+        log('Processing survey photo...');
+        let surveyPhotoDataUrl = surveyCopy.surveyPhotoData || '';
+        if (!surveyPhotoDataUrl && openSurvey.surveyPhotoRef && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
+            const id = parsePhotoRef(openSurvey.surveyPhotoRef);
+            if (id != null) {
+                const blob = await loadPhotoBlob(id);
+                if (blob) {
+                    surveyPhotoDataUrl = await blobToDataUrl(blob);
+                }
+            }
+        }
+        surveyCopy.exportSurveyPhotoDataUrl = surveyPhotoDataUrl || null;
+
+        // 3) Targets (with photos)
+        surveyCopy.targets = [];
+        if (Array.isArray(openSurvey.targets)) {
+            log(`Processing ${openSurvey.targets.length} targets...`);
+            let index = 0;
+            for (const t of openSurvey.targets) {
+                index++;
+                log(`  Target ${index}/${openSurvey.targets.length}: ${t.description || t.id || ''}`);
+
+                const tCopy = JSON.parse(JSON.stringify(t));
+                const targetThumb = t.targetPhotoData || t.photoDataUrl || '';
+                const photoDataUrls = await buildPhotoDataUrlsFromRefs(t.photos || [], targetThumb);
+
+                tCopy.exportPhotosDataUrls = photoDataUrls;
+                surveyCopy.targets.push(tCopy);
+            }
+        }
+
+        // 4) Finds linked to this survey
+        const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
+        const findsCopy = [];
+        log(`Processing ${linkedFinds.length} linked finds...`);
+
+        let findIndex = 0;
+        for (const f of linkedFinds) {
+            findIndex++;
+            log(`  Find ${findIndex}/${linkedFinds.length}: ${f.description || f.id || ''}`);
+
+            const fCopy = JSON.parse(JSON.stringify(f));
+            const findThumb = f.targetPhotoData || f.photoDataUrl || '';
+            const photoDataUrls = await buildPhotoDataUrlsFromRefs(f.photos || [], findThumb);
+
+            fCopy.exportPhotosDataUrls = photoDataUrls;
+            findsCopy.push(fCopy);
+        }
+
+        // 5) Build the export payload
+        log('Building final JSON payload...');
+        const payload = {
+            version: 'geoFind-open-survey-v1',
+            exportedAt: new Date().toISOString(),
+            profile: userProfile,
+            survey: surveyCopy,
+            finds: findsCopy
+        };
+
+        const jsonString = JSON.stringify(payload);
+        const sizeKb = Math.round(jsonString.length / 1024);
+        log(`Payload size: ~${sizeKb} KB`);
+
+        // 6) Create the export file
+        const safeName = (openSurvey.name || 'survey')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            || 'survey';
+
+        const timestamp = new Date()
+            .toISOString()
+            .replace(/[:.]/g, '')
+            .replace('T', '_')
+            .replace('Z', '');
+
+        const filename = `geoFind_${safeName}_${timestamp}.json`;
+
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log(`Export complete. "${filename}" has been saved in your Downloads folder.`);
         showMessage('Survey export completed.', 'success');
     } catch (e) {
         console.error('Error exporting open survey with photos:', e);
-        log(`ERROR: ${e.message || 'Unknown error'}`);
+        if (logBox) {
+            log(`ERROR: ${e.message || 'Unknown error'}`);
+        }
         showMessage(`Could not export open survey: ${e.message || 'Unknown error'}`, 'error');
     } finally {
         if (btn) {
             btn.disabled = false;
+            // No "(with photos)" anymore:
             btn.innerText = originalBtnText || 'Export Open Survey';
         }
     }
 }
-async function shareOpenSurveyExportWithPhotos() {
-    const btn = document.getElementById('share-open-survey-with-photos-btn');
-    const logBox = document.getElementById('export-open-survey-log');
-
-    const log = (msg) => {
-        if (!logBox) return;
-        logBox.value += msg + '\n';
-        logBox.scrollTop = logBox.scrollHeight;
-    };
-
-    let originalBtnText = '';
-    if (btn) {
-        originalBtnText = btn.innerText;
-        btn.disabled = true;
-        btn.innerText = 'Preparing...';
-    }
-
-    try {
-        const { blob, filename } = await buildOpenSurveyExportBlobWithPhotos(log);
-
-        if (btn) btn.innerText = 'Sharing...';
-
-        const shared = await shareBlobAsFile(blob, filename, filename);
-
-        if (shared) {
-            log(`Share opened for "${filename}".`);
-            showMessage('Share sheet opened.', 'success');
-        } else {
-            downloadBlob(blob, filename);
-            log(`Sharing not supported here; downloaded "${filename}" instead.`);
-            showMessage('Sharing not supported — downloaded instead.', 'info');
-        }
-    } catch (e) {
-        console.error('Error sharing open survey export:', e);
-        log(`ERROR: ${e.message || 'Unknown error'}`);
-        showMessage(`Could not share open survey: ${e.message || 'Unknown error'}`, 'error');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = originalBtnText || 'Share Export (to another phone)';
-        }
-    }
-}
-
-async function shareBlobAsFile(blob, filename, title = 'geoFind Export') {
-    // Web Share Level 2 (share files) — mostly mobile browsers
-    try {
-        const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-            await navigator.share({
-                title,
-                text: 'geoFind survey export',
-                files: [file]
-            });
-            return true;
-        }
-    } catch (e) {
-        // User cancel often throws; treat as "not shared"
-        console.log('Share cancelled or not supported:', e);
-    }
-    return false;
-}
-async function buildOpenSurveyExportBlobWithPhotos(logFn = null) {
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey) {
-        throw new Error('No open survey to export.');
-    }
-
-    const log = (msg) => {
-        if (typeof logFn === 'function') logFn(msg);
-    };
-
-    log(`Starting export for survey: ${openSurvey.name || 'Unnamed survey'}`);
-
-    // 1) Deep copy the survey so we don't mutate live data
-    const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
-
-    // 2) Survey-level photo (if present)
-    log('Processing survey photo...');
-    let surveyPhotoDataUrl = surveyCopy.surveyPhotoData || '';
-    if (!surveyPhotoDataUrl && openSurvey.surveyPhotoRef && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
-        const id = parsePhotoRef(openSurvey.surveyPhotoRef);
-        if (id != null) {
-            const blob = await loadPhotoBlob(id);
-            if (blob) {
-                surveyPhotoDataUrl = await blobToDataUrl(blob);
-            }
-        }
-    }
-    surveyCopy.exportSurveyPhotoDataUrl = surveyPhotoDataUrl || null;
-
-    // 3) Targets (with photos)
-    surveyCopy.targets = [];
-    if (Array.isArray(openSurvey.targets)) {
-        log(`Processing ${openSurvey.targets.length} targets...`);
-        let index = 0;
-        for (const t of openSurvey.targets) {
-            index++;
-            log(`  Target ${index}/${openSurvey.targets.length}: ${t.description || t.id || ''}`);
-
-            const tCopy = JSON.parse(JSON.stringify(t));
-            const targetThumb = t.targetPhotoData || t.photoDataUrl || '';
-            const photoDataUrls = await buildPhotoDataUrlsFromRefs(t.photos || [], targetThumb);
-
-            tCopy.exportPhotosDataUrls = photoDataUrls;
-            surveyCopy.targets.push(tCopy);
-        }
-    }
-
-    // 4) Finds linked to this survey
-    const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
-    const findsCopy = [];
-    log(`Processing ${linkedFinds.length} linked finds...`);
-
-    let findIndex = 0;
-    for (const f of linkedFinds) {
-        findIndex++;
-        log(`  Find ${findIndex}/${linkedFinds.length}: ${f.description || f.id || ''}`);
-
-        const fCopy = JSON.parse(JSON.stringify(f));
-        const findThumb = f.targetPhotoData || f.photoDataUrl || '';
-        const photoDataUrls = await buildPhotoDataUrlsFromRefs(f.photos || [], findThumb);
-
-        fCopy.exportPhotosDataUrls = photoDataUrls;
-        findsCopy.push(fCopy);
-    }
-
-    // 5) Build the export payload
-    log('Building final JSON payload...');
-    const payload = {
-        version: 'geoFind-open-survey-v1',
-        exportedAt: new Date().toISOString(),
-        profile: userProfile,
-        survey: surveyCopy,
-        finds: findsCopy
-    };
-
-    const jsonString = JSON.stringify(payload);
-    const sizeKb = Math.round(jsonString.length / 1024);
-    log(`Payload size: ~${sizeKb} KB`);
-
-    // 6) Filename + blob
-    const safeName = (openSurvey.name || 'survey')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        || 'survey';
-
-    const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, '')
-        .replace('T', '_')
-        .replace('Z', '');
-
-    const filename = `geoFind_${safeName}_${timestamp}.json`;
-    const blob = new Blob([jsonString], { type: 'application/json' });
-
-    return { blob, filename };
-}
-
 /**
  * Internal worker to import a survey JSON string (with photos) and add it
  * to existing data. Uses a log function to report progress.
