@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 12 - Metal Detecting Survey Log</title>
+    <title>Map 13 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1919,11 +1919,11 @@ if (quickBtn) {
         const input = document.getElementById('compass-quick-target-vdi');
         const raw = (input ? input.value : '').trim();
 
-        // Must be a number (digits only)
-        if (!/^\d+$/.test(raw)) {
-            showMessage('Target ID must be a number.', 'error');
-            return;
-        }
+   // Must be an integer, allow negatives (e.g. -12, 0, 28)
+if (!/^-?\d+$/.test(raw)) {
+    showMessage('Target ID must be a whole number (you can use negatives).', 'error');
+    return;
+}
 
         const now = Date.now();
 
@@ -6115,13 +6115,15 @@ function renderCompassPage(isAutoRefresh = false) {
                         Target ID :
                     </div>
 
-                    <input
-                        id="compass-quick-target-vdi"
-                        type="text"
-                        inputmode="numeric"
-                        placeholder="e.g. 28"
-                        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    />
+                   <input
+    id="compass-quick-target-vdi"
+    type="text"
+    inputmode="text"
+    pattern="-?[0-9]*"
+    placeholder="e.g. -12 or 28"
+    class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+/>
+
 
                     <button
                         id="compass-log-target-btn"
