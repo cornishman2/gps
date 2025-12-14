@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 10 - Metal Detecting Survey Log</title>
+    <title>Map 11 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3636,18 +3636,19 @@ function handleSurveyAction(button) {
     const id = button.dataset.id;
     const action = button.dataset.action;
     const name = button.dataset.name;
+
     const survey = surveys.find(s => s.id === id);
     if (!survey) return;
 
-    const executeAction = async () => {
+    const executeAction = () => {
         const now = Date.now();
 
         switch (action) {
             case 'open':
-                // ✅ CRITICAL: opening a survey must start "clean"
+                // ✅ Opening a survey must start "clean"
                 resetLiveTrackingAndRecordingState();
 
-                // Close any currently open survey first
+                // Close any currently open survey
                 surveys.forEach(s => {
                     if (s.status === 'Open') {
                         s.status = 'Active';
@@ -3714,7 +3715,7 @@ function handleSurveyAction(button) {
             executeAction
         );
     } else {
-        await executeAction();
+        executeAction();
     }
 }
 
