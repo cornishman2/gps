@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Map 6 - Metal Detecting Survey Log</title>
+    <title>Map 7 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1834,26 +1834,38 @@ function attachPageEventListeners() {
 const quickInput = document.getElementById('compass-quick-target-vdi');
 if (quickInput) {
     // Restore draft after a re-render
-    if (compassQuickTargetIdDraft.trim().length > 0 && quickInput.value !== compassQuickTargetIdDraft) {
+    if (typeof compassQuickTargetIdDraft === 'string' &&
+        compassQuickTargetIdDraft.trim().length > 0 &&
+        quickInput.value !== compassQuickTargetIdDraft) {
         quickInput.value = compassQuickTargetIdDraft;
     }
 
     // Keep draft up to date while typing
     quickInput.addEventListener('input', () => {
-        compassQuickTargetIdDraft = quickInput.value;
+        compassQuickTargetIdDraft = quickInput.value || '';
     });
 
-    // Optional: pause refresh immediately on focus (extra safety)
+    // Extra safety on mobile: pause refresh while focused
     quickInput.addEventListener('focus', () => {
         stopCompassAutoRefresh();
     });
 
-    // Resume refresh when leaving the field
+    // Resume refresh when leaving the field (only if still on Compass)
     quickInput.addEventListener('blur', () => {
-        // Only resume if still on Compass
         if (currentPage === 'Compass') startCompassAutoRefresh();
     });
 }
+
+// --- COMPASS PAGE: quick-log target button ---
+const quickBtn = document.getElementById('compass-log-target-btn');
+if (quickBtn) {
+    quickBtn.addEventListener('click', () => {
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        if (!openSurvey) {
+            showMessage('You must have an open survey to log a target.', 'error');
+            return;
+        }
+
         const input = document.getElementById('compass-quick-target-vdi');
         const raw = (input ? input.value : '').trim();
 
@@ -1864,15 +1876,22 @@ if (quickInput) {
         }
 
         const now = Date.now();
-        const coords = (currentUserCoords && typeof currentUserCoords.lat === 'number' && typeof currentUserCoords.lon === 'number')
-            ? `${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}`
-            : 'No GPS logged';
 
-        const acc = (currentUserAccuracy != null) ? String(currentUserAccuracy) : 'N/A';
+        // Only use GPS if we currently have it; otherwise don't log "home" coords by accident
+        const coords =
+            (isTrackingActive &&
+             currentUserCoords && typeof currentUserCoords.lat === 'number' && typeof currentUserCoords.lon === 'number')
+                ? `${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}`
+                : 'No GPS logged';
+
+        const acc =
+            (isTrackingActive && currentUserAccuracy != null)
+                ? String(currentUserAccuracy)
+                : 'N/A';
 
         const newTarget = {
             id: generateId(),
-            description: `Logged ${new Date(now).toLocaleString()}`,  // simple timestamp as requested
+            description: `Logged ${new Date(now).toLocaleString()}`,
             vdi: raw,
             depth: 'Unknown',
             type: 'Unidentified',
@@ -1884,7 +1903,6 @@ if (quickInput) {
             detector: userProfile.detector,
             centerOnMap: false,
 
-            // No photos in quick log
             photos: [],
             targetPhotoRef: '',
             targetPhotoData: ''
@@ -1896,15 +1914,15 @@ if (quickInput) {
 
         saveSurveysToLocalStorage();
 
-       // After saving the new target:
         if (input) input.value = '';
-        compassQuickTargetIdDraft='';
+        compassQuickTargetIdDraft = '';
+
         showMessage(`New Target logged (VDI ${raw}).`, 'success');
 
-        // Now that logging is done, resume auto-refresh
-        startCompassAutoRefresh();
+        // Only restart auto-refresh if tracking is on
+        if (isTrackingActive) startCompassAutoRefresh();
 
-        // Re-render compass once so the new target pin appears immediately
+        // Re-render once so the new pin appears immediately
         updateMapWithUserLocationAndRender();
     });
 }
