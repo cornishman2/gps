@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Export 1 - Metal Detecting Survey Log</title>
+    <title>Photos 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -849,6 +849,7 @@ let currentPage = 'Home';
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
+        
 
 
 // Simple filter state for the Finds page
@@ -902,6 +903,104 @@ let suppressCompassAutoRefresh = false;
         const MOVEMENT_HISTORY_MAX_LENGTH = 30;        // max number of points
         const MOVEMENT_MIN_DISTANCE_METERS = 2;        // need at least ~2m of motion
 
+// =====================
+// PHOTO RESIZE SETTINGS
+// =====================
+const PHOTO_SETTINGS_KEY = 'geoFindPhotoSettings';
+
+// default = 1000px wide (user can change in Settings)
+let photoSettings = {
+    maxWidth: 1000
+};
+
+function loadPhotoSettingsFromLocalStorage() {
+    try {
+        const raw = localStorage.getItem(PHOTO_SETTINGS_KEY);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.maxWidth === 'number' && !isNaN(parsed.maxWidth)) {
+            photoSettings.maxWidth = parsed.maxWidth;
+        }
+    } catch (e) {
+        console.warn('Could not load photo settings:', e);
+    }
+}
+
+function savePhotoSettingsToLocalStorage() {
+    try {
+        localStorage.setItem(PHOTO_SETTINGS_KEY, JSON.stringify(photoSettings));
+    } catch (e) {
+        console.warn('Could not save photo settings:', e);
+    }
+}
+
+function getMaxPhotoWidth() {
+    const w = Number(photoSettings && photoSettings.maxWidth);
+    // 0 or NaN => treat as "no resize"
+    return (!w || isNaN(w) || w < 1) ? 0 : Math.round(w);
+}
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(reader.error || new Error('File read failed'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Image decode failed'));
+        img.src = dataUrl;
+    });
+}
+
+/**
+ * Resize a dataURL down to maxWidth (keeps aspect ratio).
+ * If the image is already <= maxWidth, returns original dataUrl.
+ * Output format: JPEG (good size reduction). Quality tweakable.
+ */
+async function resizeDataUrlToMaxWidth(dataUrl, maxWidth) {
+    if (!dataUrl || typeof dataUrl !== 'string') return '';
+    if (!maxWidth || maxWidth < 1) return dataUrl; // 0 => no resizing
+
+    const img = await loadImageFromDataUrl(dataUrl);
+
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
+
+    if (!srcW || !srcH) return dataUrl;
+    if (srcW <= maxWidth) return dataUrl;
+
+    const scale = maxWidth / srcW;
+    const dstW = Math.round(srcW * scale);
+    const dstH = Math.round(srcH * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = dstW;
+    canvas.height = dstH;
+
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, dstW, dstH);
+
+    // JPEG saves lots of space. (If you really need PNG, we can add a toggle.)
+    const quality = 0.85;
+    return canvas.toDataURL('image/jpeg', quality);
+}
+
+/**
+ * Full pipeline: File -> dataUrl -> resized dataUrl (based on Settings)
+ */
+async function fileToResizedDataUrl(file) {
+    const dataUrl = await fileToDataUrl(file);
+    const maxW = getMaxPhotoWidth();
+    return await resizeDataUrlToMaxWidth(dataUrl, maxW);
+}
 
 // NEW: smoothed position for the live map
         let smoothedUserCoords = null;
@@ -1694,6 +1793,8 @@ function saveSurveysToLocalStorage() {
         const storedFinds   = localStorage.getItem('geoFindFinds');   // <--- NEW
         const storedProfile = localStorage.getItem('geoFindProfile');
         const storedUserId  = localStorage.getItem('geoFindUserId');
+        loadPhotoSettingsFromLocalStorage();
+
 
                 if (storedSurveys) {
                     surveys = JSON.parse(storedSurveys);
@@ -1826,6 +1927,40 @@ function attachPageEventListeners() {
     if (resetBtn) {
     resetBtn.addEventListener('click', resetAllAppData);
 }
+    // Settings Page: Photo resize setting
+const maxWidthInput = document.getElementById('max-photo-width-input');
+const savePhotoBtn  = document.getElementById('save-photo-settings-btn');
+
+if (maxWidthInput) {
+    // populate current value each time Settings renders
+    maxWidthInput.value = String(getMaxPhotoWidth() || 0);
+}
+
+if (savePhotoBtn && maxWidthInput) {
+    savePhotoBtn.addEventListener('click', () => {
+        const raw = (maxWidthInput.value || '').trim();
+        let val = Number(raw);
+
+        if (isNaN(val) || val < 0) val = 1000;
+
+        // clamp to something sane (avoid absurd canvas sizes)
+        if (val !== 0) {
+            if (val < 200) val = 200;
+            if (val > 4000) val = 4000;
+        }
+
+        photoSettings.maxWidth = Math.round(val);
+        savePhotoSettingsToLocalStorage();
+
+        showMessage(
+            val === 0
+                ? 'Max Photo Width saved: resizing disabled.'
+                : `Max Photo Width saved: ${photoSettings.maxWidth}px.`,
+            'success'
+        );
+    });
+}
+
 
 
     // --- FINDS PAGE: search + filters ---
@@ -3006,13 +3141,7 @@ function triggerPhotoInput(inputId) {
     fileInput.click();      // open camera / gallery
 }
 
-/**
- * Generic helper to handle a selected photo and update:
- * - status text
- * - preview wrapper + image
- * - hidden data field
- */
-function handlePhotoSelected(event, {
+async function handlePhotoSelected(event, {
     statusId,
     wrapperId,
     imgId,
@@ -3021,34 +3150,36 @@ function handlePhotoSelected(event, {
     const fileInput = event.target;
     const file = fileInput.files && fileInput.files[0];
 
-    const statusSpan     = statusId   ? document.getElementById(statusId)   : null;
-    const previewWrapper = wrapperId  ? document.getElementById(wrapperId)  : null;
-    const previewImg     = imgId      ? document.getElementById(imgId)      : null;
-    const hiddenField    = hiddenId   ? document.getElementById(hiddenId)   : null;
+    const statusSpan  = statusId  ? document.getElementById(statusId)  : null;
+    const wrapper     = wrapperId ? document.getElementById(wrapperId) : null;
+    const img         = imgId     ? document.getElementById(imgId)     : null;
+    const hiddenField = hiddenId  ? document.getElementById(hiddenId)  : null;
 
-    if (!file) {
-        if (statusSpan)     statusSpan.textContent = 'No photo captured yet.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField)    hiddenField.value = '';
-        return;
+    if (!file) return;
+
+    try {
+        if (statusSpan) statusSpan.textContent = 'Processing photo...';
+
+        const resizedDataUrl = await fileToResizedDataUrl(file);
+
+        if (hiddenField) hiddenField.value = resizedDataUrl || '';
+        if (img) img.src = resizedDataUrl || '';
+        if (wrapper) wrapper.classList.toggle('hidden', !resizedDataUrl);
+
+        if (statusSpan) {
+            const mw = getMaxPhotoWidth();
+            statusSpan.textContent = resizedDataUrl
+                ? (mw ? `Photo ready (max width ${mw}px).` : 'Photo ready (no resize).')
+                : 'No photo captured yet.';
+        }
+    } catch (e) {
+        console.error('Error processing photo:', e);
+        if (statusSpan) statusSpan.textContent = 'Photo failed to load.';
+        showMessage('Could not process that photo.', 'error');
+    } finally {
+        // allow selecting the same file again later
+        try { fileInput.value = ''; } catch (e) {}
     }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        if (hiddenField)    hiddenField.value = dataUrl;
-        if (statusSpan)     statusSpan.textContent = 'Photo captured.';
-        if (previewImg)     previewImg.src = dataUrl;
-        if (previewWrapper) previewWrapper.classList.remove('hidden');
-    };
-    reader.onerror = () => {
-        console.error('Error reading photo file:', reader.error);
-        showMessage('Could not read the photo file.', 'error');
-        if (statusSpan)     statusSpan.textContent = 'Error capturing photo.';
-        if (previewWrapper) previewWrapper.classList.add('hidden');
-        if (hiddenField)    hiddenField.value = '';
-    };
-    reader.readAsDataURL(file);
 }
 
 // --- TARGET PHOTO HELPERS (new target form) ---
@@ -3118,36 +3249,26 @@ function updateNewTargetPhotoPreview() {
     wrapper.classList.remove('hidden');
 }
 
-function handleNewTargetPhotoSelected(event) {
+async function handleNewTargetPhotoSelected(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
     // Allow selecting the same file again later
     event.target.value = '';
 
-    let remaining = files.length;
+    try {
+        for (const file of files) {
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                currentNewTargetPhotos.push(resized);
+            }
+        }
+    } catch (e) {
+        console.error('Error reading/resizing target photo file:', e);
+        showMessage('One or more photos could not be processed.', 'error');
+    }
 
-    files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target.result;
-            if (typeof dataUrl === 'string') {
-                currentNewTargetPhotos.push(dataUrl);
-            }
-            remaining -= 1;
-            if (remaining === 0) {
-                updateNewTargetPhotoPreview();
-            }
-        };
-        reader.onerror = () => {
-            console.error('Error reading target photo file:', reader.error);
-            remaining -= 1;
-            if (remaining === 0) {
-                updateNewTargetPhotoPreview();
-            }
-        };
-        reader.readAsDataURL(file);
-    });
+    updateNewTargetPhotoPreview();
 }
 
 function removeNewTargetPhoto(index) {
@@ -3216,36 +3337,29 @@ function updateEditTargetPhotoPreview() {
     wrapper.classList.remove('hidden');
 }
 
-function handleEditTargetPhotoSelected(event) {
+async function handleEditTargetPhotoSelected(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
     // Allow selecting the same file again later
     event.target.value = '';
 
-    let remaining = files.length;
+    try {
+        for (const file of files) {
+            const resized = await fileToResizedDataUrl(file); // uses Max Photo Width setting
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                currentEditTargetPhotos.push(resized);
+            }
+        }
+    } catch (e) {
+        console.error('Error reading/resizing target photo file:', e);
+        showMessage('One or more photos could not be processed.', 'error');
+    }
 
-    files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target.result;
-            if (typeof dataUrl === 'string') {
-                currentEditTargetPhotos.push(dataUrl);
-            }
-            remaining -= 1;
-            if (remaining === 0) {
-                updateEditTargetPhotoPreview();
-            }
-        };
-        reader.onerror = () => {
-            console.error('Error reading edit target photo file:', reader.error);
-            remaining -= 1;
-            if (remaining === 0) {
-                updateEditTargetPhotoPreview();
-            }
-        };
-        reader.readAsDataURL(file);
-    });
+    // Refresh the thumbnails/gallery in the Edit Target modal
+    if (typeof updateEditTargetPhotoPreview === 'function') {
+        updateEditTargetPhotoPreview();
+    }
 }
 
 function removeEditTargetPhoto(index) {
@@ -3317,44 +3431,6 @@ function updateEditFindPhotoPreview() {
     wrapper.classList.remove('hidden');
 }
 
-/**
- * Called when the user picks one or more photos in the Edit Find modal.
- * Appends them to currentEditFindPhotos and refreshes the preview.
- */
-function handleEditFindPhotoSelected(event) {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) {
-        return;
-    }
-
-    // Allow picking again later (including the same file)
-    event.target.value = '';
-
-    let remaining = files.length;
-
-    files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target.result;
-            if (typeof dataUrl === 'string') {
-                currentEditFindPhotos.push(dataUrl);
-            }
-            remaining -= 1;
-            if (remaining === 0) {
-                updateEditFindPhotoPreview();
-            }
-        };
-        reader.onerror = () => {
-            console.error('Error reading find photo file:', reader.error);
-            remaining -= 1;
-            if (remaining === 0) {
-                updateEditFindPhotoPreview();
-            }
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
         // --- NEW SURVEY PHOTO HELPERS ---
 
 function triggerNewSurveyPhotoInput() {
@@ -3370,6 +3446,27 @@ function handleNewSurveyPhotoSelected(event) {
     });
 }
 
+async function handleEditFindPhotoSelected(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    // Allow selecting the same file again later
+    event.target.value = '';
+
+    try {
+        for (const file of files) {
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                currentEditFindPhotos.push(resized);
+            }
+        }
+    } catch (e) {
+        console.error('Error reading/resizing find photo file:', e);
+        showMessage('One or more photos could not be processed.', 'error');
+    }
+
+    updateEditFindPhotoPreview();
+}
         
 async function showEditTargetModal(targetId, surveyId) {
     const survey = surveys.find(s => s.id === surveyId);
@@ -6192,6 +6289,35 @@ function renderSettingsPage() {
                     </button>
                 </div>
             </div>
+
+            <!-- PHOTO SETTINGS -->
+<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-sky-500">
+  <h4 class="text-lg font-semibold text-sky-700 mb-2">Photo Settings</h4>
+  <p class="text-sm text-gray-600 mb-3">
+    Photos will be resized when selected (before saving). This reduces storage and makes export/import faster.
+    Set to <strong>0</strong> to disable resizing.
+  </p>
+
+  <label class="block text-sm font-medium text-gray-700 mb-1" for="max-photo-width-input">
+    Max Photo Width (px)
+  </label>
+
+  <div class="flex gap-2">
+    <input id="max-photo-width-input"
+           type="number"
+           inputmode="numeric"
+           min="0"
+           step="50"
+           class="w-full border border-gray-300 rounded-lg p-2"
+           placeholder="1000" />
+    <button id="save-photo-settings-btn"
+            type="button"
+            class="px-4 py-2 rounded-lg bg-sky-600 text-white font-bold shadow hover:bg-sky-700">
+      Save
+    </button>
+  </div>
+</div>
+
 
             <h3 class="text-2xl font-bold text-gray-700 mb-3">Survey Export &amp; Import </h3>
 
