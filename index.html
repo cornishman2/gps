@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracks 1 - Metal Detecting Survey Log</title>
+    <title>Tracks 2 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6053,14 +6053,6 @@ function renderTracksPanel(openSurvey) {
 
     const tracks = Array.isArray(openSurvey.tracks) ? openSurvey.tracks : [];
     const hasTracks = tracks.length > 0;
-    const active = tracks.find(t => t.isRecording);
-
-    const recordingStatusHtml = active
-        ? `<span class="flex items-center text-[11px] text-red-600 font-semibold">
-                <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
-                Recording: ${active.name || 'Track'}
-           </span>`
-        : `<span class="text-[11px] text-gray-500">Not currently recording</span>`;
 
     let tracksListHtml = '';
 
@@ -6118,38 +6110,21 @@ function renderTracksPanel(openSurvey) {
         tracksListHtml = `
             <p class="text-xs text-gray-500 italic">
                 You don't have any tracks recorded yet for this survey.
-                Use <strong>Start new track</strong> to begin logging your path.
+                Use <strong>Start Tracking</strong> above to begin logging your path.
             </p>
         `;
     }
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
-                <div>
-                    <h3 class="text-xl font-semibold text-gray-700 flex items-center gap-2">
-                        <i class="fas fa-route text-primary"></i>
-                        Tracks for this survey
-                    </h3>
-                    <p class="text-xs text-gray-500 mt-1">
-                        Select which tracks to overlay on the map. Tracks use your live GPS position.
-                    </p>
-                </div>
-
-                <div class="flex flex-col items-stretch sm:items-end gap-1">
-                    ${recordingStatusHtml}
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <button id="start-track-btn"
-                                class="bg-green-600 text-white py-3 rounded-xl font-bold">
-                            🟢 Start Tracking
-                        </button>
-
-                        <button id="stop-track-btn"
-                                class="bg-red-600 text-white py-3 rounded-xl font-bold">
-                            🔴 Stop Tracking
-                        </button>
-                    </div>
-                </div>
+            <div class="mb-3">
+                <h3 class="text-xl font-semibold text-gray-700 flex items-center gap-2">
+                    <i class="fas fa-route text-primary"></i>
+                    Tracks for this survey
+                </h3>
+                <p class="text-xs text-gray-500 mt-1">
+                    Select which tracks to overlay on the map.
+                </p>
             </div>
 
             <div class="mt-2 space-y-1">
@@ -6159,7 +6134,7 @@ function renderTracksPanel(openSurvey) {
     `;
 }
 
-        function renderCompassPage(isAutoRefresh = false) {
+function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
     if (!openSurvey) {
@@ -6174,29 +6149,17 @@ function renderTracksPanel(openSurvey) {
         `;
     }
 
-    // ------------------------------------------------------------
-    // IMPORTANT: prevent the "numeric keypad disappears" bug
-    // If the user is typing in the quick Target ID box, DO NOT auto-refresh.
-    // ------------------------------------------------------------
+    // Prevent the "numeric keypad disappears" bug: never auto-refresh while typing in the Target ID box
     const activeEl = document.activeElement;
-    const isTypingInQuickBox =
-        activeEl && activeEl.id === 'compass-quick-target-vdi';
+    const isTypingInQuickBox = activeEl && activeEl.id === 'compass-quick-target-vdi';
 
-    // ------------------------------------------------------------
-    // GPS watch: only needed while tracking is active.
-    // If you stop tracking, we stop the live GPS watch so your location
-    // won’t keep changing anything in the UI while you’re at home.
-    // ------------------------------------------------------------
+    // GPS watch: only needed while tracking is active
     if (isTrackingActive) {
-        if (!liveMapWatchId) {
-            startLiveMapLocationWatch();
-        }
+        if (!liveMapWatchId) startLiveMapLocationWatch();
     } else {
-        // Stop GPS watch when not tracking (if your helper exists)
         if (typeof stopLiveMapLocationWatch === 'function') {
             stopLiveMapLocationWatch();
         } else if (liveMapWatchId) {
-            // Fallback safety (in case stopLiveMapLocationWatch is missing)
             try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
             liveMapWatchId = null;
             bestLiveAccuracy = Infinity;
@@ -6204,25 +6167,17 @@ function renderTracksPanel(openSurvey) {
         }
     }
 
-    // ------------------------------------------------------------
-    // Auto-refresh loop:
-    // - Only runs while tracking is active
-    // - Never runs while the user is typing (prevents input blur)
-    // ------------------------------------------------------------
+    // Auto-refresh loop: only when tracking is active, and never while typing
     if (!isAutoRefresh) {
-        // If we should NOT be refreshing, ensure any old interval is stopped
         if (!isTrackingActive || isTypingInQuickBox) {
             if (autoRefreshIntervalId) {
                 clearInterval(autoRefreshIntervalId);
                 autoRefreshIntervalId = null;
             }
         } else {
-            // Start interval if needed
             if (!autoRefreshIntervalId) {
                 autoRefreshIntervalId = setInterval(() => {
                     if (currentPage !== 'Compass') return;
-
-                    // If user starts typing, pause refresh immediately
                     const ae = document.activeElement;
                     if (ae && ae.id === 'compass-quick-target-vdi') return;
 
@@ -6230,25 +6185,34 @@ function renderTracksPanel(openSurvey) {
                     if (!appContent) return;
 
                     appContent.innerHTML = renderCompassPage(true);
-                    attachPageEventListeners(); // rewire map buttons/pins after redraw
+                    attachPageEventListeners();
                 }, 3000);
-
-                console.log("Compass auto-refresh started (tracking ON).");
             }
         }
     }
 
-    // Filter for targets that actually have usable coordinates
+    // Targets with usable coordinates
     const targets = getActiveTargets(openSurvey).filter(
         t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
     );
 
-    const showAutoRefreshNote = isTrackingActive && !isTypingInQuickBox;
+    // Recording status line (optional nice feedback)
+    const activeTrack = Array.isArray(openSurvey.tracks)
+        ? openSurvey.tracks.find(t => t && t.isRecording)
+        : null;
+
+    const trackingStatusHtml = isTrackingActive
+        ? `<span class="flex items-center text-[11px] text-green-700 font-semibold">
+                <span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse"></span>
+                Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}
+           </span>`
+        : `<span class="text-[11px] text-gray-500">Tracking OFF</span>`;
 
     return `
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-4">Targets Plot View</h2>
 
+            <!-- Survey info -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <div class="flex items-start justify-between gap-3">
                     <div>
@@ -6258,35 +6222,49 @@ function renderTracksPanel(openSurvey) {
                         <p class="text-xs text-gray-500 mt-1">
                             ${targets.length} targets with GPS coordinates
                         </p>
-                        ${
-                            showAutoRefreshNote
-                                ? `<p class="text-sm text-green-600 mt-2">
-                                        <i class="fas fa-redo fa-spin mr-1"></i> Auto-refreshing map every 3 seconds (tracking ON)
-                                   </p>`
-                                : `<p class="text-xs text-gray-400 mt-2">
-                                        Auto-refresh is paused (tracking OFF or you are typing).
-                                   </p>`
-                        }
+                        <div class="mt-2">${trackingStatusHtml}</div>
                     </div>
                 </div>
             </div>
 
-            <!-- QUICK LOG TARGET (Compass) -->
+            <!-- NEW: Tracking controls moved here -->
+            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                    <i class="fas fa-route mr-2"></i> Tracking Controls
+                </h3>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="start-track-btn"
+                            class="bg-green-600 text-white py-3 rounded-xl font-bold">
+                        🟢 Start Tracking
+                    </button>
+
+                    <button id="stop-track-btn"
+                            class="bg-red-600 text-white py-3 rounded-xl font-bold">
+                        🔴 Stop Tracking
+                    </button>
+                </div>
+
+                <p class="text-xs text-gray-500 mt-2">
+                    Tip: turn tracking OFF when you get home so your current location doesn’t squash the survey map.
+                </p>
+            </div>
+
+            <!-- Target ID entry -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <div class="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div class="text-sm font-semibold text-gray-700 whitespace-nowrap">
                         Target ID :
                     </div>
 
-                   <input
-    id="compass-quick-target-vdi"
-    type="text"
-    inputmode="text"
-    pattern="-?[0-9]*"
-    placeholder="e.g. -12 or 28"
-    class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-/>
-
+                    <input
+                        id="compass-quick-target-vdi"
+                        type="text"
+                        inputmode="text"
+                        pattern="-?[0-9]*"
+                        placeholder="e.g. -12 or 28"
+                        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
 
                     <button
                         id="compass-log-target-btn"
@@ -6298,11 +6276,11 @@ function renderTracksPanel(openSurvey) {
                     </button>
                 </div>
                 <p class="text-xs text-gray-500 mt-2">
-                    Tip: while you are typing here, the map won’t auto-refresh (so the keypad won’t disappear).
+                    While you are typing here, the map won’t auto-refresh (so the keypad won’t disappear).
                 </p>
             </div>
 
-            <!-- Map first -->
+            <!-- Map -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
                     <i class="fas fa-map mr-2"></i> Survey Map
@@ -6310,26 +6288,16 @@ function renderTracksPanel(openSurvey) {
                 ${renderTargetPlot(targets)}
             </div>
 
-            <!-- Then navigation panel -->
+            <!-- Navigation -->
             ${renderNavigationPanel(openSurvey)}
 
-            <!-- Tracks below the map -->
+            <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
-
-            <!-- Explanatory text at the bottom -->
-            <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 text-xs text-gray-600 mt-4">
-                <h4 class="font-semibold mb-1">Plot & navigation notes</h4>
-                <ul class="list-disc list-inside space-y-1">
-                    <li>The plot shows relative positions within the survey area. Targets are dots.</li>
-                    <li>Your position is only shown when <strong>tracking is ON</strong>.</li>
-                    <li>Use the <strong>+</strong> and <strong>−</strong> buttons to zoom, and drag the map to keep targets in view.</li>
-                    <li>Tap a target pin on the map to select it for navigation. The dashed line and arrow show direction from your GPS position to the target.</li>
-                    <li>When you are inside the target’s confidence circle, the navigation line is hidden.</li>
-                </ul>
-            </div>
         </div>
     `;
 }
+
+        
 /** Renders the content for the Settings page. */
 function renderSettingsPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
