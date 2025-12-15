@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Galler 1 - Metal Detecting Survey Log</title>
+    <title>Gallery 2 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1143,6 +1143,7 @@ async function exportOpenSurveyPhotoGallery() {
 
                     const outBlob = await resizeBlobToMaxWidthJpeg(rawBlob, maxW, 0.85);
                     if (!outBlob) continue;
+                    const imgDataUrl = await blobToDataUrl(outBlob); // data:image/jpeg;base64,...
 
                     const baseName = `${item.kind}_${safeSlug(item.parentId)}_${String(item.indexInParent).padStart(2,'0')}`;
                     const imgName = `${baseName}.jpg`;
@@ -1189,7 +1190,8 @@ async function exportOpenSurveyPhotoGallery() {
     <p><a href="../index.html">← Back to gallery</a></p>
     <h1>${escapeHtml(item.title)}</h1>
     <p class="muted">${item.kind === 'find' ? 'Find photo' : 'Target photo'}</p>
-    <img src="${escapeHtml(imgName)}" alt="${escapeHtml(item.title)}">
+    <img src="${escapeHtml(imgDataUrl)}" alt="${escapeHtml(item.title)}">
+
     ${detailsHtml}
   </div>
 </body>
@@ -1202,7 +1204,7 @@ async function exportOpenSurveyPhotoGallery() {
                     const card = `
                       <div class="card">
                         <a class="thumbLink" href="${relDir}/${escapeHtml(pageName)}">
-                          <img src="${relDir}/${escapeHtml(imgName)}" alt="${escapeHtml(item.title)}">
+                          <img src="${escapeHtml(imgDataUrl)}" alt="${escapeHtml(item.title)}">
                         </a>
                         <div class="cap">
                           <div class="title">${escapeHtml(item.title)}</div>
