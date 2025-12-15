@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photos 1 - Metal Detecting Survey Log</title>
+    <title>Tracks 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1902,7 +1902,20 @@ switch (currentPage) {
 
 /** Attaches event listeners for dynamically rendered elements */
 function attachPageEventListeners() {
-    // Home Page (New Survey Button)
+
+    const trackDeleteButtons = document.querySelectorAll('.track-delete-btn');
+if (trackDeleteButtons && trackDeleteButtons.length > 0) {
+    trackDeleteButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // stops any label/row click effects
+            const trackId = btn.getAttribute('data-track-id');
+            deleteTrack(trackId);
+        });
+    });
+}
+
+        // Home Page (New Survey Button)
     const newSurveyBtn = document.getElementById('new-survey-btn');
     if (newSurveyBtn) {
         newSurveyBtn.addEventListener('click', showNewSurveyModal);
@@ -2137,6 +2150,48 @@ if (!/^-?\d+$/.test(raw)) {
     }
 }
 
+function deleteTrack(trackId) {
+    const found = findTrackById(trackId);
+    if (!found) {
+        showMessage('Track not found.', 'error');
+        return;
+    }
+
+    const { survey, track } = found;
+    const trackName = track.name || 'this track';
+
+    const executeDelete = () => {
+        // If deleting the currently active recording track, stop + clear state safely
+        if (activeTrackId === track.id && activeTrackSurveyId === survey.id) {
+            activeTrackId = null;
+            activeTrackSurveyId = null;
+
+            // Also stop tracking so user-location does not keep affecting the map
+            isTrackingActive = false;
+            if (typeof stopLiveMapLocationWatch === 'function') {
+                stopLiveMapLocationWatch();
+            }
+        }
+
+        // Remove it from the survey
+        survey.tracks = (survey.tracks || []).filter(t => t.id !== track.id);
+
+        saveSurveysToLocalStorage();
+        showMessage(`Track deleted: ${trackName}.`, 'success');
+
+        // Re-render if we're on Compass so the list + map update immediately
+        if (currentPage === 'Compass') {
+            render();
+        }
+    };
+
+    showConfirmationModal(
+        `Confirm Delete Track: ${trackName}`,
+        `Are you sure you want to permanently delete <strong>${trackName}</strong>?<br>
+         <span class="text-sm text-gray-600">This cannot be undone.</span>`,
+        executeDelete
+    );
+}
 
 
         
@@ -2190,7 +2245,7 @@ function startTargetLocationWatch() {
     targetWatchId = navigator.geolocation.watchPosition(
         // Success Callback
         (position) => {
-            const accuracy = position.coords.accuracy;
+            const accuracy = Math.round(position.coords.accuracy*10) / 10;
 
             // Only update if this reading is more accurate
             if (accuracy < bestAccuracy) {
@@ -2323,7 +2378,7 @@ function stopLiveMapLocationWatch() {
 
 liveMapWatchId = navigator.geolocation.watchPosition(
         (position) => {
-            const accuracy = position.coords.accuracy;
+            const accuracy = Math.round(position.coords.accuracy *10) / 10;
 
             // Raw latest reading
             currentUserCoords = {
@@ -6000,11 +6055,6 @@ function renderTracksPanel(openSurvey) {
     const hasTracks = tracks.length > 0;
     const active = tracks.find(t => t.isRecording);
 
-    const startButtonClass = active
-        ? 'px-3 py-1 rounded-lg bg-gray-200 text-gray-500 text-xs font-semibold cursor-not-allowed opacity-60'
-        : 'px-3 py-1 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/90';
-    const stopButtonExtraClasses = active ? '' : ' hidden';
-
     const recordingStatusHtml = active
         ? `<span class="flex items-center text-[11px] text-red-600 font-semibold">
                 <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
@@ -6019,11 +6069,9 @@ function renderTracksPanel(openSurvey) {
             const isVisible = track.isVisible !== false;
             const pointsCount = Array.isArray(track.points) ? track.points.length : 0;
             const created = track.createdAt
-                ? new Date(track.createdAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                  })
+                ? new Date(track.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : '';
+
             const activeBadge = track.isRecording
                 ? `<span class="ml-2 inline-flex items-center text-[10px] text-red-600 font-semibold">
                         <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
@@ -6032,8 +6080,8 @@ function renderTracksPanel(openSurvey) {
                 : '';
 
             return `
-                <label class="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
-                    <div class="flex items-center gap-2">
+                <div class="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
+                    <label class="flex items-center gap-2 select-none">
                         <input
                             type="checkbox"
                             class="track-visibility-toggle h-4 w-4 text-primary"
@@ -6048,9 +6096,22 @@ function renderTracksPanel(openSurvey) {
                                 ${pointsCount} points${created ? ` · ${created}` : ''}
                             </span>
                         </div>
+                    </label>
+
+                    <div class="flex items-center gap-2">
+                        ${activeBadge}
+
+                        <button
+                            type="button"
+                            class="track-delete-btn px-3 py-2 rounded-lg bg-gray-100 hover:bg-red-100 text-red-600 font-bold"
+                            data-track-id="${track.id}"
+                            title="Delete track"
+                            aria-label="Delete track"
+                        >
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
-                    ${activeBadge}
-                </label>
+                </div>
             `;
         }).join('');
     } else {
@@ -6064,7 +6125,6 @@ function renderTracksPanel(openSurvey) {
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-            <!-- Make this responsive: stack on small screens, side-by-side on larger -->
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
                 <div>
                     <h3 class="text-xl font-semibold text-gray-700 flex items-center gap-2">
@@ -6075,30 +6135,31 @@ function renderTracksPanel(openSurvey) {
                         Select which tracks to overlay on the map. Tracks use your live GPS position.
                     </p>
                 </div>
-<div class="flex flex-col items-stretch sm:items-end gap-1">
-    ${recordingStatusHtml}
-  <div class="grid grid-cols-2 gap-3 mb-4">
 
-  <button id="start-track-btn"
-          class="bg-green-600 text-white py-3 rounded-xl font-bold">
-    🟢 Start Tracking
-  </button>
+                <div class="flex flex-col items-stretch sm:items-end gap-1">
+                    ${recordingStatusHtml}
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <button id="start-track-btn"
+                                class="bg-green-600 text-white py-3 rounded-xl font-bold">
+                            🟢 Start Tracking
+                        </button>
 
-  <button id="stop-track-btn"
-          class="bg-red-600 text-white py-3 rounded-xl font-bold">
-    🔴 Stop Tracking
-  </button>
-
-</div>
-</div>
+                        <button id="stop-track-btn"
+                                class="bg-red-600 text-white py-3 rounded-xl font-bold">
+                            🔴 Stop Tracking
+                        </button>
+                    </div>
+                </div>
             </div>
+
             <div class="mt-2 space-y-1">
                 ${tracksListHtml}
             </div>
         </div>
     `;
 }
-function renderCompassPage(isAutoRefresh = false) {
+
+        function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
     if (!openSurvey) {
