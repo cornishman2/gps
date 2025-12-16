@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 6 - Metal Detecting Survey Log</title>
+    <title>Gallery 7 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2857,26 +2857,63 @@ function showMessage(message, type = 'info') {
 }
 
         
-      /** Shows the generic confirmation modal. */
-        function showConfirmationModal(title, message, onConfirmCallback) {
-            const modal = document.getElementById('confirmation-modal');
-            document.getElementById('confirm-title').innerHTML = title;
-            document.getElementById('confirm-message').innerHTML = message;
-            
-            const yesBtn = document.getElementById('confirm-yes-btn');
-            const noBtn = document.getElementById('confirm-no-btn');
+ /** Shows the generic confirmation modal (supports async callbacks safely). */
+function showConfirmationModal(title, message, onConfirmCallback) {
+    const modal = document.getElementById('confirmation-modal');
+    const titleEl = document.getElementById('confirm-title');
+    const msgEl = document.getElementById('confirm-message');
 
-            const handleYes = () => {
-                onConfirmCallback();
-                closeConfirmationModal();
-                yesBtn.removeEventListener('click', handleYes);
-            };
+    const yesBtn = document.getElementById('confirm-yes-btn');
+    const noBtn  = document.getElementById('confirm-no-btn');
 
-            yesBtn.onclick = handleYes;
-            noBtn.onclick = closeConfirmationModal;
-            
-            modal.style.display = 'block';
+    if (!modal || !titleEl || !msgEl || !yesBtn || !noBtn) return;
+
+    titleEl.innerHTML = title;
+    msgEl.innerHTML = message;
+
+    // Reset any previous handlers
+    yesBtn.onclick = null;
+    noBtn.onclick  = null;
+
+    const close = () => {
+        modal.style.display = 'none';
+        // Re-enable buttons in case we disabled them
+        yesBtn.disabled = false;
+        noBtn.disabled  = false;
+        yesBtn.onclick = null;
+        noBtn.onclick  = null;
+    };
+
+    noBtn.onclick = close;
+
+    yesBtn.onclick = async () => {
+        // Prevent double-taps
+        yesBtn.disabled = true;
+        noBtn.disabled  = true;
+
+        try {
+            // IMPORTANT: await the caller (so errors are caught here)
+            await onConfirmCallback();
+            close();
+        } catch (e) {
+            // Treat user-cancelled pickers as a normal “cancel”
+            if (e && (e.name === 'AbortError' || String(e.message || '').toLowerCase().includes('aborted'))) {
+                console.log('User cancelled the request:', e);
+                if (typeof showMessage === 'function') showMessage('Cancelled.', 'info');
+                close();
+                return;
+            }
+
+            console.error('Confirmation action failed:', e);
+            if (typeof showMessage === 'function') {
+                showMessage(`Action failed: ${e.message || e}`, 'error');
+            }
+            close();
         }
+    };
+
+    modal.style.display = 'block';
+}
 
         /** Closes the generic confirmation modal. */
         function closeConfirmationModal() {
