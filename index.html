@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 2 - Metal Detecting Survey Log</title>
+    <title>Gallery 3 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1027,7 +1027,6 @@ async function exportOpenSurveyPhotoGallery() {
 
     if (logBox) logBox.value = '';
 
-    // Confirm (standard style)
     showConfirmationModal(
         'Export Photo Gallery',
         'Export a photo gallery for the <strong>open survey</strong> (Finds first, then Targets)?<br>' +
@@ -1046,14 +1045,12 @@ async function exportOpenSurveyPhotoGallery() {
                 log(`Max photo width: ${maxW || 0}px (${maxW ? 'resize ON' : 'resize OFF'})`);
                 log('Preparing files...');
 
-                // Check File System Access API
                 if (!window.showDirectoryPicker) {
-                    showMessage('This browser cannot export multiple files. I can add a single-file fallback if you want.', 'error');
+                    showMessage('This browser cannot export multiple files.', 'error');
                     log('ERROR: showDirectoryPicker not available in this browser.');
                     return;
                 }
 
-                // User picks a folder, we create a subfolder for this gallery
                 const rootPick = await window.showDirectoryPicker();
                 const folderName = `geoFind_gallery_${safeSlug(openSurvey.name)}_${new Date().toISOString().replace(/[:.]/g,'').replace('T','_').replace('Z','')}`;
                 const galleryDir = await getOrCreateDir(rootPick, folderName);
@@ -1061,11 +1058,9 @@ async function exportOpenSurveyPhotoGallery() {
                 const findsDir = await getOrCreateDir(galleryDir, 'finds');
                 const targetsDir = await getOrCreateDir(galleryDir, 'targets');
 
-                // Collect finds linked to this survey (Finds first)
                 const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
                 const targetsList = Array.isArray(openSurvey.targets) ? openSurvey.targets : [];
 
-                // Build items: each item may have multiple photos
                 const galleryItems = [];
 
                 // Finds first
@@ -1086,7 +1081,6 @@ async function exportOpenSurveyPhotoGallery() {
                             time: f.time || f.date || '',
                             coords: f.coordinates || '',
                             accuracy: f.accuracy || '',
-                            extra: f,
                             photoRefOrDataUrl: photoInputs[i]
                         });
                     }
@@ -1110,7 +1104,6 @@ async function exportOpenSurveyPhotoGallery() {
                             time: t.time || '',
                             coords: t.coordinates || '',
                             accuracy: t.accuracy || '',
-                            extra: t,
                             photoRefOrDataUrl: photoInputs[i]
                         });
                     }
@@ -1127,14 +1120,14 @@ async function exportOpenSurveyPhotoGallery() {
                     return;
                 }
 
-                // Write files + build HTML snippets
                 const findCards = [];
                 const targetCards = [];
+                const findSections = [];
+                const targetSections = [];
 
                 for (let n = 0; n < galleryItems.length; n++) {
                     const item = galleryItems[n];
 
-                    // Resolve + resize
                     const rawBlob = await resolvePhotoBlob(item.photoRefOrDataUrl);
                     if (!rawBlob) {
                         log(`Skipping missing photo: ${item.kind} ${item.parentId}`);
@@ -1143,67 +1136,21 @@ async function exportOpenSurveyPhotoGallery() {
 
                     const outBlob = await resizeBlobToMaxWidthJpeg(rawBlob, maxW, 0.85);
                     if (!outBlob) continue;
-                    const imgDataUrl = await blobToDataUrl(outBlob); // data:image/jpeg;base64,...
+
+                    const imgDataUrl = await blobToDataUrl(outBlob);
 
                     const baseName = `${item.kind}_${safeSlug(item.parentId)}_${String(item.indexInParent).padStart(2,'0')}`;
                     const imgName = `${baseName}.jpg`;
-                    const pageName = `${baseName}.html`;
+                    const anchorId = `${baseName}`;
 
                     const dir = (item.kind === 'find') ? findsDir : targetsDir;
 
-                    // Save image
+                    // Save image file (nice for laptop users; harmless on phone)
                     await writeFileToHandle(dir, imgName, outBlob);
 
-                    // Create per-image page
-                    const detailsHtml = `
-                        <ul class="meta">
-                          <li><strong>Type:</strong> ${escapeHtml(item.type)}</li>
-                          <li><strong>VDI/ID:</strong> ${escapeHtml(item.vdi)}</li>
-                          <li><strong>Depth:</strong> ${escapeHtml(item.depth)}</li>
-                          <li><strong>Date/Time:</strong> ${escapeHtml(fmtDateTime(item.time))}</li>
-                          <li><strong>Coordinates:</strong> ${escapeHtml(item.coords)}</li>
-                          <li><strong>Accuracy:</strong> ${escapeHtml(item.accuracy)}</li>
-                          <li><strong>Parent ID:</strong> ${escapeHtml(item.parentId)}</li>
-                          <li><strong>Photo #:</strong> ${item.indexInParent}</li>
-                        </ul>
-                    `;
-
-                    const singlePage = `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(item.title)}</title>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:18px;color:#111;}
-  a{color:#0369a1;text-decoration:none;font-weight:600}
-  a:hover{text-decoration:underline}
-  .wrap{max-width:1000px;margin:0 auto}
-  img{width:100%;height:auto;border-radius:12px;border:1px solid #e5e7eb}
-  .meta{margin:14px 0 0 0;padding:0;list-style:none}
-  .meta li{padding:6px 0;border-bottom:1px solid #f1f5f9}
-  .muted{color:#64748b;font-size:14px}
-</style>
-</head>
-<body>
-  <div class="wrap">
-    <p><a href="../index.html">← Back to gallery</a></p>
-    <h1>${escapeHtml(item.title)}</h1>
-    <p class="muted">${item.kind === 'find' ? 'Find photo' : 'Target photo'}</p>
-    <img src="${escapeHtml(imgDataUrl)}" alt="${escapeHtml(item.title)}">
-
-    ${detailsHtml}
-  </div>
-</body>
-</html>`;
-
-                    await writeFileToHandle(dir, pageName, new Blob([singlePage], { type: 'text/html' }));
-
-                    // Card for index.html (relative link differs by section)
-                    const relDir = item.kind === 'find' ? 'finds' : 'targets';
                     const card = `
                       <div class="card">
-                        <a class="thumbLink" href="${relDir}/${escapeHtml(pageName)}">
+                        <a class="thumbLink" href="#${escapeHtml(anchorId)}">
                           <img src="${escapeHtml(imgDataUrl)}" alt="${escapeHtml(item.title)}">
                         </a>
                         <div class="cap">
@@ -1214,13 +1161,37 @@ async function exportOpenSurveyPhotoGallery() {
                       </div>
                     `;
 
-                    if (item.kind === 'find') findCards.push(card);
-                    else targetCards.push(card);
+                    const section = `
+                      <div class="detail" id="${escapeHtml(anchorId)}">
+                        <p class="back"><a href="#top">← Back to gallery</a></p>
+                        <h3>${escapeHtml(item.title)}</h3>
+                        <p class="muted">${item.kind === 'find' ? 'Find photo' : 'Target photo'}</p>
+                        <img class="full" src="${escapeHtml(imgDataUrl)}" alt="${escapeHtml(item.title)}">
+                        <ul class="meta">
+                          <li><strong>Type:</strong> ${escapeHtml(item.type)}</li>
+                          <li><strong>VDI/ID:</strong> ${escapeHtml(item.vdi)}</li>
+                          <li><strong>Depth:</strong> ${escapeHtml(item.depth)}</li>
+                          <li><strong>Date/Time:</strong> ${escapeHtml(fmtDateTime(item.time))}</li>
+                          <li><strong>Coordinates:</strong> ${escapeHtml(item.coords)}</li>
+                          <li><strong>Accuracy:</strong> ${escapeHtml(item.accuracy)}</li>
+                          <li><strong>Parent ID:</strong> ${escapeHtml(item.parentId)}</li>
+                          <li><strong>Photo #:</strong> ${item.indexInParent}</li>
+                        </ul>
+                        <hr>
+                      </div>
+                    `;
+
+                    if (item.kind === 'find') {
+                        findCards.push(card);
+                        findSections.push(section);
+                    } else {
+                        targetCards.push(card);
+                        targetSections.push(section);
+                    }
 
                     if ((n + 1) % 10 === 0) log(`Exported ${n + 1}/${galleryItems.length}...`);
                 }
 
-                // Build index.html
                 const surveyInfoHtml = `
                   <div class="surveyBox">
                     <h1>${escapeHtml(openSurvey.name || 'Unnamed survey')}</h1>
@@ -1244,6 +1215,7 @@ async function exportOpenSurveyPhotoGallery() {
   .surveyBox{background:#fff;border:1px solid #e5e7eb;border-left:6px solid #0ea5e9;border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
   h1{margin:0 0 8px 0;font-size:26px}
   h2{margin:22px 0 10px 0}
+  h3{margin:8px 0 10px 0}
   .muted{color:#64748b;font-size:14px}
   .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
   @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
@@ -1254,9 +1226,15 @@ async function exportOpenSurveyPhotoGallery() {
   .title{font-weight:800;font-size:14px;margin-bottom:4px}
   .metaLine{font-size:12px;color:#64748b}
   a.thumbLink{text-decoration:none;color:inherit}
+  .detail{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-top:14px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+  img.full{width:100%;height:auto;border-radius:12px;border:1px solid #e5e7eb}
+  .meta{margin:12px 0 0 0;padding:0;list-style:none}
+  .meta li{padding:6px 0;border-bottom:1px solid #f1f5f9}
+  .back{margin:0 0 8px 0}
 </style>
 </head>
 <body>
+  <a id="top"></a>
   <div class="wrap">
     ${surveyInfoHtml}
 
@@ -1270,6 +1248,10 @@ async function exportOpenSurveyPhotoGallery() {
       ${targetCards.join('')}
     </div>
 
+    <h2>Full Photos</h2>
+    ${findSections.join('')}
+    ${targetSections.join('')}
+
     <p class="muted" style="margin-top:22px;">Generated by geoFind.</p>
   </div>
 </body>
@@ -1278,7 +1260,7 @@ async function exportOpenSurveyPhotoGallery() {
                 await writeFileToHandle(galleryDir, 'index.html', new Blob([indexHtml], { type: 'text/html' }));
 
                 log('Done.');
-                showMessage('Photo gallery exported successfully.', 'success');
+                showMessage('Photo gallery exported successfully (single-file).', 'success');
                 log(`Saved folder: ${folderName}`);
 
             } catch (e) {
@@ -1288,14 +1270,14 @@ async function exportOpenSurveyPhotoGallery() {
             } finally {
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerText = 'Export Photo Gallery';
+                    btn.innerText = originalBtnText || 'Export Photo Gallery';
                 }
             }
         }
     );
 }
 
-function loadPhotoSettingsFromLocalStorage() {
+        function loadPhotoSettingsFromLocalStorage() {
     try {
         const raw = localStorage.getItem(PHOTO_SETTINGS_KEY);
         if (!raw) return;
