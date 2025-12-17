@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 14 - Metal Detecting Survey Log</title>
+    <title>Targets 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -862,6 +862,14 @@ let findsFilter = {
     surveyId: 'All'
 };
 
+let quickLogRanges = [
+    { label: '-7 to 3',  min: -7, max: 3,  color: 'bg-blue-500',  description: 'Iron/Rubbish' },
+    { label: '4 to 11',  min: 4,  max: 11, color: 'bg-cyan-500',  description: 'Foil/Small Gold' },
+    { label: '12 to 22', min: 12, max: 22, color: 'bg-green-500', description: 'Nickels/Pulltabs' },
+    { label: '23 to 30', min: 23, max: 30, color: 'bg-yellow-500', description: 'Zinc/Screwcaps' },
+    { label: '31 to 40', min: 31, max: 40, color: 'bg-red-500',    description: 'Silver/Copper' }
+];
+        
 // NEW: holds photos while the Edit Find modal is open
 let currentEditFindPhotos = [];
 
@@ -954,7 +962,44 @@ function exportPhotoGalleryToSelectedFolder() {
     }
     exportOpenSurveyPhotoGallery_ToFolder(photoGalleryExportRootHandle);
 }
+//
+function quickLogTarget(rangeIndex) {
+    const range = quickLogRanges[rangeIndex];
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    
+    if (!openSurvey) {
+        showMessage("No open survey found!", "error");
+        return;
+    }
 
+    // Use the middle value of the range as the Target ID
+    const estimatedVdi = Math.round((range.min + range.max) / 2);
+
+    const newTarget = {
+        id: Date.now(),
+        surveyId: openSurvey.id,
+        vdi: estimatedVdi.toString(),
+        lat: lastKnownLatLng ? lastKnownLatLng.lat : null,
+        lng: lastKnownLatLng ? lastKnownLatLng.lng : null,
+        time: Date.now(),
+        depth: "N/A",
+        description: `Quick Log: ${range.description}`,
+        deleted: false
+    };
+
+    if (!openSurvey.targets) openSurvey.targets = [];
+    openSurvey.targets.push(newTarget);
+    saveDataToLocalStorage();
+    
+    // Visual feedback
+    showMessage(`Logged ${range.description} (VDI ~${estimatedVdi})`, 'success');
+    
+    // If we are on the Compass page, we might want to refresh the map markers
+    if (currentPage === 'Compass') {
+        render(); 
+    }
+        }
+//        
 function safeSlug(str) {
     return String(str || '')
         .toLowerCase()
@@ -6947,6 +6992,25 @@ ${(() => {
                     While you are typing here, the map won’t auto-refresh (so the keypad won’t disappear).
                 </p>
             </div>
+
+        // ... after the "Log New Target" button container ...
+
+<div class="mt-4 mb-4">
+    <p class="text-xs font-bold text-gray-500 uppercase mb-2 ml-1 tracking-widest">Quick Log (Target ID Range)</p>
+    <div class="flex w-full h-14 rounded-xl overflow-hidden shadow-lg border-2 border-white">
+        ${quickLogRanges.map((range, index) => `
+            <button 
+                onclick="quickLogTarget(${index})"
+                class="${range.color} flex-1 flex flex-col items-center justify-center active:brightness-75 transition-all duration-75 text-white border-r border-white/20 last:border-r-0"
+            >
+                <span class="text-xs font-black">${range.label}</span>
+                <i class="fas fa-plus-circle text-[10px] opacity-50"></i>
+            </button>
+        `).join('')}
+    </div>
+</div>
+
+// ... before the Survey Map container ...
 
             <!-- Map -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
