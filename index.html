@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 5 - Metal Detecting Survey Log</title>
+    <title>Gallery 10 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -76,17 +76,14 @@
                     <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Targets">
                         <i class="fas fa-bullseye text-xl"></i>
                     </button>
-                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Finds">
-                        <i class="fas fa-trophy text-xl"></i>
-                   </button>
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150"
+                    data-page="Finds">
+                    <i class="fas fa-trophy text-xl"></i>
+                    </button>
 
-                   <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Export">
-                        <i class="fas fa-file-export text-xl"></i>
-                   </button>
-
-                  <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Settings">
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Settings">
                         <i class="fas fa-cog text-xl"></i>
-                  </button>
+                    </button>
                 </div>
             </div>
         </div>
@@ -853,7 +850,7 @@ let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
         
-let targetSortOrder = 'date'; // default to most recent
+
 
 // Simple filter state for the Finds page
 let findsFilter = {
@@ -862,14 +859,6 @@ let findsFilter = {
     surveyId: 'All'
 };
 
-let quickLogRanges = [
-    { label: '-7 to 3',  min: -7, max: 3,  color: 'bg-blue-500',  description: 'Iron/Rubbish' },
-    { label: '4 to 11',  min: 4,  max: 11, color: 'bg-cyan-500',  description: 'Foil/Small Gold' },
-    { label: '12 to 22', min: 12, max: 22, color: 'bg-green-500', description: 'Nickels/Pulltabs' },
-    { label: '23 to 30', min: 23, max: 30, color: 'bg-yellow-500', description: 'Zinc/Screwcaps' },
-    { label: '31 to 40', min: 31, max: 40, color: 'bg-red-500',    description: 'Silver/Copper' }
-];
-        
 // NEW: holds photos while the Edit Find modal is open
 let currentEditFindPhotos = [];
 
@@ -937,7 +926,6 @@ async function pickPhotoGalleryExportFolder() {
 
         const handle = await window.showDirectoryPicker();
         photoGalleryExportRootHandle = handle;
-        render();
 
         const box = document.getElementById('gallery-export-folder-name');
         if (box) box.value = handle.name || 'Selected folder';
@@ -962,49 +950,7 @@ function exportPhotoGalleryToSelectedFolder() {
     }
     exportOpenSurveyPhotoGallery_ToFolder(photoGalleryExportRootHandle);
 }
-//
-function quickLogTarget(rangeIndex) {
-    const range = quickLogRanges[rangeIndex];
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    
-    if (!openSurvey) {
-        showMessage("No open survey found!", "error");
-        return;
-    }
 
-    const estimatedVdi = Math.round((range.min + range.max) / 2);
-    
-    // Use smoothedUserCoords from your Compass logic
-    const lat = (smoothedUserCoords && smoothedUserCoords.lat) ? smoothedUserCoords.lat : null;
-    const lng = (smoothedUserCoords && smoothedUserCoords.lon) ? smoothedUserCoords.lon : null;
-    const coordsString = lat && lng ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : 'No GPS logged';
-
-    const newTarget = {
-        id: Date.now(),
-        surveyId: openSurvey.id,
-        vdi: estimatedVdi.toString(),
-        description: `Quick Log: ${range.description}`,
-        type: 'Unidentified',
-        status: 'Signal Detected',
-        time: Date.now(),
-        coordinates: coordsString,
-        accuracy: 'N/A',
-        user: userProfile.name,
-        detector: userProfile.detector,
-        deleted: false
-    };
-
-    if (!openSurvey.targets) openSurvey.targets = [];
-    openSurvey.targets.push(newTarget);
-    
-    // FIX: Changed to match your exact function name 'saveSurveysToLocalStorage'
-    saveSurveysToLocalStorage(); 
-    
-    showMessage(`Logged ${range.description} (ID: ${estimatedVdi})`, 'success');
-    
-    // Re-render the page to show the new target on the map/list
-    render(); 
-}//        
 function safeSlug(str) {
     return String(str || '')
         .toLowerCase()
@@ -2448,9 +2394,6 @@ switch (currentPage) {
     case 'Compass':
         contentHtml = renderCompassPage(false);
         break;
-    case 'Export':
-        contentHtml = renderExportPage();
-        break;
     case 'Settings':
         contentHtml = renderSettingsPage();
         break;
@@ -2463,236 +2406,7 @@ switch (currentPage) {
         }
 
 /** Attaches event listeners for dynamically rendered elements */
-
 function attachPageEventListeners() {
-    // 1. TRACKS MANAGEMENT
-    const trackDeleteButtons = document.querySelectorAll('.track-delete-btn');
-    if (trackDeleteButtons && trackDeleteButtons.length > 0) {
-        trackDeleteButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation(); // stops any label/row click effects
-                const trackId = btn.getAttribute('data-track-id');
-                deleteTrack(trackId);
-            });
-        });
-    }
-
-    const trackCheckboxes = document.querySelectorAll('.track-visibility-toggle');
-    if (trackCheckboxes && trackCheckboxes.length > 0) {
-        trackCheckboxes.forEach(cb => {
-            cb.addEventListener('change', (e) => {
-                const trackId = e.target.getAttribute('data-track-id');
-                toggleTrackVisibility(trackId, e.target.checked);
-            });
-        });
-    }
-
-         // --- NEW: TARGET CARD "DUG" BUTTON ---
-    document.querySelectorAll('.status-dug-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.dataset.targetId;
-            const surveyId = btn.dataset.surveyId;
-            // Calls your existing update logic
-            updateTargetStatus(targetId, surveyId, 'Dug');
-        });
-    });
-
-
-    // 2. NAVIGATION & GLOBAL BUTTONS
-    document.querySelectorAll('.nav-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const targetPage = e.currentTarget.dataset.page;
-            if (targetPage && targetPage !== currentPage) {
-                currentPage = targetPage;
-                render();
-            }
-        });
-    });
-
-    const newSurveyBtn = document.getElementById('new-survey-btn');
-    if (newSurveyBtn) {
-        newSurveyBtn.addEventListener('click', showNewSurveyModal);
-    }
-
-    const addTargetBtn = document.getElementById('add-target-btn');
-    if (addTargetBtn) {
-        addTargetBtn.addEventListener('click', showNewTargetModal);
-    }
-
-    // 3. TARGET CARD BUTTONS (Dug Status Correction)
-    // This finds every "Dug" button on the Targets page and hooks up the logic
-    document.querySelectorAll('.status-dug-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.dataset.targetId;
-            const surveyId = btn.dataset.surveyId;
-            if (typeof updateTargetStatus === 'function') {
-                updateTargetStatus(targetId, surveyId, 'Dug');
-            }
-        });
-    });
-
-    // 4. SETTINGS PAGE
-    const exportBtn = document.getElementById('export-data-btn');
-    if (exportBtn) {
-        exportBtn.addEventListener('click', exportData);
-    }
-    const importBtn = document.getElementById('import-data-btn');
-    if (importBtn) {
-        importBtn.addEventListener('click', importData);
-    }
-    const resetBtn = document.getElementById('reset-all-data-btn');
-    if (resetBtn) {
-        resetBtn.addEventListener('click', resetAllAppData);
-    }
-
-    const maxWidthInput = document.getElementById('max-photo-width-input');
-    const savePhotoBtn = document.getElementById('save-photo-settings-btn');
-    if (maxWidthInput) {
-        maxWidthInput.value = String(getMaxPhotoWidth() || 0);
-    }
-    if (savePhotoBtn && maxWidthInput) {
-        savePhotoBtn.addEventListener('click', () => {
-            const raw = (maxWidthInput.value || '').trim();
-            let val = Number(raw);
-            if (isNaN(val) || val < 0) val = 1000;
-            if (val !== 0) {
-                if (val < 200) val = 200;
-                if (val > 4000) val = 4000;
-            }
-            photoSettings.maxWidth = Math.round(val);
-            savePhotoSettingsToLocalStorage();
-            showMessage(val === 0 ? 'Max Photo Width saved: resizing disabled.' : `Max Photo Width saved: ${photoSettings.maxWidth}px.`, 'success');
-        });
-    }
-
-    // 5. FINDS PAGE: search + filters
-    const findsSearchInput = document.getElementById('finds-search-input');
-    const findsTypeSelect = document.getElementById('finds-type-select');
-    const findsSurveySelect = document.getElementById('finds-survey-select');
-    const clearFindsBtn = document.getElementById('clear-finds-filters-btn');
-
-    if (findsSearchInput) {
-        findsSearchInput.addEventListener('input', (e) => {
-            findsFilter.query = e.target.value || '';
-            render();
-        });
-    }
-    if (findsTypeSelect) {
-        findsTypeSelect.addEventListener('change', (e) => {
-            findsFilter.type = e.target.value || 'All';
-            render();
-        });
-    }
-    if (findsSurveySelect) {
-        findsSurveySelect.addEventListener('change', (e) => {
-            findsFilter.surveyId = e.target.value || 'All';
-            render();
-        });
-    }
-    if (clearFindsBtn) {
-        clearFindsBtn.addEventListener('click', () => {
-            findsFilter = { query: '', type: 'All', surveyId: 'All' };
-            render();
-        });
-    }
-
-    const findEditButtons = document.querySelectorAll('.find-card-edit-btn');
-    findEditButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-find-id');
-            if (id) openEditFindModal(id);
-        });
-    });
-
-    const findDeleteButtons = document.querySelectorAll('.find-card-delete-btn');
-    findDeleteButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-find-id');
-            if (id) deleteFind(id);
-        });
-    });
-
-    // 6. COMPASS PAGE
-    const quickInput = document.getElementById('compass-quick-target-vdi');
-    if (quickInput) {
-        if (typeof compassQuickTargetIdDraft === 'string' && compassQuickTargetIdDraft.trim().length > 0) {
-            quickInput.value = compassQuickTargetIdDraft;
-        }
-        quickInput.addEventListener('input', () => {
-            compassQuickTargetIdDraft = quickInput.value || '';
-        });
-        quickInput.addEventListener('focus', () => stopCompassAutoRefresh());
-        quickInput.addEventListener('blur', () => {
-            if (currentPage === 'Compass') startCompassAutoRefresh();
-        });
-    }
-
-    const quickBtn = document.getElementById('compass-log-target-btn');
-    if (quickBtn) {
-        quickBtn.addEventListener('click', () => {
-            const openSurvey = surveys.find(s => s.status === 'Open');
-            if (!openSurvey) {
-                showMessage('You must have an open survey to log a target.', 'error');
-                return;
-            }
-            const input = document.getElementById('compass-quick-target-vdi');
-            const raw = (input ? input.value : '').trim();
-            if (!/^-?\d+$/.test(raw)) {
-                showMessage('Target ID must be a whole number (you can use negatives).', 'error');
-                return;
-            }
-            const now = Date.now();
-            const coords = (isTrackingActive && currentUserCoords && typeof currentUserCoords.lat === 'number' && typeof currentUserCoords.lon === 'number')
-                ? `${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}`
-                : 'No GPS logged';
-            const acc = (isTrackingActive && currentUserAccuracy != null) ? String(currentUserAccuracy) : 'N/A';
-
-            const newTarget = {
-                id: generateId(),
-                description: `Logged ${new Date(now).toLocaleString()}`,
-                vdi: raw,
-                depth: 'Unknown',
-                type: 'Unidentified',
-                status: 'Not dug',
-                time: now,
-                coordinates: coords,
-                accuracy: acc,
-                user: userProfile.name,
-                detector: userProfile.detector,
-                centerOnMap: false,
-                photos: [],
-                targetPhotoRef: '',
-                targetPhotoData: ''
-            };
-
-            if (!Array.isArray(openSurvey.targets)) openSurvey.targets = [];
-            openSurvey.targets.unshift(newTarget);
-            openSurvey.dateLastChanged = now;
-            saveSurveysToLocalStorage();
-            if (input) input.value = '';
-            compassQuickTargetIdDraft = '';
-            showMessage(`New Target logged (VDI ${raw}).`, 'success');
-            if (isTrackingActive) startCompassAutoRefresh();
-            updateMapWithUserLocationAndRender();
-        });
-    }
-
-    const startTrackBtn = document.getElementById('start-track-btn');
-    if (startTrackBtn) {
-        startTrackBtn.addEventListener('click', handleStartTrackClick);
-    }
-
-    const stopTrackBtn = document.getElementById('stop-track-btn');
-    if (stopTrackBtn) {
-        stopTrackBtn.addEventListener('click', handleStopTrackClick);
-    }
-
-    if (typeof initialiseCardThumbnails === 'function') {
-        initialiseCardThumbnails();
-    }
-        }
-function oldattachPageEventListeners() {
 
     const trackDeleteButtons = document.querySelectorAll('.track-delete-btn');
 if (trackDeleteButtons && trackDeleteButtons.length > 0) {
@@ -2941,67 +2655,6 @@ if (!/^-?\d+$/.test(raw)) {
     }
 }
 
-/** Renders the content for the new Export page. */
-function renderExportPage() {
-    const secondaryColor = 'rgb(var(--color-secondary))';
-    return `
-        <div class="p-4 space-y-6">
-            <h2 class="text-3xl font-bold text-primary mb-6">Data Export & Import</h2>
-
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds</h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    This creates a <strong>.json file</strong> containing the currently open survey, all its targets, and any finds linked to that survey.
-                </p>
-                <button id="export-open-survey-with-photos-btn" onclick="exportOpenSurveyWithPhotos()" 
-                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                    <i class="fas fa-download mr-1"></i> Export Open Survey
-                </button>
-                <textarea id="export-open-survey-log" rows="6" readonly placeholder="Export log will appear here." 
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
-            </div>
-
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-sky-500">
-                <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery</h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Step 1: Pick a folder. Step 2: Export the gallery into that folder.
-                </p>
-                <div class="flex flex-col gap-2">
-                    <button id="pick-gallery-folder-btn" type="button" onclick="pickPhotoGalleryExportFolder()" 
-                            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
-                        <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
-                    </button>
-                  <input id="gallery-export-folder-name" type="text" readonly 
-                   value="${photoGalleryExportRootHandle ? photoGalleryExportRootHandle.name : ''}" 
-                   placeholder="No folder selected" 
-                   class="w-full p-2 border border-sky-400 rounded-md text-sm" /> 
-                    <button id="export-gallery-to-folder-btn" type="button" onclick="exportPhotoGalleryToSelectedFolder()" 
-                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                        <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
-                    </button>
-                </div>
-                <textarea id="export-photo-gallery-log" rows="8" readonly placeholder="Export log will appear here." 
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
-            </div>
-
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey</h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Import a survey export file (.json). The survey and its finds will be added to your existing local data.
-                </p>
-                <div class="mb-3">
-                    <input type="file" id="import-survey-with-photos-input" accept=".json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
-                    <button onclick="document.getElementById('import-survey-with-photos-input').click()" 
-                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition">
-                        <i class="fas fa-upload mr-1"></i> Select File & Import
-                    </button>
-                </div>
-                <textarea id="import-survey-log" rows="6" readonly placeholder="Import log will appear here." 
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-2"></textarea>
-            </div>
-        </div>
-    `;
-}        
 function deleteTrack(trackId) {
     const found = findTrackById(trackId);
     if (!found) {
@@ -5408,71 +5061,42 @@ function renderSurveyCard(survey, isOpen = false) {
         </div>
     `;
 }    
-/** Sets the sort preference and refreshes the page. */
-function setTargetSort(mode) {
-    targetSortOrder = mode;
-    render(); // Re-render to apply the sort
-}
+        /** Renders the content for the Targets page. */
+        function renderTargetsPage() {
+            const openSurvey = surveys.find(s => s.status === 'Open');
 
-function renderTargetsPage() {
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey) {
-        return `<div class="p-4">
-            <h2 class="text-3xl font-bold text-primary mb-6">Targets</h2>
-            <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
-                <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                <p class="text-gray-700">Please open or create a survey on the <strong>Home</strong> page to log targets.</p>
-            </div>
-        </div>`;
-    }
+            if (!openSurvey) {
+                return `
+                    <div class="p-4">
+                        <h2 class="text-3xl font-bold text-primary mb-6">Survey Targets</h2>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+                            <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
+                            <p class="text-gray-700">Please open a survey on the **Home** page to view or log targets.</p>
+                        </div>
+                    </div>
+                `;
+            }
 
-    // Filter out deleted targets
-    let displayTargets = (openSurvey.targets || []).filter(t => !t.deleted);
+            const targets = getActiveTargets(openSurvey);
 
-    // --- APPLY SORTING LOGIC ---
-    if (targetSortOrder === 'vdi') {
-        displayTargets.sort((a, b) => {
-            // Convert to number, defaulting to -8 if empty or "N/A"
-            const vdiA = (a.vdi === 'N/A' || !a.vdi) ? -8 : parseFloat(a.vdi);
-            const vdiB = (b.vdi === 'N/A' || !b.vdi) ? -8 : parseFloat(b.vdi);
-            return vdiB - vdiA; // High to Low
-        });
-    } else {
-        // Default: Date (Most recent first)
-        displayTargets.sort((a, b) => (b.time || 0) - (a.time || 0));
-    }
 
-    return `
-        <div class="p-4">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-3xl font-bold text-primary">Targets</h2>
-                <span class="bg-primary text-white text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wide">
-                    ${openSurvey.name}
-                </span>
-            </div>
+            return `
+                <div class="p-4">
+                    <h2 class="text-3xl font-bold text-primary mb-6">Targets: ${openSurvey.name}</h2>
+                    
+                    <button id="add-target-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
+                        <i class="fas fa-crosshairs mr-2"></i> Log New Target
+                    </button>
 
-            <button onclick="showNewTargetModal()" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-4">
-                <i class="fas fa-plus-circle mr-2"></i> Log New Target
-            </button>
-
- <div class="flex bg-gray-200 p-1 rounded-xl mb-6">
-    <button onclick="setTargetSort('vdi')" 
-        class="flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all duration-200 ${targetSortOrder === 'vdi' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}">
-        <i class="fas fa-sort-numeric-down-alt mr-1"></i> ID (High-Low)
-    </button>
-    <button onclick="setTargetSort('date')" 
-        class="flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all duration-200 ${targetSortOrder === 'date' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}">
-        <i class="fas fa-clock mr-1"></i> Newest First
-    </button>
-</div>
-            <div id="targets-list" class="space-y-4">
-                ${displayTargets.length > 0 
-                    ? displayTargets.map(t => renderTargetCard(t, openSurvey.id)).join('') 
-                    : '<p class="text-gray-500 italic text-center py-10">No targets logged for this survey yet.</p>'}
-            </div>
-        </div>
-    `;
-}
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Target Log (${targets.length})</h3>
+                    <div id="targets-list" class="space-y-4">
+                        ${targets.length === 0 ? 
+                            '<p class="text-gray-500 italic p-4 bg-white rounded-xl shadow-lg">No targets logged in this survey yet.</p>' : 
+                            targets.map(t => renderTargetCard(t, openSurvey.id)).join('')}
+                    </div>
+                </div>
+            `;
+        }
 
 function renderFindsPage() {
     const hasFinds = Array.isArray(finds) && finds.length > 0;
@@ -7067,9 +6691,11 @@ function renderCompassPage(isAutoRefresh = false) {
         `;
     }
 
+    // Prevent the "numeric keypad disappears" bug: never auto-refresh while typing in the Target ID box
     const activeEl = document.activeElement;
     const isTypingInQuickBox = activeEl && activeEl.id === 'compass-quick-target-vdi';
 
+    // GPS watch: only needed while tracking is active
     if (isTrackingActive) {
         if (!liveMapWatchId) startLiveMapLocationWatch();
     } else {
@@ -7083,6 +6709,7 @@ function renderCompassPage(isAutoRefresh = false) {
         }
     }
 
+    // Auto-refresh loop: only when tracking is active, and never while typing
     if (!isAutoRefresh) {
         if (!isTrackingActive || isTypingInQuickBox) {
             if (autoRefreshIntervalId) {
@@ -7095,8 +6722,10 @@ function renderCompassPage(isAutoRefresh = false) {
                     if (currentPage !== 'Compass') return;
                     const ae = document.activeElement;
                     if (ae && ae.id === 'compass-quick-target-vdi') return;
+
                     const appContent = document.getElementById('app-content');
                     if (!appContent) return;
+
                     appContent.innerHTML = renderCompassPage(true);
                     attachPageEventListeners();
                 }, 3000);
@@ -7104,10 +6733,12 @@ function renderCompassPage(isAutoRefresh = false) {
         }
     }
 
+    // Targets with usable coordinates
     const targets = getActiveTargets(openSurvey).filter(
         t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
     );
 
+    // Recording status line (optional nice feedback)
     const activeTrack = Array.isArray(openSurvey.tracks)
         ? openSurvey.tracks.find(t => t && t.isRecording)
         : null;
@@ -7123,6 +6754,7 @@ function renderCompassPage(isAutoRefresh = false) {
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-4">Targets Plot View</h2>
 
+            <!-- Survey info -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <div class="flex items-start justify-between gap-3">
                     <div>
@@ -7137,57 +6769,89 @@ function renderCompassPage(isAutoRefresh = false) {
                 </div>
             </div>
 
-            ${(() => {
-                const isOn = !!isTrackingActive;
-                const startDisabled = isOn;
-                const stopDisabled = !isOn;
-                const statusText = isOn ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}` : 'Tracking OFF';
+${(() => {
+    const isOn = !!isTrackingActive;
+    const startDisabled = isOn;
+    const stopDisabled = !isOn;
 
-                return `
-                <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-                    <div class="flex items-start justify-between gap-3 mb-3">
-                        <h3 class="text-xl font-semibold text-gray-700 flex items-center">
-                            <i class="fas fa-route mr-2"></i> Tracking Controls
-                        </h3>
-                        <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                            ${statusText}
-                        </span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button id="start-track-btn" type="button" ${startDisabled ? 'disabled' : ''}
-                            class="py-3 rounded-xl font-bold text-white shadow ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
-                            🟢 Start Tracking
-                        </button>
-                        <button id="stop-track-btn" type="button" ${stopDisabled ? 'disabled' : ''}
-                            class="py-3 rounded-xl font-bold text-white shadow ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
-                            🔴 Stop Tracking
-                        </button>
-                    </div>
-                </div>`;
-            })()}
+    const activeTrack = (openSurvey && Array.isArray(openSurvey.tracks))
+        ? openSurvey.tracks.find(t => t && t.isRecording)
+        : null;
 
+    const statusText = isOn
+        ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
+        : 'Tracking OFF';
+
+    return `
+    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <h3 class="text-xl font-semibold text-gray-700 flex items-center">
+                <i class="fas fa-route mr-2"></i> Tracking Controls
+            </h3>
+
+            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                ${statusText}
+            </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button
+                id="start-track-btn"
+                type="button"
+                ${startDisabled ? 'disabled' : ''}
+                class="py-3 rounded-xl font-bold text-white shadow
+                       ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
+                🟢 Start Tracking
+            </button>
+
+            <button
+                id="stop-track-btn"
+                type="button"
+                ${stopDisabled ? 'disabled' : ''}
+                class="py-3 rounded-xl font-bold text-white shadow
+                       ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
+                🔴 Stop Tracking
+            </button>
+        </div>
+
+        <p class="text-xs text-gray-500 mt-2">
+            Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
+        </p>
+    </div>
+    `;
+})()}
+
+            <!-- Target ID entry -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div class="text-sm font-semibold text-gray-700 whitespace-nowrap">Target ID :</div>
-                    <input id="compass-quick-target-vdi" type="text" placeholder="e.g. -12 or 28" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                    <button id="compass-log-target-btn" type="button" class="text-white font-bold px-4 py-2 rounded-lg shadow hover:opacity-90" style="background-color: rgb(var(--color-secondary));">
+                    <div class="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                        Target ID :
+                    </div>
+
+                    <input
+                        id="compass-quick-target-vdi"
+                        type="text"
+                        inputmode="text"
+                        pattern="-?[0-9]*"
+                        placeholder="e.g. -12 or 28"
+                        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+
+                    <button
+                        id="compass-log-target-btn"
+                        type="button"
+                        class="text-white font-bold px-4 py-2 rounded-lg shadow hover:opacity-90"
+                        style="background-color: rgb(var(--color-secondary));"
+                    >
                         Log New Target
                     </button>
                 </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    While you are typing here, the map won’t auto-refresh (so the keypad won’t disappear).
+                </p>
             </div>
 
-            <div class="mt-4 mb-4">
-                <p class="text-xs font-bold text-gray-500 uppercase mb-2 ml-1 tracking-widest">Quick Log Range</p>
-                <div class="flex w-full h-14 rounded-xl overflow-hidden shadow-lg border-2 border-white">
-                    ${quickLogRanges.map((range, index) => `
-                        <button onclick="quickLogTarget(${index})"
-                            class="${range.color} flex-1 flex flex-col items-center justify-center active:brightness-75 transition-all duration-75 text-white border-r border-white/20 last:border-r-0">
-                            <span class="text-xs font-black">${range.label}</span>
-                        </button>
-                    `).join('')}
-                </div>
-            </div>
-
+            <!-- Map -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
                     <i class="fas fa-map mr-2"></i> Survey Map
@@ -7195,11 +6859,15 @@ function renderCompassPage(isAutoRefresh = false) {
                 ${renderTargetPlot(targets)}
             </div>
 
+            <!-- Navigation -->
             ${renderNavigationPanel(openSurvey)}
+
+            <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
         </div>
     `;
-        }
+}
+
         
 /** Renders the content for the Settings page. */
 function renderSettingsPage() {
@@ -7250,6 +6918,113 @@ function renderSettingsPage() {
   </div>
 </div>
 
+
+            <h3 class="text-2xl font-bold text-gray-700 mb-3">Survey Export &amp; Import </h3>
+
+            <!-- EXPORT OPEN SURVEY  -->
+            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds </h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    This creates a <strong>.json file</strong> containing the currently open survey, all its targets,
+                    any finds linked to that survey. A log below shows export progress.
+                </p>
+                <button id="export-open-survey-with-photos-btn"
+                        onclick="exportOpenSurveyWithPhotos()"
+                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+                    <i class="fas fa-download mr-1"></i> Export Open Survey 
+                </button>
+                <textarea id="export-open-survey-log" 
+                          rows="6" 
+                          readonly 
+                          placeholder="Export log will appear here."
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
+            </div>
+
+<!-- PHOTO GALLERY EXPORT (2-step) -->
+<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-sky-500">
+  <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery</h4>
+  <p class="text-sm text-gray-600 mb-3">
+    Step 1: Pick a folder. Step 2: Export the gallery into that folder (creates a new gallery folder inside it).
+  </p>
+
+  <div class="flex flex-col gap-2">
+    <button id="pick-gallery-folder-btn"
+            type="button"
+            onclick="pickPhotoGalleryExportFolder()"
+            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
+      <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
+    </button>
+
+    <input id="gallery-export-folder-name"
+           type="text"
+           readonly
+           placeholder="No folder selected"
+           class="w-full p-2 border border-sky-400 rounded-md text-sm" />
+
+    <button id="export-gallery-to-folder-btn"
+            type="button"
+            onclick="exportPhotoGalleryToSelectedFolder()"
+            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+      <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
+    </button>
+  </div>
+
+  <textarea id="export-photo-gallery-log"
+            rows="8"
+            readonly
+            placeholder="Export log will appear here."
+            class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
+</div>
+            <!-- IMPORT SURVEY  -->
+            <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-emerald-500">
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey </h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    Import a survey export file (created by the button above). The survey and its finds will be
+                    <strong>added</strong> to your existing local data. Progress is shown in the log below.
+                </p>
+
+                <div class="mb-3">
+                   <div class="w-full mb-3 flex flex-col gap-2">
+                    <label for="import-survey-with-photos-file"
+                       class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md text-center hover:bg-sky-700 transition duration-150 cursor-pointer">
+                        <i class="fas fa-file mr-1"></i>Select Survey File
+                        </label>
+                <input type="file"
+                       id="import-survey-with-photos-file"
+                       accept=".json,application/json"
+                       class="hidden" />
+                        <button type="button"
+                        onclick="triggerImportSurvey()"
+                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+                    <i class="fas fa-upload mr-1"></i> Import Survey
+                </button>
+                </div>
+                </div>
+                
+                <textarea id="import-survey-log" 
+                          rows="8" 
+                          readonly
+                          placeholder="Import log will appear here."
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs"></textarea>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border border-gray-100">
+                <h4 class="text-lg font-semibold text-gray-700 mb-2">
+                    Import Target via QR
+                </h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    Use your camera to scan a GeoFind Target QR code from another device.
+                    The target will be added to the <strong>currently open survey</strong>.
+                </p>
+                <button
+                    type="button"
+                    class="w-full px-4 py-2 rounded-lg text-sm font-semibold text-white shadow-md hover:opacity-90"
+                    style="background-color: ${secondaryColor};"
+                    onclick="openTargetQrScanModal()"
+                >
+                    <i class="fas fa-qrcode mr-2"></i>
+                    Import Target via QR
+                </button>
+            </div>
 
             <!-- Danger Zone: Reset All Data -->
             <div class="mt-8 border-t border-gray-300 pt-6">
