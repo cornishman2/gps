@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 11 - Metal Detecting Survey Log</title>
+    <title>Gallery 12 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -929,6 +929,7 @@ async function pickPhotoGalleryExportFolder() {
 
         const handle = await window.showDirectoryPicker();
         photoGalleryExportRootHandle = handle;
+        render();
 
         const box = document.getElementById('gallery-export-folder-name');
         if (box) box.value = handle.name || 'Selected folder';
@@ -2691,8 +2692,10 @@ function renderExportPage() {
                             class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
                         <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
                     </button>
-                    <input id="gallery-export-folder-name" type="text" readonly placeholder="No folder selected" 
-                           class="w-full p-2 border border-sky-400 rounded-md text-sm" />
+                  <input id="gallery-export-folder-name" type="text" readonly 
+                   value="${photoGalleryExportRootHandle ? photoGalleryExportRootHandle.name : ''}" 
+                   placeholder="No folder selected" 
+                   class="w-full p-2 border border-sky-400 rounded-md text-sm" /> 
                     <button id="export-gallery-to-folder-btn" type="button" onclick="exportPhotoGalleryToSelectedFolder()" 
                             class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
                         <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
