@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 10 - Metal Detecting Survey Log</title>
+    <title>Gallery 11 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -76,14 +76,17 @@
                     <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Targets">
                         <i class="fas fa-bullseye text-xl"></i>
                     </button>
-                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150"
-                    data-page="Finds">
-                    <i class="fas fa-trophy text-xl"></i>
-                    </button>
+                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Finds">
+                        <i class="fas fa-trophy text-xl"></i>
+                   </button>
 
-                    <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Settings">
+                   <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Export">
+                        <i class="fas fa-file-export text-xl"></i>
+                   </button>
+
+                  <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Settings">
                         <i class="fas fa-cog text-xl"></i>
-                    </button>
+                  </button>
                 </div>
             </div>
         </div>
@@ -2394,6 +2397,9 @@ switch (currentPage) {
     case 'Compass':
         contentHtml = renderCompassPage(false);
         break;
+    case 'Export':
+        contentHtml = renderExportPage();
+        break;
     case 'Settings':
         contentHtml = renderSettingsPage();
         break;
@@ -2655,6 +2661,65 @@ if (!/^-?\d+$/.test(raw)) {
     }
 }
 
+/** Renders the content for the new Export page. */
+function renderExportPage() {
+    const secondaryColor = 'rgb(var(--color-secondary))';
+    return `
+        <div class="p-4 space-y-6">
+            <h2 class="text-3xl font-bold text-primary mb-6">Data Export & Import</h2>
+
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds</h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    This creates a <strong>.json file</strong> containing the currently open survey, all its targets, and any finds linked to that survey.
+                </p>
+                <button id="export-open-survey-with-photos-btn" onclick="exportOpenSurveyWithPhotos()" 
+                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+                    <i class="fas fa-download mr-1"></i> Export Open Survey
+                </button>
+                <textarea id="export-open-survey-log" rows="6" readonly placeholder="Export log will appear here." 
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-sky-500">
+                <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery</h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    Step 1: Pick a folder. Step 2: Export the gallery into that folder.
+                </p>
+                <div class="flex flex-col gap-2">
+                    <button id="pick-gallery-folder-btn" type="button" onclick="pickPhotoGalleryExportFolder()" 
+                            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
+                        <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
+                    </button>
+                    <input id="gallery-export-folder-name" type="text" readonly placeholder="No folder selected" 
+                           class="w-full p-2 border border-sky-400 rounded-md text-sm" />
+                    <button id="export-gallery-to-folder-btn" type="button" onclick="exportPhotoGalleryToSelectedFolder()" 
+                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+                        <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
+                    </button>
+                </div>
+                <textarea id="export-photo-gallery-log" rows="8" readonly placeholder="Export log will appear here." 
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey</h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    Import a survey export file (.json). The survey and its finds will be added to your existing local data.
+                </p>
+                <div class="mb-3">
+                    <input type="file" id="import-survey-with-photos-input" accept=".json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
+                    <button onclick="document.getElementById('import-survey-with-photos-input').click()" 
+                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition">
+                        <i class="fas fa-upload mr-1"></i> Select File & Import
+                    </button>
+                </div>
+                <textarea id="import-survey-log" rows="6" readonly placeholder="Import log will appear here." 
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-2"></textarea>
+            </div>
+        </div>
+    `;
+}        
 function deleteTrack(trackId) {
     const found = findTrackById(trackId);
     if (!found) {
@@ -6918,113 +6983,6 @@ function renderSettingsPage() {
   </div>
 </div>
 
-
-            <h3 class="text-2xl font-bold text-gray-700 mb-3">Survey Export &amp; Import </h3>
-
-            <!-- EXPORT OPEN SURVEY  -->
-            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey + Finds </h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    This creates a <strong>.json file</strong> containing the currently open survey, all its targets,
-                    any finds linked to that survey. A log below shows export progress.
-                </p>
-                <button id="export-open-survey-with-photos-btn"
-                        onclick="exportOpenSurveyWithPhotos()"
-                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                    <i class="fas fa-download mr-1"></i> Export Open Survey 
-                </button>
-                <textarea id="export-open-survey-log" 
-                          rows="6" 
-                          readonly 
-                          placeholder="Export log will appear here."
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
-            </div>
-
-<!-- PHOTO GALLERY EXPORT (2-step) -->
-<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-sky-500">
-  <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery</h4>
-  <p class="text-sm text-gray-600 mb-3">
-    Step 1: Pick a folder. Step 2: Export the gallery into that folder (creates a new gallery folder inside it).
-  </p>
-
-  <div class="flex flex-col gap-2">
-    <button id="pick-gallery-folder-btn"
-            type="button"
-            onclick="pickPhotoGalleryExportFolder()"
-            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
-      <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
-    </button>
-
-    <input id="gallery-export-folder-name"
-           type="text"
-           readonly
-           placeholder="No folder selected"
-           class="w-full p-2 border border-sky-400 rounded-md text-sm" />
-
-    <button id="export-gallery-to-folder-btn"
-            type="button"
-            onclick="exportPhotoGalleryToSelectedFolder()"
-            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-      <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
-    </button>
-  </div>
-
-  <textarea id="export-photo-gallery-log"
-            rows="8"
-            readonly
-            placeholder="Export log will appear here."
-            class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
-</div>
-            <!-- IMPORT SURVEY  -->
-            <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey </h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Import a survey export file (created by the button above). The survey and its finds will be
-                    <strong>added</strong> to your existing local data. Progress is shown in the log below.
-                </p>
-
-                <div class="mb-3">
-                   <div class="w-full mb-3 flex flex-col gap-2">
-                    <label for="import-survey-with-photos-file"
-                       class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md text-center hover:bg-sky-700 transition duration-150 cursor-pointer">
-                        <i class="fas fa-file mr-1"></i>Select Survey File
-                        </label>
-                <input type="file"
-                       id="import-survey-with-photos-file"
-                       accept=".json,application/json"
-                       class="hidden" />
-                        <button type="button"
-                        onclick="triggerImportSurvey()"
-                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                    <i class="fas fa-upload mr-1"></i> Import Survey
-                </button>
-                </div>
-                </div>
-                
-                <textarea id="import-survey-log" 
-                          rows="8" 
-                          readonly
-                          placeholder="Import log will appear here."
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs"></textarea>
-            </div>
-            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border border-gray-100">
-                <h4 class="text-lg font-semibold text-gray-700 mb-2">
-                    Import Target via QR
-                </h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Use your camera to scan a GeoFind Target QR code from another device.
-                    The target will be added to the <strong>currently open survey</strong>.
-                </p>
-                <button
-                    type="button"
-                    class="w-full px-4 py-2 rounded-lg text-sm font-semibold text-white shadow-md hover:opacity-90"
-                    style="background-color: ${secondaryColor};"
-                    onclick="openTargetQrScanModal()"
-                >
-                    <i class="fas fa-qrcode mr-2"></i>
-                    Import Target via QR
-                </button>
-            </div>
 
             <!-- Danger Zone: Reset All Data -->
             <div class="mt-8 border-t border-gray-300 pt-6">
