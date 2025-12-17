@@ -5129,43 +5129,6 @@ function renderSurveyCard(survey, isOpen = false) {
         </div>
     `;
 }    
-        /** Renders the content for the Targets page. */
-        function oldrenderTargetsPage() {
-            const openSurvey = surveys.find(s => s.status === 'Open');
-
-            if (!openSurvey) {
-                return `
-                    <div class="p-4">
-                        <h2 class="text-3xl font-bold text-primary mb-6">Survey Targets</h2>
-                        <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
-                            <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                            <p class="text-gray-700">Please open a survey on the **Home** page to view or log targets.</p>
-                        </div>
-                    </div>
-                `;
-            }
-
-            const targets = getActiveTargets(openSurvey);
-
-
-            return `
-                <div class="p-4">
-                    <h2 class="text-3xl font-bold text-primary mb-6">Targets: ${openSurvey.name}</h2>
-                    
-                    <button id="add-target-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
-                        <i class="fas fa-crosshairs mr-2"></i> Log New Target
-                    </button>
-
-                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Target Log (${targets.length})</h3>
-                    <div id="targets-list" class="space-y-4">
-                        ${targets.length === 0 ? 
-                            '<p class="text-gray-500 italic p-4 bg-white rounded-xl shadow-lg">No targets logged in this survey yet.</p>' : 
-                            targets.map(t => renderTargetCard(t, openSurvey.id)).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
 /** Sets the sort preference and refreshes the page. */
 function setTargetSort(mode) {
     targetSortOrder = mode;
