@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Targets 2 - Metal Detecting Survey Log</title>
+    <title>Targets 3 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -974,31 +974,37 @@ function quickLogTarget(rangeIndex) {
 
     const estimatedVdi = Math.round((range.min + range.max) / 2);
     
-    // Fix: Use smoothedUserCoords which exists in your Compass logic
-    const lat = smoothedUserCoords ? smoothedUserCoords.lat : null;
-    const lng = smoothedUserCoords ? smoothedUserCoords.lng : null;
+    // Use smoothedUserCoords from your Compass logic
+    const lat = (smoothedUserCoords && smoothedUserCoords.lat) ? smoothedUserCoords.lat : null;
+    const lng = (smoothedUserCoords && smoothedUserCoords.lon) ? smoothedUserCoords.lon : null;
     const coordsString = lat && lng ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : 'No GPS logged';
 
     const newTarget = {
         id: Date.now(),
         surveyId: openSurvey.id,
         vdi: estimatedVdi.toString(),
-        coordinates: coordsString, // Using your app's standard field name
-        time: Date.now(),
-        depth: "N/A",
         description: `Quick Log: ${range.description}`,
+        type: 'Unidentified',
+        status: 'Signal Detected',
+        time: Date.now(),
+        coordinates: coordsString,
+        accuracy: 'N/A',
+        user: userProfile.name,
+        detector: userProfile.detector,
         deleted: false
     };
 
     if (!openSurvey.targets) openSurvey.targets = [];
     openSurvey.targets.push(newTarget);
     
-    saveDataToLocalStorage();
+    // FIX: Changed to match your exact function name 'saveSurveysToLocalStorage'
+    saveSurveysToLocalStorage(); 
+    
     showMessage(`Logged ${range.description} (ID: ${estimatedVdi})`, 'success');
     
+    // Re-render the page to show the new target on the map/list
     render(); 
-        }
-//        
+}//        
 function safeSlug(str) {
     return String(str || '')
         .toLowerCase()
