@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 12 - Metal Detecting Survey Log</title>
+    <title>Gallery 14 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -853,7 +853,7 @@ let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
         
-
+let targetSortOrder = 'date'; // default to most recent
 
 // Simple filter state for the Finds page
 let findsFilter = {
@@ -5130,7 +5130,7 @@ function renderSurveyCard(survey, isOpen = false) {
     `;
 }    
         /** Renders the content for the Targets page. */
-        function renderTargetsPage() {
+        function oldrenderTargetsPage() {
             const openSurvey = surveys.find(s => s.status === 'Open');
 
             if (!openSurvey) {
@@ -5165,6 +5165,72 @@ function renderSurveyCard(survey, isOpen = false) {
                 </div>
             `;
         }
+
+/** Sets the sort preference and refreshes the page. */
+function setTargetSort(mode) {
+    targetSortOrder = mode;
+    render(); // Re-render to apply the sort
+}
+
+function renderTargetsPage() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey) {
+        return `<div class="p-4">
+            <h2 class="text-3xl font-bold text-primary mb-6">Targets</h2>
+            <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+                <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
+                <p class="text-gray-700">Please open or create a survey on the <strong>Home</strong> page to log targets.</p>
+            </div>
+        </div>`;
+    }
+
+    // Filter out deleted targets
+    let displayTargets = (openSurvey.targets || []).filter(t => !t.deleted);
+
+    // --- APPLY SORTING LOGIC ---
+    if (targetSortOrder === 'vdi') {
+        displayTargets.sort((a, b) => {
+            // Convert to number, defaulting to -8 if empty or "N/A"
+            const vdiA = (a.vdi === 'N/A' || !a.vdi) ? -8 : parseFloat(a.vdi);
+            const vdiB = (b.vdi === 'N/A' || !b.vdi) ? -8 : parseFloat(b.vdi);
+            return vdiB - vdiA; // High to Low
+        });
+    } else {
+        // Default: Date (Most recent first)
+        displayTargets.sort((a, b) => (b.time || 0) - (a.time || 0));
+    }
+
+    return `
+        <div class="p-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold text-primary">Targets</h2>
+                <span class="bg-primary text-white text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wide">
+                    ${openSurvey.name}
+                </span>
+            </div>
+
+            <button onclick="showNewTargetModal()" class="w-full bg-secondary text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-4">
+                <i class="fas fa-plus-circle mr-2"></i> Log New Target
+            </button>
+
+ <div class="flex bg-gray-200 p-1 rounded-xl mb-6">
+    <button onclick="setTargetSort('vdi')" 
+        class="flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all duration-200 ${targetSortOrder === 'vdi' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-sort-numeric-down-alt mr-1"></i> ID (High-Low)
+    </button>
+    <button onclick="setTargetSort('date')" 
+        class="flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all duration-200 ${targetSortOrder === 'date' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-clock mr-1"></i> Newest First
+    </button>
+</div>
+            <div id="targets-list" class="space-y-4">
+                ${displayTargets.length > 0 
+                    ? displayTargets.map(t => renderTargetCard(t, openSurvey.id)).join('') 
+                    : '<p class="text-gray-500 italic text-center py-10">No targets logged for this survey yet.</p>'}
+            </div>
+        </div>
+    `;
+}
 
 function renderFindsPage() {
     const hasFinds = Array.isArray(finds) && finds.length > 0;
