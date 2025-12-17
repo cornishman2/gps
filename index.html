@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 9 - Metal Detecting Survey Log</title>
+    <title>Gallery 10 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -912,6 +912,45 @@ const PHOTO_SETTINGS_KEY = 'geoFindPhotoSettings';
 let photoSettings = {
     maxWidth: 1000
 };
+
+// Holds the chosen folder handle for this session
+let photoGalleryExportRootHandle = null;
+
+/** Step 1: user picks a folder; we store the handle and show its name in the textbox. */
+async function pickPhotoGalleryExportFolder() {
+    try {
+        if (!window.showDirectoryPicker) {
+            showMessage('Folder picking is not supported in this browser.', 'error');
+            return;
+        }
+
+        const handle = await window.showDirectoryPicker();
+        photoGalleryExportRootHandle = handle;
+
+        const box = document.getElementById('gallery-export-folder-name');
+        if (box) box.value = handle.name || 'Selected folder';
+
+        showMessage('Folder selected.', 'success');
+    } catch (e) {
+        // User cancelled folder picker: ignore quietly
+        if (e && (e.name === 'AbortError' || String(e.message || '').toLowerCase().includes('aborted'))) {
+            showMessage('Folder selection cancelled.', 'info');
+            return;
+        }
+        console.error('pickPhotoGalleryExportFolder error:', e);
+        showMessage(`Could not select folder: ${e.message || e}`, 'error');
+    }
+}
+
+/** Step 2: checks we have a stored handle, then runs the export into that folder. */
+function exportPhotoGalleryToSelectedFolder() {
+    if (!photoGalleryExportRootHandle) {
+        showMessage('Please pick a folder first (Step 1).', 'error');
+        return;
+    }
+    exportOpenSurveyPhotoGallery_ToFolder(photoGalleryExportRootHandle);
+}
+
 function safeSlug(str) {
     return String(str || '')
         .toLowerCase()
@@ -1608,7 +1647,7 @@ function closeModal(modalId) {
     modal.style.display = 'none';
 }
 
-async function exportOpenSurveyPhotoGallery() {
+async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('No open survey to export.', 'error');
@@ -1616,7 +1655,7 @@ async function exportOpenSurveyPhotoGallery() {
     }
 
     const logBox = document.getElementById('export-photo-gallery-log');
-    const btn = document.getElementById('export-photo-gallery-btn');
+    const btn = document.getElementById('export-gallery-to-folder-btn');
 
     const log = (msg) => {
         if (!logBox) return;
@@ -1625,7 +1664,7 @@ async function exportOpenSurveyPhotoGallery() {
     };
     if (logBox) logBox.value = '';
 
-    // Spinner overlay (safe + simple)
+    // Spinner overlay
     function ensureSpinner() {
         let overlay = document.getElementById('gallery-export-overlay');
         if (overlay) return overlay;
@@ -1664,24 +1703,18 @@ async function exportOpenSurveyPhotoGallery() {
         if (overlay) overlay.style.display = 'none';
     }
 
+    // Confirm includeTargets (no folder picking here)
     const confirmHtml = `
-        Export a gallery folder containing:<br>
-        <ul class="text-sm text-gray-600" style="margin-top:6px; padding-left:18px;">
-          <li><strong>index.html</strong> with embedded images (phone safe)</li>
-          <li><strong>Finds/</strong> folder of 1000px (Max Width) JPGs</li>
-          <li><strong>Targets/</strong> folder of 1000px JPGs (optional)</li>
-        </ul>
+        Export gallery into the selected folder?<br>
+        <span class="text-sm text-gray-600">index.html is embedded/phone-safe. JPGs are also saved into Finds/Targets subfolders (not linked from index.html).</span>
         <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
             <input id="gallery-include-targets" type="checkbox" checked style="width:18px;height:18px;">
             <label for="gallery-include-targets" style="font-weight:700;">Also export Target JPGs</label>
         </div>
-        <div class="text-sm text-gray-600" style="margin-top:8px;">
-            You will be asked to choose a destination folder.
-        </div>
     `;
 
     showConfirmationModal('Export Photo Gallery', confirmHtml, async () => {
-        // Close modal immediately so it never sits over the UI
+        // close modal immediately
         if (typeof closeConfirmationModal === 'function') closeConfirmationModal();
         else {
             const m = document.getElementById('confirmation-modal');
@@ -1705,16 +1738,6 @@ async function exportOpenSurveyPhotoGallery() {
             log(`Max photo width: ${maxW || 0}px`);
             log(`Export Target JPGs: ${includeTargets ? 'YES' : 'NO'}`);
 
-            // Need folder picker to create subfolders (no ZIP)
-            if (!window.showDirectoryPicker) {
-                showMessage('This browser cannot create folders/files. Use Chrome/Edge.', 'error');
-                log('ERROR: showDirectoryPicker not available.');
-                return;
-            }
-
-            showSpinner('Choose a destination folder…');
-            const rootPick = await window.showDirectoryPicker();
-
             const safeName = safeSlug(openSurvey.name || 'survey');
             const folderName =
                 `geoFind_gallery_${safeName}_` +
@@ -1727,7 +1750,6 @@ async function exportOpenSurveyPhotoGallery() {
             const findsDir   = await getOrCreateDir(galleryDir, 'Finds');
             const targetsDir = await getOrCreateDir(galleryDir, 'Targets');
 
-            // Helper: save resized JPG to a chosen dir
             async function saveJpg(dirHandle, filenameBase, photoRefOrDataUrl) {
                 const rawBlob = await resolvePhotoBlob(photoRefOrDataUrl);
                 if (!rawBlob) return null;
@@ -1737,13 +1759,12 @@ async function exportOpenSurveyPhotoGallery() {
 
                 const fileName = `${filenameBase}.jpg`;
                 await writeFileToHandle(dirHandle, fileName, outBlob);
-                return { fileName, outBlob };
+                return outBlob; // return blob for embedding
             }
 
-            // Build gallery items (for embedded index.html) + also save jpgs to folders
+            // Build item list
             const items = [];
 
-            // Survey photo (if present)
             const surveyPhotoInput =
                 (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef))
                     ? openSurvey.surveyPhotoRef
@@ -1765,7 +1786,6 @@ async function exportOpenSurveyPhotoGallery() {
                 });
             }
 
-            // Finds first
             const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
             for (const f of linkedFinds) {
                 const refs = Array.isArray(f.photos) ? f.photos : [];
@@ -1791,7 +1811,6 @@ async function exportOpenSurveyPhotoGallery() {
                 }
             }
 
-            // Targets optional
             if (includeTargets && Array.isArray(openSurvey.targets)) {
                 for (const t of openSurvey.targets) {
                     const refs = Array.isArray(t.photos) ? t.photos : [];
@@ -1827,55 +1846,57 @@ async function exportOpenSurveyPhotoGallery() {
             log(`Total photos to process: ${items.length}`);
             showSpinner(`Processing 0/${items.length}…`);
 
-            // Build HTML snippets (embedded) — and separately save JPGs to folders
-            const surveyCards = [];
+            // HTML bits (embedded index.html only)
+            let surveyHeroHtml = '';
             const findCards = [];
             const targetCards = [];
             const sections = [];
 
             for (let i = 0; i < items.length; i++) {
                 const it = items[i];
-                const label = `${it.kind} ${it.parentId} #${it.indexInParent}`;
+                const baseName = `${it.kind}_${safeSlug(it.parentId)}_${String(it.indexInParent).padStart(2, '0')}`;
+                const anchorId = baseName;
 
-                log(`Photo ${i + 1}/${items.length}: ${label} (resize + save jpg + embed)`);
+                log(`Photo ${i + 1}/${items.length}: ${it.kind} ${it.parentId} #${it.indexInParent}`);
                 showSpinner(`Processing ${i + 1}/${items.length}…`);
 
-                // Decide folder + filename for JPG access
                 let dirHandle = findsDir;
                 if (it.kind === 'survey') dirHandle = surveyDir;
                 else if (it.kind === 'target') dirHandle = targetsDir;
 
-                const baseName = `${it.kind}_${safeSlug(it.parentId)}_${String(it.indexInParent).padStart(2, '0')}`;
-
-                const saved = await saveJpg(dirHandle, baseName, it.photoRefOrDataUrl);
-                if (!saved) {
+                const outBlob = await saveJpg(dirHandle, baseName, it.photoRefOrDataUrl);
+                if (!outBlob) {
                     log('  SKIP (missing/failed)');
                     continue;
                 }
 
-                // Embed in HTML from the resized blob (NOT from file)
-                const dataUrl = await blobToDataUrl(saved.outBlob);
+                const dataUrl = await blobToDataUrl(outBlob);
 
-                const anchorId = baseName;
+                // Survey hero: full width, only one
+                if (it.kind === 'survey') {
+                    surveyHeroHtml = `
+                      <div class="surveyHero">
+                        <img class="surveyImg" src="${escapeHtml(dataUrl)}" alt="Survey photo">
+                      </div>
+                    `;
+                } else {
+                    const card = `
+                      <div class="card">
+                        <a class="thumbLink" href="#${anchorId}">
+                          <img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
+                        </a>
+                        <div class="cap">
+                          <div class="title">${escapeHtml(it.title)}</div>
+                          <div class="metaLine">${escapeHtml(it.vdi)} ${it.type ? '· ' + escapeHtml(it.type) : ''}</div>
+                          <div class="metaLine">${escapeHtml(fmtDateTime(it.time))}</div>
+                        </div>
+                      </div>
+                    `;
+                    if (it.kind === 'find') findCards.push(card);
+                    else targetCards.push(card);
+                }
 
-                const card = `
-                  <div class="card">
-                    <a class="thumbLink" href="#${anchorId}">
-                      <img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
-                    </a>
-                    <div class="cap">
-                      <div class="title">${escapeHtml(it.title)}</div>
-                      <div class="metaLine">${escapeHtml(it.vdi)} ${it.type ? '· ' + escapeHtml(it.type) : ''}</div>
-                      <div class="metaLine">${escapeHtml(fmtDateTime(it.time))}</div>
-                    </div>
-                  </div>
-                `;
-
-                if (it.kind === 'survey') surveyCards.push(card);
-                else if (it.kind === 'find') findCards.push(card);
-                else targetCards.push(card);
-
-                // Full section (still embedded, internal anchor only)
+                // Full sections (embedded + internal only)
                 sections.push(`
                   <div class="detail" id="${anchorId}">
                     <p class="back"><a href="#top">↑ Back to top</a></p>
@@ -1904,10 +1925,7 @@ async function exportOpenSurveyPhotoGallery() {
                 <h1>${escapeHtml(openSurvey.name || 'Unnamed survey')}</h1>
                 <p><strong>Description:</strong> ${escapeHtml(openSurvey.description || '')}</p>
                 <p><strong>Exported:</strong> ${escapeHtml(new Date().toLocaleString())}</p>
-                <p><strong>User:</strong> ${escapeHtml(userProfile && userProfile.name ? userProfile.name : '')}
-                   ${userProfile && userProfile.detector ? ` · <strong>Detector:</strong> ${escapeHtml(userProfile.detector)}` : ''}</p>
-                <p class="muted">Targets included in JPG folders: <strong>${includeTargets ? 'Yes' : 'No'}</strong></p>
-                <p class="muted">Note: index.html is self-contained and does not link to the JPG folders.</p>
+                <p class="muted">index.html is embedded/phone-safe and does not link to the JPG folders.</p>
               </div>
             `;
 
@@ -1926,7 +1944,9 @@ async function exportOpenSurveyPhotoGallery() {
   h3{margin:8px 0 10px 0}
   .muted{color:#64748b;font-size:14px}
 
-  /* Thumbnails: 3 cols desktop, 2 cols phone */
+  .surveyHero{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.06); margin-top:12px;}
+  .surveyImg{width:100%; height:auto; display:block;}
+
   .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
   @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
   @media (max-width:520px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
@@ -1949,8 +1969,7 @@ async function exportOpenSurveyPhotoGallery() {
   <a id="top"></a>
   <div class="wrap">
     ${surveyInfoHtml}
-
-    ${surveyCards.length ? `<h2>Survey Photo</h2><div class="grid">${surveyCards.join('')}</div>` : ''}
+    ${surveyHeroHtml}
 
     <h2>Finds</h2>
     <div class="grid">${findCards.join('')}</div>
@@ -1969,14 +1988,14 @@ async function exportOpenSurveyPhotoGallery() {
 
             hideSpinner();
             log('Done.');
-            showMessage('Gallery exported: index.html embedded + JPG folders created.', 'success');
+            showMessage('Gallery exported successfully.', 'success');
             log(`Saved folder: ${folderName}`);
+            log(`JPG folders: Survey/, Finds/, Targets/`);
 
         } catch (e) {
             hideSpinner();
             console.error('Gallery export error:', e);
 
-            // User cancelled folder picker
             if (e && (e.name === 'AbortError' || String(e.message || '').toLowerCase().includes('aborted'))) {
                 showMessage('Cancelled.', 'info');
                 log('Cancelled by user.');
@@ -1989,12 +2008,11 @@ async function exportOpenSurveyPhotoGallery() {
             hideSpinner();
             if (btn) {
                 btn.disabled = false;
-                btn.innerText = originalBtnText || 'Export Photo Gallery';
+                btn.innerText = originalBtnText || 'Step 2: Export to Selected Folder';
             }
         }
     });
 }
-        
 // ======================================
 // SHARED FORM HELPERS
 // ======================================
@@ -6922,29 +6940,41 @@ function renderSettingsPage() {
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
             </div>
 
-        <!-- PHOTO GALLERY EXPORT -->
+<!-- PHOTO GALLERY EXPORT (2-step) -->
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-sky-500">
-  <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery (Open Survey)</h4>
+  <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery</h4>
   <p class="text-sm text-gray-600 mb-3">
-    Exports all <strong>Find</strong> photos (first) and <strong>Target</strong> photos (second) as resized JPGs,
-    plus an <strong>index.html</strong> gallery and a separate HTML page per image.
+    Step 1: Pick a folder. Step 2: Export the gallery into that folder (creates a new gallery folder inside it).
   </p>
 
-  <button id="export-photo-gallery-btn"
-          type="button"
-          onclick="exportOpenSurveyPhotoGallery()"
-          class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
-    <i class="fas fa-images mr-1"></i> Export Photo Gallery
-  </button>
+  <div class="flex flex-col gap-2">
+    <button id="pick-gallery-folder-btn"
+            type="button"
+            onclick="pickPhotoGalleryExportFolder()"
+            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
+      <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
+    </button>
+
+    <input id="gallery-export-folder-name"
+           type="text"
+           readonly
+           placeholder="No folder selected"
+           class="w-full p-2 border border-sky-400 rounded-md text-sm" />
+
+    <button id="export-gallery-to-folder-btn"
+            type="button"
+            onclick="exportPhotoGalleryToSelectedFolder()"
+            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
+      <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
+    </button>
+  </div>
 
   <textarea id="export-photo-gallery-log"
-            rows="7"
+            rows="8"
             readonly
-            placeholder="Gallery export log will appear here."
-            class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-4"></textarea>
+            placeholder="Export log will appear here."
+            class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
 </div>
-
-
             <!-- IMPORT SURVEY  -->
             <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey </h4>
