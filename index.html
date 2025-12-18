@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 15 - Metal Detecting Survey Log</title>
+    <title>Gallery 16 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -842,7 +842,7 @@
     </div>
 
 
-    <script>
+<script>
         // --- GLOBAL STATE & INITIALIZATION ---
         
 // --- GLOBAL STATE & INITIALIZATION ---
@@ -862,6 +862,28 @@ let findsFilter = {
     surveyId: 'All'
 };
 
+// =====================================================
+// GLOBAL DELEGATED HANDLER FOR TARGET BUTTONS (NEW WAY)
+// Survives sorting and re-rendering
+// =====================================================
+document.addEventListener('click', (e) => {
+
+    if (currentPage !== 'Targets') return;
+
+    const btn = e.target.closest('button[data-action][data-id][data-survey-id]');
+    if (!btn) return;
+
+    const list = document.getElementById('targets-list');
+    if (!list || !list.contains(btn)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    handleTargetAction(btn);
+
+}, true); // capture=true improves mobile reliability
+
+    
 // NEW: holds photos while the Edit Find modal is open
 let currentEditFindPhotos = [];
 
@@ -2522,21 +2544,6 @@ if (savePhotoBtn && maxWidthInput) {
             });
         }
     }
-
-    // --- TARGETS PAGE: delegated action handler (NEW WAY) ---
-const targetsList = document.getElementById('targets-list');
-if (targetsList) {
-    // Overwrite each render so we never “stack” handlers
-    targetsList.onclick = (e) => {
-        const btn = e.target.closest('button[data-action][data-id][data-survey-id]');
-        if (!btn || !targetsList.contains(btn)) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        handleTargetAction(btn);
-    };
-}
 
 
     // --- FINDS PAGE: card Edit / Delete buttons ---
