@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 14 - Metal Detecting Survey Log</title>
+    <title>Gallery 15 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -916,6 +916,8 @@ let photoSettings = {
     maxWidth: 1000
 };
 
+
+        
 // Holds the chosen folder handle for this session
 let photoGalleryExportRootHandle = null;
 
@@ -2520,6 +2522,22 @@ if (savePhotoBtn && maxWidthInput) {
             });
         }
     }
+
+    // --- TARGETS PAGE: delegated action handler (NEW WAY) ---
+const targetsList = document.getElementById('targets-list');
+if (targetsList) {
+    // Overwrite each render so we never “stack” handlers
+    targetsList.onclick = (e) => {
+        const btn = e.target.closest('button[data-action][data-id][data-survey-id]');
+        if (!btn || !targetsList.contains(btn)) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        handleTargetAction(btn);
+    };
+}
+
 
     // --- FINDS PAGE: card Edit / Delete buttons ---
     const findEditButtons = document.querySelectorAll('.find-card-edit-btn');
@@ -5681,8 +5699,7 @@ function renderTargetCard(target, surveyId) {
         data-action="setStatus"
         data-status="Not dug"
         data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+        data-survey-id="${surveyId}">
         Not dug
     </button>
 
@@ -5695,8 +5712,7 @@ function renderTargetCard(target, surveyId) {
         data-action="setStatus"
         data-status="Hole Dug"
         data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+        data-survey-id="${surveyId}">
         Dug
     </button>
 
@@ -5709,8 +5725,7 @@ function renderTargetCard(target, surveyId) {
         data-action="setStatus"
         data-status="Hole Refilled"
         data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+        data-survey-id="${surveyId}">
         Refilled
     </button>
 
@@ -5723,8 +5738,7 @@ function renderTargetCard(target, surveyId) {
         data-action="setStatus"
         data-status="Signal Ignored"
         data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+        data-survey-id="${surveyId}">
         Ignored
     </button>
 
@@ -5740,8 +5754,7 @@ function renderTargetCard(target, surveyId) {
                                text-xs sm:text-sm font-semibold"
                         data-action="showQr"
                         data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
+                        data-survey-id="${surveyId}">
                         Show QR
                     </button>
 
@@ -5752,8 +5765,7 @@ function renderTargetCard(target, surveyId) {
                                text-xs sm:text-sm font-semibold"
                         data-action="navigate"
                         data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
+                        data-survey-id="${surveyId}">
                         Navigate to Target
                     </button>
 
@@ -5764,8 +5776,7 @@ function renderTargetCard(target, surveyId) {
                                text-xs sm:text-sm font-semibold"
                         data-action="centerOnMap"
                         data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
+                        data-survey-id="${surveyId}">
                         Centre on Map
                     </button>
                 </div>
@@ -5780,8 +5791,7 @@ function renderTargetCard(target, surveyId) {
                                text-xs sm:text-sm font-semibold"
                         data-action="edit"
                         data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
+                        data-survey-id="${surveyId}">
                         Edit details
                     </button>
 
@@ -5792,8 +5802,7 @@ function renderTargetCard(target, surveyId) {
                                text-xs sm:text-sm font-semibold"
                         data-action="saveFind"
                         data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
+                        data-survey-id="${surveyId}">
                         Copy to finds
                     </button>
 
@@ -5804,8 +5813,7 @@ function renderTargetCard(target, surveyId) {
                                text-xs sm:text-sm font-semibold"
                         data-action="delete"
                         data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
+                        data-survey-id="${surveyId}">
                         Delete Target
                     </button>
                 </div>
