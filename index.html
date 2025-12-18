@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 14 - Metal Detecting Survey Log</title>
+    <title>Gallery 15 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -4838,92 +4838,58 @@ function handleTargetQrScanned(text) {
 }
 
 
-function handleTargetAction(element) {
-    const action   = element.dataset.action;
-    const targetId = element.dataset.id;
-    const surveyId = element.dataset.surveyId;
+/**
+ * Central handler for all target-related clicks.
+ * This is called directly by the HTML onclick attribute.
+ */
+async function handleTargetAction(buttonEl) {
+    const action = buttonEl.getAttribute('data-action');
+    const targetId = buttonEl.getAttribute('data-id');
+    const surveyId = buttonEl.getAttribute('data-survey-id');
 
-    const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return;
+    if (!action || !targetId) return;
 
-    const target = survey.targets.find(t => t.id === targetId);
-    if (!target) return;
+    switch (action) {
+        case 'setStatus':
+            const newStatus = buttonEl.getAttribute('data-status');
+            updateTargetStatus(targetId, surveyId, newStatus);
+            break;
 
-    // Special case: open the edit modal
-    if (action === 'edit') {
-        showEditTargetModal(targetId, surveyId);
-        return;
-    }
-
-    const executeAction = () => {
-          switch (action) {
-            case 'setStatus': {
-                const newStatus = element.dataset.status;
-                target.status = newStatus;
-                showMessage(`Target status updated to: ${newStatus}`, 'success');
-                break;
+        case 'copyToFinds':
+            if (typeof copyTargetToFinds === 'function') {
+                copyTargetToFinds(targetId, surveyId);
             }
+            break;
 
-            case 'saveFind': {
-                target.isFind = true;
-                createFindFromTarget(target, survey);
-                break;
+        case 'photos':
+            // Async call to handle IndexedDB photo loading
+            await openTargetPhotoGallery(targetId, surveyId);
+            break;
+
+        case 'navigate':
+            navigationTargetId = targetId;
+            currentPage = 'Compass';
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            break;
+
+        case 'edit':
+            showEditTargetModal(targetId, surveyId);
+            break;
+
+        case 'delete':
+            showConfirmationModal(
+                'Delete Target?',
+                'Are you sure you want to permanently delete this target and its photos?',
+                () => deleteTarget(targetId, surveyId)
+            );
+            break;
+
+        case 'qr':
+            if (typeof showTargetQrModal === 'function') {
+                showTargetQrModal(targetId, surveyId);
             }
-
-            case 'navigate': {
-                navigationTargetId = targetId;
-                showMessage(`Navigation target set: "${target.description}".`, 'success');
-                currentPage = 'Compass';
-                break;
-            }
-
-            case 'centerOnMap': {
-                survey.targets.forEach(t => {
-                    t.centerOnMap = (t.id === targetId);
-                });
-                showMessage('Centre on map updated for this target.', 'success');
-                break;
-            }
-
-            case 'showQr': {
-                // No state change — just show the QR modal
-                showTargetQrModalFor(target, survey);
-                break;
-            }
-
-            case 'delete': {
-                target.deleted = true;
-                if (navigationTargetId === targetId) {
-                    navigationTargetId = null;
-                }
-                showMessage('Target deleted.', 'error');
-                break;
-            }
-        }
-
-        survey.dateLastChanged = Date.now();
-        saveSurveysToLocalStorage();
-        render();
-    };
-
-    // Use confirmation modal for significant actions
-    if (action === 'delete') {
-        showConfirmationModal(
-            `Confirm Delete Target: ${target.description}`,
-            `Are you sure you want to permanently delete this target?`,
-            executeAction
-        );
-    } else if (action === 'saveFind') {
-        showConfirmationModal(
-            'Promote to Find',
-            `Save <strong>${target.description}</strong> to your Finds library?<br>
-             <span class="text-sm text-gray-600">
-                 You can review and edit it later on the <strong>Finds</strong> tab.
-             </span>`,
-            executeAction
-        );
-    } else {
-        executeAction();
+            break;
     }
 }
         // --- PAGE RENDER FUNCTIONS ---
@@ -5491,330 +5457,110 @@ function renderFindsPage() {
 }
         
 /** Renders a single target card. */
+/**
+ * Renders an individual target card for the Targets page.
+ * Uses the "New System" (handleTargetAction) for all buttons to ensure
+ * they remain functional after sorting/filtering.
+ */
 function renderTargetCard(target, surveyId) {
-    // --- Type icon & colour chip ---
-    let typeColor = 'bg-primary';
-    let typeIcon  = 'fas fa-gem';
+    const timeStr = new Date(target.time).toLocaleString([], {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
 
- switch (target.type) {
-    case 'Button':
-        typeColor = 'bg-amber-500';
-        typeIcon  = 'fas fa-dot-circle';
-        break;
-    case 'Coin':
-        typeColor = 'bg-yellow-500';
-        typeIcon  = 'fas fa-coins';
-        break;
-    case 'Relic':
-        typeColor = 'bg-red-500';
-        typeIcon  = 'fas fa-shield-alt';
-        break;
-    case 'Jewelry':
-        typeColor = 'bg-pink-500';
-        typeIcon  = 'fas fa-ring';
-        break;
-    case 'Modern Junk':
-        typeColor = 'bg-gray-500';
-        typeIcon  = 'fas fa-trash';
-        break;
-    case 'Iron Junk':
-        typeColor = 'bg-gray-700';
-        typeIcon  = 'fas fa-magnet';
-        break;
-    case 'Unidentified':
-        typeColor = 'bg-purple-500';
-        typeIcon  = 'fas fa-question';
-        break;
-}
+    // Determine status color logic
+    let statusClass = "text-gray-500 bg-gray-100";
+    if (target.status === 'Dug') statusClass = "text-green-700 bg-green-100 font-bold";
+    if (target.status === 'Signal Ignored') statusClass = "text-red-700 bg-red-100";
 
-    // --- Status badge styling ---
-    let statusClass = 'bg-green-100 text-green-800';
-    let statusIcon  = `
-        <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-             xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>`;
-
-    switch (target.status) {
-        case 'Signal Detected':
-            statusClass = 'bg-green-100 text-green-800';
-            break;
-        case 'Hole Dug':
-            statusClass = 'bg-amber-100 text-amber-800';
-            statusIcon  = `
-                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M4 6h16M4 10h16M4 14h10"></path>
-                </svg>`;
-            break;
-        case 'Hole Refilled':
-            statusClass = 'bg-blue-100 text-blue-800';
-            statusIcon  = `
-                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M5 13l4 4L19 7"></path>
-                </svg>`;
-            break;
-        case 'Signal Ignored':
-            statusClass = 'bg-gray-100 text-gray-800';
-            statusIcon  = `
-                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M6 18L18 6M6 6l12 12"></path>
-                </svg>`;
-            break;
-    }
-
-    // --- Photo thumbnail block (IndexedDB-aware) ---
-    let thumbRef    = '';
-    let photosCount = 0;
-
-    // Prefer the new structure: an array of refs or data URLs
-    if (Array.isArray(target.photos) && target.photos.length) {
-        thumbRef    = target.photos[0];
-        photosCount = target.photos.length;
-    } else if (target.targetPhotoRef) {
-        // Single ref field
-        thumbRef    = target.targetPhotoRef;
-        photosCount = 1;
-    } else if (target.targetPhotoData || target.photoDataUrl) {
-        // Legacy base64 / URL fallback
-        thumbRef    = target.targetPhotoData || target.photoDataUrl;
-        photosCount = thumbRef ? 1 : 0;
-    }
-
+    // Handle Photos (IDB ref or Base64)
     let photoHtml = '';
-    if (thumbRef) {
-        const captionHtml = photosCount > 1
-            ? `<p class="mt-1 text-xs text-gray-600 text-center">
-                    ${photosCount} photos — tap to view gallery.
-               </p>`
-            : '';
+    const photoRef = (Array.isArray(target.photos) && target.photos.length > 0) 
+        ? target.photos[0] 
+        : (target.targetPhotoRef || '');
 
+    if (photoRef) {
         photoHtml = `
-            <div class="mt-3">
-                <div class="flex justify-center">
-                    <img
-                        src=""
-                        data-photo-ref="${thumbRef}"
-                        data-photo-kind="target"
-                        data-target-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        alt="Target photo"
-                        class="w-11/12 max-h-48 object-cover rounded-lg border border-gray-200 cursor-pointer"
-                        onclick="openTargetPhotoGallery('${target.id}', '${surveyId}')"
-                    />
+            <div class="mt-3 relative cursor-pointer" onclick="handleTargetAction(this)" 
+                 data-action="photos" data-id="${target.id}" data-survey-id="${surveyId}">
+                <img src="" data-photo-ref="${photoRef}" 
+                     class="w-full h-40 object-cover rounded-lg border border-gray-200 shadow-sm" 
+                     alt="Target photo">
+                <div class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-[10px]">
+                    <i class="fas fa-camera mr-1"></i> ${Array.isArray(target.photos) ? target.photos.length : 1}
                 </div>
-                ${captionHtml}
-            </div>
-        `;
+            </div>`;
     }
-
-    const vdiText   = target.vdi ?? 'N/A';
-    const depthText = target.depth ?? 'Unknown';
-
-    const coordsText = target.coordinates && target.coordinates !== 'No GPS logged'
-        ? target.coordinates
-        : 'No GPS logged';
-
-    const accuracyText = target.accuracy && target.accuracy !== 'N/A'
-        ? `${target.accuracy} m`
-        : 'N/A';
 
     return `
-        <div class="bg-white rounded-xl shadow-md p-4 border border-gray-100">
-            <div class="flex items-start justify-between mb-2">
-                <div class="flex items-center space-x-2">
-                    <span class="inline-flex items-center justify-center w-9 h-9 rounded-full ${typeColor} text-white">
-                        <i class="${typeIcon} text-lg"></i>
-                    </span>
-                    <div>
-                        <h3 class="text-lg font-bold text-gray-800">
-                            ${target.description || 'Unnamed Target'}
-                        </h3>
-                        <p class="text-xs text-gray-500">
-                            VDI: <span class="font-semibold">${vdiText}</span> ·
-                            Depth: <span class="font-semibold">${depthText}</span>
-                        </p>
-                    </div>
+    <div class="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-4 transition-all hover:shadow-lg">
+        <div class="p-4">
+            <div class="flex justify-between items-start mb-2">
+                <div>
+                    <h3 class="font-bold text-gray-800 text-lg">${target.description}</h3>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">${timeStr}</p>
                 </div>
-
-                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${statusClass}">
-                    ${statusIcon}
-                    <span>${target.status || 'Signal Detected'}</span>
+                <span class="text-[10px] px-2 py-1 rounded-full ${statusClass}">
+                    ${target.status.toUpperCase()}
                 </span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 my-3">
+                <div class="bg-gray-50 p-2 rounded-lg text-center">
+                    <p class="text-[10px] text-gray-400 uppercase">ID</p>
+                    <p class="font-bold text-primary">${target.vdi || 'N/A'}</p>
+                </div>
+                <div class="bg-gray-50 p-2 rounded-lg text-center">
+                    <p class="text-[10px] text-gray-400 uppercase">Depth</p>
+                    <p class="font-bold text-gray-700">${target.depth || '?'}</p>
+                </div>
+                <div class="bg-gray-50 p-2 rounded-lg text-center">
+                    <p class="text-[10px] text-gray-400 uppercase">Type</p>
+                    <p class="font-bold text-gray-700 text-xs truncate">${target.type}</p>
+                </div>
             </div>
 
             ${photoHtml}
 
-            <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <div>
-                    <p class="font-semibold">Coordinates</p>
-                    <p class="break-words">${coordsText}</p>
-                </div>
-                <div>
-                    <p class="font-semibold">Accuracy</p>
-                    <p>${accuracyText}</p>
-                </div>
+            <div class="flex flex-wrap gap-2 mt-4 border-t border-gray-50 pt-3">
+                <button class="flex-1 py-2 rounded-lg bg-green-600 text-white text-xs font-bold shadow-sm hover:bg-green-700 active:transform active:scale-95"
+                        data-action="setStatus" data-status="Dug" data-id="${target.id}" data-survey-id="${surveyId}" onclick="handleTargetAction(this)">
+                    <i class="fas fa-check mr-1"></i> DUG
+                </button>
+                <button class="flex-1 py-2 rounded-lg bg-gray-100 text-gray-600 text-xs font-bold hover:bg-gray-200"
+                        data-action="setStatus" data-status="Signal Ignored" data-id="${target.id}" data-survey-id="${surveyId}" onclick="handleTargetAction(this)">
+                    IGNORE
+                </button>
+                <button class="px-3 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-blue-700"
+                        data-action="navigate" data-id="${target.id}" onclick="handleTargetAction(this)">
+                    <i class="fas fa-location-arrow"></i>
+                </button>
             </div>
 
-            <div class="mt-3 text-xs text-gray-500 flex justify-between">
-                <span>Logged: ${formatDate(target.time)}</span>
-                <span>${target.user || userProfile.name} · ${target.detector || userProfile.detector}</span>
-            </div>
-
-            <!-- Actions -->
-            <div class="mt-4 space-y-2">
-                <!-- Row 1: Hole status buttons -->
-            <div class="grid grid-cols-4 gap-2 mt-3">
-
-    <!-- Not dug -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-green-100 text-green-800 hover:bg-green-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Not dug"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
-        Not dug
-    </button>
-
-    <!-- Dug -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-amber-100 text-amber-800 hover:bg-amber-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Hole Dug"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
-        Dug
-    </button>
-
-    <!-- Refilled -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-blue-100 text-blue-800 hover:bg-blue-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Hole Refilled"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
-        Refilled
-    </button>
-
-    <!-- Ignored -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-gray-100 text-gray-700 hover:bg-gray-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Signal Ignored"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
-        Ignored
-    </button>
-
-</div>
-
-                <!-- Row 2: Navigation -->
-                     <!-- Row 2: QR + Navigation -->
-                <div class="grid grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-gray-800 text-white hover:bg-gray-900
-                               text-xs sm:text-sm font-semibold"
-                        data-action="showQr"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Show QR
+            <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-50">
+                <div class="flex space-x-4">
+                    <button class="text-green-600 font-bold text-[11px] flex items-center hover:underline"
+                            data-action="copyToFinds" data-id="${target.id}" data-survey-id="${surveyId}" onclick="handleTargetAction(this)">
+                        <i class="fas fa-trophy mr-1"></i> TO FINDS
                     </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-emerald-600 text-white hover:bg-emerald-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="navigate"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Navigate to Target
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-sky-600 text-white hover:bg-sky-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="centerOnMap"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Centre on Map
+                    <button class="text-gray-400 font-bold text-[11px] flex items-center hover:text-primary"
+                            data-action="qr" data-id="${target.id}" data-survey-id="${surveyId}" onclick="handleTargetAction(this)">
+                        <i class="fas fa-qrcode mr-1"></i> QR
                     </button>
                 </div>
-
-                <!-- Row 3: Edit / Copy / Delete -->
-                <div class="grid grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-purple-100 text-purple-800 hover:bg-purple-200
-                               border border-purple-300
-                               text-xs sm:text-sm font-semibold"
-                        data-action="edit"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Edit details
+                <div class="flex space-x-3">
+                    <button class="text-gray-400 hover:text-blue-600"
+                            data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}" onclick="handleTargetAction(this)">
+                        <i class="fas fa-edit"></i>
                     </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-indigo-600 text-white hover:bg-indigo-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="saveFind"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Copy to finds
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-red-600 text-white hover:bg-red-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="delete"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Delete Target
+                    <button class="text-gray-400 hover:text-red-600"
+                            data-action="delete" data-id="${target.id}" data-survey-id="${surveyId}" onclick="handleTargetAction(this)">
+                        <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
             </div>
         </div>
-    `;
-}
-
-        
+    </div>`;
+}        
             // --- MAP ZOOM & PAN STATE ---
 
 let mapZoom = 1;
