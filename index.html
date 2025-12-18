@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 16 - Metal Detecting Survey Log</title>
+    <title>Gallery 17 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -868,11 +868,12 @@ let findsFilter = {
 // =====================================================
 document.addEventListener('click', (e) => {
 
-    if (currentPage !== 'Targets') return;
-
+    // NEW WAY (robust): handle any click on a Target-card action button,
+    // even after sorting/re-rendering replaces the Targets DOM.
     const btn = e.target.closest('button[data-action][data-id][data-survey-id]');
     if (!btn) return;
 
+    // Only treat it as a Target action if it is inside the current targets list.
     const list = document.getElementById('targets-list');
     if (!list || !list.contains(btn)) return;
 
