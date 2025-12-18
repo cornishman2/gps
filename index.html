@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 17 - Metal Detecting Survey Log</title>
+    <title>Gallery 18 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -4869,11 +4869,17 @@ function handleTargetAction(element) {
     const targetId = element.dataset.id;
     const surveyId = element.dataset.surveyId;
 
-    const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) return;
+    const survey = surveys.find(s => String(s.id) === String(surveyId));
+    if (!survey) {
+        showMessage('Target action failed: survey not found (ID mismatch).', 'error');
+        return;
+    }
 
-    const target = survey.targets.find(t => t.id === targetId);
-    if (!target) return;
+    const target = (survey.targets || []).find(t => String(t.id) === String(targetId));
+    if (!target) {
+        showMessage('Target action failed: target not found (ID mismatch).', 'error');
+        return;
+    }
 
     // Special case: open the edit modal
     if (action === 'edit') {
