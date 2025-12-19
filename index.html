@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Button 5 - Metal Detecting Survey Log</title>
+    <title>Sort 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -852,8 +852,8 @@ let currentPage = 'Home';
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
-        
 
+let targetSortMode = 'date'; // 'date' | 'id'
 
 // Simple filter state for the Finds page
 let findsFilter = {
@@ -2541,6 +2541,23 @@ function attachPageEventListeners() {
             }
         };
     }
+
+        const sortByIdBtn = document.getElementById('sort-target-id-btn');
+if (sortByIdBtn) {
+    sortByIdBtn.addEventListener('click', () => {
+        targetSortMode = 'id';
+        render();
+    });
+}
+
+const sortByDateBtn = document.getElementById('sort-target-date-btn');
+if (sortByDateBtn) {
+    sortByDateBtn.addEventListener('click', () => {
+        targetSortMode = 'date';
+        render();
+    });
+}
+
 
     // 10. Resolve thumbnails
     if (typeof initialiseCardThumbnails === 'function') {
@@ -5166,7 +5183,14 @@ function renderSurveyCard(survey, isOpen = false) {
                 `;
             }
 
-            const targets = getActiveTargets(openSurvey);
+let targets = survey.targets.filter(t => !t.deleted);
+
+if (targetSortMode === 'id') {
+    targets.sort((a, b) => Number(b.id) - Number(a.id));
+} else {
+    // Sort by most recent first
+    targets.sort((a, b) => (b.dateCreated || 0) - (a.dateCreated || 0));
+}
 
 
             return `
@@ -5177,6 +5201,24 @@ function renderSurveyCard(survey, isOpen = false) {
                         <i class="fas fa-crosshairs mr-2"></i> Log New Target
                     </button>
 
+<!-- Sort buttons -->
+<div class="mt-3 flex gap-3">
+    <button
+        id="sort-target-id-btn"
+        class="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300"
+    >
+        Sort by Target ID
+    </button>
+
+    <button
+        id="sort-target-date-btn"
+        class="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300"
+    >
+        Sort by Date
+    </button>
+</div>
+
+        
                     <h3 class="text-2xl font-bold text-gray-700 mb-3">Target Log (${targets.length})</h3>
                     <div id="targets-list" class="space-y-4">
                         ${targets.length === 0 ? 
