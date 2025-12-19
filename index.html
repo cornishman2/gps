@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery 13 - Metal Detecting Survey Log</title>
+    <title>Gallery 14 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2578,6 +2578,30 @@ if (quickInput) {
     quickInput.addEventListener('blur', () => {
         if (currentPage === 'Compass') startCompassAutoRefresh();
     });
+
+  const appContent = document.getElementById('app-content');
+    
+    // Central Listener for ALL Target buttons
+    appContent.onclick = (e) => {
+        // Find the nearest button that has our new data-action attribute
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+
+        // Pull the data we stored in the button
+        const action = btn.dataset.action;
+        const targetId = btn.dataset.id;
+        const surveyId = btn.dataset.surveyId;
+        const value = btn.dataset.value;
+
+        // Route the click to your existing handleTargetAction function
+        if (action === 'status') {
+            // For "Not dug", "Dug", etc., we pass the value (e.g., "Dug")
+            handleTargetAction(btn); 
+        } else {
+            // For "delete", "navigate", etc., we pass the button itself
+            handleTargetAction(btn);
+        }
+    };
 }
 
 
@@ -5643,142 +5667,60 @@ function renderTargetCard(target, surveyId) {
             <div class="grid grid-cols-4 gap-2 mt-3">
 
     <!-- Not dug -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-green-100 text-green-800 hover:bg-green-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Not dug"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+    <button data-action="status" data-id="${target.id}" data-value="Not dug" 
+            class="py-1 text-xs rounded font-bold shadow-sm transition-colors ${target.status === 'Not dug' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}">
         Not dug
     </button>
-
-    <!-- Dug -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-amber-100 text-amber-800 hover:bg-amber-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Hole Dug"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+    <button data-action="status" data-id="${target.id}" data-value="Dug" 
+            class="py-1 text-xs rounded font-bold shadow-sm transition-colors ${target.status === 'Dug' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}">
         Dug
     </button>
-
-    <!-- Refilled -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-blue-100 text-blue-800 hover:bg-blue-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Hole Refilled"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
+    <button data-action="status" data-id="${target.id}" data-value="Refilled" 
+            class="py-1 text-xs rounded font-bold shadow-sm transition-colors ${target.status === 'Refilled' ? 'bg-orange-600 text-white' : 'bg-gray-200 text-gray-700'}">
         Refilled
     </button>
-
-    <!-- Ignored -->
-    <button
-        type="button"
-        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-               bg-gray-100 text-gray-700 hover:bg-gray-200
-               text-xs sm:text-sm font-semibold"
-        data-action="setStatus"
-        data-status="Signal Ignored"
-        data-id="${target.id}"
-        data-survey-id="${surveyId}"
-        onclick="handleTargetAction(this)">
-        Ignored
+    <button data-action="status" data-id="${target.id}" data-value="Ignore" 
+            class="py-1 text-xs rounded font-bold shadow-sm transition-colors ${target.status === 'Ignore' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700'}">
+        Ignore
     </button>
-
 </div>
 
                 <!-- Row 2: Navigation -->
                      <!-- Row 2: QR + Navigation -->
                 <div class="grid grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-gray-800 text-white hover:bg-gray-900
-                               text-xs sm:text-sm font-semibold"
-                        data-action="showQr"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Show QR
-                    </button>
+                    <button data-action="show-qr" data-id="${target.id}" 
+        class="w-full py-2 mb-2 bg-gray-100 rounded-lg text-sm font-bold text-primary border border-gray-200 active:bg-gray-200">
+    <i class="fas fa-qrcode mr-2"></i> Show QR
+</button>
 
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-emerald-600 text-white hover:bg-emerald-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="navigate"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Navigate to Target
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-sky-600 text-white hover:bg-sky-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="centerOnMap"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Centre on Map
-                    </button>
-                </div>
+<button type="button" 
+            data-action="navigate" data-id="${target.id}" data-survey-id="${surveyId}"
+            class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 text-xs sm:text-sm font-semibold">
+        Navigate
+    </button>
+    <button type="button" 
+            data-action="centerOnMap" data-id="${target.id}" data-survey-id="${surveyId}"
+            class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-sky-600 text-white hover:bg-sky-700 text-xs sm:text-sm font-semibold">
+        Centre Map
+    </button>                </div>
 
                 <!-- Row 3: Edit / Copy / Delete -->
                 <div class="grid grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-purple-100 text-purple-800 hover:bg-purple-200
-                               border border-purple-300
-                               text-xs sm:text-sm font-semibold"
-                        data-action="edit"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Edit details
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-indigo-600 text-white hover:bg-indigo-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="saveFind"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Copy to finds
-                    </button>
-
-                    <button
-                        type="button"
-                        class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md
-                               bg-red-600 text-white hover:bg-red-700
-                               text-xs sm:text-sm font-semibold"
-                        data-action="delete"
-                        data-id="${target.id}"
-                        data-survey-id="${surveyId}"
-                        onclick="handleTargetAction(this)">
-                        Delete Target
-                    </button>
-                </div>
+  <button type="button" 
+            data-action="edit-target" data-id="${target.id}" data-survey-id="${surveyId}"
+            class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-primary text-white hover:bg-blue-700 text-xs sm:text-sm font-semibold">
+        Edit details
+    </button>
+    <button type="button" 
+            data-action="copyToFinds" data-id="${target.id}" data-survey-id="${surveyId}"
+            class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-amber-500 text-white hover:bg-amber-600 text-xs sm:text-sm font-semibold">
+        Copy to finds
+    </button>
+    <button type="button" 
+            data-action="delete" data-id="${target.id}" data-survey-id="${surveyId}"
+            class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 text-xs sm:text-sm font-semibold">
+        Delete
+    </button>              </div>
             </div>
         </div>
     `;
