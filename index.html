@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Button 3 - Metal Detecting Survey Log</title>
+    <title>Button 4 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -4842,14 +4842,27 @@ function handleTargetQrScanned(text) {
 
 
 function handleTargetAction(element) {
-    const action   = element.dataset.action;
-    const targetId = element.dataset.id;
-    const surveyId = element.dataset.surveyId;
+    let action = element.dataset.action || '';
+    const targetId = element.dataset.id || '';
+    let surveyId = element.dataset.surveyId || element.dataset.surveyID || '';
 
-    const survey = surveys.find(s => s.id === surveyId);
+    // --- Normalise alternative action names (keeps old markup working) ---
+    if (action === 'edit-target') action = 'edit';
+    if (action === 'copyToFinds') action = 'saveFind';
+    if (action === 'show-qr') action = 'showQr';
+
+    // Find survey: prefer explicit surveyId, otherwise fall back to OPEN survey
+    let survey = null;
+    if (surveyId) {
+        survey = surveys.find(s => s.id === surveyId) || null;
+    }
+    if (!survey) {
+        survey = surveys.find(s => s.status === 'Open') || null;
+        if (survey) surveyId = survey.id;
+    }
     if (!survey) return;
 
-    const target = survey.targets.find(t => t.id === targetId);
+    const target = (survey.targets || []).find(t => t.id === targetId);
     if (!target) return;
 
     // Special case: open the edit modal
@@ -4859,10 +4872,14 @@ function handleTargetAction(element) {
     }
 
     const executeAction = () => {
-          alert(action);
-          switch (action) {
+        switch (action) {
             case 'setStatus': {
-                const newStatus = element.dataset.status;
+                // ✅ FIX: your buttons use data-value="Dug" etc., not data-status
+                const newStatus = element.dataset.status || element.dataset.value || '';
+                if (!newStatus) {
+                    console.warn('setStatus clicked but no data-status or data-value on button', element);
+                    return;
+                }
                 target.status = newStatus;
                 showMessage(`Target status updated to: ${newStatus}`, 'success');
                 break;
@@ -4882,7 +4899,7 @@ function handleTargetAction(element) {
             }
 
             case 'centerOnMap': {
-                survey.targets.forEach(t => {
+                (survey.targets || []).forEach(t => {
                     t.centerOnMap = (t.id === targetId);
                 });
                 showMessage('Centre on map updated for this target.', 'success');
@@ -4890,19 +4907,20 @@ function handleTargetAction(element) {
             }
 
             case 'showQr': {
-                // No state change — just show the QR modal
                 showTargetQrModalFor(target, survey);
                 break;
             }
 
             case 'delete': {
                 target.deleted = true;
-                if (navigationTargetId === targetId) {
-                    navigationTargetId = null;
-                }
+                if (navigationTargetId === targetId) navigationTargetId = null;
                 showMessage('Target deleted.', 'error');
                 break;
             }
+
+            default:
+                console.warn('Unknown target action:', action);
+                return;
         }
 
         survey.dateLastChanged = Date.now();
@@ -4910,7 +4928,7 @@ function handleTargetAction(element) {
         render();
     };
 
-    // Use confirmation modal for significant actions
+    // Confirm significant actions
     if (action === 'delete') {
         showConfirmationModal(
             `Confirm Delete Target: ${target.description}`,
@@ -4930,7 +4948,6 @@ function handleTargetAction(element) {
         executeAction();
     }
 }
-        // --- PAGE RENDER FUNCTIONS ---
 
 function renderHomePage() {
     const openSurvey = surveys.find(s => s.status === 'Open');
