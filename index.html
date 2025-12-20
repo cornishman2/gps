@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sort 4 - Metal Detecting Survey Log</title>
+    <title>Sort 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2953,6 +2953,8 @@ function startTargetLocationWatch() {
  *  and starts the auto-refresh interval to redraw the map.
  */
 function stopLiveMapLocationWatch() {
+    const hadWatch = !!liveMapWatchId;
+
     if (liveMapWatchId) {
         navigator.geolocation.clearWatch(liveMapWatchId);
         liveMapWatchId = null;
@@ -2965,10 +2967,13 @@ function stopLiveMapLocationWatch() {
     smoothedUserCoords = null;
     movementHistory = [];
 
-    console.log("Live Map GPS Watch stopped and user map state cleared.");
+    if (hadWatch) {
+        console.log("Live Map GPS Watch stopped and user map state cleared.");
+    }
 }
 
-    function startLiveMapLocationWatch() {
+        
+        function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
         currentUserCoords = null;
         currentUserAccuracy = null;
