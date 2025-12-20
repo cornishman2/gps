@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sort 5 - Metal Detecting Survey Log</title>
+    <title>Sort 3 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -915,23 +915,6 @@ const PHOTO_SETTINGS_KEY = 'geoFindPhotoSettings';
 let photoSettings = {
     maxWidth: 1000
 };
-
-function stopTrackRecording(reason = '') {
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey || !openSurvey.tracks) return;
-
-    if (activeTrackId) {
-        const track = openSurvey.tracks.find(t => t.id === activeTrackId);
-        if (track) {
-            track.isRecording = false; // ✅ clears “recording” label
-        }
-        activeTrackId = null;
-    }
-
-    if (reason) showMessage(reason, 'success');
-    saveSurveysToLocalStorage();
-    render();
-}
 
 // Holds the chosen folder handle for this session
 let photoGalleryExportRootHandle = null;
@@ -2682,8 +2665,6 @@ if (quickBtn) {
     const stopTrackBtn = document.getElementById('stop-track-btn');
     if (stopTrackBtn) {
         stopTrackBtn.addEventListener('click', handleStopTrackClick);
-        stopTrackRecording('Tracking stopped.');
-
     }
 
     const trackCheckboxes = document.querySelectorAll('.track-visibility-toggle');
@@ -2953,8 +2934,6 @@ function startTargetLocationWatch() {
  *  and starts the auto-refresh interval to redraw the map.
  */
 function stopLiveMapLocationWatch() {
-    const hadWatch = !!liveMapWatchId;
-
     if (liveMapWatchId) {
         navigator.geolocation.clearWatch(liveMapWatchId);
         liveMapWatchId = null;
@@ -2967,13 +2946,10 @@ function stopLiveMapLocationWatch() {
     smoothedUserCoords = null;
     movementHistory = [];
 
-    if (hadWatch) {
-        console.log("Live Map GPS Watch stopped and user map state cleared.");
-    }
+    console.log("Live Map GPS Watch stopped and user map state cleared.");
 }
 
-        
-        function startLiveMapLocationWatch() {
+    function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
         currentUserCoords = null;
         currentUserAccuracy = null;
@@ -4488,9 +4464,7 @@ function handleSurveyAction(button) {
                 survey.status = 'Active';
                 survey.dateLastChanged = now;
                 saveSurveysToLocalStorage();
-                stopTrackRecording('Survey closed — tracking stopped.');
-
-//                showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
+                showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
                 render();
                 break;
 
