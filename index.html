@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracks 7 - Metal Detecting Survey Log</title>
+    <title>Sort 3 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2527,51 +2527,45 @@ function attachPageEventListeners() {
             quickInput.value = compassQuickTargetIdDraft;
         }
         quickInput.addEventListener('input', () => { compassQuickTargetIdDraft = quickInput.value || ''; });
-        if (typeof stopCompassAutoRefresh === 'function') {
-            quickInput.addEventListener('focus', stopCompassAutoRefresh);
-        }
-        quickInput.addEventListener('blur', () => {
-            if (currentPage === 'Compass' && typeof startCompassAutoRefresh === 'function') {
-                startCompassAutoRefresh();
+        quickInput.addEventListener('focus', stopCompassAutoRefresh);
+        quickInput.addEventListener('blur', () => { if (currentPage === 'Compass') startCompassAutoRefresh(); });
+    } // <--- THIS WAS THE MISSING BRACE IN YOUR FILE
+
+    // 9. Central Listener for ALL Target buttons
+    const appContent = document.getElementById('app-content');
+    if (appContent) {
+        appContent.onclick = (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (btn && typeof handleTargetAction === 'function') {
+                handleTargetAction(btn);
             }
-        });
-        const quickBtn = document.getElementById('compass-log-target-btn');
-if (quickBtn) {
-    quickBtn.addEventListener('click', () => {
-        const input = document.getElementById('compass-quick-target-vdi');
-        const raw = (input ? input.value : '').trim();
-        quickLogTargetByVDI(raw, 'manual');
-        if (input) input.value = '';
-        compassQuickTargetIdDraft = '';
-    });
-}
-
-const startTrackBtn = document.getElementById('start-track-btn');
-if (startTrackBtn) {
-    startTrackBtn.addEventListener('click', handleStartTrackClick);
-}
-
-const stopTrackBtn = document.getElementById('stop-track-btn');
-if (stopTrackBtn) {
-    stopTrackBtn.addEventListener('click', handleStopTrackClick);
-}
-const trackCheckboxes = document.querySelectorAll('.track-visibility-toggle');
-if (trackCheckboxes && trackCheckboxes.length > 0) {
-    trackCheckboxes.forEach(cb => {
-        cb.addEventListener('change', (e) => {
-            const trackId = e.target.getAttribute('data-track-id');
-            toggleTrackVisibility(trackId, e.target.checked);
-        });
-    });
-}
-
-
+        };
     }
 
- 
+        const sortByIdBtn = document.getElementById('sort-target-id-btn');
+if (sortByIdBtn) {
+    sortByIdBtn.addEventListener('click', () => {
+        targetSortMode = 'id';
+        render();
+    });
+}
 
-// IMPORTANT: this MUST be outside attachPageEventListeners()
-function randomIntInclusive(min, max) {
+const sortByDateBtn = document.getElementById('sort-target-date-btn');
+if (sortByDateBtn) {
+    sortByDateBtn.addEventListener('click', () => {
+        targetSortMode = 'date';
+        render();
+    });
+}
+
+
+    // 10. Resolve thumbnails
+    if (typeof initialiseCardThumbnails === 'function') {
+        initialiseCardThumbnails();
+    }
+        
+        
+        function randomIntInclusive(min, max) {
     const a = Math.ceil(Number(min));
     const b = Math.floor(Number(max));
     return Math.floor(Math.random() * (b - a + 1)) + a;
@@ -2646,6 +2640,46 @@ function quickLogTargetByVDI(raw, sourceLabel = '') {
 
     // Re-render once so the new pin appears immediately
     updateMapWithUserLocationAndRender();
+}
+
+// --- COMPASS PAGE: quick-log target button ---
+const quickBtn = document.getElementById('compass-log-target-btn');
+if (quickBtn) {
+    quickBtn.addEventListener('click', () => {
+        const input = document.getElementById('compass-quick-target-vdi');
+        const raw = (input ? input.value : '').trim();
+
+        quickLogTargetByVDI(raw, 'manual');
+
+        if (input) input.value = '';
+        compassQuickTargetIdDraft = '';
+    });
+}
+
+    //Ends here.    
+    const startTrackBtn = document.getElementById('start-track-btn');
+    if (startTrackBtn) {
+        startTrackBtn.addEventListener('click', handleStartTrackClick);
+    }
+
+    const stopTrackBtn = document.getElementById('stop-track-btn');
+    if (stopTrackBtn) {
+        stopTrackBtn.addEventListener('click', handleStopTrackClick);
+    }
+
+    const trackCheckboxes = document.querySelectorAll('.track-visibility-toggle');
+    if (trackCheckboxes && trackCheckboxes.length > 0) {
+        trackCheckboxes.forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const trackId = e.target.getAttribute('data-track-id');
+                toggleTrackVisibility(trackId, e.target.checked);
+            });
+        });
+    }
+        // After wiring up page-specific buttons, resolve any thumbnails
+    if (typeof initialiseCardThumbnails === 'function') {
+        initialiseCardThumbnails();
+    }
 }
 
 /** Renders the content for the new Export page. */
@@ -2915,7 +2949,7 @@ function stopLiveMapLocationWatch() {
     console.log("Live Map GPS Watch stopped and user map state cleared.");
 }
 
-function startLiveMapLocationWatch() {
+    function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
         currentUserCoords = null;
         currentUserAccuracy = null;
@@ -2924,36 +2958,59 @@ function startLiveMapLocationWatch() {
         return;
     }
 
-    // If already running, do nothing (prevents duplicate watches)
-    if (liveMapWatchId) return;
-
-    // Fresh run
+    // Fresh run each time we arrive on the Compass page
     bestLiveAccuracy = Infinity;
     smoothedUserCoords = null;
     movementHistory = [];
 
-    liveMapWatchId = navigator.geolocation.watchPosition(
-        (position) => {
-            const accuracy = Math.round(position.coords.accuracy * 10) / 10;
+    // Start / restart the GPS watch
+//    if (liveMapWatchId !== null) {
+  //      navigator.geolocation.clearWatch(liveMapWatchId);
+    //    liveMapWatchId = null;
+   // }
 
+liveMapWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const accuracy = Math.round(position.coords.accuracy *10) / 10;
+
+            // Raw latest reading
             currentUserCoords = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude
             };
             currentUserAccuracy = accuracy;
 
+            // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
 
+            // Record this smoothed point into the movement history
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
             }
 
-            // If recording a track, log points using the smoothed position
+            // NEW: if we’re recording a track, log a point using the smoothed location
             if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
                 logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
             }
 
-            if (accuracy < bestLiveAccuracy) bestLiveAccuracy = accuracy;
+            // Track best accuracy (for logging/info)
+            if (accuracy < bestLiveAccuracy) {
+                bestLiveAccuracy = accuracy;
+            }
+
+            // ... rest of your logging code stays the same ...
+
+            console.log(
+                `Live Map position (raw): ${currentUserCoords.lat.toFixed(6)}, ` +
+                `${currentUserCoords.lon.toFixed(6)} (acc: ${accuracy.toFixed(1)}m, best: ${bestLiveAccuracy.toFixed(1)}m)`
+            );
+
+            if (smoothedUserCoords) {
+                console.log(
+                    `Live Map position (smoothed): ${smoothedUserCoords.lat.toFixed(6)}, ` +
+                    `${smoothedUserCoords.lon.toFixed(6)}`
+                );
+            }
         },
         (error) => {
             currentUserCoords = null;
@@ -2967,7 +3024,13 @@ function startLiveMapLocationWatch() {
         }
     );
 
-    console.log('Live Map GPS watch started.');
+    // Start the auto-refresh interval (if not already running)
+    if (autoRefreshIntervalId === null) {
+        autoRefreshIntervalId = setInterval(() => {
+            updateMapWithUserLocationAndRender();
+        }, 3000); // 3 seconds
+        console.log('Live Map GPS Watch and auto-refresh interval started.');
+    }
 }
 
 /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
@@ -2981,6 +3044,7 @@ function stopCompassAutoRefresh() {
     if (autoRefreshIntervalId) {
         clearInterval(autoRefreshIntervalId);
         autoRefreshIntervalId = null;
+        console.log("Compass auto-refresh paused.");
     }
 }
 
@@ -4396,29 +4460,13 @@ function handleSurveyAction(button) {
                 render();
                 break;
 
-            case 'close': {
-                 const now = Date.now();
-
-    // Stop any active tracking / recording first
-                stopTrackRecording('survey closed');
-                isTrackingActive = false;
-
-                if (typeof stopLiveMapLocationWatch === 'function') {
-                stopLiveMapLocationWatch();
-                }
-                if (typeof stopCompassAutoRefresh === 'function') {
-                stopCompassAutoRefresh();
-                }
-
-    // ✅ Correct status
-                survey.status = 'Closed';
+            case 'close':
+                survey.status = 'Active';
                 survey.dateLastChanged = now;
-
                 saveSurveysToLocalStorage();
-                showMessage(`Survey '${name}' is now CLOSED.`, 'info');
+                showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
                 render();
                 break;
-                }
 
             case 'archive':
                 survey.status = 'Archived';
@@ -4931,6 +4979,7 @@ function renderHomePage() {
         return list.map(s => renderSurveyCard(s, s.id === (openSurvey ? openSurvey.id : null))).join('');
     };
 
+    // CRITICAL FIX: The template literal must start on the same line as 'return'
     return `<div class="p-4">
         <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
 
@@ -6446,35 +6495,6 @@ if (movementBearingDeg !== null) {
         // ======================================
 // TRACK RECORDING HELPERS
 // ======================================
-function stopTrackRecording(reason = '') {
-    // Find the currently active recording track (if any)
-    const active = getActiveTrack();
-    if (active && active.track) {
-        active.track.isRecording = false;
-    }
-
-    // Also clear any “isRecording” flags that might be lingering
-    if (Array.isArray(surveys)) {
-        surveys.forEach(s => {
-            if (Array.isArray(s.tracks)) {
-                s.tracks.forEach(t => {
-                    if (t && t.isRecording) t.isRecording = false;
-                });
-            }
-        });
-    }
-
-    activeTrackId = null;
-    activeTrackSurveyId = null;
-
-    saveSurveysToLocalStorage();
-
-    if (reason) {
-        showMessage(`Track recording stopped (${reason}).`, 'info');
-    } else {
-        showMessage('Track recording stopped.', 'info');
-    }
-}
 
 function refreshActiveTrackFromSurveys() {
     activeTrackSurveyId = null;
@@ -6603,12 +6623,28 @@ function handleStartTrackClick() {
  * Stop recording the active track (if any).
  */
 function handleStopTrackClick() {
-    stopTrackRecording('Stop button');
+    const active = getActiveTrack();
+    if (!active) {
+        showMessage('No active track to stop.', 'warning');
+        return;
+    }
 
-    // Do NOT force GPS off here.
-    // User can keep GPS on to see where they are.
+    isTrackingActive = false;
+    stopLiveMapLocationWatch();   // clears user coords so map zoom is based on targets/tracks only
+    startCompassAutoRefresh();    // optional, but keeps redraw behaviour consistent
+
+    active.track.isRecording = false;
+    saveSurveysToLocalStorage();
+
+    const name = active.track.name || 'track';
+
+    activeTrackSurveyId = null;
+    activeTrackId = null;
+
+    showMessage(`Stopped recording ${name}.`, 'info');
     render();
 }
+
 /**
  * Toggle whether a track is drawn on the map.
  */
@@ -6730,20 +6766,23 @@ function renderCompassPage(isAutoRefresh = false) {
     const activeEl = document.activeElement;
     const isTypingInQuickBox = activeEl && activeEl.id === 'compass-quick-target-vdi';
 
-    // GPS state (separate from “recording a track”)
-    const isGpsOn = !!liveMapWatchId;
-
-    // GPS watch:
-    // - Start ONLY when tracking is active (existing behaviour),
-    // - but DO NOT auto-stop here (GPS can be left on for “just show me where I am”).
+    // GPS watch: only needed while tracking is active
     if (isTrackingActive) {
         if (!liveMapWatchId) startLiveMapLocationWatch();
+    } else {
+        if (typeof stopLiveMapLocationWatch === 'function') {
+            stopLiveMapLocationWatch();
+        } else if (liveMapWatchId) {
+            try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
+            liveMapWatchId = null;
+            bestLiveAccuracy = Infinity;
+            smoothedUserCoords = null;
+        }
     }
 
-    // Auto-refresh loop:
-    // - only when GPS is ON (watch running), and never while typing
+    // Auto-refresh loop: only when tracking is active, and never while typing
     if (!isAutoRefresh) {
-        if (!isGpsOn || isTypingInQuickBox) {
+        if (!isTrackingActive || isTypingInQuickBox) {
             if (autoRefreshIntervalId) {
                 clearInterval(autoRefreshIntervalId);
                 autoRefreshIntervalId = null;
@@ -6775,12 +6814,12 @@ function renderCompassPage(isAutoRefresh = false) {
         ? openSurvey.tracks.find(t => t && t.isRecording)
         : null;
 
-    const trackingStatusHtml = isGpsOn
+    const trackingStatusHtml = isTrackingActive
         ? `<span class="flex items-center text-[11px] text-green-700 font-semibold">
                 <span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse"></span>
-                GPS ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}
+                Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}
            </span>`
-        : `<span class="text-[11px] text-gray-500">GPS OFF</span>`;
+        : `<span class="text-[11px] text-gray-500">Tracking OFF</span>`;
 
     return `
         <div class="p-4">
@@ -6810,9 +6849,9 @@ ${(() => {
         ? openSurvey.tracks.find(t => t && t.isRecording)
         : null;
 
-    const statusText = isGpsOn
-        ? `GPS ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
-        : 'GPS OFF';
+    const statusText = isOn
+        ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
+        : 'Tracking OFF';
 
     return `
     <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
@@ -6821,7 +6860,7 @@ ${(() => {
                 <i class="fas fa-route mr-2"></i> Tracking Controls
             </h3>
 
-            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isGpsOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
                 ${statusText}
             </span>
         </div>
@@ -6846,25 +6885,8 @@ ${(() => {
             </button>
         </div>
 
-        <!-- NEW: GPS on/off buttons (work even when not recording a track) -->
-        <div class="grid grid-cols-2 gap-3 mt-3">
-            <button
-                id="gps-on-btn"
-                type="button"
-                class="py-3 rounded-xl font-bold text-white shadow bg-emerald-600 hover:bg-emerald-700">
-                📍 Turn on GPS
-            </button>
-
-            <button
-                id="gps-off-btn"
-                type="button"
-                class="py-3 rounded-xl font-bold text-gray-900 shadow bg-gray-200 hover:bg-gray-300">
-                📴 Turn off GPS
-            </button>
-        </div>
-
         <p class="text-xs text-gray-500 mt-2">
-            Tip: you can turn GPS ON just to see where you are, even if you are not recording a track.
+            Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
         </p>
     </div>
     `;
@@ -6900,7 +6922,7 @@ ${(() => {
                 </p>
             </div>
 
-            <!-- Quick range buttons (rainbow) -->
+                    <!-- Quick range buttons (rainbow) -->
             <div class="bg-white p-3 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <div class="grid grid-cols-5 gap-2">
                     <button type="button"
@@ -6939,6 +6961,7 @@ ${(() => {
                 </p>
             </div>
 
+
             <!-- Map -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
@@ -6955,6 +6978,7 @@ ${(() => {
         </div>
     `;
 }
+
         
 /** Renders the content for the Settings page. */
 function renderSettingsPage() {
@@ -7492,7 +7516,7 @@ async function importSurveyWithPhotosFromFile() {
 
         // 2. Initial render call
         render();
-        }
+
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
