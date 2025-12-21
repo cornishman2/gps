@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sort 3 - Metal Detecting Survey Log</title>
+    <title>TRacks 1 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2949,7 +2949,7 @@ function stopLiveMapLocationWatch() {
     console.log("Live Map GPS Watch stopped and user map state cleared.");
 }
 
-    function startLiveMapLocationWatch() {
+function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
         currentUserCoords = null;
         currentUserAccuracy = null;
@@ -2958,59 +2958,36 @@ function stopLiveMapLocationWatch() {
         return;
     }
 
-    // Fresh run each time we arrive on the Compass page
+    // If already running, do nothing (prevents duplicate watches)
+    if (liveMapWatchId) return;
+
+    // Fresh run
     bestLiveAccuracy = Infinity;
     smoothedUserCoords = null;
     movementHistory = [];
 
-    // Start / restart the GPS watch
-//    if (liveMapWatchId !== null) {
-  //      navigator.geolocation.clearWatch(liveMapWatchId);
-    //    liveMapWatchId = null;
-   // }
-
-liveMapWatchId = navigator.geolocation.watchPosition(
+    liveMapWatchId = navigator.geolocation.watchPosition(
         (position) => {
-            const accuracy = Math.round(position.coords.accuracy *10) / 10;
+            const accuracy = Math.round(position.coords.accuracy * 10) / 10;
 
-            // Raw latest reading
             currentUserCoords = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude
             };
             currentUserAccuracy = accuracy;
 
-            // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
 
-            // Record this smoothed point into the movement history
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
             }
 
-            // NEW: if we’re recording a track, log a point using the smoothed location
+            // If recording a track, log points using the smoothed position
             if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
                 logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
             }
 
-            // Track best accuracy (for logging/info)
-            if (accuracy < bestLiveAccuracy) {
-                bestLiveAccuracy = accuracy;
-            }
-
-            // ... rest of your logging code stays the same ...
-
-            console.log(
-                `Live Map position (raw): ${currentUserCoords.lat.toFixed(6)}, ` +
-                `${currentUserCoords.lon.toFixed(6)} (acc: ${accuracy.toFixed(1)}m, best: ${bestLiveAccuracy.toFixed(1)}m)`
-            );
-
-            if (smoothedUserCoords) {
-                console.log(
-                    `Live Map position (smoothed): ${smoothedUserCoords.lat.toFixed(6)}, ` +
-                    `${smoothedUserCoords.lon.toFixed(6)}`
-                );
-            }
+            if (accuracy < bestLiveAccuracy) bestLiveAccuracy = accuracy;
         },
         (error) => {
             currentUserCoords = null;
@@ -3024,13 +3001,7 @@ liveMapWatchId = navigator.geolocation.watchPosition(
         }
     );
 
-    // Start the auto-refresh interval (if not already running)
-    if (autoRefreshIntervalId === null) {
-        autoRefreshIntervalId = setInterval(() => {
-            updateMapWithUserLocationAndRender();
-        }, 3000); // 3 seconds
-        console.log('Live Map GPS Watch and auto-refresh interval started.');
-    }
+    console.log('Live Map GPS watch started.');
 }
 
 /** Wrapper function to re-render Compass page for auto-refresh using the latest watched GPS data. */
@@ -3044,7 +3015,6 @@ function stopCompassAutoRefresh() {
     if (autoRefreshIntervalId) {
         clearInterval(autoRefreshIntervalId);
         autoRefreshIntervalId = null;
-        console.log("Compass auto-refresh paused.");
     }
 }
 
@@ -4460,13 +4430,29 @@ function handleSurveyAction(button) {
                 render();
                 break;
 
-            case 'close':
-                survey.status = 'Active';
+            case 'close': {
+                 const now = Date.now();
+
+    // Stop any active tracking / recording first
+                stopTrackRecording('survey closed');
+                isTrackingActive = false;
+
+                if (typeof stopLiveMapLocationWatch === 'function') {
+                stopLiveMapLocationWatch();
+                }
+                if (typeof stopCompassAutoRefresh === 'function') {
+                stopCompassAutoRefresh();
+                }
+
+    // ✅ Correct status
+                survey.status = 'Closed';
                 survey.dateLastChanged = now;
+
                 saveSurveysToLocalStorage();
-                showMessage(`Survey '${name}' is now CLOSED (Active).`, 'info');
+                showMessage(`Survey '${name}' is now CLOSED.`, 'info');
                 render();
                 break;
+                }
 
             case 'archive':
                 survey.status = 'Archived';
@@ -6495,6 +6481,35 @@ if (movementBearingDeg !== null) {
         // ======================================
 // TRACK RECORDING HELPERS
 // ======================================
+function stopTrackRecording(reason = '') {
+    // Find the currently active recording track (if any)
+    const active = getActiveTrack();
+    if (active && active.track) {
+        active.track.isRecording = false;
+    }
+
+    // Also clear any “isRecording” flags that might be lingering
+    if (Array.isArray(surveys)) {
+        surveys.forEach(s => {
+            if (Array.isArray(s.tracks)) {
+                s.tracks.forEach(t => {
+                    if (t && t.isRecording) t.isRecording = false;
+                });
+            }
+        });
+    }
+
+    activeTrackId = null;
+    activeTrackSurveyId = null;
+
+    saveSurveysToLocalStorage();
+
+    if (reason) {
+        showMessage(`Track recording stopped (${reason}).`, 'info');
+    } else {
+        showMessage('Track recording stopped.', 'info');
+    }
+}
 
 function refreshActiveTrackFromSurveys() {
     activeTrackSurveyId = null;
@@ -6623,28 +6638,12 @@ function handleStartTrackClick() {
  * Stop recording the active track (if any).
  */
 function handleStopTrackClick() {
-    const active = getActiveTrack();
-    if (!active) {
-        showMessage('No active track to stop.', 'warning');
-        return;
-    }
+    stopTrackRecording('Stop button');
 
-    isTrackingActive = false;
-    stopLiveMapLocationWatch();   // clears user coords so map zoom is based on targets/tracks only
-    startCompassAutoRefresh();    // optional, but keeps redraw behaviour consistent
-
-    active.track.isRecording = false;
-    saveSurveysToLocalStorage();
-
-    const name = active.track.name || 'track';
-
-    activeTrackSurveyId = null;
-    activeTrackId = null;
-
-    showMessage(`Stopped recording ${name}.`, 'info');
+    // Do NOT force GPS off here.
+    // User can keep GPS on to see where they are.
     render();
 }
-
 /**
  * Toggle whether a track is drawn on the map.
  */
