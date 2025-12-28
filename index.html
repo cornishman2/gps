@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TRack 1 - Metal Detecting Survey Log</title>
+    <title>Track 2 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1165,6 +1165,33 @@ function pickTrackColor(index) {
     return palette[Math.abs(index) % palette.length];
 }
 
+function clearStaleRecordingTracksOnLoad() {
+    let changed = false;
+
+    if (!Array.isArray(surveys)) return;
+
+    for (const survey of surveys) {
+        if (!survey || !Array.isArray(survey.tracks)) continue;
+
+        for (const t of survey.tracks) {
+            if (t && t.isRecording) {
+                t.isRecording = false;
+                changed = true;
+            }
+        }
+    }
+
+    // Clear runtime state too (so Start works immediately)
+    activeTrackSurveyId = null;
+    activeTrackId = null;
+    isTrackingActive = false;
+
+    if (changed) {
+        saveSurveysToLocalStorage();
+    }
+}
+
+
 function resetLiveTrackingAndRecordingState() {
     // Stop UI auto refresh
     if (typeof stopCompassAutoRefresh === 'function') stopCompassAutoRefresh();
@@ -2295,7 +2322,9 @@ function saveSurveysToLocalStorage() {
             showMessage("Storage quota exceeded. Consider exporting and clearing old data.", 'error');
         }
     }
-}        /** Loads data from Local Storage. Initializes if no data found. */
+}
+        
+/** Loads data from Local Storage. Initializes if no data found. */
     function loadDataFromLocalStorage() {
     try {
         const storedSurveys = localStorage.getItem('geoFindSurveys');
@@ -2351,8 +2380,8 @@ function saveSurveysToLocalStorage() {
                     userId = generateId();
                 }
 
-                saveSurveysToLocalStorage(); // Ensure initial data and ID are saved
-                refreshActiveTrackFromSurveys(); // NEW: hydrate any persisted active track
+                saveSurveysToLocalStorage();
+                clearStaleRecordingTracksOnLoad();
 
             } catch (e) {
                 console.error("Error loading from Local Storage:", e);
