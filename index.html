@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 4 - Metal Detecting Survey Log</title>
+    <title>Track 5 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6219,9 +6219,9 @@ function renderNavigationPanel(openSurvey) {
     //
     // If a navigation target is selected, ensure GPS watch is running
 // (this enables navigation without recording a track)
-if (!liveMapWatchId) {
-    startLiveMapLocationWatch();
-}
+//if (!liveMapWatchId) {
+//    startLiveMapLocationWatch();
+//}
 
     // Decide which user coords to use (prefer smoothed if available)
     const effectiveUser = smoothedUserCoords || currentUserCoords;
@@ -6618,19 +6618,21 @@ function renderCompassPage(isAutoRefresh = false) {
     const activeEl = document.activeElement;
     const isTypingInQuickBox = activeEl && activeEl.id === 'compass-quick-target-vdi';
 
-    // GPS watch: only needed while tracking is active
-    if (isAnyTrackRecording()) {
-        if (!liveMapWatchId) startLiveMapLocationWatch();
-    } else {
-        if (typeof stopLiveMapLocationWatch === 'function') {
-            stopLiveMapLocationWatch();
-        } else if (liveMapWatchId) {
-            try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
-            liveMapWatchId = null;
-            bestLiveAccuracy = Infinity;
-            smoothedUserCoords = null;
-        }
+    // GPS watch: needed for tracking OR navigation
+const needsGps = isAnyTrackRecording() || !!navigationTargetId;
+
+if (needsGps) {
+    if (!liveMapWatchId) startLiveMapLocationWatch();
+} else {
+    if (typeof stopLiveMapLocationWatch === 'function') {
+        stopLiveMapLocationWatch();
+    } else if (liveMapWatchId) {
+        try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
+        liveMapWatchId = null;
+        bestLiveAccuracy = Infinity;
+        smoothedUserCoords = null;
     }
+}
 
     // Auto-refresh loop: only when tracking is active, and never while typing
     if (!isAutoRefresh) {
