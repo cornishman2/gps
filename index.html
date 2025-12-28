@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 6 - Metal Detecting Survey Log</title>
+    <title>Track 7 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -852,6 +852,7 @@ let currentPage = 'Home';
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
+let showUserPosition = true; // default: show user location on the map
 
 let targetSortMode = 'date'; // 'date' | 'id'
 
@@ -918,6 +919,11 @@ let photoSettings = {
 
 // Holds the chosen folder handle for this session
 let photoGalleryExportRootHandle = null;
+
+function needsGpsNow() {
+    // GPS needed if: user wants to see themselves OR navigation is active OR tracking is recording
+    return !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
+}
 
 /** Step 1: user picks a folder; we store the handle and show its name in the textbox. */
 async function pickPhotoGalleryExportFolder() {
@@ -5724,7 +5730,7 @@ function renderTargetPlot(targets) {
     const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
 
 // Treat GPS as "present" for the map when tracking OR navigation is active
-const needsGps = isAnyTrackRecording() || !!navigationTargetId;
+const needsGps = !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
 
 const hasUserGPS =
     needsGps &&
@@ -6623,7 +6629,8 @@ function renderCompassPage(isAutoRefresh = false) {
     // GPS watch: needed for tracking OR navigation
 const needsGps = isAnyTrackRecording() || !!navigationTargetId;
 
-if (needsGps) {
+// GPS watch: needed for showing user position OR navigation OR recording a track
+if (needsGpsNow()) {
     if (!liveMapWatchId) startLiveMapLocationWatch();
 } else {
     if (typeof stopLiveMapLocationWatch === 'function') {
@@ -6740,6 +6747,21 @@ ${(() => {
                 🔴 Stop Tracking
             </button>
         </div>
+        <div class="mt-3">
+    <button
+        id="toggle-gps-btn"
+        type="button"
+        class="w-full py-3 rounded-xl font-bold text-white shadow hover:opacity-90"
+        style="background-color: rgb(var(--color-secondary));"
+    >
+        ${showUserPosition ? '📍 Hide My Position' : '📍 Show My Position'}
+    </button>
+
+    <p class="text-xs text-gray-500 mt-2">
+        This controls whether your live position is shown. It does not record a track.
+    </p>
+</div>
+
 
         <p class="text-xs text-gray-500 mt-2">
             Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
@@ -7307,6 +7329,32 @@ async function performSurveyImport(text, filename, log) {
 
     /** Attaches event listeners for dynamically rendered elements */
 function attachPageEventListeners() {
+
+    const gpsBtn = document.getElementById('toggle-gps-btn');
+if (gpsBtn) {
+    gpsBtn.addEventListener('click', () => {
+        showUserPosition = !showUserPosition;
+
+        // If turning OFF, stop GPS only if nothing else needs it
+        if (!needsGpsNow()) {
+            if (typeof stopLiveMapLocationWatch === 'function') stopLiveMapLocationWatch();
+        } else {
+            if (!liveMapWatchId) startLiveMapLocationWatch();
+        }
+
+        showMessage(showUserPosition ? 'Showing your position.' : 'Hiding your position.', 'info');
+
+        // Re-render Compass to update button label + map
+        if (currentPage === 'Compass') {
+            const appContent = document.getElementById('app-content');
+            if (appContent) {
+                appContent.innerHTML = renderCompassPage(true);
+                attachPageEventListeners();
+            }
+        }
+    });
+}
+
     // 1. Navigation Button Listener
     document.querySelectorAll('.nav-btn').forEach(button => {
         button.onclick = (e) => {
