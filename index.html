@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 9 - Metal Detecting Survey Log</title>
+    <title>Track 10 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -855,6 +855,9 @@ let compassQuickTargetIdDraft = '';
 let showUserPosition = true; // default: show user location on the map
 
 let targetSortMode = 'date'; // 'date' | 'id'
+
+let hasRenderedFirstGpsFix = false;
+
 
 // Simple filter state for the Finds page
 let findsFilter = {
@@ -2795,6 +2798,8 @@ function stopLiveMapLocationWatch() {
     currentUserAccuracy = null;
     smoothedUserCoords = null;
     movementHistory = [];
+    hasRenderedFirstGpsFix = false;
+
 
     console.log("Live Map GPS Watch stopped and user map state cleared.");
 }
@@ -2832,6 +2837,19 @@ liveMapWatchId = navigator.geolocation.watchPosition(
 
             // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
+
+        // Force a one-time redraw on first GPS fix so the user dot appears immediately
+if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
+    hasRenderedFirstGpsFix = true;
+
+    // Re-render Compass safely without starting extra loops
+    const appContent = document.getElementById('app-content');
+    if (appContent) {
+        appContent.innerHTML = renderCompassPage(true);
+        attachPageEventListeners();
+    }
+}
+
 
             // Record this smoothed point into the movement history
             if (smoothedUserCoords) {
