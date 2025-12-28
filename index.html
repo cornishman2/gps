@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 7 - Metal Detecting Survey Log</title>
+    <title>Track 8 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6487,19 +6487,25 @@ function handleStopTrackClick() {
         return;
     }
 
-    isTrackingActive = false;
-    stopLiveMapLocationWatch();   // clears user coords so map zoom is based on targets/tracks only
-    startCompassAutoRefresh();    // optional, but keeps redraw behaviour consistent
-
+    // Stop recording points into the track
     active.track.isRecording = false;
     saveSurveysToLocalStorage();
 
     const name = active.track.name || 'track';
 
+    // Clear "active recording" pointers (this is the real source of truth)
     activeTrackSurveyId = null;
     activeTrackId = null;
-    
-    isTrackingActive = false;
+
+    // Keep GPS running if user position is shown OR navigation target exists
+    // (Requires you to have needsGpsNow() as discussed, or inline the condition)
+    if (typeof needsGpsNow === 'function') {
+        if (!needsGpsNow()) {
+            if (typeof stopLiveMapLocationWatch === 'function') stopLiveMapLocationWatch();
+        } else {
+            if (!liveMapWatchId) startLiveMapLocationWatch();
+        }
+    }
 
     showMessage(`Stopped recording ${name}.`, 'info');
     render();
