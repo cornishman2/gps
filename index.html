@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 18 - Metal Detecting Survey Log</title>
+    <title>Track 19 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6212,168 +6212,120 @@ function toggleMapFullscreen() {
     render(); 
 }  
 
-function renderNavigationMiniMap({ targetLat, targetLon, userLat, userLon, bearingDeg, distMeters }) {
-    // Fixed anchors (your requested layout)
-    const userAnchor = { x: 50, y: 82 };
-    const targetAnchor = { x: 50, y: 18 };
-
-    // If nav session isn't ready yet, show a friendly hint
-    if (!navSession || !navSession.active) {
-        return '';
-    }
-
-    // If we don't have a nav start fix yet, show a gentle hint (but still show distance)
-    const startLat = navSession.startLat;
-    const startLon = navSession.startLon;
+function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon, distMeters }) {
+    const userAnchor = { x: 50, y: 50 }; // centre of the mini-map
 
     const distStr =
-        distMeters >= 1000
-            ? (distMeters / 1000).toFixed(2) + ' km'
-            : distMeters.toFixed(1) + ' m';
+        distMeters >= 1000 ? (distMeters / 1000).toFixed(2) + ' km' : distMeters.toFixed(1) + ' m';
 
-    if (typeof startLat !== 'number' || typeof startLon !== 'number') {
+    // Need nav start fix
+    if (!navSession || !navSession.active || typeof navSession.startLat !== 'number' || typeof navSession.startLon !== 'number') {
         return `
             <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
                 <div class="flex items-center justify-between mb-3">
                     <h4 class="text-base font-semibold text-gray-700 flex items-center">
-                        <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map
+                        <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map (Simple)
                     </h4>
-                    <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                        ${distStr}
-                    </span>
+                    <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">${distStr}</span>
                 </div>
                 <div class="text-sm text-gray-600">Waiting for your GPS position…</div>
             </div>
         `;
     }
 
-    // Scale: keep view useful close-in, avoid huge stretches
-    const idealSpan = (userAnchor.y - targetAnchor.y); // ~64 units
-    const scaleMeters = Math.max(10, Math.min(distMeters, 250)); // clamp 10..250m
-    const metersPerUnit = scaleMeters / idealSpan;
+    const startLat = navSession.startLat;
+    const startLon = navSession.startLon;
 
-    // Rotate so "towards target" is always UP
-     const refBearing = (navSession && typeof navSession.baseBearingDeg === 'number')
-    ? navSession.baseBearingDeg
-    : bearingDeg;
-
-    const theta = (-refBearing) * Math.PI / 180;
-   const cosT = Math.cos(theta);
-    const sinT = Math.sin(theta);
-
-    // Local meters approximation around nav start
+    // Convert lat/lon to local metres around start (no rotation)
     const mPerDegLat = 110574;
     const mPerDegLon = 111320 * Math.cos(startLat * Math.PI / 180);
 
-    function toLocalMeters(lat, lon) {
-        const dx = (lon - startLon) * mPerDegLon; // east +
-        const dy = (lat - startLat) * mPerDegLat; // north +
-        return { dx, dy };
-    }
+    const toLocalMeters = (lat, lon) => ({
+        x: (lon - startLon) * mPerDegLon,   // east/right +
+        y: (lat - startLat) * mPerDegLat    // north/up +
+    });
 
-    function rotateToTargetUp(dx, dy) {
-        const rx = dx * cosT - dy * sinT;
-        const ry = dx * sinT + dy * cosT;
-        return { rx, ry };
-    }
+    // Collect points (path + current + target)
+    const path = Array.isArray(navSession.path) ? navSession.path.slice(-120) : [];
+    const targetM = toLocalMeters(targetLat, targetLon);
+    const userM = toLocalMeters(userLat, userLon);
 
-    function toSvgFromMeters(dx, dy) {
-        const r = rotateToTargetUp(dx, dy);
-        const x = userAnchor.x - (r.rx / metersPerUnit);
-        const y = userAnchor.y - (r.ry / metersPerUnit);
-        return {
-            x: Math.max(2, Math.min(98, x)),
-            y: Math.max(2, Math.min(98, y))
-        };
-    }
+    // Determine scale so everything fits nicely
+    const candidates = [
+        ...path.map(p => toLocalMeters(p.lat, p.lon)),
+        targetM,
+        userM,
+        { x: 0, y: 0 }
+    ];
 
-    // Build breadcrumb polyline from navSession.path (real walked path)
-    const path = Array.isArray(navSession.path) ? navSession.path.slice(-80) : [];
+    let maxAbs = 10; // metres
+    candidates.forEach(p => {
+        maxAbs = Math.max(maxAbs, Math.abs(p.x), Math.abs(p.y));
+    });
 
+    // map metres to SVG units (viewBox 0..100)
+    // leave margin: maxAbs maps to ~40 units
+    const metersPerUnit = maxAbs / 40;
+
+    const toSvg = (m) => ({
+        x: userAnchor.x + (m.x / metersPerUnit),
+        y: userAnchor.y - (m.y / metersPerUnit) // invert so north is up
+    });
+
+    // Polyline
     let poly = '';
-    let startDot = '';
-    let currentDot = '';
-
-    if (path.length >= 1) {
-        // Start point (black)
-        const p0 = path[0];
-        const m0 = toLocalMeters(p0.lat, p0.lon);
-        const s0 = toSvgFromMeters(m0.dx, m0.dy);
-        startDot = `<circle cx="${s0.x.toFixed(1)}" cy="${s0.y.toFixed(1)}" r="2.3" fill="black" />`;
-
-        // Polyline (green)
-        const pts = path
-            .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
-            .map(p => {
-                const m = toLocalMeters(p.lat, p.lon);
-                const s = toSvgFromMeters(m.dx, m.dy);
-                return `${s.x.toFixed(1)},${s.y.toFixed(1)}`;
-            });
-
-        if (pts.length >= 2) {
-            poly = `
-                <polyline
-                    points="${pts.join(' ')}"
-                    fill="none"
-                    stroke="rgba(16,185,129,0.95)"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                />
-            `;
-        }
-
-        // Current user point (red) plotted from current userLat/userLon
-        if (typeof userLat === 'number' && typeof userLon === 'number') {
-            const mU = toLocalMeters(userLat, userLon);
-            const sU = toSvgFromMeters(mU.dx, mU.dy);
-            currentDot = `<circle cx="${sU.x.toFixed(1)}" cy="${sU.y.toFixed(1)}" r="2.9" fill="rgba(239,68,68,1)" />`;
-        }
-    } else {
-        // If path is empty, still show current user dot at anchor (fallback)
-        currentDot = `<circle cx="${userAnchor.x}" cy="${userAnchor.y}" r="2.9" fill="rgba(239,68,68,1)" />`;
+    if (path.length >= 2) {
+        const pts = path.map(p => {
+            const m = toLocalMeters(p.lat, p.lon);
+            const s = toSvg(m);
+            return `${s.x.toFixed(1)},${s.y.toFixed(1)}`;
+        });
+        poly = `<polyline points="${pts.join(' ')}" fill="none"
+                  stroke="rgba(16,185,129,0.95)" stroke-width="1.8"
+                  stroke-linecap="round" stroke-linejoin="round" />`;
     }
 
-    // Target is always top-centre (blue), as requested
-    const targetDot = `<circle cx="${targetAnchor.x}" cy="${targetAnchor.y}" r="3.2" fill="rgba(37,99,235,1)" />`;
+    // Start (black), Current user (red), Target (blue)
+    const startDot = `<circle cx="${userAnchor.x}" cy="${userAnchor.y}" r="2.3" fill="black" />`;
+
+    const userSvg = toSvg(userM);
+    const userDot = `<circle cx="${userSvg.x.toFixed(1)}" cy="${userSvg.y.toFixed(1)}" r="2.9" fill="rgba(239,68,68,1)" />`;
+
+    const targetSvg = toSvg(targetM);
+    const targetDot = `<circle cx="${targetSvg.x.toFixed(1)}" cy="${targetSvg.y.toFixed(1)}" r="3.2" fill="rgba(37,99,235,1)" />`;
+
+    // Line from current user to target (blue dashed)
+    const navLine = `
+        <line x1="${userSvg.x.toFixed(1)}" y1="${userSvg.y.toFixed(1)}"
+              x2="${targetSvg.x.toFixed(1)}" y2="${targetSvg.y.toFixed(1)}"
+              stroke="rgba(37,99,235,0.9)" stroke-width="1.4" stroke-dasharray="3 2" />
+    `;
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
             <div class="flex items-center justify-between mb-3">
                 <h4 class="text-base font-semibold text-gray-700 flex items-center">
-                    <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map
+                    <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map (Simple)
                 </h4>
-                <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                    ${distStr}
-                </span>
+                <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">${distStr}</span>
             </div>
 
             <div class="relative w-full aspect-square rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
                 <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <!-- Ideal line is always vertical -->
-                    <line x1="${userAnchor.x}" y1="${userAnchor.y}" x2="${targetAnchor.x}" y2="${targetAnchor.y}"
-                          stroke="rgba(37,99,235,0.9)" stroke-width="1.4" stroke-dasharray="3 2" />
-
                     ${poly}
+                    ${navLine}
                     ${startDot}
-                    ${currentDot}
-
-                    <!-- TARGET (BLUE, top-centre) -->
+                    ${userDot}
                     ${targetDot}
-                    <text x="${targetAnchor.x}" y="${targetAnchor.y - 6}" text-anchor="middle" font-size="4" fill="#111827">TARGET</text>
-
-                    <!-- YOU label (bottom-centre) -->
-                    <text x="${userAnchor.x}" y="${userAnchor.y + 10}" text-anchor="middle" font-size="4" fill="#111827">YOU</text>
                 </svg>
             </div>
 
             <div class="text-[11px] text-gray-500 mt-2">
-                Green = walked path. Black = start. Red = you now. Blue = target. Up = towards target.
+                Green = your walked path. Black = start. Red = you now. Blue = target. (North is up.)
             </div>
         </div>
     `;
 }
-
         
     function renderNavigationPanel(openSurvey) {
     // If no navigation target has been selected yet, show a hint.
@@ -6523,10 +6475,10 @@ if (navSession && navSession.active && (navSession.startLat === null || navSessi
 // --- Movement-based guidance (optional, only if we have enough movement) ---
 let guidanceHtml = '';
 const movementBearingDeg = computeMovementBearingDegrees();
-const miniMapHtml = renderNavigationMiniMap({
+const miniMapHtml = renderNavigationMiniMapSimple({
     targetLat, targetLon,
     userLat, userLon,
-    bearingDeg, distMeters
+    distMeters
 });
 
 
