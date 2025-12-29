@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 13 - Metal Detecting Survey Log</title>
+    <title>Track 14 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -860,6 +860,16 @@ let hasRenderedFirstGpsFix = false;
 
 let navBreadcrumbStartIndex = 0;
 
+let navSession = {
+    active: false,
+    startLat: null,
+    startLon: null,
+    targetLat: null,
+    targetLon: null,
+    path: [],          // array of {lat, lon}
+    lastLat: null,
+    lastLon: null
+};
 
 
 // Simple filter state for the Finds page
@@ -2840,6 +2850,7 @@ liveMapWatchId = navigator.geolocation.watchPosition(
 
             // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
+            
 
         // Force a one-time redraw on first GPS fix so the user dot appears immediately
 if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
@@ -2856,8 +2867,27 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
 
             // Record this smoothed point into the movement history
             if (smoothedUserCoords) {
-                recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
+                recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);   
             }
+// If navigating, record a breadcrumb point (real walked path, not derived bearings)
+if (navSession.active && navigationTargetId && smoothedUserCoords) {
+    const lat = smoothedUserCoords.lat;
+    const lon = smoothedUserCoords.lon;
+
+    // Only add a point if we've moved ~2m or more (reduces jitter)
+    if (navSession.lastLat === null || navSession.lastLon === null) {
+        navSession.lastLat = lat;
+        navSession.lastLon = lon;
+        navSession.path.push({ lat, lon });
+    } else {
+        const d = distanceMeters(navSession.lastLat, navSession.lastLon, lat, lon);
+        if (d >= 2) {
+            navSession.lastLat = lat;
+            navSession.lastLon = lon;
+            navSession.path.push({ lat, lon });
+        }
+    }
+}
 
             // NEW: if we’re recording a track, log a point using the smoothed location
             if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
@@ -4397,7 +4427,26 @@ function handleSurveyAction(button) {
 
     // Save the selected target ID for navigation
     navigationTargetId = targetId;
+// Start a fresh navigation session for breadcrumbs
+navSession.active = true;
+navSession.path = [];
+navSession.lastLat = null;
+navSession.lastLon = null;
 
+// Prefer smoothed coords if available
+const u = smoothedUserCoords || currentUserCoords;
+if (u && typeof u.lat === 'number' && typeof u.lon === 'number') {
+    navSession.startLat = u.lat;
+    navSession.startLon = u.lon;
+    navSession.lastLat = u.lat;
+    navSession.lastLon = u.lon;
+    navSession.path.push({ lat: u.lat, lon: u.lon }); // start point
+} else {
+    navSession.startLat = null;
+    navSession.startLon = null;
+}
+
+        
     // Start breadcrumb fresh from the moment navigation is selected
     navBreadcrumbStartIndex = Array.isArray(movementHistory) ? movementHistory.length : 0;
     
@@ -4417,6 +4466,16 @@ function handleSurveyAction(button) {
 
             function clearNavigationTarget() {
     navigationTargetId = null;
+    // Stop navigation session
+navSession.active = false;
+navSession.path = [];
+navSession.startLat = null;
+navSession.startLon = null;
+navSession.targetLat = null;
+navSession.targetLon = null;
+navSession.lastLat = null;
+navSession.lastLon = null;
+
     showMessage('Navigation target cleared.', 'info');
 
     // If we are on the Compass page, re-render so the panel updates
@@ -6171,104 +6230,121 @@ function toggleMapFullscreen() {
     render(); 
 }  
 
-function renderNavigationMiniMap({ distMeters, bearingDeg, movementBearingDeg }) {
-    // Panel coordinate system: 0..100 in both directions
-    const user = { x: 50, y: 82 };
-    const target = { x: 50, y: 18 };
+function renderNavigationMiniMap({ targetLat, targetLon, userLat, userLon, bearingDeg, distMeters }) {
+    // SVG space 0..100
+    const W = 100, H = 100;
 
-    // Build a breadcrumb polyline from movementHistory (if available)
-    // We map movement into sideways drift relative to the ideal path.
-    // Forward progress is just time/order (not distance), so it stays stable.
-    let crumbPolyline = '';
-    let crumbNote = '';
+    // Fixed anchor points for the "ideal" display
+    const userAnchor = { x: 50, y: 82 };   // where the start point sits
+    const targetAnchor = { x: 50, y: 18 };
 
-    const full = Array.isArray(movementHistory) ? movementHistory : [];
-    const mh = full.slice(navBreadcrumbStartIndex).slice(-25);
+    // Compute a stable scale:
+    // - We want the target to sit near the top regardless of real distance.
+    // - Use distance as scaling reference, but clamp so it doesn't explode.
+    const idealSpanPx = (userAnchor.y - targetAnchor.y); // ~64 units
+    const scaleMeters = Math.max(10, Math.min(distMeters, 250)); // clamp 10..250m
+    const metersPerUnit = scaleMeters / idealSpanPx; // meters per SVG unit
 
-    
-    if (mh.length >= 3) {
-        // Anchor at the first sample
-        const p0 = mh[0];
+    // Rotate world so that bearing-to-target points "up" in the mini-map.
+    // If target bearing is 0° (north), that's already up.
+    // In our SVG, up is negative Y. We'll rotate by -bearingDeg.
+    const theta = (-bearingDeg) * Math.PI / 180;
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
 
-        // Helper: bearing between two points (use your existing geo helper if available)
-        const bearingBetween = (a, b) => {
-            if (typeof initialBearingDegrees === 'function' && a && b) {
-                return initialBearingDegrees(a.lat, a.lon, b.lat, b.lon);
-            }
-            return null;
+    // Convert lat/lon to local meters using a small-area approximation around the START point
+    const startLat = navSession.startLat;
+    const startLon = navSession.startLon;
+
+    // If we don't have a nav start fix yet, show a gentle hint
+    if (typeof startLat !== 'number' || typeof startLon !== 'number') {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
+                <div class="text-sm text-gray-700 font-semibold mb-2">Navigation Mini-Map</div>
+                <div class="text-sm text-gray-600">Waiting for a stable GPS fix to start navigation…</div>
+            </div>
+        `;
+    }
+
+    const mPerDegLat = 110574;
+    const mPerDegLon = 111320 * Math.cos(startLat * Math.PI / 180);
+
+    function toLocalMeters(lat, lon) {
+        const dx = (lon - startLon) * mPerDegLon; // east +
+        const dy = (lat - startLat) * mPerDegLat; // north +
+        return { dx, dy };
+    }
+
+    function rotateToTargetUp(dx, dy) {
+        // Rotate by theta
+        const rx = dx * cosT - dy * sinT;
+        const ry = dx * sinT + dy * cosT;
+        return { rx, ry };
+    }
+
+    function toSvgPointFromMeters(dx, dy) {
+        // After rotation:
+        // +ry means "towards target" (up), so subtract from y
+        // +rx means drift right, add to x
+        const r = rotateToTargetUp(dx, dy);
+
+        const x = userAnchor.x + (r.rx / metersPerUnit);
+        const y = userAnchor.y - (r.ry / metersPerUnit);
+
+        // Clamp to viewbox
+        return {
+            x: Math.max(2, Math.min(98, x)),
+            y: Math.max(2, Math.min(98, y))
         };
+    }
 
-        // Compute drift points:
-        // - y moves upward from the user dot toward the target dot as history progresses
-        // - x drifts left/right based on angular difference from target bearing
-        const pts = [];
-        for (let i = 0; i < mh.length; i++) {
-            const pi = mh[i];
-            if (!pi || typeof pi.lat !== 'number' || typeof pi.lon !== 'number') continue;
+    // Build breadcrumb polyline from navSession.path
+    const path = Array.isArray(navSession.path) ? navSession.path.slice(-60) : [];
+    let poly = '';
+    let startDot = '';
+    let currentDot = '';
 
-            // Bearing from start of breadcrumb to this point
-            const b = bearingBetween(p0, pi);
-            if (b === null) continue;
+    if (path.length >= 1) {
+        // start point = first
+        const p0 = path[0];
+        const m0 = toLocalMeters(p0.lat, p0.lon);
+        const s0 = toSvgPointFromMeters(m0.dx, m0.dy);
+        startDot = `<circle cx="${s0.x.toFixed(1)}" cy="${s0.y.toFixed(1)}" r="2.2" fill="black" />`;
 
-            // Relative angle vs target bearing (-180..180)
-            let rel = bearingDeg - b;
-            if (rel > 180) rel -= 360;
-            if (rel <= -180) rel += 360;
-
-            // Map rel angle to sideways drift.
-            // 90° off course -> about 22 units sideways (tunable)
-            const drift = Math.max(-25, Math.min(25, (rel / 90) * 22));
-
-            // y goes from user.y toward target.y across samples
-            const t = i / (mh.length - 1);
-            const y = user.y - t * (user.y - target.y) * 0.75; // only use lower 75% of the panel
-            const x = user.x + drift;
-
-            pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-        }
+        const pts = path.map(p => {
+            const m = toLocalMeters(p.lat, p.lon);
+            const s = toSvgPointFromMeters(m.dx, m.dy);
+            return `${s.x.toFixed(1)},${s.y.toFixed(1)}`;
+        });
 
         if (pts.length >= 2) {
-            crumbPolyline = `
+            poly = `
                 <polyline
                     points="${pts.join(' ')}"
                     fill="none"
                     stroke="rgba(16,185,129,0.95)"
-                    stroke-width="1.6"
+                    stroke-width="1.8"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 />
             `;
-            crumbNote = `<div class="text-[11px] text-gray-500 mt-2">Green line: your recent path (from GPS movement).</div>`;
         }
-    } else {
-        crumbNote = `<div class="text-[11px] text-gray-500 mt-2">Walk a few metres to show your path and stabilise guidance.</div>`;
+
+        // current user position = last point, red dot
+        const plast = path[path.length - 1];
+        const mLast = toLocalMeters(plast.lat, plast.lon);
+        const sLast = toSvgPointFromMeters(mLast.dx, mLast.dy);
+        currentDot = `<circle cx="${sLast.x.toFixed(1)}" cy="${sLast.y.toFixed(1)}" r="2.8" fill="rgba(239,68,68,1)" />`;
     }
 
-    // Turn instruction banner based on movement bearing (your “relative bearing” concept)
-    let bannerText = 'Start walking to estimate direction';
-    let bannerClass = 'bg-gray-100 text-gray-700';
+    // Target point in this rotated coordinate system:
+    // Compute target offset from start, then map to SVG.
+    const mt = toLocalMeters(targetLat, targetLon);
+    const st = toSvgPointFromMeters(mt.dx, mt.dy);
 
-    if (movementBearingDeg !== null && typeof movementBearingDeg === 'number') {
-        let rel = bearingDeg - movementBearingDeg;
-        if (rel > 180) rel -= 360;
-        if (rel <= -180) rel += 360;
-
-        const absRel = Math.abs(rel);
-
-        if (absRel < 12) {
-            bannerText = 'ON COURSE';
-            bannerClass = 'bg-green-100 text-green-800';
-        } else if (absRel < 35) {
-            bannerText = rel > 0 ? 'SLIGHT RIGHT' : 'SLIGHT LEFT';
-            bannerClass = 'bg-yellow-100 text-yellow-800';
-        } else if (absRel < 120) {
-            bannerText = rel > 0 ? 'TURN RIGHT' : 'TURN LEFT';
-            bannerClass = 'bg-orange-100 text-orange-800';
-        } else {
-            bannerText = 'TURN AROUND';
-            bannerClass = 'bg-red-100 text-red-800';
-        }
-    }
+    // Force target towards top visually by capping its y to not go below targetAnchor.y
+    const targetX = st.x;
+    const targetY = Math.min(st.y, targetAnchor.y);
 
     const distStr =
         distMeters >= 1000
@@ -6281,44 +6357,39 @@ function renderNavigationMiniMap({ distMeters, bearingDeg, movementBearingDeg })
                 <h4 class="text-base font-semibold text-gray-700 flex items-center">
                     <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map
                 </h4>
-                <span class="text-xs font-semibold px-2 py-1 rounded-full ${bannerClass}">
-                    ${bannerText}
+                <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                    ${distStr}
                 </span>
             </div>
 
             <div class="relative w-full aspect-square rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
                 <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <!-- Ideal line (you -> target) -->
-                    <line x1="${user.x}" y1="${user.y}" x2="${target.x}" y2="${target.y}"
+                    <!-- Ideal line: from user anchor to target anchor -->
+                    <line x1="${userAnchor.x}" y1="${userAnchor.y}" x2="${targetAnchor.x}" y2="${targetAnchor.y}"
                           stroke="rgba(37,99,235,0.9)" stroke-width="1.4" stroke-dasharray="3 2" />
 
-                    <!-- Breadcrumb path -->
-                    ${crumbPolyline}
+                    <!-- Breadcrumb path (green) -->
+                    ${poly}
 
-                    <!-- Target -->
-                    <circle cx="${target.x}" cy="${target.y}" r="3.2" fill="rgba(239,68,68,1)" />
-                    <text x="${target.x}" y="${target.y - 6}" text-anchor="middle" font-size="4" fill="#111827">TARGET</text>
+                    <!-- Start point (black) -->
+                    ${startDot}
 
-                    <!-- User -->
-                    <circle cx="${user.x}" cy="${user.y}" r="3.2" fill="rgba(37,99,235,1)" />
-                    <text x="${user.x}" y="${user.y + 8}" text-anchor="middle" font-size="4" fill="#111827">YOU</text>
+                    <!-- Target dot (BLUE to match first map request) -->
+                    <circle cx="${targetX.toFixed(1)}" cy="${targetY.toFixed(1)}" r="3.2" fill="rgba(37,99,235,1)" />
+                    <text x="${targetX.toFixed(1)}" y="${(targetY - 6).toFixed(1)}" text-anchor="middle" font-size="4" fill="#111827">TARGET</text>
+
+                    <!-- Current user dot (RED) -->
+                    ${currentDot}
+                    <text x="${userAnchor.x}" y="${(userAnchor.y + 10).toFixed(1)}" text-anchor="middle" font-size="4" fill="#111827">YOU</text>
                 </svg>
-
-                <!-- Distance badge -->
-                <div class="absolute left-2 top-2 text-xs font-semibold bg-white/90 border border-gray-200 rounded px-2 py-1 shadow">
-                    ${distStr}
-                </div>
             </div>
 
-            ${crumbNote}
-
-            <div class="text-xs text-gray-500 mt-2">
-                Blue dashed line: ideal direction to target. Target is always shown above you; your path drifts left/right if you veer off course.
+            <div class="text-[11px] text-gray-500 mt-2">
+                Green = your walked path (GPS). Black = start. Red = you now. Blue = target. Up = towards target.
             </div>
         </div>
     `;
 }
-
         
     function renderNavigationPanel(openSurvey) {
     // If no navigation target has been selected yet, show a hint.
@@ -6434,6 +6505,12 @@ function renderNavigationMiniMap({ distMeters, bearingDeg, movementBearingDeg })
 
     const distMeters = distanceMeters(userLat, userLon, targetLat, targetLon);
     const bearingDeg = initialBearingDegrees(userLat, userLon, targetLat, targetLon);
+    const miniMapHtml = renderNavigationMiniMap({
+    targetLat, targetLon,
+    userLat, userLon,
+    bearingDeg, distMeters
+});
+
     const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
 
     const distStr =
@@ -6521,8 +6598,8 @@ if (movementBearingDeg !== null) {
             <p class="text-sm text-gray-700 mb-1">
                 <span class="font-semibold">Bearing from you:</span> ${bearingStr}
             </p>
-            ${guidanceHtml}
             ${miniMapHtml}
+            ${guidanceHtml}
         </div>
     `;
 
