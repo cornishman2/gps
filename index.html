@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 11 - Metal Detecting Survey Log</title>
+    <title>Track 12 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6164,7 +6164,153 @@ function toggleMapFullscreen() {
     render(); 
 }  
 
-function renderNavigationPanel(openSurvey) {
+function renderNavigationMiniMap({ distMeters, bearingDeg, movementBearingDeg }) {
+    // Panel coordinate system: 0..100 in both directions
+    const user = { x: 50, y: 82 };
+    const target = { x: 50, y: 18 };
+
+    // Build a breadcrumb polyline from movementHistory (if available)
+    // We map movement into sideways drift relative to the ideal path.
+    // Forward progress is just time/order (not distance), so it stays stable.
+    let crumbPolyline = '';
+    let crumbNote = '';
+
+    const mh = Array.isArray(movementHistory) ? movementHistory.slice(-25) : [];
+    if (mh.length >= 3) {
+        // Anchor at the first sample
+        const p0 = mh[0];
+
+        // Helper: bearing between two points (use your existing geo helper if available)
+        const bearingBetween = (a, b) => {
+            if (typeof initialBearingDegrees === 'function' && a && b) {
+                return initialBearingDegrees(a.lat, a.lon, b.lat, b.lon);
+            }
+            return null;
+        };
+
+        // Compute drift points:
+        // - y moves upward from the user dot toward the target dot as history progresses
+        // - x drifts left/right based on angular difference from target bearing
+        const pts = [];
+        for (let i = 0; i < mh.length; i++) {
+            const pi = mh[i];
+            if (!pi || typeof pi.lat !== 'number' || typeof pi.lon !== 'number') continue;
+
+            // Bearing from start of breadcrumb to this point
+            const b = bearingBetween(p0, pi);
+            if (b === null) continue;
+
+            // Relative angle vs target bearing (-180..180)
+            let rel = bearingDeg - b;
+            if (rel > 180) rel -= 360;
+            if (rel <= -180) rel += 360;
+
+            // Map rel angle to sideways drift.
+            // 90° off course -> about 22 units sideways (tunable)
+            const drift = Math.max(-25, Math.min(25, (rel / 90) * 22));
+
+            // y goes from user.y toward target.y across samples
+            const t = i / (mh.length - 1);
+            const y = user.y - t * (user.y - target.y) * 0.75; // only use lower 75% of the panel
+            const x = user.x + drift;
+
+            pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+        }
+
+        if (pts.length >= 2) {
+            crumbPolyline = `
+                <polyline
+                    points="${pts.join(' ')}"
+                    fill="none"
+                    stroke="rgba(16,185,129,0.95)"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            `;
+            crumbNote = `<div class="text-[11px] text-gray-500 mt-2">Green line: your recent path (from GPS movement).</div>`;
+        }
+    } else {
+        crumbNote = `<div class="text-[11px] text-gray-500 mt-2">Walk a few metres to show your path and stabilise guidance.</div>`;
+    }
+
+    // Turn instruction banner based on movement bearing (your “relative bearing” concept)
+    let bannerText = 'Start walking to estimate direction';
+    let bannerClass = 'bg-gray-100 text-gray-700';
+
+    if (movementBearingDeg !== null && typeof movementBearingDeg === 'number') {
+        let rel = bearingDeg - movementBearingDeg;
+        if (rel > 180) rel -= 360;
+        if (rel <= -180) rel += 360;
+
+        const absRel = Math.abs(rel);
+
+        if (absRel < 12) {
+            bannerText = 'ON COURSE';
+            bannerClass = 'bg-green-100 text-green-800';
+        } else if (absRel < 35) {
+            bannerText = rel > 0 ? 'SLIGHT RIGHT' : 'SLIGHT LEFT';
+            bannerClass = 'bg-yellow-100 text-yellow-800';
+        } else if (absRel < 120) {
+            bannerText = rel > 0 ? 'TURN RIGHT' : 'TURN LEFT';
+            bannerClass = 'bg-orange-100 text-orange-800';
+        } else {
+            bannerText = 'TURN AROUND';
+            bannerClass = 'bg-red-100 text-red-800';
+        }
+    }
+
+    const distStr =
+        distMeters >= 1000
+            ? (distMeters / 1000).toFixed(2) + ' km'
+            : distMeters.toFixed(1) + ' m';
+
+    return `
+        <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="text-base font-semibold text-gray-700 flex items-center">
+                    <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map
+                </h4>
+                <span class="text-xs font-semibold px-2 py-1 rounded-full ${bannerClass}">
+                    ${bannerText}
+                </span>
+            </div>
+
+            <div class="relative w-full aspect-square rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+                <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <!-- Ideal line (you -> target) -->
+                    <line x1="${user.x}" y1="${user.y}" x2="${target.x}" y2="${target.y}"
+                          stroke="rgba(37,99,235,0.9)" stroke-width="1.4" stroke-dasharray="3 2" />
+
+                    <!-- Breadcrumb path -->
+                    ${crumbPolyline}
+
+                    <!-- Target -->
+                    <circle cx="${target.x}" cy="${target.y}" r="3.2" fill="rgba(239,68,68,1)" />
+                    <text x="${target.x}" y="${target.y - 6}" text-anchor="middle" font-size="4" fill="#111827">TARGET</text>
+
+                    <!-- User -->
+                    <circle cx="${user.x}" cy="${user.y}" r="3.2" fill="rgba(37,99,235,1)" />
+                    <text x="${user.x}" y="${user.y + 8}" text-anchor="middle" font-size="4" fill="#111827">YOU</text>
+                </svg>
+
+                <!-- Distance badge -->
+                <div class="absolute left-2 top-2 text-xs font-semibold bg-white/90 border border-gray-200 rounded px-2 py-1 shadow">
+                    ${distStr}
+                </div>
+            </div>
+
+            ${crumbNote}
+
+            <div class="text-xs text-gray-500 mt-2">
+                Blue dashed line: ideal direction to target. Target is always shown above you; your path drifts left/right if you veer off course.
+            </div>
+        </div>
+    `;
+}
+
+        
+    function renderNavigationPanel(openSurvey) {
     // If no navigation target has been selected yet, show a hint.
     if (!navigationTargetId) {
         return `
@@ -6289,6 +6435,8 @@ function renderNavigationPanel(openSurvey) {
 // --- Movement-based guidance (optional, only if we have enough movement) ---
 let guidanceHtml = '';
 const movementBearingDeg = computeMovementBearingDegrees();
+const miniMapHtml = renderNavigationMiniMap({ distMeters, bearingDeg, movementBearingDeg });
+
 
 if (movementBearingDeg !== null) {
     // Relative angle from movement direction to target direction
@@ -6364,6 +6512,7 @@ if (movementBearingDeg !== null) {
                 <span class="font-semibold">Bearing from you:</span> ${bearingStr}
             </p>
             ${guidanceHtml}
+            ${miniMapHtml}
         </div>
     `;
 
