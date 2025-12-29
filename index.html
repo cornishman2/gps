@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 12 - Metal Detecting Survey Log</title>
+    <title>Track 13 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -857,6 +857,9 @@ let showUserPosition = true; // default: show user location on the map
 let targetSortMode = 'date'; // 'date' | 'id'
 
 let hasRenderedFirstGpsFix = false;
+
+let navBreadcrumbStartIndex = 0;
+
 
 
 // Simple filter state for the Finds page
@@ -4394,6 +4397,10 @@ function handleSurveyAction(button) {
 
     // Save the selected target ID for navigation
     navigationTargetId = targetId;
+
+    // Start breadcrumb fresh from the moment navigation is selected
+    navBreadcrumbStartIndex = Array.isArray(movementHistory) ? movementHistory.length : 0;
+    
     console.log('Navigation target selected from map:', navigationTargetId);
 
     // Give the user some feedback
@@ -6175,7 +6182,10 @@ function renderNavigationMiniMap({ distMeters, bearingDeg, movementBearingDeg })
     let crumbPolyline = '';
     let crumbNote = '';
 
-    const mh = Array.isArray(movementHistory) ? movementHistory.slice(-25) : [];
+    const full = Array.isArray(movementHistory) ? movementHistory : [];
+    const mh = full.slice(navBreadcrumbStartIndex).slice(-25);
+
+    
     if (mh.length >= 3) {
         // Anchor at the first sample
         const p0 = mh[0];
@@ -6817,29 +6827,33 @@ if (needsGpsNow()) {
     }
 }
 
-    // Auto-refresh loop: only when tracking is active, and never while typing
-    if (!isAutoRefresh) {
-        if (!isAnyTrackRecording() || isTypingInQuickBox) {
-            if (autoRefreshIntervalId) {
-                clearInterval(autoRefreshIntervalId);
-                autoRefreshIntervalId = null;
-            }
-        } else {
-            if (!autoRefreshIntervalId) {
-                autoRefreshIntervalId = setInterval(() => {
-                    if (currentPage !== 'Compass') return;
-                    const ae = document.activeElement;
-                    if (ae && ae.id === 'compass-quick-target-vdi') return;
+// Auto-refresh loop: when GPS is needed, and never while typing (to avoid keypad bug)
+if (!isAutoRefresh) {
+    const needsGps = !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
 
-                    const appContent = document.getElementById('app-content');
-                    if (!appContent) return;
+    if (!needsGps || isTypingInQuickBox) {
+        if (autoRefreshIntervalId) {
+            clearInterval(autoRefreshIntervalId);
+            autoRefreshIntervalId = null;
+        }
+    } else {
+        if (!autoRefreshIntervalId) {
+            autoRefreshIntervalId = setInterval(() => {
+                if (currentPage !== 'Compass') return;
 
-                    appContent.innerHTML = renderCompassPage(true);
-                    attachPageEventListeners();
-                }, 3000);
-            }
+                const ae = document.activeElement;
+                if (ae && ae.id === 'compass-quick-target-vdi') return;
+
+                const appContent = document.getElementById('app-content');
+                if (!appContent) return;
+
+                appContent.innerHTML = renderCompassPage(true);
+                attachPageEventListeners();
+            }, 3000);
         }
     }
+}
+
 
     // Targets with usable coordinates
     const targets = getActiveTargets(openSurvey).filter(
