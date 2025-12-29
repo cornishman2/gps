@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 21 - Metal Detecting Survey Log</title>
+    <title>Track 22 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -936,6 +936,17 @@ let photoSettings = {
 // Holds the chosen folder handle for this session
 let photoGalleryExportRootHandle = null;
 
+function turnInstructionFromRelativeAngle(relDeg) {
+    // relDeg: -180..+180 (negative = target left, positive = target right)
+    const a = Math.abs(relDeg);
+    if (a < 10) return 'STRAIGHT';
+    if (a < 25) return relDeg > 0 ? 'SLIGHT RIGHT' : 'SLIGHT LEFT';
+    if (a < 60) return relDeg > 0 ? 'RIGHT' : 'LEFT';
+    if (a < 110) return relDeg > 0 ? 'HARD RIGHT' : 'HARD LEFT';
+    return 'TURN AROUND';
+}
+
+        
 function needsGpsNow() {
     // GPS needed if: user wants to see themselves OR navigation is active OR tracking is recording
     return !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
@@ -6233,12 +6244,32 @@ function toggleMapFullscreen() {
     render(); 
 }  
 
-function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon, distMeters }) {
+function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon, distMeters, bearingDeg, movementBearingDeg }) {
+
     const userAnchor = { x: 50, y: 50 }; // centre of the mini-map
 
     const distStr =
         distMeters >= 1000 ? (distMeters / 1000).toFixed(2) + ' km' : distMeters.toFixed(1) + ' m';
 
+    // Compass label (NNW, SSE, etc.)
+const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
+
+// Relative bearing = target bearing - movement bearing (direction of travel)
+let rel = null;
+if (typeof movementBearingDeg === 'number') {
+    rel = bearingDeg - movementBearingDeg;
+    if (rel > 180) rel -= 360;
+    if (rel <= -180) rel += 360;
+}
+const turnText = (rel === null) ? 'START WALKING' : turnInstructionFromRelativeAngle(rel);
+
+// Place overlay: if target generally north -> bottom; if south -> top; else bottom
+const b = bearingDeg;
+const isNorth = (b >= 315 || b <= 45);
+const isSouth = (b >= 135 && b <= 225);
+const overlayPosClass = isSouth ? 'top-3' : 'bottom-3';
+
+    
     // Need nav start fix
     if (!navSession || !navSession.active || typeof navSession.startLat !== 'number' || typeof navSession.startLon !== 'number') {
         return `
@@ -6339,6 +6370,14 @@ function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon,
                     ${userDot}
                     ${targetDot}
                 </svg>
+                <div class="absolute left-0 right-0 ${overlayPosClass} flex justify-center pointer-events-none">
+    <div class="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg border border-gray-200 text-center">
+        <div class="text-3xl font-extrabold text-gray-900 leading-none">${distStr}</div>
+        <div class="text-xl font-bold text-gray-700 mt-1">${bearingLabel}</div>
+        <div class="text-lg font-extrabold text-blue-700 mt-1">${turnText}</div>
+    </div>
+</div>
+
             </div>
 
             <div class="text-[11px] text-gray-500 mt-2">
@@ -6497,10 +6536,13 @@ if (navSession && navSession.active && (navSession.startLat === null || navSessi
 // --- Movement-based guidance (optional, only if we have enough movement) ---
 let guidanceHtml = '';
 const movementBearingDeg = computeMovementBearingDegrees();
+
 const miniMapHtml = renderNavigationMiniMapSimple({
     targetLat, targetLon,
     userLat, userLon,
-    distMeters
+    distMeters,
+    bearingDeg,
+    movementBearingDeg
 });
 
 
