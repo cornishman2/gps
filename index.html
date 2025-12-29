@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 17 - Metal Detecting Survey Log</title>
+    <title>Track 18 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6253,8 +6253,12 @@ function renderNavigationMiniMap({ targetLat, targetLon, userLat, userLon, beari
     const metersPerUnit = scaleMeters / idealSpan;
 
     // Rotate so "towards target" is always UP
-    const theta = (-bearingDeg) * Math.PI / 180;
-    const cosT = Math.cos(theta);
+     const refBearing = (navSession && typeof navSession.baseBearingDeg === 'number')
+    ? navSession.baseBearingDeg
+    : bearingDeg;
+
+    const theta = (-refBearing) * Math.PI / 180;
+   const cosT = Math.cos(theta);
     const sinT = Math.sin(theta);
 
     // Local meters approximation around nav start
@@ -6408,6 +6412,15 @@ function renderNavigationMiniMap({ targetLat, targetLon, userLat, userLon, beari
         `;
     }
 
+    // Always ensure navSession exists & is active whenever a nav target is selected
+if (!navSession) {
+    navSession = { active: true, startLat: null, startLon: null, lastLat: null, lastLon: null, path: [], baseBearingDeg: null };
+} else {
+    navSession.active = true;
+    if (!Array.isArray(navSession.path)) navSession.path = [];
+}
+
+
     // Ensure the target has usable coordinates
     if (!target.coordinates || !target.coordinates.includes(',')) {
         return `
@@ -6478,13 +6491,18 @@ function renderNavigationMiniMap({ targetLat, targetLon, userLat, userLon, beari
             </div>
         `;
     }
-// If navigation has started but we didn't have GPS at click-time, initialise now
 if (navSession && navSession.active && (navSession.startLat === null || navSession.startLon === null)) {
     navSession.startLat = effectiveUser.lat;
     navSession.startLon = effectiveUser.lon;
     navSession.lastLat = effectiveUser.lat;
     navSession.lastLon = effectiveUser.lon;
     navSession.path = [{ lat: effectiveUser.lat, lon: effectiveUser.lon }]; // black start point
+
+    // Freeze the reference bearing from START -> TARGET (so breadcrumbs don't "morph")
+    navSession.baseBearingDeg = initialBearingDegrees(
+        navSession.startLat, navSession.startLon,
+        targetLat, targetLon
+    );
 }
 
     // Compute distance and bearing using the global geo helpers
@@ -6492,13 +6510,8 @@ if (navSession && navSession.active && (navSession.startLat === null || navSessi
     const userLon = effectiveUser.lon;
 
     const distMeters = distanceMeters(userLat, userLon, targetLat, targetLon);
-    const bearingDeg = initialBearingDegrees(userLat, userLon, targetLat, targetLon);
-//    const miniMapHtml = renderNavigationMiniMap({
-//    targetLat, targetLon,
-//    userLat, userLon,
-//    bearingDeg, distMeters
-//});
-
+    const rawBearingDeg = initialBearingDegrees(userLat, userLon, targetLat, targetLon);
+    const bearingDeg = ((rawBearingDeg % 360) + 360) % 360;
     const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
 
     const distStr =
