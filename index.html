@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 23 - Metal Detecting Survey Log</title>
+    <title>Track 24 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6265,15 +6265,17 @@ const turnText = (rel === null) ? 'START WALKING' : turnInstructionFromRelativeA
 
 // Place overlay: if target generally north -> bottom; if south -> top; else bottom
 const b = bearingDeg;
-const isNorth = (b >= 315 || b <= 45);
-const isSouth = (b >= 135 && b <= 225);
-//const overlayPosClass = isSouth ? 'top-3' : 'bottom-3';
-// Vertical position for overlay (avoid covering the start point)
-const overlayTopPct = isSouth
-    ? (userAnchor.y - 22)   // ABOVE the user marker
-    : (userAnchor.y + 6);   // BELOW the user marker
+// Decide overlay based on actual N/S relationship (stable even if you overshoot)
+const targetIsNorthOfUser = (typeof targetLat === 'number' && typeof userLat === 'number')
+    ? (targetLat > userLat)
+    : false;
 
-
+// Place overlay so it DOES NOT cover the start marker:
+// - target north => overlay below user marker
+// - target south => overlay above user marker
+const overlayTopPct = targetIsNorthOfUser
+    ? (userAnchor.y + 6)    // below user marker
+    : (userAnchor.y - 22);  // above user marker
     
     // Need nav start fix
     if (!navSession || !navSession.active || typeof navSession.startLat !== 'number' || typeof navSession.startLon !== 'number') {
