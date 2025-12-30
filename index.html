@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 29 - Metal Detecting Survey Log</title>
+    <title>Track 30 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -871,6 +871,7 @@ let navSession = {
     lastLon: null
 };
 
+let lastGpsUiRefreshMs = 0;
 
 // Simple filter state for the Finds page
 let findsFilter = {
@@ -2944,6 +2945,13 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);   
             }
+            // Faster UI updates: refresh on GPS fixes (throttled), still keyboard-safe
+            const now = Date.now();
+            if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 700) { // 0.7s throttle
+                lastGpsUiRefreshMs = now;
+                updateMapWithUserLocationAndRender();
+            }
+
 // If navigating, record a breadcrumb point (real walked path)
 if (navSession && navSession.active && navigationTargetId && smoothedUserCoords) {
     if (!Array.isArray(navSession.path)) navSession.path = [];
@@ -3021,7 +3029,7 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
     if (autoRefreshIntervalId === null) {
         autoRefreshIntervalId = setInterval(() => {
             updateMapWithUserLocationAndRender();
-        }, 3000); // 3 seconds
+        }, 1000); // 3 seconds
         console.log('Live Map GPS Watch and auto-refresh interval started.');
     }
 }
@@ -3078,10 +3086,9 @@ function updateMapWithUserLocationAndRender() {
         }
     }
 
-    // Also skip if we have a draft (user typed something previously)
-    if (typeof compassQuickTargetIdDraft === 'string' && compassQuickTargetIdDraft.trim().length > 0) {
-        return;
-    }
+    // Only block refresh if the user is actively focused in the Target ID box
+    const ae2 = document.activeElement;
+    if (ae2 && ae2.id === 'compass-quick-target-vdi') return;
 
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
