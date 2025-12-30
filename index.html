@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 30 - Metal Detecting Survey Log</title>
+    <title>Track 31 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -941,6 +941,18 @@ let navOverlaySettings = {
     belowOffsetPct: 6   // default
 };
         
+function navViewRadiusMetersForDistance(distMeters) {
+    // How many metres from the user to the edge of the mini-map.
+    // Bigger far away, tighter when close.
+    if (!isFinite(distMeters)) return 40;
+
+    if (distMeters > 200) return 120;
+    if (distMeters > 120) return 80;
+    if (distMeters > 60)  return 50;
+    if (distMeters > 30)  return 30;
+    if (distMeters > 15)  return 20;
+    return 12; // very close: show fine detail
+}
 
 // Holds the chosen folder handle for this session
 let photoGalleryExportRootHandle = null;
@@ -4538,6 +4550,8 @@ function handleMapTargetClick(event, targetId) {
     navSession.startLon = null;
     navSession.lastLat = null;
     navSession.lastLon = null;
+    navSession.smoothedViewRadiusM = null;
+
 
     // IMPORTANT: do NOT try to set startLat/startLon here.
     // If GPS isn't ready yet, we initialise startLat/startLon later in renderNavigationPanel()
@@ -6373,14 +6387,25 @@ const overlayTopPct = (side === 'above')
         { x: 0, y: 0 }
     ];
 
-    let maxAbs = 10; // metres
-    candidates.forEach(p => {
-        maxAbs = Math.max(maxAbs, Math.abs(p.x), Math.abs(p.y));
-    });
+   // Dynamic zoom: choose a radius based on current distance to target
+let viewRadiusM = navViewRadiusMetersForDistance(distMeters);
 
-    // map metres to SVG units (viewBox 0..100)
-    // leave margin: maxAbs maps to ~40 units
-    const metersPerUnit = maxAbs / 40;
+// Ensure the target is still visible even if it’s slightly off to the side
+const targetAbs = Math.max(Math.abs(targetM.x), Math.abs(targetM.y));
+viewRadiusM = Math.max(viewRadiusM, targetAbs * 1.15);
+
+// Also ensure we show a little of the walked path
+let pathAbs = 0;
+if (path.length) {
+    for (const p of path) {
+        const pm = toLocalMeters(p.lat, p.lon);
+        pathAbs = Math.max(pathAbs, Math.abs(pm.x), Math.abs(pm.y));
+    }
+}
+viewRadiusM = Math.max(viewRadiusM, pathAbs * 1.05);
+
+// Convert metres to SVG units: radius maps to 40 units (margin included)
+const metersPerUnit = viewRadiusM / 40;
 
     const toSvg = (m) => ({
         x: userAnchor.x + (m.x / metersPerUnit),
