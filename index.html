@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 32 - Metal Detecting Survey Log</title>
+    <title>Track 33 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6314,12 +6314,8 @@ function toggleMapFullscreen() {
 }  
 
 function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon, distMeters, bearingDeg, movementBearingDeg }) {
-    // SVG space 0..100
-    const W = 100, H = 100;
 
-    // Mini-map anchor for "start point"
-    // (This is where the black dot sits; user/target are drawn relative to it)
-    const userAnchor = { x: 50, y: 82 };
+    const userAnchor = { x: 50, y: 50 }; // centre of the mini-map
 
     const distStr =
         distMeters >= 1000 ? (distMeters / 1000).toFixed(2) + ' km' : distMeters.toFixed(1) + ' m';
@@ -6327,80 +6323,54 @@ function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon,
     // Compass label (NNW, SSE, etc.)
     const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
 
-    // Relative bearing guidance text (uses movementBearingDeg if available)
+    // Relative bearing = target bearing - movement bearing (direction of travel)
     let rel = null;
     if (typeof movementBearingDeg === 'number') {
         rel = bearingDeg - movementBearingDeg;
         if (rel > 180) rel -= 360;
         if (rel <= -180) rel += 360;
     }
-    const turnText = (rel === null) ? 'START WALKING' : turnInstructionFromRelativeAngle(rel);
+    const turnText = (rel === null) ? 'START WALK'
+        : (Math.abs(rel) <= 10) ? 'ON COURSE'
+            : (rel > 0) ? `TURN RIGHT ${Math.round(Math.abs(rel))}°`
+                : `TURN LEFT ${Math.round(Math.abs(rel))}°`;
 
-    // Need nav start fix (and active nav session)
-    if (!navSession || !navSession.active || typeof navSession.startLat !== 'number' || typeof navSession.startLon !== 'number') {
-        return `
-            <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
-                <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-base font-semibold text-gray-700 flex items-center">
-                        <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map (Simple)
-                    </h4>
-                    <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">${distStr}</span>
-                </div>
-                <div class="text-sm text-gray-600">Waiting for your GPS position…</div>
-            </div>
-        `;
+    // --- Convert lat/lon to local meters relative to an origin (the start point) ---
+    const origin = navSession && navSession.origin ? navSession.origin : { lat: userLat, lon: userLon };
+
+    function toLocalMeters(lat, lon) {
+        const mPerDegLat = 111132.92;
+        const mPerDegLon = 111320 * Math.cos((origin.lat * Math.PI) / 180);
+        return {
+            x: (lon - origin.lon) * mPerDegLon,
+            y: -(lat - origin.lat) * mPerDegLat // negative so north is up
+        };
     }
 
-    // Lock-based overlay position (set once when navigation starts)
-    const side = (navSession && navSession.overlaySide) ? navSession.overlaySide : 'below';
-    const aboveOffset = getNavOverlayAboveOffsetPct();
-    const belowOffset = getNavOverlayBelowOffsetPct();
-
-    // NOTE: because userAnchor.y is 50, offsets are direct top% positions around center
-    const overlayTopPct = (side === 'above')
-        ? (userAnchor.y - aboveOffset)
-        : (userAnchor.y + belowOffset);
-
-    // Clamp overlay so it can’t leave the map
-    const overlayTopPctClamped = Math.max(5, Math.min(95, overlayTopPct));
-
-    // Convert lat/lon to local metres around nav start (no rotation)
-    const startLat = navSession.startLat;
-    const startLon = navSession.startLon;
-
-    const mPerDegLat = 110574;
-    const mPerDegLon = 111320 * Math.cos(startLat * Math.PI / 180);
-
-    const toLocalMeters = (lat, lon) => ({
-        x: (lon - startLon) * mPerDegLon,   // east/right +
-        y: (lat - startLat) * mPerDegLat    // north/up +
-    });
-
-    // Current and target in local metres
     const targetM = toLocalMeters(targetLat, targetLon);
     const userM = toLocalMeters(userLat, userLon);
 
-    // Path (recent)
-    const path = Array.isArray(navSession.path) ? navSession.path.slice(-120) : [];
+    // Path points (if we have them)
+    const path = (navSession && Array.isArray(navSession.path)) ? navSession.path : [];
 
-    // --------------------------
-    // Dynamic zoom based on CURRENT distance to target
-    // --------------------------
+    // Dynamic view radius (meters)
     let viewRadiusM = navViewRadiusMetersForDistance(distMeters);
 
-    // Ensure target is visible even if it's off to the side
-    const targetAbs = Math.max(Math.abs(targetM.x), Math.abs(targetM.y));
-    viewRadiusM = Math.max(viewRadiusM, targetAbs * 1.15);
+    // ✅ Make the extent depend on CURRENT user→target separation (so it can zoom as you walk)
+    const dx = targetM.x - userM.x;
+    const dy = targetM.y - userM.y;
+    const sepAbs = Math.max(Math.abs(dx), Math.abs(dy));
+    viewRadiusM = Math.max(viewRadiusM, sepAbs * 1.25);
 
-    // Ensure we also show some of the walked path
+    // ✅ Include a bit of recent trail around the CURRENT user position (not the whole start→target span)
     let pathAbs = 0;
     for (const p of path) {
         const pm = toLocalMeters(p.lat, p.lon);
-        pathAbs = Math.max(pathAbs, Math.abs(pm.x), Math.abs(pm.y));
+        pathAbs = Math.max(pathAbs, Math.abs(pm.x - userM.x), Math.abs(pm.y - userM.y));
     }
-    viewRadiusM = Math.max(viewRadiusM, pathAbs * 1.05);
+    viewRadiusM = Math.max(viewRadiusM, pathAbs * 1.10);
 
-    // Smooth the zoom so it doesn’t “pump”
+    // Optional smoothing so it doesn’t jump around
     if (navSession) {
         if (typeof navSession.smoothedViewRadiusM !== 'number') {
             navSession.smoothedViewRadiusM = viewRadiusM;
@@ -6410,78 +6380,108 @@ function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon,
         viewRadiusM = navSession.smoothedViewRadiusM;
     }
 
-    // Convert metres to SVG units: radius maps to about 40 units
-    const metersPerUnit = viewRadiusM / 40;
+    // Convert meters → SVG units (0..100)
+    const scale = 50 / viewRadiusM; // 50 SVG units = viewRadiusM meters
 
-    const toSvg = (m) => ({
-        x: userAnchor.x + (m.x / metersPerUnit),
-        y: userAnchor.y - (m.y / metersPerUnit) // invert so north is up
-    });
-
-    // Polyline for walked path (green)
-    let poly = '';
-    if (path.length >= 2) {
-        const pts = path.map(p => {
-            const m = toLocalMeters(p.lat, p.lon);
-            const s = toSvg(m);
-            return `${s.x.toFixed(1)},${s.y.toFixed(1)}`;
-        });
-        poly = `<polyline points="${pts.join(' ')}" fill="none"
-                  stroke="rgba(16,185,129,0.95)" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round" />`;
+    function toSvg(m) {
+        return {
+            x: userAnchor.x + m.x * scale,
+            y: userAnchor.y + m.y * scale
+        };
     }
 
-    // Start (black), Current user (red), Target (blue)
-    const startDot = `<circle cx="${userAnchor.x}" cy="${userAnchor.y}" r="2.3" fill="black" />`;
-
     const userSvg = toSvg(userM);
-    const userDot = `<circle cx="${userSvg.x.toFixed(1)}" cy="${userSvg.y.toFixed(1)}" r="2.9" fill="rgba(239,68,68,1)" />`;
-
     const targetSvg = toSvg(targetM);
-    const targetDot = `<circle cx="${targetSvg.x.toFixed(1)}" cy="${targetSvg.y.toFixed(1)}" r="3.2" fill="rgba(37,99,235,1)" />`;
 
-    // Line from current user to target (blue dashed)
-    const navLine = `
-        <line x1="${userSvg.x.toFixed(1)}" y1="${userSvg.y.toFixed(1)}"
-              x2="${targetSvg.x.toFixed(1)}" y2="${targetSvg.y.toFixed(1)}"
-              stroke="rgba(37,99,235,0.9)" stroke-width="1.4" stroke-dasharray="3 2" />
-    `;
+    // Clamp within bounds (keep a small padding)
+    function clampSvg(p) {
+        const pad = 3;
+        return {
+            x: Math.max(pad, Math.min(100 - pad, p.x)),
+            y: Math.max(pad, Math.min(100 - pad, p.y))
+        };
+    }
 
+    const userDot = clampSvg(userSvg);
+    const targetDot = clampSvg(targetSvg);
+
+    // Render path polyline (relative to origin)
+    let pathPoints = '';
+    if (path.length > 1) {
+        const pts = path.map(p => clampSvg(toSvg(toLocalMeters(p.lat, p.lon))))
+            .map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+            .join(' ');
+        pathPoints = `<polyline points="${pts}" fill="none" stroke="rgba(59,130,246,0.6)" stroke-width="1.5" />`;
+    }
+
+    // Direction line from user to target
+    const line = `<line x1="${userDot.x}" y1="${userDot.y}" x2="${targetDot.x}" y2="${targetDot.y}" stroke="rgba(0,0,0,0.35)" stroke-width="1" />`;
+
+    // Label placement (above when close, below when far)
+    const side = distMeters < 15 ? 'above' : 'below';
+    const aboveOffset = 22; // percent
+    const belowOffset = 28; // percent
+
+    // Overlay is positioned using CSS percentages, so base it on 50% (centre), not SVG units.
+    const overlayTopPct = (side === 'above')
+        ? (50 - aboveOffset)
+        : (50 + belowOffset);
+
+    // Build HTML
     return `
-        <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
-            <div class="flex items-center justify-between mb-3">
-                <h4 class="text-base font-semibold text-gray-700 flex items-center">
-                    <i class="fas fa-map-signs mr-2"></i> Navigation Mini-Map (Simple)
-                </h4>
-                <span class="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700">${distStr}</span>
-            </div>
+        <div class="bg-white rounded-xl shadow border p-3">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1">
+                    <div class="text-sm text-gray-500">Distance</div>
+                    <div class="text-2xl font-bold text-gray-900">${distStr}</div>
 
-            <div class="relative w-full aspect-square rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
-                <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    ${poly}
-                    ${navLine}
-                    ${startDot}
-                    ${userDot}
-                    ${targetDot}
-                </svg>
-
-                <!-- Scale label (debug + useful) -->
-                <div class="absolute top-2 left-2 text-[11px] bg-white/90 border border-gray-200 rounded px-2 py-1 text-gray-700 pointer-events-none">
-                    Scale: ±${Math.round(viewRadiusM)}m
+                    <div class="mt-2 text-sm text-gray-500">Bearing</div>
+                    <div class="text-lg font-semibold text-gray-900">${Math.round(bearingDeg)}° <span class="text-gray-500">(${bearingLabel})</span></div>
                 </div>
 
-                <!-- Big overlay -->
-                <div class="absolute left-0 right-0 flex justify-center pointer-events-none" style="top:${overlayTopPctClamped}%; transform: translateY(-50%);">
-                    <div class="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg border border-gray-200 text-center">
-                        <div class="text-3xl font-extrabold text-gray-900 leading-none">${distStr}</div>
-                        <div class="text-xl font-bold text-gray-700 mt-1">${bearingLabel}</div>
-                        <div class="text-lg font-extrabold text-blue-700 mt-1">${turnText}</div>
+                <div class="w-[110px] text-right">
+                    <div class="text-sm text-gray-500">Guidance</div>
+                    <div class="text-base font-bold ${turnText === 'ON COURSE' ? 'text-green-700' : 'text-indigo-700'}">
+                        ${turnText}
                     </div>
                 </div>
             </div>
 
-            <div class="text-[11px] text-gray-500 mt-2">
-                Green = your walked path. Black = start. Red = you now. Blue = target. (North is up.)
+            <div class="mt-3 relative">
+                <div class="w-full aspect-square rounded-lg border bg-gray-50 overflow-hidden relative">
+                    <svg viewBox="0 0 100 100" class="w-full h-full block">
+                        <!-- grid -->
+                        <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
+                            <line x1="0" y1="50" x2="100" y2="50" />
+                            <line x1="50" y1="0" x2="50" y2="100" />
+                            <line x1="0" y1="25" x2="100" y2="25" />
+                            <line x1="0" y1="75" x2="100" y2="75" />
+                            <line x1="25" y1="0" x2="25" y2="100" />
+                            <line x1="75" y1="0" x2="75" y2="100" />
+                        </g>
+
+                        ${pathPoints}
+                        ${line}
+
+                        <!-- target -->
+                        <circle cx="${targetDot.x}" cy="${targetDot.y}" r="3.5" fill="rgba(239,68,68,0.85)" />
+                        <circle cx="${targetDot.x}" cy="${targetDot.y}" r="6.8" fill="rgba(239,68,68,0.15)" />
+
+                        <!-- user -->
+                        <circle cx="${userDot.x}" cy="${userDot.y}" r="3.8" fill="rgba(0,0,0,0.85)" />
+                        <circle cx="${userDot.x}" cy="${userDot.y}" r="7.2" fill="rgba(0,0,0,0.12)" />
+                    </svg>
+
+                    <!-- label overlay -->
+                    <div style="top:${overlayTopPct}%; left:50%; transform:translate(-50%,-50%);"
+                        class="absolute px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800">
+                        ${distStr} • ${Math.round(bearingDeg)}°
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-gray-500 mt-2">
+                    Mini-map is relative to your start point. (North is up.)
+                </div>
             </div>
         </div>
     `;
