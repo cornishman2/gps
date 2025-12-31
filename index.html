@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 37 - Metal Detecting Survey Log</title>
+    <title>Track 38 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3057,7 +3057,14 @@ function stopCompassAutoRefresh() {
     if (autoRefreshIntervalId) {
         clearInterval(autoRefreshIntervalId);
         autoRefreshIntervalId = null;
-        console.log("Compass auto-refresh paused.");
+        console.log("Compass auto-refresh stopped.");
+    }
+    if (window._compassWatchId) {
+        try {
+            navigator.geolocation.clearWatch(window._compassWatchId);
+        } catch (e) {}
+        window._compassWatchId = null;
+        console.log("Compass GPS watch stopped.");
     }
 }
 
@@ -3102,33 +3109,111 @@ function startCompassAutoRefresh() {
 }
 
 /**
- * Re-render Compass only when safe.
- * Key rule: NEVER re-render while the user is focused in an input/textarea/select,
- * otherwise mobile keyboard will drop.
+ * Refresh Compass while avoiding the mobile keyboard drop.
+ * Rule: NEVER full re-render while the Target ID box is focused.
+ * Otherwise, prefer a lightweight update to avoid jank.
  */
 function updateMapWithUserLocationAndRender() {
     if (currentPage !== 'Compass') return;
 
-    // If user is interacting with any form control, do not refresh
     const ae = document.activeElement;
-    if (ae) {
-        const tag = (ae.tagName || '').toUpperCase();
-        const isFormControl =
-            tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable;
+    const tag = ae ? (ae.tagName || '').toUpperCase() : '';
+    const isFormControl = !!ae && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable);
 
-        // Extra safety: specifically protect the Target ID input on Compass
-        if (isFormControl) {
-            // Keep draft updated if it's the compass Target ID field
-            if (ae.id === 'compass-quick-target-vdi') {
-                compassQuickTargetIdDraft = ae.value || '';
+    // The *real* keypad-drop risk: the quick Target ID box on Compass.
+    const isTypingTargetId = !!ae && ae.id === 'compass-quick-target-vdi';
+
+    // If user is typing the Target ID, do NOT refresh anything.
+    if (isTypingTargetId) {
+        // preserve draft
+        compassQuickTargetIdDraft = ae.value || '';
+        return;
+    }
+
+    // If some other form control is focused, avoid full DOM replacement,
+    // but we can still do a light refresh (navigation panel / mini-map).
+    const avoidFullRender = isFormControl;
+
+    // -----------------------------------------
+    // FAST PATH: update mini-map / nav area only
+    // -----------------------------------------
+    // These IDs are safe even if they don't exist yet (we just fall back).
+    const navMiniMapHost = document.getElementById('nav-mini-map-host');
+    const navStatusHost = document.getElementById('nav-status-host');
+
+    // If you have an active navigation target, we can update the mini map cheaply.
+    // We'll try to render ONLY that portion.
+    if (navMiniMapHost && typeof renderNavigationMiniMapSimple === 'function' && navigationTargetId) {
+        try {
+            // You already have the target id; locate the target object.
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (openSurvey) {
+                const targets = getActiveTargets(openSurvey) || [];
+                const target = targets.find(t => String(t.id) === String(navigationTargetId) || String(t.targetId) === String(navigationTargetId));
+                if (target && target.coordinates && String(target.coordinates).includes(',')) {
+                    const parts = String(target.coordinates).split(',');
+                    const tLat = parseFloat(parts[0]);
+                    const tLon = parseFloat(parts[1]);
+
+                    // Use your existing user position variables if you have them,
+                    // otherwise fall back to passed-in coords (renderCompassPage handles this anyway).
+                    const uLat = (typeof liveUserLat === 'number') ? liveUserLat
+                               : (typeof currentUserLat === 'number') ? currentUserLat
+                               : (typeof userLat === 'number') ? userLat
+                               : null;
+
+                    const uLon = (typeof liveUserLon === 'number') ? liveUserLon
+                               : (typeof currentUserLon === 'number') ? currentUserLon
+                               : (typeof userLon === 'number') ? userLon
+                               : null;
+
+                    // If we can't find live coords here, just fall back to full render.
+                    if (typeof uLat === 'number' && typeof uLon === 'number') {
+                        const d = (typeof calculateDistanceMeters === 'function')
+                            ? calculateDistanceMeters(uLat, uLon, tLat, tLon)
+                            : distMeters;
+
+                        const b = (typeof calculateBearingDegrees === 'function')
+                            ? calculateBearingDegrees(uLat, uLon, tLat, tLon)
+                            : bearingDeg;
+
+                        navMiniMapHost.innerHTML = renderNavigationMiniMapSimple({
+                            targetLat: tLat,
+                            targetLon: tLon,
+                            userLat: uLat,
+                            userLon: uLon,
+                            distMeters: (typeof d === 'number') ? d : distMeters,
+                            bearingDeg: (typeof b === 'number') ? b : bearingDeg,
+                            movementBearingDeg: (typeof window.movementBearingDeg === 'number') ? window.movementBearingDeg : movementBearingDeg
+                        });
+
+                        // Optional: update any simple text status if you have a host
+                        if (navStatusHost) {
+                            navStatusHost.textContent = '';
+                        }
+
+                        // If we're avoiding full render due to other focused input, stop here.
+                        if (avoidFullRender) return;
+                        // Otherwise, we *can* still do a full render occasionally,
+                        // but no need right now—fast update already happened.
+                        return;
+                    }
+                }
             }
-            return; // <-- THIS is what stops the keyboard from disappearing
+        } catch (e) {
+            // If anything goes wrong, fall through to full render.
+            console.warn("Mini-map fast refresh failed:", e);
         }
     }
 
-    // Only block refresh if the user is actively focused in the Target ID box
-    const ae2 = document.activeElement;
-    if (ae2 && ae2.id === 'compass-quick-target-vdi') return;
+    // -----------------------------------------
+    // FALLBACK: full re-render (safe when not typing Target ID)
+    // -----------------------------------------
+    if (avoidFullRender) {
+        // User is focused in some other input; don't blow away the DOM.
+        // Better to do nothing than destroy their interaction.
+        return;
+    }
 
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
@@ -3136,7 +3221,6 @@ function updateMapWithUserLocationAndRender() {
     appContent.innerHTML = renderCompassPage(true);
     attachPageEventListeners();
 }
-
     /** Shows a temporary, highly visible notification toast (top-centre). */
 function showMessage(message, type = 'info') {
     const toast = document.getElementById('message-toast');
@@ -6749,7 +6833,7 @@ function renderNavigationMiniMapSimple({
     }
 
     // Look up the selected target in the open survey
-    const target = openSurvey.targets.find(t => t.id === navigationTargetId);
+   const target = openSurvey.targets.find(t => String(t.id) === String(navigationTargetId));
 
     if (!target) {
         return `
@@ -6961,13 +7045,17 @@ if (movementBearingDeg !== null) {
                     Clear
                 </button>
             </div>
-            <p class="text-sm text-gray-700 mb-1">
-                <span class="font-semibold">Distance:</span> ${distStr}
-            </p>
-            <p class="text-sm text-gray-700 mb-1">
+             <div id="nav-status-host">
+                <p class="text-sm text-gray-700 mb-1">
+                    <span class="font-semibold">Distance:</span> ${distStr}
+                </p>
+                <p class="text-sm text-gray-700 mb-1">
                 <span class="font-semibold">Bearing from you:</span> ${bearingStr}
-            </p>
-            ${miniMapHtml}
+                </p>
+            </div>
+           <div id="nav-mini-map-host">
+                ${miniMapHtml}
+            </div>
             ${guidanceHtml}
         </div>
     `;
@@ -7274,29 +7362,16 @@ if (needsGpsNow()) {
 }
 
 // Auto-refresh loop: when GPS is needed, and never while typing (to avoid keypad bug)
+// Auto-refresh: delegate to startCompassAutoRefresh() (GPS-driven + safety net)
+// and never refresh while typing (prevents keypad bug)
 if (!isAutoRefresh) {
     const needsGps = !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
 
     if (!needsGps || isTypingInQuickBox) {
-        if (autoRefreshIntervalId) {
-            clearInterval(autoRefreshIntervalId);
-            autoRefreshIntervalId = null;
-        }
+        if (typeof stopCompassAutoRefresh === 'function') stopCompassAutoRefresh();
+        else if (autoRefreshIntervalId) { clearInterval(autoRefreshIntervalId); autoRefreshIntervalId = null; }
     } else {
-        if (!autoRefreshIntervalId) {
-            autoRefreshIntervalId = setInterval(() => {
-                if (currentPage !== 'Compass') return;
-
-                const ae = document.activeElement;
-                if (ae && ae.id === 'compass-quick-target-vdi') return;
-
-                const appContent = document.getElementById('app-content');
-                if (!appContent) return;
-
-                appContent.innerHTML = renderCompassPage(true);
-                attachPageEventListeners();
-            }, 3000);
-        }
+        if (typeof startCompassAutoRefresh === 'function') startCompassAutoRefresh();
     }
 }
 
