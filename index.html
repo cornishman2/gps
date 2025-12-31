@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 31 - Metal Detecting Survey Log</title>
+    <title>Track 32 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6314,30 +6314,29 @@ function toggleMapFullscreen() {
 }  
 
 function renderNavigationMiniMapSimple({ targetLat, targetLon, userLat, userLon, distMeters, bearingDeg, movementBearingDeg }) {
+    // SVG space 0..100
+    const W = 100, H = 100;
 
-    const userAnchor = { x: 50, y: 50 }; // centre of the mini-map
+    // Mini-map anchor for "start point"
+    // (This is where the black dot sits; user/target are drawn relative to it)
+    const userAnchor = { x: 50, y: 50 };
 
     const distStr =
         distMeters >= 1000 ? (distMeters / 1000).toFixed(2) + ' km' : distMeters.toFixed(1) + ' m';
 
     // Compass label (NNW, SSE, etc.)
-const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
+    const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
 
-// Relative bearing = target bearing - movement bearing (direction of travel)
-let rel = null;
-if (typeof movementBearingDeg === 'number') {
-    rel = bearingDeg - movementBearingDeg;
-    if (rel > 180) rel -= 360;
-    if (rel <= -180) rel += 360;
-}
-const turnText = (rel === null) ? 'START WALKING' : turnInstructionFromRelativeAngle(rel);
+    // Relative bearing guidance text (uses movementBearingDeg if available)
+    let rel = null;
+    if (typeof movementBearingDeg === 'number') {
+        rel = bearingDeg - movementBearingDeg;
+        if (rel > 180) rel -= 360;
+        if (rel <= -180) rel += 360;
+    }
+    const turnText = (rel === null) ? 'START WALKING' : turnInstructionFromRelativeAngle(rel);
 
-// Place overlay: if target generally north -> bottom; if south -> top; else bottom
-const b = bearingDeg;
-// Place overlay so it DOES NOT cover the start marker:
-// - target north => overlay below user marker
-// - target south => overlay above user marker
-    // Need nav start fix
+    // Need nav start fix (and active nav session)
     if (!navSession || !navSession.active || typeof navSession.startLat !== 'number' || typeof navSession.startLon !== 'number') {
         return `
             <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mt-4">
@@ -6353,19 +6352,22 @@ const b = bearingDeg;
     }
 
     // Lock-based overlay position (set once when navigation starts)
-const side = (navSession && navSession.overlaySide) ? navSession.overlaySide : 'below';
-const aboveOffset = getNavOverlayAboveOffsetPct();
-const belowOffset = getNavOverlayBelowOffsetPct();
+    const side = (navSession && navSession.overlaySide) ? navSession.overlaySide : 'below';
+    const aboveOffset = getNavOverlayAboveOffsetPct();
+    const belowOffset = getNavOverlayBelowOffsetPct();
 
-const overlayTopPct = (side === 'above')
-    ? (userAnchor.y - aboveOffset)
-    : (userAnchor.y + belowOffset);
+    // NOTE: because userAnchor.y is 50, offsets are direct top% positions around center
+    const overlayTopPct = (side === 'above')
+        ? (userAnchor.y - aboveOffset)
+        : (userAnchor.y + belowOffset);
 
+    // Clamp overlay so it can’t leave the map
+    const overlayTopPctClamped = Math.max(5, Math.min(95, overlayTopPct));
 
+    // Convert lat/lon to local metres around nav start (no rotation)
     const startLat = navSession.startLat;
     const startLon = navSession.startLon;
 
-    // Convert lat/lon to local metres around start (no rotation)
     const mPerDegLat = 110574;
     const mPerDegLon = 111320 * Math.cos(startLat * Math.PI / 180);
 
@@ -6374,45 +6376,49 @@ const overlayTopPct = (side === 'above')
         y: (lat - startLat) * mPerDegLat    // north/up +
     });
 
-    // Collect points (path + current + target)
-    const path = Array.isArray(navSession.path) ? navSession.path.slice(-120) : [];
+    // Current and target in local metres
     const targetM = toLocalMeters(targetLat, targetLon);
     const userM = toLocalMeters(userLat, userLon);
 
-    // Determine scale so everything fits nicely
-    const candidates = [
-        ...path.map(p => toLocalMeters(p.lat, p.lon)),
-        targetM,
-        userM,
-        { x: 0, y: 0 }
-    ];
+    // Path (recent)
+    const path = Array.isArray(navSession.path) ? navSession.path.slice(-120) : [];
 
-   // Dynamic zoom: choose a radius based on current distance to target
-let viewRadiusM = navViewRadiusMetersForDistance(distMeters);
+    // --------------------------
+    // Dynamic zoom based on CURRENT distance to target
+    // --------------------------
+    let viewRadiusM = navViewRadiusMetersForDistance(distMeters);
 
-// Ensure the target is still visible even if it’s slightly off to the side
-const targetAbs = Math.max(Math.abs(targetM.x), Math.abs(targetM.y));
-viewRadiusM = Math.max(viewRadiusM, targetAbs * 1.15);
+    // Ensure target is visible even if it's off to the side
+    const targetAbs = Math.max(Math.abs(targetM.x), Math.abs(targetM.y));
+    viewRadiusM = Math.max(viewRadiusM, targetAbs * 1.15);
 
-// Also ensure we show a little of the walked path
-let pathAbs = 0;
-if (path.length) {
+    // Ensure we also show some of the walked path
+    let pathAbs = 0;
     for (const p of path) {
         const pm = toLocalMeters(p.lat, p.lon);
         pathAbs = Math.max(pathAbs, Math.abs(pm.x), Math.abs(pm.y));
     }
-}
-viewRadiusM = Math.max(viewRadiusM, pathAbs * 1.05);
+    viewRadiusM = Math.max(viewRadiusM, pathAbs * 1.05);
 
-// Convert metres to SVG units: radius maps to 40 units (margin included)
-const metersPerUnit = viewRadiusM / 40;
+    // Smooth the zoom so it doesn’t “pump”
+    if (navSession) {
+        if (typeof navSession.smoothedViewRadiusM !== 'number') {
+            navSession.smoothedViewRadiusM = viewRadiusM;
+        } else {
+            navSession.smoothedViewRadiusM = navSession.smoothedViewRadiusM * 0.85 + viewRadiusM * 0.15;
+        }
+        viewRadiusM = navSession.smoothedViewRadiusM;
+    }
+
+    // Convert metres to SVG units: radius maps to about 40 units
+    const metersPerUnit = viewRadiusM / 40;
 
     const toSvg = (m) => ({
         x: userAnchor.x + (m.x / metersPerUnit),
         y: userAnchor.y - (m.y / metersPerUnit) // invert so north is up
     });
 
-    // Polyline
+    // Polyline for walked path (green)
     let poly = '';
     if (path.length >= 2) {
         const pts = path.map(p => {
@@ -6458,15 +6464,20 @@ const metersPerUnit = viewRadiusM / 40;
                     ${userDot}
                     ${targetDot}
                 </svg>
-                <div class="absolute left-0 right-0 flex justify-center pointer-events-none" style="top:${overlayTopPct}%;">
 
-    <div class="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg border border-gray-200 text-center">
-        <div class="text-3xl font-extrabold text-gray-900 leading-none">${distStr}</div>
-        <div class="text-xl font-bold text-gray-700 mt-1">${bearingLabel}</div>
-        <div class="text-lg font-extrabold text-blue-700 mt-1">${turnText}</div>
-    </div>
-</div>
+                <!-- Scale label (debug + useful) -->
+                <div class="absolute top-2 left-2 text-[11px] bg-white/90 border border-gray-200 rounded px-2 py-1 text-gray-700 pointer-events-none">
+                    Scale: ±${Math.round(viewRadiusM)}m
+                </div>
 
+                <!-- Big overlay -->
+                <div class="absolute left-0 right-0 flex justify-center pointer-events-none" style="top:${overlayTopPctClamped}%; transform: translateY(-50%);">
+                    <div class="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg border border-gray-200 text-center">
+                        <div class="text-3xl font-extrabold text-gray-900 leading-none">${distStr}</div>
+                        <div class="text-xl font-bold text-gray-700 mt-1">${bearingLabel}</div>
+                        <div class="text-lg font-extrabold text-blue-700 mt-1">${turnText}</div>
+                    </div>
+                </div>
             </div>
 
             <div class="text-[11px] text-gray-500 mt-2">
