@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 40 - Metal Detecting Survey Log</title>
+    <title>Track 41 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6461,6 +6461,7 @@ function renderNavigationMiniMapSimple({
     if (typeof window.navSession !== 'object' || window.navSession === null) window.navSession = {};
     const nav = window.navSession;
 
+    // Auto-reset if target changes a lot (new nav run)
     const targetChangeThresholdM = 8;
     function metersBetweenLatLon(aLat, aLon, bLat, bLon) {
         const mPerDegLat = 111132.92;
@@ -6483,6 +6484,7 @@ function renderNavigationMiniMapSimple({
     }
     nav._targetLatLon = { lat: targetLat, lon: targetLon };
 
+    // Lock origin once per nav run
     if (!nav.origin) {
         nav.origin = { lat: userLat, lon: userLon };
         nav.path = [];
@@ -6493,6 +6495,7 @@ function renderNavigationMiniMapSimple({
 
     if (!Array.isArray(nav.path)) nav.path = [];
 
+    // Add current point (avoid duplicates)
     const last = nav.path.length ? nav.path[nav.path.length - 1] : null;
     const minStepM = 1.0;
     let shouldAdd = true;
@@ -6500,12 +6503,14 @@ function renderNavigationMiniMapSimple({
         const step = metersBetweenLatLon(last.lat, last.lon, userLat, userLon);
         if (step < minStepM) shouldAdd = false;
     }
-    if (shouldAdd) nav.path.push({ lat: userLat, lon: userLon });
+    if (shouldAdd) nav.path.push({ lat: userLat, lon: userLon, t: Date.now() });
 
-    if (nav.path.length > 1500) nav.path = nav.path.slice(-1500);
+    // Cap to avoid runaway memory
+    const MAX_PATH_POINTS = 1500;
+    if (nav.path.length > MAX_PATH_POINTS) nav.path = nav.path.slice(-MAX_PATH_POINTS);
 
     // -----------------------------
-    // Local meters
+    // Local meters conversion (origin = start)
     // -----------------------------
     const origin = nav.origin;
     function toLocalMeters(lat, lon) {
@@ -6513,12 +6518,14 @@ function renderNavigationMiniMapSimple({
         const mPerDegLon = 111320 * Math.cos((origin.lat * Math.PI) / 180);
         return {
             x: (lon - origin.lon) * mPerDegLon,
-            y: -(lat - origin.lat) * mPerDegLat
+            y: -(lat - origin.lat) * mPerDegLat // north up
         };
     }
 
     const userM = toLocalMeters(userLat, userLon);
     const targetM = toLocalMeters(targetLat, targetLon);
+
+    // Freeze target local meters (prevents tiny drift)
     if (!nav._targetLocalM) nav._targetLocalM = targetM;
 
     function clampSvg(p) {
@@ -6530,7 +6537,7 @@ function renderNavigationMiniMapSimple({
     }
 
     // -----------------------------
-    // OVERVIEW MAP (midpoint centred)
+    // OVERVIEW MAP (top) - midpoint centred
     // -----------------------------
     const centerWorldM = {
         x: (userM.x + nav._targetLocalM.x) / 2,
@@ -6538,12 +6545,21 @@ function renderNavigationMiniMapSimple({
     };
     const centerSvg = { x: 50, y: 50 };
 
-    let viewRadiusM = Math.max(
-        Math.abs(nav._targetLocalM.x - userM.x),
-        Math.abs(nav._targetLocalM.y - userM.y)
-    ) * 0.7;
+    const dxUT = nav._targetLocalM.x - userM.x;
+    const dyUT = nav._targetLocalM.y - userM.y;
+    let viewRadiusM = Math.max(Math.abs(dxUT), Math.abs(dyUT)) * 0.7;
     viewRadiusM = Math.max(12, viewRadiusM);
 
+    // Ensure recent trail fits a bit
+    let trailAbs = 0;
+    const recent = nav.path.slice(-250);
+    for (const p of recent) {
+        const pm = toLocalMeters(p.lat, p.lon);
+        trailAbs = Math.max(trailAbs, Math.abs(pm.x - centerWorldM.x), Math.abs(pm.y - centerWorldM.y));
+    }
+    viewRadiusM = Math.max(viewRadiusM, trailAbs * 1.05);
+
+    // light smoothing to reduce jitter
     if (typeof nav._overviewViewRadiusM !== 'number') nav._overviewViewRadiusM = viewRadiusM;
     nav._overviewViewRadiusM = nav._overviewViewRadiusM * 0.85 + viewRadiusM * 0.15;
     const ovScale = 50 / nav._overviewViewRadiusM;
@@ -6559,26 +6575,31 @@ function renderNavigationMiniMapSimple({
     const overviewTargetSvg = toOverviewSvg(nav._targetLocalM);
     const overviewStartSvg = toOverviewSvg({ x: 0, y: 0 });
 
+    // Overview trail
     let overviewTrail = '';
     if (nav.path.length > 1) {
-        overviewTrail = `<polyline points="${
-            nav.path.map(p => {
-                const s = toOverviewSvg(toLocalMeters(p.lat, p.lon));
-                return `${s.x.toFixed(1)},${s.y.toFixed(1)}`;
-            }).join(' ')
-        }" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
+        const pts = nav.path
+            .map(p => toOverviewSvg(toLocalMeters(p.lat, p.lon)))
+            .map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+            .join(' ');
+        overviewTrail = `<polyline points="${pts}" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
     }
 
     // -----------------------------
-    // CLOSE-UP MAP (10m x 10m)
+    // CLOSE-UP MAP (bottom) - 10m x 10m, target centred
     // -----------------------------
     const closeupCenter = { x: 50, y: 50 };
-    const cuScale = 50 / 5;
+    const CLOSEUP_HALF_SPAN_M = 5; // ±5m => 10m window
+    const cuScale = 50 / CLOSEUP_HALF_SPAN_M;
 
-    function toCloseupSvg(worldM) {
+    function toCloseupSvgFromWorldM(worldM) {
+        const relToTarget = {
+            x: worldM.x - nav._targetLocalM.x,
+            y: worldM.y - nav._targetLocalM.y
+        };
         return {
-            x: closeupCenter.x + (worldM.x - nav._targetLocalM.x) * cuScale,
-            y: closeupCenter.y + (worldM.y - nav._targetLocalM.y) * cuScale
+            x: closeupCenter.x + relToTarget.x * cuScale,
+            y: closeupCenter.y + relToTarget.y * cuScale
         };
     }
 
@@ -6586,89 +6607,186 @@ function renderNavigationMiniMapSimple({
         return p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
     }
 
-    const closeupUserRaw = toCloseupSvg(userM);
+    const closeupUserRaw = toCloseupSvgFromWorldM(userM);
     const closeupUserOnMap = isOnCloseup(closeupUserRaw);
     const closeupUserSvg = clampSvg(closeupUserRaw);
 
+    // Close-up trail (only points inside window)
     let closeupTrail = '';
     if (nav.path.length > 1) {
-        const pts = [];
+        const ptsArr = [];
         for (const p of nav.path) {
-            const sp = toCloseupSvg(toLocalMeters(p.lat, p.lon));
+            const pm = toLocalMeters(p.lat, p.lon);
+            const sp = toCloseupSvgFromWorldM(pm);
             if (isOnCloseup(sp)) {
                 const cp = clampSvg(sp);
-                pts.push(`${cp.x.toFixed(1)},${cp.y.toFixed(1)}`);
+                ptsArr.push(`${cp.x.toFixed(1)},${cp.y.toFixed(1)}`);
             }
         }
-        if (pts.length > 1) {
-            closeupTrail = `<polyline points="${pts.join(' ')}" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
+        if (ptsArr.length > 1) {
+            closeupTrail = `<polyline points="${ptsArr.join(' ')}" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
         }
     }
 
-    // Direction ray ONLY when user is NOT yet visible
+    // Direction ray ONLY when user is NOT visible in close-up
     let closeupRay = '';
     if (!closeupUserOnMap) {
-        const v = {
-            x: userM.x - nav._targetLocalM.x,
-            y: userM.y - nav._targetLocalM.y
-        };
-        const len = Math.hypot(v.x, v.y) || 1;
-        const ux = v.x / len;
-        const uy = v.y / len;
+        const v = { x: userM.x - nav._targetLocalM.x, y: userM.y - nav._targetLocalM.y };
+        const vLen = Math.hypot(v.x, v.y) || 1;
+        const ux = v.x / vLen;
+        const uy = v.y / vLen;
 
-        function rayToEdge(cx, cy, dx, dy) {
-            const t = Math.min(
-                dx > 0 ? (100 - cx) / dx : (0 - cx) / dx,
-                dy > 0 ? (100 - cy) / dy : (0 - cy) / dy
-            );
-            return { x: cx + dx * t, y: cy + dy * t };
+        function rayToBoxEdge(cx, cy, dx, dy) {
+            const candidates = [];
+
+            if (dx !== 0) {
+                const t1 = (0 - cx) / dx;
+                const y1 = cy + t1 * dy;
+                if (t1 > 0 && y1 >= 0 && y1 <= 100) candidates.push({ t: t1, x: 0, y: y1 });
+
+                const t2 = (100 - cx) / dx;
+                const y2 = cy + t2 * dy;
+                if (t2 > 0 && y2 >= 0 && y2 <= 100) candidates.push({ t: t2, x: 100, y: y2 });
+            }
+            if (dy !== 0) {
+                const t3 = (0 - cy) / dy;
+                const x3 = cx + t3 * dx;
+                if (t3 > 0 && x3 >= 0 && x3 <= 100) candidates.push({ t: t3, x: x3, y: 0 });
+
+                const t4 = (100 - cy) / dy;
+                const x4 = cx + t4 * dx;
+                if (t4 > 0 && x4 >= 0 && x4 <= 100) candidates.push({ t: t4, x: x4, y: 100 });
+            }
+
+            candidates.sort((a, b) => a.t - b.t);
+            return candidates.length ? candidates[0] : { x: cx, y: cy };
         }
 
-        const edge = rayToEdge(closeupCenter.x, closeupCenter.y, ux, uy);
-        closeupRay = `<line x1="50" y1="50" x2="${edge.x}" y2="${edge.y}"
-            stroke="rgba(0,0,0,0.25)" stroke-width="2" stroke-linecap="round" />`;
+        const edge = rayToBoxEdge(closeupCenter.x, closeupCenter.y, ux, uy);
+
+        // Broken BLUE ray to match the main map style
+        closeupRay = `
+            <line x1="${closeupCenter.x}" y1="${closeupCenter.y}" x2="${edge.x}" y2="${edge.y}"
+                  stroke="rgba(59,130,246,0.65)" stroke-width="2" stroke-linecap="round"
+                  stroke-dasharray="5 4" />
+        `;
     }
 
-    // -----------------------------
-    // Render
-    // -----------------------------
+    // Overlay label positioning (CSS %, stable)
+    const side = distMeters < 15 ? 'above' : 'below';
+    const aboveOffset = 22;
+    const belowOffset = 28;
+    const overlayTopPct = (side === 'above') ? (50 - aboveOffset) : (50 + belowOffset);
+
+    // Color/style constants to match your “first map” style:
+    // USER = Red + confidence circle
+    // TARGET = Blue + ring
+    const USER_FILL = 'rgba(239,68,68,0.90)';       // red
+    const USER_RING = 'rgba(239,68,68,0.18)';       // red ring
+    const TARGET_FILL = 'rgba(59,130,246,0.90)';    // blue
+    const TARGET_RING = 'rgba(59,130,246,0.18)';    // blue ring
+
     return `
         <div class="bg-white rounded-xl shadow border p-3">
             <div class="flex items-start justify-between gap-3">
-                <div>
+                <div class="flex-1">
                     <div class="text-sm text-gray-500">Distance</div>
-                    <div class="text-2xl font-bold">${distStr}</div>
+                    <div class="text-2xl font-bold text-gray-900">${distStr}</div>
+
                     <div class="mt-2 text-sm text-gray-500">Bearing</div>
-                    <div class="text-lg font-semibold">${Math.round(bearingDeg)}° (${bearingLabel})</div>
+                    <div class="text-lg font-semibold text-gray-900">
+                        ${Math.round(bearingDeg)}° <span class="text-gray-500">${bearingLabel ? `(${bearingLabel})` : ''}</span>
+                    </div>
                 </div>
-                <div class="text-right">
+
+                <div class="w-[110px] text-right">
                     <div class="text-sm text-gray-500">Guidance</div>
-                    <div class="font-bold ${turnText === 'ON COURSE' ? 'text-green-700' : 'text-indigo-700'}">
+                    <div class="text-base font-bold ${turnText === 'ON COURSE' ? 'text-green-700' : 'text-indigo-700'}">
                         ${turnText}
                     </div>
                 </div>
             </div>
 
-            <div class="mt-3">
-                <svg viewBox="0 0 100 100" class="w-full aspect-square border bg-gray-50 rounded">
-                    ${overviewTrail}
-                    <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="4" fill="red" />
-                    <circle cx="${overviewStartSvg.x}" cy="${overviewStartSvg.y}" r="4" fill="black" />
-                    <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="4" fill="blue" />
-                </svg>
+            <!-- OVERVIEW -->
+            <div class="mt-3 relative">
+                <div class="w-full aspect-square rounded-lg border bg-gray-50 overflow-hidden relative">
+                    <svg viewBox="0 0 100 100" class="w-full h-full block">
+                        <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
+                            <line x1="0" y1="50" x2="100" y2="50" />
+                            <line x1="50" y1="0" x2="50" y2="100" />
+                            <line x1="0" y1="25" x2="100" y2="25" />
+                            <line x1="0" y1="75" x2="100" y2="75" />
+                            <line x1="25" y1="0" x2="25" y2="100" />
+                            <line x1="75" y1="0" x2="75" y2="100" />
+                        </g>
+
+                        ${overviewTrail}
+
+                        <!-- TARGET (blue) -->
+                        <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="3.5" fill="${TARGET_FILL}" />
+                        <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="6.8" fill="${TARGET_RING}" />
+
+                        <!-- START (black) -->
+                        <circle cx="${overviewStartSvg.x}" cy="${overviewStartSvg.y}" r="3.8" fill="rgba(0,0,0,0.9)" />
+                        <circle cx="${overviewStartSvg.x}" cy="${overviewStartSvg.y}" r="7.2" fill="rgba(0,0,0,0.12)" />
+
+                        <!-- USER (red + confidence circle) -->
+                        <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="3.6" fill="${USER_FILL}" />
+                        <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="7.2" fill="${USER_RING}" />
+                    </svg>
+
+                    <div style="top:${overlayTopPct}%; left:50%; transform:translate(-50%,-50%);"
+                        class="absolute px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800">
+                        ${distStr} • ${Math.round(bearingDeg)}°
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-gray-500 mt-2">
+                    Overview: centered between you and target (more detail, less wasted space).
+                </div>
             </div>
 
+            <!-- CLOSE-UP -->
             <div class="mt-4">
-                <svg viewBox="0 0 100 100" class="w-full aspect-square border bg-gray-50 rounded">
-                    ${closeupTrail}
-                    ${closeupRay}
-                    <circle cx="50" cy="50" r="4" fill="red" />
-                    ${
-                        closeupUserOnMap
-                            ? `<circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="4" fill="blue" />`
-                            : ''
-                    }
-                </svg>
+                <div class="w-full aspect-square rounded-lg border bg-gray-50 overflow-hidden relative">
+                    <svg viewBox="0 0 100 100" class="w-full h-full block">
+                        <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
+                            <line x1="0" y1="50" x2="100" y2="50" />
+                            <line x1="50" y1="0" x2="50" y2="100" />
+                            <line x1="0" y1="25" x2="100" y2="25" />
+                            <line x1="0" y1="75" x2="100" y2="75" />
+                            <line x1="25" y1="0" x2="25" y2="100" />
+                            <line x1="75" y1="0" x2="75" y2="100" />
+                        </g>
+
+                        ${closeupTrail}
+                        ${closeupRay}
+
+                        <!-- TARGET fixed at centre (blue) -->
+                        <circle cx="${closeupCenter.x}" cy="${closeupCenter.y}" r="3.5" fill="${TARGET_FILL}" />
+                        <circle cx="${closeupCenter.x}" cy="${closeupCenter.y}" r="6.8" fill="${TARGET_RING}" />
+
+                        ${
+                            closeupUserOnMap
+                                ? `
+                                    <line x1="${closeupUserSvg.x}" y1="${closeupUserSvg.y}" x2="${closeupCenter.x}" y2="${closeupCenter.y}"
+                                        stroke="rgba(0,0,0,0.18)" stroke-width="1" />
+                                    <!-- USER (red + confidence circle) -->
+                                    <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="3.6" fill="${USER_FILL}" />
+                                    <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="7.2" fill="${USER_RING}" />
+                                  `
+                                : ''
+                        }
+                    </svg>
+
+                    <div class="absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800">
+                        Close-up (10m × 10m)
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-gray-500 mt-2">
+                    Close-up: target centered; dashed blue ray shows approach direction until you enter the window.
+                </div>
             </div>
         </div>
     `;
