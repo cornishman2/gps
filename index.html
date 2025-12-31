@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 38 - Metal Detecting Survey Log</title>
+    <title>Track 39 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6456,14 +6456,10 @@ function renderNavigationMiniMapSimple({
                     `TURN LEFT ${Math.round(Math.abs(rel))}°`;
 
     // -----------------------------
-    // Navigation session state (safe + automatic)
+    // Navigation session state (NO localStorage persistence)
     // -----------------------------
     if (typeof window.navSession !== 'object' || window.navSession === null) window.navSession = {};
     const nav = window.navSession;
-
-    // Key so breadcrumbs persist across refresh for "this navigation"
-    // (rounded target coords keeps key stable without being overly long)
-    const tKey = `nav_breadcrumbs_${(targetLat ?? 0).toFixed(6)}_${(targetLon ?? 0).toFixed(6)}`;
 
     // Auto-reset if target changes a lot (e.g., you started navigating to a different target)
     const targetChangeThresholdM = 8; // if target jumps by >8m, treat as new navigation
@@ -6480,13 +6476,12 @@ function renderNavigationMiniMapSimple({
     if (prevTarget) {
         const jumpM = metersBetweenLatLon(prevTarget.lat, prevTarget.lon, targetLat, targetLon);
         if (jumpM > targetChangeThresholdM) {
-            // New target => new nav run (no user action required)
+            // New target => new nav run
             nav.origin = null;
             nav.path = [];
             nav._targetLocalM = null;
             nav._overviewViewRadiusM = null;
             nav._overviewScale = null;
-            nav._lastBreadcrumbSave = 0;
         }
     }
     nav._targetLatLon = { lat: targetLat, lon: targetLon };
@@ -6498,28 +6493,13 @@ function renderNavigationMiniMapSimple({
         nav._targetLocalM = null;
         nav._overviewViewRadiusM = null;
         nav._overviewScale = null;
-        nav._lastBreadcrumbSave = 0;
-
-        // Load persisted breadcrumbs (if any)
-        try {
-            const saved = localStorage.getItem(tKey);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length) {
-                    // Only accept if it looks sane
-                    nav.path = parsed.filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number');
-                }
-            }
-        } catch (e) {
-            // ignore
-        }
     }
 
     if (!Array.isArray(nav.path)) nav.path = [];
 
     // Add current point (but avoid adding duplicates constantly)
     const last = nav.path.length ? nav.path[nav.path.length - 1] : null;
-    const minStepM = 1.0; // make breadcrumbs more responsive (was likely "a few metres")
+    const minStepM = 1.0; // responsive breadcrumbs
     let shouldAdd = true;
     if (last && typeof last.lat === 'number' && typeof last.lon === 'number') {
         const step = metersBetweenLatLon(last.lat, last.lon, userLat, userLon);
@@ -6527,20 +6507,9 @@ function renderNavigationMiniMapSimple({
     }
     if (shouldAdd) nav.path.push({ lat: userLat, lon: userLon, t: Date.now() });
 
-    // Keep breadcrumbs; don't “disappear”. Still cap to avoid runaway memory.
+    // Cap to avoid runaway memory, but breadcrumbs do NOT "disappear" during the nav session
     const MAX_PATH_POINTS = 1500;
     if (nav.path.length > MAX_PATH_POINTS) nav.path = nav.path.slice(nav.path.length - MAX_PATH_POINTS);
-
-    // Persist breadcrumbs (throttled)
-    const now = Date.now();
-    if (!nav._lastBreadcrumbSave || (now - nav._lastBreadcrumbSave) > 2000) {
-        nav._lastBreadcrumbSave = now;
-        try {
-            localStorage.setItem(tKey, JSON.stringify(nav.path));
-        } catch (e) {
-            // ignore
-        }
-    }
 
     // -----------------------------
     // Local meters conversion (origin = start point of nav run)
@@ -6572,7 +6541,7 @@ function renderNavigationMiniMapSimple({
 
     // -----------------------------
     // OVERVIEW MAP (top)
-    // Centre = midpoint between user and target (your request a)
+    // Centre = midpoint between user and target
     // -----------------------------
     const centerWorldM = {
         x: (userM.x + nav._targetLocalM.x) / 2,
@@ -6581,13 +6550,12 @@ function renderNavigationMiniMapSimple({
     const centerSvg = { x: 50, y: 50 };
 
     // Compute dynamic radius so BOTH user & target fit comfortably (+ a bit of trail)
-    // This is allowed now because you asked for midpoint centering (so endpoints can move on-screen).
     const dxUT = nav._targetLocalM.x - userM.x;
     const dyUT = nav._targetLocalM.y - userM.y;
-    let viewRadiusM = Math.max(Math.abs(dxUT), Math.abs(dyUT)) * 0.7; // half-span-ish
-    viewRadiusM = Math.max(12, viewRadiusM); // minimum zoom
+    let viewRadiusM = Math.max(Math.abs(dxUT), Math.abs(dyUT)) * 0.7;
+    viewRadiusM = Math.max(12, viewRadiusM);
 
-    // Also ensure recent trail fits a bit
+    // Ensure recent trail fits a bit
     let trailAbs = 0;
     const recent = nav.path.slice(-250);
     for (const p of recent) {
@@ -6610,7 +6578,7 @@ function renderNavigationMiniMapSimple({
 
     const overviewUserSvg = toOverviewSvg(userM);
     const overviewTargetSvg = toOverviewSvg(nav._targetLocalM);
-    const overviewStartSvg = toOverviewSvg({ x: 0, y: 0 }); // origin point is start (0,0) in local meters
+    const overviewStartSvg = toOverviewSvg({ x: 0, y: 0 });
 
     // Overview trail
     let overviewTrail = '';
@@ -6624,8 +6592,7 @@ function renderNavigationMiniMapSimple({
 
     // -----------------------------
     // CLOSE-UP MAP (bottom)
-    // 10m x 10m, target fixed at centre (same colours),
-    // plus direction ray to edge (your request b)
+    // 10m x 10m, target fixed at centre, plus direction ray to edge
     // -----------------------------
     const closeupCenter = { x: 50, y: 50 };
     const CLOSEUP_HALF_SPAN_M = 5; // ±5m => 10m window
@@ -6673,7 +6640,6 @@ function renderNavigationMiniMapSimple({
     const ux = v.x / vLen;
     const uy = v.y / vLen;
 
-    // Convert direction to SVG and intersect with box edge (0..100)
     function rayToBoxEdge(cx, cy, dx, dy) {
         const candidates = [];
 
@@ -6700,7 +6666,6 @@ function renderNavigationMiniMapSimple({
         return candidates.length ? candidates[0] : { x: cx, y: cy };
     }
 
-    // user direction in SVG space for close-up: note Y axis is same orientation in our local meters mapping
     const edge = rayToBoxEdge(closeupCenter.x, closeupCenter.y, ux, uy);
     const closeupRay = `<line x1="${closeupCenter.x}" y1="${closeupCenter.y}" x2="${edge.x}" y2="${edge.y}" stroke="rgba(0,0,0,0.25)" stroke-width="2" stroke-linecap="round" />`;
 
@@ -6814,7 +6779,6 @@ function renderNavigationMiniMapSimple({
         </div>
     `;
 }
-
         
     function renderNavigationPanel(openSurvey) {
     // If no navigation target has been selected yet, show a hint.
