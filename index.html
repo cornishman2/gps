@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 36 - Metal Detecting Survey Log</title>
+    <title>Track 37 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3065,11 +3065,39 @@ function startCompassAutoRefresh() {
     // Only run while actually on Compass
     if (currentPage !== 'Compass') return;
 
+    // 1) Prefer GPS-driven updates (fast + responsive)
+    // If you already start a watch elsewhere, this will just use it.
+    if (!window._compassWatchId && navigator.geolocation) {
+        try {
+            window._compassWatchId = navigator.geolocation.watchPosition(
+                () => {
+                    // Each GPS update triggers an immediate refresh/render.
+                    if (currentPage !== 'Compass') return;
+                    updateMapWithUserLocationAndRender();
+                },
+                (err) => {
+                    console.warn("Compass GPS watch error:", err);
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,   // don't reuse old locations
+                    timeout: 10000
+                }
+            );
+            console.log("Compass GPS watch started.");
+        } catch (e) {
+            console.warn("Compass GPS watch start failed:", e);
+        }
+    }
+
+    // 2) Keep a light safety-net interval (in case GPS events pause)
+    // Use a faster interval than 3000ms, but not crazy fast.
     if (!autoRefreshIntervalId) {
         autoRefreshIntervalId = setInterval(() => {
+            if (currentPage !== 'Compass') return;
             updateMapWithUserLocationAndRender();
-        }, 3000);
-        console.log("Compass auto-refresh started/resumed.");
+        }, 800); // was 3000; 800ms feels much more responsive
+        console.log("Compass auto-refresh started/resumed (safety net).");
     }
 }
 
