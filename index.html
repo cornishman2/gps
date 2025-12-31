@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 35 - Metal Detecting Survey Log</title>
+    <title>Track 36 - Metal Detecting Survey Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6344,28 +6344,94 @@ function renderNavigationMiniMapSimple({
                     `TURN LEFT ${Math.round(Math.abs(rel))}°`;
 
     // -----------------------------
-    // Navigation session state
+    // Navigation session state (safe + automatic)
     // -----------------------------
     if (typeof window.navSession !== 'object' || window.navSession === null) window.navSession = {};
     const nav = window.navSession;
 
-    // Lock origin + target for this nav run
+    // Key so breadcrumbs persist across refresh for "this navigation"
+    // (rounded target coords keeps key stable without being overly long)
+    const tKey = `nav_breadcrumbs_${(targetLat ?? 0).toFixed(6)}_${(targetLon ?? 0).toFixed(6)}`;
+
+    // Auto-reset if target changes a lot (e.g., you started navigating to a different target)
+    const targetChangeThresholdM = 8; // if target jumps by >8m, treat as new navigation
+    function metersBetweenLatLon(aLat, aLon, bLat, bLon) {
+        // quick small-distance approximation
+        const mPerDegLat = 111132.92;
+        const mPerDegLon = 111320 * Math.cos((aLat * Math.PI) / 180);
+        const dx = (bLon - aLon) * mPerDegLon;
+        const dy = (bLat - aLat) * mPerDegLat;
+        return Math.hypot(dx, dy);
+    }
+
+    const prevTarget = nav._targetLatLon ? nav._targetLatLon : null;
+    if (prevTarget) {
+        const jumpM = metersBetweenLatLon(prevTarget.lat, prevTarget.lon, targetLat, targetLon);
+        if (jumpM > targetChangeThresholdM) {
+            // New target => new nav run (no user action required)
+            nav.origin = null;
+            nav.path = [];
+            nav._targetLocalM = null;
+            nav._overviewViewRadiusM = null;
+            nav._overviewScale = null;
+            nav._lastBreadcrumbSave = 0;
+        }
+    }
+    nav._targetLatLon = { lat: targetLat, lon: targetLon };
+
+    // Lock origin once per nav run
     if (!nav.origin) {
         nav.origin = { lat: userLat, lon: userLon };
         nav.path = [];
         nav._targetLocalM = null;
         nav._overviewViewRadiusM = null;
         nav._overviewScale = null;
+        nav._lastBreadcrumbSave = 0;
+
+        // Load persisted breadcrumbs (if any)
+        try {
+            const saved = localStorage.getItem(tKey);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length) {
+                    // Only accept if it looks sane
+                    nav.path = parsed.filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number');
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
     }
 
-    // Add to trail (trim to keep fast)
     if (!Array.isArray(nav.path)) nav.path = [];
-    nav.path.push({ lat: userLat, lon: userLon, t: Date.now() });
-    const MAX_PATH_POINTS = 180;
+
+    // Add current point (but avoid adding duplicates constantly)
+    const last = nav.path.length ? nav.path[nav.path.length - 1] : null;
+    const minStepM = 1.0; // make breadcrumbs more responsive (was likely "a few metres")
+    let shouldAdd = true;
+    if (last && typeof last.lat === 'number' && typeof last.lon === 'number') {
+        const step = metersBetweenLatLon(last.lat, last.lon, userLat, userLon);
+        if (step < minStepM) shouldAdd = false;
+    }
+    if (shouldAdd) nav.path.push({ lat: userLat, lon: userLon, t: Date.now() });
+
+    // Keep breadcrumbs; don't “disappear”. Still cap to avoid runaway memory.
+    const MAX_PATH_POINTS = 1500;
     if (nav.path.length > MAX_PATH_POINTS) nav.path = nav.path.slice(nav.path.length - MAX_PATH_POINTS);
 
+    // Persist breadcrumbs (throttled)
+    const now = Date.now();
+    if (!nav._lastBreadcrumbSave || (now - nav._lastBreadcrumbSave) > 2000) {
+        nav._lastBreadcrumbSave = now;
+        try {
+            localStorage.setItem(tKey, JSON.stringify(nav.path));
+        } catch (e) {
+            // ignore
+        }
+    }
+
     // -----------------------------
-    // Local meters conversion
+    // Local meters conversion (origin = start point of nav run)
     // -----------------------------
     const origin = nav.origin;
 
@@ -6381,10 +6447,9 @@ function renderNavigationMiniMapSimple({
     const userM = toLocalMeters(userLat, userLon);
     const targetM = toLocalMeters(targetLat, targetLon);
 
-    // Freeze target position in local meters to avoid tiny float drift
+    // Freeze target local meters (prevents tiny drift)
     if (!nav._targetLocalM) nav._targetLocalM = targetM;
 
-    // Utility: clamp SVG positions into bounds with padding
     function clampSvg(p) {
         const pad = 3;
         return {
@@ -6395,30 +6460,47 @@ function renderNavigationMiniMapSimple({
 
     // -----------------------------
     // OVERVIEW MAP (top)
-    // start fixed (black), target fixed (red), user moves (blue), trail (blue)
+    // Centre = midpoint between user and target (your request a)
     // -----------------------------
-    const startSvg = { x: 50, y: 50 }; // fixed start position
+    const centerWorldM = {
+        x: (userM.x + nav._targetLocalM.x) / 2,
+        y: (userM.y + nav._targetLocalM.y) / 2
+    };
+    const centerSvg = { x: 50, y: 50 };
 
-    // Fixed overview extent for the whole navigation run:
-    if (typeof nav._overviewViewRadiusM !== 'number') {
-        const tAbs = Math.max(Math.abs(nav._targetLocalM.x), Math.abs(nav._targetLocalM.y));
-        const minRadius = 25; // meters (so it's not too "zoomed in" if target is close)
-        nav._overviewViewRadiusM = Math.max(minRadius, tAbs * 1.15);
-        nav._overviewScale = 50 / nav._overviewViewRadiusM;
+    // Compute dynamic radius so BOTH user & target fit comfortably (+ a bit of trail)
+    // This is allowed now because you asked for midpoint centering (so endpoints can move on-screen).
+    const dxUT = nav._targetLocalM.x - userM.x;
+    const dyUT = nav._targetLocalM.y - userM.y;
+    let viewRadiusM = Math.max(Math.abs(dxUT), Math.abs(dyUT)) * 0.7; // half-span-ish
+    viewRadiusM = Math.max(12, viewRadiusM); // minimum zoom
+
+    // Also ensure recent trail fits a bit
+    let trailAbs = 0;
+    const recent = nav.path.slice(-250);
+    for (const p of recent) {
+        const pm = toLocalMeters(p.lat, p.lon);
+        trailAbs = Math.max(trailAbs, Math.abs(pm.x - centerWorldM.x), Math.abs(pm.y - centerWorldM.y));
     }
+    viewRadiusM = Math.max(viewRadiusM, trailAbs * 1.05);
 
-    const ovScale = nav._overviewScale;
+    // light smoothing so it doesn't jitter
+    if (typeof nav._overviewViewRadiusM !== 'number') nav._overviewViewRadiusM = viewRadiusM;
+    nav._overviewViewRadiusM = nav._overviewViewRadiusM * 0.85 + viewRadiusM * 0.15;
+    const ovScale = 50 / nav._overviewViewRadiusM;
 
-    function toOverviewSvg(m) {
+    function toOverviewSvg(worldM) {
         return clampSvg({
-            x: startSvg.x + m.x * ovScale,
-            y: startSvg.y + m.y * ovScale
+            x: centerSvg.x + (worldM.x - centerWorldM.x) * ovScale,
+            y: centerSvg.y + (worldM.y - centerWorldM.y) * ovScale
         });
     }
 
-    const overviewTargetSvg = toOverviewSvg(nav._targetLocalM); // fixed on overview
     const overviewUserSvg = toOverviewSvg(userM);
+    const overviewTargetSvg = toOverviewSvg(nav._targetLocalM);
+    const overviewStartSvg = toOverviewSvg({ x: 0, y: 0 }); // origin point is start (0,0) in local meters
 
+    // Overview trail
     let overviewTrail = '';
     if (nav.path.length > 1) {
         const pts = nav.path
@@ -6428,18 +6510,15 @@ function renderNavigationMiniMapSimple({
         overviewTrail = `<polyline points="${pts}" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
     }
 
-    const overviewLine = `<line x1="${startSvg.x}" y1="${startSvg.y}" x2="${overviewTargetSvg.x}" y2="${overviewTargetSvg.y}" stroke="rgba(0,0,0,0.18)" stroke-width="1" />`;
-
     // -----------------------------
     // CLOSE-UP MAP (bottom)
-    // Target fixed at centre, 10m x 10m view (±5m each axis)
-    // User only appears when within bounds; trail shown near target too.
+    // 10m x 10m, target fixed at centre (same colours),
+    // plus direction ray to edge (your request b)
     // -----------------------------
     const closeupCenter = { x: 50, y: 50 };
-    const CLOSEUP_HALF_SPAN_M = 5;        // ±5m => 10m window
-    const cuScale = 50 / CLOSEUP_HALF_SPAN_M; // 50 svg units represent 5m
+    const CLOSEUP_HALF_SPAN_M = 5; // ±5m => 10m window
+    const cuScale = 50 / CLOSEUP_HALF_SPAN_M;
 
-    // Convert world (origin-based local meters) into CLOSE-UP SVG where target is centre
     function toCloseupSvgFromWorldM(worldM) {
         const relToTarget = {
             x: worldM.x - nav._targetLocalM.x,
@@ -6451,16 +6530,15 @@ function renderNavigationMiniMapSimple({
         };
     }
 
-    // Only draw user if within visible region (0..100 plus small pad allowance)
     function isOnCloseup(p) {
         return p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
     }
 
-    const closeupUserSvgRaw = toCloseupSvgFromWorldM(userM);
-    const closeupUserOnMap = isOnCloseup(closeupUserSvgRaw);
-    const closeupUserSvg = clampSvg(closeupUserSvgRaw);
+    const closeupUserRaw = toCloseupSvgFromWorldM(userM);
+    const closeupUserOnMap = isOnCloseup(closeupUserRaw);
+    const closeupUserSvg = clampSvg(closeupUserRaw);
 
-    // Close-up trail (only segments that are within window)
+    // Close-up trail (only points that fall inside window)
     let closeupTrail = '';
     if (nav.path.length > 1) {
         const ptsArr = [];
@@ -6477,22 +6555,49 @@ function renderNavigationMiniMapSimple({
         }
     }
 
-    // Close-up line user->target only if user is visible
-    const closeupLine = closeupUserOnMap
-        ? `<line x1="${closeupUserSvg.x}" y1="${closeupUserSvg.y}" x2="${closeupCenter.x}" y2="${closeupCenter.y}" stroke="rgba(0,0,0,0.18)" stroke-width="1" />`
-        : '';
+    // Ray from target centre towards user direction, to the edge
+    const v = { x: userM.x - nav._targetLocalM.x, y: userM.y - nav._targetLocalM.y };
+    const vLen = Math.hypot(v.x, v.y) || 1;
+    const ux = v.x / vLen;
+    const uy = v.y / vLen;
 
-    // -----------------------------
+    // Convert direction to SVG and intersect with box edge (0..100)
+    function rayToBoxEdge(cx, cy, dx, dy) {
+        const candidates = [];
+
+        if (dx !== 0) {
+            const t1 = (0 - cx) / dx;
+            const y1 = cy + t1 * dy;
+            if (t1 > 0 && y1 >= 0 && y1 <= 100) candidates.push({ t: t1, x: 0, y: y1 });
+
+            const t2 = (100 - cx) / dx;
+            const y2 = cy + t2 * dy;
+            if (t2 > 0 && y2 >= 0 && y2 <= 100) candidates.push({ t: t2, x: 100, y: y2 });
+        }
+        if (dy !== 0) {
+            const t3 = (0 - cy) / dy;
+            const x3 = cx + t3 * dx;
+            if (t3 > 0 && x3 >= 0 && x3 <= 100) candidates.push({ t: t3, x: x3, y: 0 });
+
+            const t4 = (100 - cy) / dy;
+            const x4 = cx + t4 * dx;
+            if (t4 > 0 && x4 >= 0 && x4 <= 100) candidates.push({ t: t4, x: x4, y: 100 });
+        }
+
+        candidates.sort((a, b) => a.t - b.t);
+        return candidates.length ? candidates[0] : { x: cx, y: cy };
+    }
+
+    // user direction in SVG space for close-up: note Y axis is same orientation in our local meters mapping
+    const edge = rayToBoxEdge(closeupCenter.x, closeupCenter.y, ux, uy);
+    const closeupRay = `<line x1="${closeupCenter.x}" y1="${closeupCenter.y}" x2="${edge.x}" y2="${edge.y}" stroke="rgba(0,0,0,0.25)" stroke-width="2" stroke-linecap="round" />`;
+
     // Overlay label positioning (CSS %, stable)
-    // -----------------------------
     const side = distMeters < 15 ? 'above' : 'below';
-    const aboveOffset = 22; // percent
-    const belowOffset = 28; // percent
+    const aboveOffset = 22;
+    const belowOffset = 28;
     const overlayTopPct = (side === 'above') ? (50 - aboveOffset) : (50 + belowOffset);
 
-    // -----------------------------
-    // Render
-    // -----------------------------
     return `
         <div class="bg-white rounded-xl shadow border p-3">
             <div class="flex items-start justify-between gap-3">
@@ -6518,7 +6623,6 @@ function renderNavigationMiniMapSimple({
             <div class="mt-3 relative">
                 <div class="w-full aspect-square rounded-lg border bg-gray-50 overflow-hidden relative">
                     <svg viewBox="0 0 100 100" class="w-full h-full block">
-                        <!-- grid -->
                         <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
                             <line x1="0" y1="50" x2="100" y2="50" />
                             <line x1="50" y1="0" x2="50" y2="100" />
@@ -6529,22 +6633,20 @@ function renderNavigationMiniMapSimple({
                         </g>
 
                         ${overviewTrail}
-                        ${overviewLine}
 
-                        <!-- target (fixed on overview) -->
+                        <!-- target (red) -->
                         <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="3.5" fill="rgba(239,68,68,0.9)" />
                         <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="6.8" fill="rgba(239,68,68,0.18)" />
 
-                        <!-- start (fixed) -->
-                        <circle cx="${startSvg.x}" cy="${startSvg.y}" r="3.8" fill="rgba(0,0,0,0.9)" />
-                        <circle cx="${startSvg.x}" cy="${startSvg.y}" r="7.2" fill="rgba(0,0,0,0.12)" />
+                        <!-- start (black) -->
+                        <circle cx="${overviewStartSvg.x}" cy="${overviewStartSvg.y}" r="3.8" fill="rgba(0,0,0,0.9)" />
+                        <circle cx="${overviewStartSvg.x}" cy="${overviewStartSvg.y}" r="7.2" fill="rgba(0,0,0,0.12)" />
 
-                        <!-- moving user (blue) -->
+                        <!-- user (blue) -->
                         <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="3.6" fill="rgba(59,130,246,0.95)" />
                         <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="6.8" fill="rgba(59,130,246,0.16)" />
                     </svg>
 
-                    <!-- overlay label -->
                     <div style="top:${overlayTopPct}%; left:50%; transform:translate(-50%,-50%);"
                         class="absolute px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800">
                         ${distStr} • ${Math.round(bearingDeg)}°
@@ -6552,15 +6654,14 @@ function renderNavigationMiniMapSimple({
                 </div>
 
                 <div class="text-[11px] text-gray-500 mt-2">
-                    Overview: start (black) and target (red) fixed; you are blue.
+                    Overview: centered between you and target (more detail, less wasted space).
                 </div>
             </div>
 
-            <!-- CLOSE-UP (same size, fixed 10m x 10m) -->
+            <!-- CLOSE-UP -->
             <div class="mt-4">
                 <div class="w-full aspect-square rounded-lg border bg-gray-50 overflow-hidden relative">
                     <svg viewBox="0 0 100 100" class="w-full h-full block">
-                        <!-- grid -->
                         <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
                             <line x1="0" y1="50" x2="100" y2="50" />
                             <line x1="50" y1="0" x2="50" y2="100" />
@@ -6571,19 +6672,21 @@ function renderNavigationMiniMapSimple({
                         </g>
 
                         ${closeupTrail}
-                        ${closeupLine}
+                        ${closeupRay}
 
-                        <!-- target fixed at centre -->
+                        <!-- target fixed at centre (red) -->
                         <circle cx="${closeupCenter.x}" cy="${closeupCenter.y}" r="3.5" fill="rgba(239,68,68,0.9)" />
                         <circle cx="${closeupCenter.x}" cy="${closeupCenter.y}" r="6.8" fill="rgba(239,68,68,0.18)" />
 
                         ${
                             closeupUserOnMap
-                            ? `
-                                <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="3.6" fill="rgba(59,130,246,0.95)" />
-                                <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="6.8" fill="rgba(59,130,246,0.16)" />
-                              `
-                            : ''
+                                ? `
+                                    <line x1="${closeupUserSvg.x}" y1="${closeupUserSvg.y}" x2="${closeupCenter.x}" y2="${closeupCenter.y}"
+                                        stroke="rgba(0,0,0,0.18)" stroke-width="1" />
+                                    <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="3.6" fill="rgba(59,130,246,0.95)" />
+                                    <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="6.8" fill="rgba(59,130,246,0.16)" />
+                                  `
+                                : ''
                         }
                     </svg>
 
@@ -6593,12 +6696,13 @@ function renderNavigationMiniMapSimple({
                 </div>
 
                 <div class="text-[11px] text-gray-500 mt-2">
-                    Close-up: target stays centered; you appear when within ~5m of the target.
+                    Close-up: target centered; black ray shows which side you’re approaching from.
                 </div>
             </div>
         </div>
     `;
 }
+
         
     function renderNavigationPanel(openSurvey) {
     // If no navigation target has been selected yet, show a hint.
