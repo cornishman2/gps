@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.0</title>
+    <title>DIG IT! v1.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -5996,8 +5996,7 @@ function endMapDrag() {
 }
         
 /** Renders a static plot of targets based on relative coordinates, with optional centre target, grid, and nav line. */
-/** Renders a static plot of targets based on relative coordinates, with optional centre target, grid, and nav line. */
-function renderTargetPlot(targets) {
+function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
@@ -6005,19 +6004,18 @@ function renderTargetPlot(targets) {
     // Current zoom (global), and inverse zoom for "keep-size-constant" overlays
     const invZoom = 1 / (mapZoom || 1);
 
-    // Prefer smoothed coords if available, fall back to raw
-    const effectiveUserCoords = smoothedUserCoords || currentUserCoords;
+    // ✅ CHANGED: Use the passed-in user coords ONLY.
+    // If caller passes null (Hide My Position), the map must not use user coords at all.
+    const effectiveUserCoords = userCoordsOrNull;
 
-// Treat GPS as "present" for the map when tracking OR navigation is active
-const needsGps = !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
+    // ✅ CHANGED: GPS is "present" for the map ONLY if effectiveUserCoords was provided
+    // (i.e., showUserPosition is on AND caller passed coords).
+    const hasUserGPS =
+        !!effectiveUserCoords &&
+        typeof effectiveUserCoords.lat === 'number' &&
+        typeof effectiveUserCoords.lon === 'number';
 
-const hasUserGPS =
-    needsGps &&
-    !!effectiveUserCoords &&
-    typeof effectiveUserCoords.lat === 'number' &&
-    typeof effectiveUserCoords.lon === 'number';
-
-const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccuracy : 0;
+    const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccuracy : 0;
     const diameterInMeters = userAccuracy * 2;
     const bufferPercentage = 0.05; // 5% buffer around the entire calculated area
 
@@ -6071,8 +6069,8 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
         });
     }
 
-    // User coord: only if tracking is active
-    if (hasUserGPS && effectiveUserCoords && typeof effectiveUserCoords.lat === 'number' && typeof effectiveUserCoords.lon === 'number') {
+    // ✅ CHANGED: User coord only if caller provided coords
+    if (hasUserGPS) {
         userCoord = { lat: effectiveUserCoords.lat, lon: effectiveUserCoords.lon };
         allCoords.push({
             id: 'user',
@@ -6170,15 +6168,15 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
                     <div class="relative">
-    ${extraRing}
-    <div
-        class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"
-        style="
-            transform: scale(${invZoom});
-            transform-origin: center;
-        "
-    ></div>
-</div>
+                        ${extraRing}
+                        <div
+                            class="${pinSize} rounded-full ${pinColor} border-2 border-primary shadow-lg cursor-pointer"
+                            style="
+                                transform: scale(${invZoom});
+                                transform-origin: center;
+                            "
+                        ></div>
+                    </div>
                     <!-- Label: counter-scale so it stays the same size while zooming -->
                     <span
                         class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
@@ -6195,7 +6193,7 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
             `;
         }).join('');
 
-    // 5. User pin + label (only when tracking)
+    // 5. User pin + label (only when userCoord exists)
     let userPinAndLabelHtml = '';
     let userXPercent = null;
     let userYPercent = null;
@@ -6214,7 +6212,7 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
         `;
     }
 
-    // 6. Confidence circle for user accuracy (only when tracking)
+    // 6. Confidence circle for user accuracy (only when userCoord exists)
     let userConfidenceCircleHtml = '';
     if (userCoord && userAccuracy > 0 && mapWidthMeters && mapHeightMeters) {
         const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
@@ -6251,32 +6249,29 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
             if (!pts) return '';
 
             const stroke =
-    track.color ||
-    track.colour ||            // just in case an older version used UK spelling
-    track.strokeColor ||        // just in case
-    pickTrackColor(visibleTracks.indexOf(track)); // ✅ fallback per-track
+                track.color ||
+                track.colour ||
+                track.strokeColor ||
+                pickTrackColor(visibleTracks.indexOf(track));
 
             return `<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="0.8" vector-effect="non-scaling-stroke" />`;
         }).join('');
 
-    trackSvgHtml = `
-  <svg
-      class="absolute inset-0 w-full h-full pointer-events-none"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      style="z-index: 6;"
-  >
-      ${polylines}
-  </svg>
-`;
-
-
+        trackSvgHtml = `
+            <svg
+                class="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style="z-index: 6;"
+            >
+                ${polylines}
+            </svg>
+        `;
     }
 
-    // 8. Nav line SVG (counter-scaled so line + distance text don't grow)
+    // 8. Nav line SVG (only if we have a userCoord!)
     let navLineHtml = '';
 
-    // Need nav target percentages if nav target exists
     let navTargetXPercent = null;
     let navTargetYPercent = null;
     let navTargetLat = null;
@@ -6299,16 +6294,16 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
 
     if (
         navigationTargetId &&
-        userCoord &&
+        userCoord && // ✅ key guard: no userCoord => no nav line
         navTargetXPercent !== null &&
         navTargetYPercent !== null &&
         typeof navTargetLat === 'number' &&
         typeof navTargetLon === 'number'
     ) {
-        const userLat = effectiveUserCoords ? effectiveUserCoords.lat : userCoord.lat;
-        const userLon = effectiveUserCoords ? effectiveUserCoords.lon : userCoord.lon;
+        const userLatForNav = userCoord.lat;
+        const userLonForNav = userCoord.lon;
 
-        const distanceToNavMeters = distanceMeters(userLat, userLon, navTargetLat, navTargetLon);
+        const distanceToNavMeters = distanceMeters(userLatForNav, userLonForNav, navTargetLat, navTargetLon);
 
         const navAcc = (typeof navTargetAccuracy === 'number' && navTargetAccuracy > 0)
             ? navTargetAccuracy
@@ -6415,7 +6410,9 @@ const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccu
         </div>
     `;
 }
-       /** Toggles the map state and re-renders immediately. */
+
+        
+    /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
     // Toggle the state variable
     isMapFullscreen = !isMapFullscreen;
@@ -7561,7 +7558,7 @@ ${(() => {
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
                     <i class="fas fa-map mr-2"></i> Survey Map
                 </h3>
-                ${renderTargetPlot(targets)}
+                ${renderTargetPlot(targets, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
             </div>
 
             <!-- Navigation -->
