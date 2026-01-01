@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track 41 - Metal Detecting Survey Log</title>
+    <title>DIG IT! v1.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -6463,6 +6463,7 @@ function renderNavigationMiniMapSimple({
 
     // Auto-reset if target changes a lot (new nav run)
     const targetChangeThresholdM = 8;
+
     function metersBetweenLatLon(aLat, aLon, bLat, bLon) {
         const mPerDegLat = 111132.92;
         const mPerDegLon = 111320 * Math.cos((aLat * Math.PI) / 180);
@@ -6480,6 +6481,10 @@ function renderNavigationMiniMapSimple({
             nav._targetLocalM = null;
             nav._overviewViewRadiusM = null;
             nav._overviewScale = null;
+
+            // Stationary filter state
+            nav._stableUser = null;
+            nav._stableUserSetAt = 0;
         }
     }
     nav._targetLatLon = { lat: targetLat, lon: targetLon };
@@ -6491,19 +6496,47 @@ function renderNavigationMiniMapSimple({
         nav._targetLocalM = null;
         nav._overviewViewRadiusM = null;
         nav._overviewScale = null;
+
+        // Stationary filter state
+        nav._stableUser = { lat: userLat, lon: userLon };
+        nav._stableUserSetAt = Date.now();
     }
 
     if (!Array.isArray(nav.path)) nav.path = [];
 
-    // Add current point (avoid duplicates)
-    const last = nav.path.length ? nav.path[nav.path.length - 1] : null;
-    const minStepM = 1.0;
-    let shouldAdd = true;
-    if (last) {
-        const step = metersBetweenLatLon(last.lat, last.lon, userLat, userLon);
-        if (step < minStepM) shouldAdd = false;
+    // -----------------------------
+    // Stationary / jitter filter (THIS fixes the “keeps moving” problem)
+    // -----------------------------
+    // Any "movement" smaller than this is treated as GPS noise when standing still.
+    // 1.5m is a good default for consumer GPS.
+    const STATIONARY_DEADBAND_M = 1.5;
+
+    // Track a "stable" user position that only updates when movement is real.
+    if (!nav._stableUser) {
+        nav._stableUser = { lat: userLat, lon: userLon };
+        nav._stableUserSetAt = Date.now();
     }
-    if (shouldAdd) nav.path.push({ lat: userLat, lon: userLon, t: Date.now() });
+
+    const jitterStepM = metersBetweenLatLon(nav._stableUser.lat, nav._stableUser.lon, userLat, userLon);
+
+    // Accept new stable position only if movement exceeds deadband
+    if (jitterStepM >= STATIONARY_DEADBAND_M) {
+        nav._stableUser = { lat: userLat, lon: userLon };
+        nav._stableUserSetAt = Date.now();
+    }
+
+    // Use this stable position for ALL drawing
+    const stableUserLat = nav._stableUser.lat;
+    const stableUserLon = nav._stableUser.lon;
+
+    // Add breadcrumb point only when movement exceeds deadband
+    const last = nav.path.length ? nav.path[nav.path.length - 1] : null;
+    let shouldAdd = true;
+    if (last && typeof last.lat === 'number' && typeof last.lon === 'number') {
+        const step = metersBetweenLatLon(last.lat, last.lon, stableUserLat, stableUserLon);
+        if (step < STATIONARY_DEADBAND_M) shouldAdd = false;
+    }
+    if (shouldAdd) nav.path.push({ lat: stableUserLat, lon: stableUserLon, t: Date.now() });
 
     // Cap to avoid runaway memory
     const MAX_PATH_POINTS = 1500;
@@ -6513,6 +6546,7 @@ function renderNavigationMiniMapSimple({
     // Local meters conversion (origin = start)
     // -----------------------------
     const origin = nav.origin;
+
     function toLocalMeters(lat, lon) {
         const mPerDegLat = 111132.92;
         const mPerDegLon = 111320 * Math.cos((origin.lat * Math.PI) / 180);
@@ -6522,7 +6556,7 @@ function renderNavigationMiniMapSimple({
         };
     }
 
-    const userM = toLocalMeters(userLat, userLon);
+    const userM = toLocalMeters(stableUserLat, stableUserLon);
     const targetM = toLocalMeters(targetLat, targetLon);
 
     // Freeze target local meters (prevents tiny drift)
@@ -6664,7 +6698,6 @@ function renderNavigationMiniMapSimple({
 
         const edge = rayToBoxEdge(closeupCenter.x, closeupCenter.y, ux, uy);
 
-        // Broken BLUE ray to match the main map style
         closeupRay = `
             <line x1="${closeupCenter.x}" y1="${closeupCenter.y}" x2="${edge.x}" y2="${edge.y}"
                   stroke="rgba(59,130,246,0.65)" stroke-width="2" stroke-linecap="round"
@@ -6678,9 +6711,7 @@ function renderNavigationMiniMapSimple({
     const belowOffset = 28;
     const overlayTopPct = (side === 'above') ? (50 - aboveOffset) : (50 + belowOffset);
 
-    // Color/style constants to match your “first map” style:
-    // USER = Red + confidence circle
-    // TARGET = Blue + ring
+    // Style constants (match your first map)
     const USER_FILL = 'rgba(239,68,68,0.90)';       // red
     const USER_RING = 'rgba(239,68,68,0.18)';       // red ring
     const TARGET_FILL = 'rgba(59,130,246,0.90)';    // blue
