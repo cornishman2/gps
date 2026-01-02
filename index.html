@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.4</title>
+    <title>DIG IT! v1.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2573,6 +2573,11 @@ switch (currentPage) {
  * Shared worker: logs a new quick target into the OPEN survey using the given VDI/Target ID.
  * This is the same logic as your existing "Log New Target" button, centralised.
  */
+/**
+ * Shared worker: logs a new quick target into the OPEN survey using the given VDI/Target ID.
+ * FIX: Always try to include GPS coords if available (not only when recording a track).
+ * Also: if no live coords are available, it will do a one-shot getCurrentPosition().
+ */
 function quickLogTargetByVDI(raw, sourceLabel = '') {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -2590,56 +2595,110 @@ function quickLogTargetByVDI(raw, sourceLabel = '') {
 
     const now = Date.now();
 
-    // Only use GPS if we currently have it
-    const coords =
-        (isAnyTrackRecording() &&
-         currentUserCoords && typeof currentUserCoords.lat === 'number' && typeof currentUserCoords.lon === 'number')
-            ? `${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}`
-            : 'No GPS logged';
+    // Prefer smoothed coords if available, else raw
+    const effectiveCoords = (typeof smoothedUserCoords === 'object' && smoothedUserCoords)
+        ? smoothedUserCoords
+        : currentUserCoords;
 
-    const acc =
-        (isAnyTrackRecording() && currentUserAccuracy != null)
-            ? String(currentUserAccuracy)
-            : 'N/A';
+    const hasLiveGps =
+        effectiveCoords &&
+        typeof effectiveCoords.lat === 'number' &&
+        typeof effectiveCoords.lon === 'number' &&
+        isFinite(effectiveCoords.lat) &&
+        isFinite(effectiveCoords.lon);
 
-    const newTarget = {
-        id: generateId(),
-        description: `Logged ${new Date(now).toLocaleString()}`,
-        vdi: vdiStr,
-        depth: 'Unknown',
-        type: 'Unidentified',
-        status: 'Not dug',
-        time: now,
-        coordinates: coords,
-        accuracy: acc,
-        user: userProfile.name,
-        detector: userProfile.detector,
-        centerOnMap: false,
+    // Best available accuracy value
+    const effectiveAccuracy =
+        (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy
+        : (typeof bestLiveAccuracy === 'number' && isFinite(bestLiveAccuracy) && bestLiveAccuracy !== Infinity) ? bestLiveAccuracy
+        : null;
 
-        photos: [],
-        targetPhotoRef: '',
-        targetPhotoData: ''
+    const commitTarget = (lat, lon, acc) => {
+        const coordsStr =
+            (typeof lat === 'number' && typeof lon === 'number' && isFinite(lat) && isFinite(lon))
+                ? `${lat.toFixed(6)}, ${lon.toFixed(6)}`
+                : 'No GPS logged';
+
+        const accStr =
+            (typeof acc === 'number' && isFinite(acc))
+                ? String(acc)
+                : 'N/A';
+
+        const newTarget = {
+            id: generateId(),
+            description: `Logged ${new Date(now).toLocaleString()}`,
+            vdi: vdiStr,
+            depth: 'Unknown',
+            type: 'Unidentified',
+            status: 'Not dug',
+            time: now,
+            coordinates: coordsStr,
+            accuracy: accStr,
+            user: userProfile.name,
+            detector: userProfile.detector,
+            centerOnMap: false,
+
+            photos: [],
+            targetPhotoRef: '',
+            targetPhotoData: ''
+        };
+
+        if (!Array.isArray(openSurvey.targets)) openSurvey.targets = [];
+        openSurvey.targets.unshift(newTarget);
+        openSurvey.dateLastChanged = now;
+
+        saveSurveysToLocalStorage();
+
+        // Feedback: short vibration + obvious toast
+        if (navigator.vibrate) navigator.vibrate(60);
+
+        const extra = sourceLabel ? ` (${sourceLabel})` : '';
+        showMessage(`New Target logged: ${vdiStr}${extra}`, 'success');
+
+        // Only restart auto-refresh if tracking is on
+        if (isTrackingActive) startCompassAutoRefresh();
+
+        // Re-render once so the new pin appears immediately
+        updateMapWithUserLocationAndRender();
     };
 
-    if (!Array.isArray(openSurvey.targets)) openSurvey.targets = [];
-    openSurvey.targets.unshift(newTarget);
-    openSurvey.dateLastChanged = now;
+    // 1) If we already have live GPS in memory, use it immediately
+    if (hasLiveGps) {
+        commitTarget(effectiveCoords.lat, effectiveCoords.lon, effectiveAccuracy);
+        return;
+    }
 
-    saveSurveysToLocalStorage();
+    // 2) Otherwise do a one-shot GPS read so Log New Target still captures coordinates
+    if (navigator.geolocation && typeof navigator.geolocation.getCurrentPosition === 'function') {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos?.coords?.latitude;
+                const lon = pos?.coords?.longitude;
+                const acc = pos?.coords?.accuracy;
 
-    // Feedback: short vibration + obvious toast
-    if (navigator.vibrate) navigator.vibrate(60);
+                commitTarget(
+                    (typeof lat === 'number' ? lat : null),
+                    (typeof lon === 'number' ? lon : null),
+                    (typeof acc === 'number' ? acc : null)
+                );
+            },
+            (err) => {
+                console.warn('quickLogTargetByVDI: getCurrentPosition failed:', err);
+                // Fall back to logging without GPS, but still log the target
+                commitTarget(null, null, null);
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 8000
+            }
+        );
+        return;
+    }
 
-    const extra = sourceLabel ? ` (${sourceLabel})` : '';
-    showMessage(`New Target logged: ${vdiStr}${extra}`, 'success');
-
-    // Only restart auto-refresh if tracking is on
-    if (isTrackingActive) startCompassAutoRefresh();
-
-    // Re-render once so the new pin appears immediately
-    updateMapWithUserLocationAndRender();
+    // 3) No geolocation available: log without GPS
+    commitTarget(null, null, null);
 }
-
 
 /** Renders the content for the new Export page. */
 function renderExportPage() {
@@ -3603,41 +3662,8 @@ function closeNewTargetModal() {
     closeModal('new-target-modal');
 }
 
-//
-async function handleNewTargetSubmit(event) {
-    event.preventDefault();
-    const form = event.target;
-
-    // Which survey are we saving to?
-    const surveyId = form['targetSurveyId']?.value;
-    const survey = surveys.find(s => s.id === surveyId);
-
-    if (!survey) {
-        showMessage('Error: Survey not found for this target.', 'error');
-        return;
-    }
-
-    const newDescription = form['targetDescription'].value.trim();
-    const newVDI         = form['targetVDI'].value.trim() || 'N/A';
-    const newDepth       = form['targetDepth'].value.trim() || 'Unknown';
-    const newType        = form['targetType'].value;
-    
-    // ✅ FIX: Use live GPS data if available, otherwise fall back to form fields
-    let newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
-    let newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
-    
-    // If we have current user coordinates from the GPS watch, use those
-    if (currentUserCoords && typeof currentUserCoords.lat === 'number' && typeof currentUserCoords.lon === 'number') {
-        newCoords = `${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}`;
-        if (typeof currentUserAccuracy === 'number') {
-            newAccuracy = currentUserAccuracy.toFixed(1);
-        }
-    }
-    }
-//
-        
 // NOTE: now async because we talk to IndexedDB
-async function OLDhandleNewTargetSubmit(event) {
+async function handleNewTargetSubmit(event) {
     event.preventDefault();
     const form = event.target;
 
