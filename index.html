@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.3</title>
+    <title>DIG IT! v1.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2569,15 +2569,6 @@ switch (currentPage) {
     return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
-/**
- * Shared worker: logs a new quick target into the OPEN survey using the given VDI/Target ID.
- * This is the same logic as your existing "Log New Target" button, centralised.
- */
-/**
- * Shared worker: logs a new quick target into the OPEN survey using the given VDI/Target ID.
- * FIX: Always try to include GPS coords if available (not only when recording a track).
- * Also: if no live coords are available, it will do a one-shot getCurrentPosition().
- */
 function quickLogTargetByVDI(raw, sourceLabel = '') {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -2596,108 +2587,59 @@ function quickLogTargetByVDI(raw, sourceLabel = '') {
     const now = Date.now();
 
     // Prefer smoothed coords if available, else raw
-    const effectiveCoords = (typeof smoothedUserCoords === 'object' && smoothedUserCoords)
+    const effectiveCoords = (smoothedUserCoords && typeof smoothedUserCoords.lat === 'number' && typeof smoothedUserCoords.lon === 'number')
         ? smoothedUserCoords
         : currentUserCoords;
 
-    const hasLiveGps =
-        effectiveCoords &&
-        typeof effectiveCoords.lat === 'number' &&
-        typeof effectiveCoords.lon === 'number' &&
-        isFinite(effectiveCoords.lat) &&
-        isFinite(effectiveCoords.lon);
+    // FIX: Don't gate GPS on isAnyTrackRecording(); use coords whenever we have them
+    const coords =
+        (effectiveCoords && typeof effectiveCoords.lat === 'number' && typeof effectiveCoords.lon === 'number')
+            ? `${effectiveCoords.lat.toFixed(6)}, ${effectiveCoords.lon.toFixed(6)}`
+            : 'No GPS logged';
 
-    // Best available accuracy value
-    const effectiveAccuracy =
-        (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy
-        : (typeof bestLiveAccuracy === 'number' && isFinite(bestLiveAccuracy) && bestLiveAccuracy !== Infinity) ? bestLiveAccuracy
-        : null;
-
-    const commitTarget = (lat, lon, acc) => {
-        const coordsStr =
-            (typeof lat === 'number' && typeof lon === 'number' && isFinite(lat) && isFinite(lon))
-                ? `${lat.toFixed(6)}, ${lon.toFixed(6)}`
-                : 'No GPS logged';
-
-        const accStr =
-            (typeof acc === 'number' && isFinite(acc))
-                ? String(acc)
+    // Best available accuracy
+    const acc =
+        (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy))
+            ? String(currentUserAccuracy)
+            : (typeof bestLiveAccuracy === 'number' && isFinite(bestLiveAccuracy) && bestLiveAccuracy !== Infinity)
+                ? String(bestLiveAccuracy)
                 : 'N/A';
 
-        const newTarget = {
-            id: generateId(),
-            description: `Logged ${new Date(now).toLocaleString()}`,
-            vdi: vdiStr,
-            depth: 'Unknown',
-            type: 'Unidentified',
-            status: 'Not dug',
-            time: now,
-            coordinates: coordsStr,
-            accuracy: accStr,
-            user: userProfile.name,
-            detector: userProfile.detector,
-            centerOnMap: false,
+    const newTarget = {
+        id: generateId(),
+        description: `Logged ${new Date(now).toLocaleString()}`,
+        vdi: vdiStr,
+        depth: 'Unknown',
+        type: 'Unidentified',
+        status: 'Not dug',
+        time: now,
+        coordinates: coords,
+        accuracy: acc,
+        user: userProfile.name,
+        detector: userProfile.detector,
+        centerOnMap: false,
 
-            photos: [],
-            targetPhotoRef: '',
-            targetPhotoData: ''
-        };
-
-        if (!Array.isArray(openSurvey.targets)) openSurvey.targets = [];
-        openSurvey.targets.unshift(newTarget);
-        openSurvey.dateLastChanged = now;
-
-        saveSurveysToLocalStorage();
-
-        // Feedback: short vibration + obvious toast
-        if (navigator.vibrate) navigator.vibrate(60);
-
-        const extra = sourceLabel ? ` (${sourceLabel})` : '';
-        showMessage(`New Target logged: ${vdiStr}${extra}`, 'success');
-
-        // Only restart auto-refresh if tracking is on
-        if (isTrackingActive) startCompassAutoRefresh();
-
-        // Re-render once so the new pin appears immediately
-        updateMapWithUserLocationAndRender();
+        photos: [],
+        targetPhotoRef: '',
+        targetPhotoData: ''
     };
 
-    // 1) If we already have live GPS in memory, use it immediately
-    if (hasLiveGps) {
-        commitTarget(effectiveCoords.lat, effectiveCoords.lon, effectiveAccuracy);
-        return;
-    }
+    if (!Array.isArray(openSurvey.targets)) openSurvey.targets = [];
+    openSurvey.targets.unshift(newTarget);
+    openSurvey.dateLastChanged = now;
 
-    // 2) Otherwise do a one-shot GPS read so Log New Target still captures coordinates
-    if (navigator.geolocation && typeof navigator.geolocation.getCurrentPosition === 'function') {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const lat = pos?.coords?.latitude;
-                const lon = pos?.coords?.longitude;
-                const acc = pos?.coords?.accuracy;
+    saveSurveysToLocalStorage();
 
-                commitTarget(
-                    (typeof lat === 'number' ? lat : null),
-                    (typeof lon === 'number' ? lon : null),
-                    (typeof acc === 'number' ? acc : null)
-                );
-            },
-            (err) => {
-                console.warn('quickLogTargetByVDI: getCurrentPosition failed:', err);
-                // Fall back to logging without GPS, but still log the target
-                commitTarget(null, null, null);
-            },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 8000
-            }
-        );
-        return;
-    }
+    if (navigator.vibrate) navigator.vibrate(60);
 
-    // 3) No geolocation available: log without GPS
-    commitTarget(null, null, null);
+    const extra = sourceLabel ? ` (${sourceLabel})` : '';
+    showMessage(`New Target logged: ${vdiStr}${extra}`, 'success');
+
+    // Only restart auto-refresh if tracking is on
+    if (isTrackingActive) startCompassAutoRefresh();
+
+    // Re-render once so the new pin appears immediately
+    updateMapWithUserLocationAndRender();
 }
 
 /** Renders the content for the new Export page. */
