@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.1</title>
+    <title>DIG IT! v1.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -5995,7 +5995,6 @@ function endMapDrag() {
     document.removeEventListener('touchend', endMapDrag);
 }
         
-/** Renders a static plot of targets based on relative coordinates, with optional centre target, grid, and nav line. */
 function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
@@ -6004,16 +6003,18 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Current zoom (global), and inverse zoom for "keep-size-constant" overlays
     const invZoom = 1 / (mapZoom || 1);
 
-    // ✅ CHANGED: Use the passed-in user coords ONLY.
-    // If caller passes null (Hide My Position), the map must not use user coords at all.
+    // ✅ CRITICAL FIX:
+    // This function MUST respect the caller's intent.
+    // If "Hide My Position" is active, the caller should pass null, and we must not use any global GPS coords.
     const effectiveUserCoords = userCoordsOrNull;
 
-    // ✅ CHANGED: GPS is "present" for the map ONLY if effectiveUserCoords was provided
-    // (i.e., showUserPosition is on AND caller passed coords).
+    // ✅ Only treat user GPS as present if the caller provided coords
     const hasUserGPS =
         !!effectiveUserCoords &&
         typeof effectiveUserCoords.lat === 'number' &&
-        typeof effectiveUserCoords.lon === 'number';
+        typeof effectiveUserCoords.lon === 'number' &&
+        !isNaN(effectiveUserCoords.lat) &&
+        !isNaN(effectiveUserCoords.lon);
 
     const userAccuracy = (typeof currentUserAccuracy === 'number') ? currentUserAccuracy : 0;
     const diameterInMeters = userAccuracy * 2;
@@ -6069,7 +6070,7 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         });
     }
 
-    // ✅ CHANGED: User coord only if caller provided coords
+    // ✅ User coord: ONLY if caller provided coords (i.e., position is not hidden)
     if (hasUserGPS) {
         userCoord = { lat: effectiveUserCoords.lat, lon: effectiveUserCoords.lon };
         allCoords.push({
@@ -6269,9 +6270,10 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         `;
     }
 
-    // 8. Nav line SVG (only if we have a userCoord!)
+    // 8. Nav line SVG (ONLY if userCoord exists!)
     let navLineHtml = '';
 
+    // Need nav target percentages if nav target exists
     let navTargetXPercent = null;
     let navTargetYPercent = null;
     let navTargetLat = null;
@@ -6294,7 +6296,7 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
 
     if (
         navigationTargetId &&
-        userCoord && // ✅ key guard: no userCoord => no nav line
+        userCoord && // ✅ key guard: hidden position => no nav line
         navTargetXPercent !== null &&
         navTargetYPercent !== null &&
         typeof navTargetLat === 'number' &&
