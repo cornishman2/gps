@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.2</title>
+    <title>DIG IT! v1.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3621,100 +3621,18 @@ async function handleNewTargetSubmit(event) {
     const newVDI         = form['targetVDI'].value.trim() || 'N/A';
     const newDepth       = form['targetDepth'].value.trim() || 'Unknown';
     const newType        = form['targetType'].value;
-    const newCoords      = form['targetCoords'].value.trim() || 'No GPS logged';
-    const newAccuracy    = form['targetAccuracy'].value.trim() || 'N/A';
-
-    if (!newDescription) {
-        showMessage('Description / Find Name is required.', 'error');
-        return;
-    }
-
-    // Centre on Map radios may or may not exist
-    let centerOnMap = false;
-    const centerField = form['targetCenterOnMap'];
-    if (centerField) {
-        const centerOnMapValue = centerField.value;
-        centerOnMap = (centerOnMapValue === 'Yes');
-    }
-
-    // --- PHOTO HANDLING (Step 1: still uses data URLs in memory) ---
-
-    // Hidden field currently stores JSON.stringify(currentNewTargetPhotos)
-    let photosDataUrls = [];
-    const rawPhotoField = form['targetPhotoData']?.value;
-
-    if (rawPhotoField) {
-        try {
-            const parsed = JSON.parse(rawPhotoField);
-            if (Array.isArray(parsed)) {
-                photosDataUrls = parsed.filter(p => typeof p === 'string' && p.length > 0);
-            } else if (typeof parsed === 'string' && parsed.length > 0) {
-                photosDataUrls = [parsed];
-            }
-        } catch (e) {
-            // Not valid JSON? Treat as single data URL
-            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
-                photosDataUrls = [rawPhotoField];
-            }
+    
+    // ✅ FIX: Use live GPS data if available, otherwise fall back to form fields
+    let newCoords = form['targetCoords'].value.trim() || 'No GPS logged';
+    let newAccuracy = form['targetAccuracy'].value.trim() || 'N/A';
+    
+    // If we have current user coordinates from the GPS watch, use those
+    if (currentUserCoords && typeof currentUserCoords.lat === 'number' && typeof currentUserCoords.lon === 'number') {
+        newCoords = `${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)}`;
+        if (typeof currentUserAccuracy === 'number') {
+            newAccuracy = currentUserAccuracy.toFixed(1);
         }
     }
-
-    // Save these data URLs into IndexedDB and get back lightweight references
-    let photoRefs = [];
-    try {
-        photoRefs = await saveDataUrlsAsPhotoRefs(photosDataUrls);
-    } catch (e) {
-        console.error('Error saving photos to IndexedDB:', e);
-        // We can still proceed, just without IDB refs.
-        photoRefs = [];
-    }
-
- const primaryDataUrl = photosDataUrls[0] || '';
-const primaryRef     = photoRefs[0] || '';
-
-const newTarget = {
-    id: generateId(),
-    description: newDescription,
-    vdi: newVDI,
-    depth: newDepth,
-    type: newType,
-    status: 'Not dug',
-    time: Date.now(),
-    coordinates: newCoords,
-    accuracy: newAccuracy,
-    user: userProfile.name,
-    detector: userProfile.detector,
-    centerOnMap,
-
-    // Photos: use IndexedDB refs as the truth
-    photos: photoRefs,
-    targetPhotoRef: primaryRef,
-
-    // IMPORTANT:
-    // If we successfully saved to IndexedDB (photoRefs.length > 0),
-    // DO NOT keep a base64 copy in localStorage.
-    // Only keep base64 if IDB save failed.
-    targetPhotoData: photoRefs.length > 0 ? '' : primaryDataUrl
-};
-  
-    if (!Array.isArray(survey.targets)) {
-        survey.targets = [];
-    }
-    survey.targets.unshift(newTarget);
-    survey.dateLastChanged = Date.now();
-
-    // Clear temp buffer so it doesn't leak into the next target
-    currentNewTargetPhotos = [];
-
-    saveSurveysToLocalStorage();
-    closeNewTargetModal();
-
-    // Make sure we land back on the Targets screen
-    currentPage = 'Targets';
-    showMessage(`New Target (${newDescription}) logged successfully!`, 'success');
-    render();
-}
-
         
 // Now async, so it can talk to IndexedDB
 async function openTargetPhotoGallery(targetId, surveyId) {
@@ -5995,7 +5913,7 @@ function endMapDrag() {
     document.removeEventListener('touchend', endMapDrag);
 }
         
-function renderTargetPlot(targets, userCoordsOrNull = null) {
+renderTargetPlot(targets, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null) {
     // Haversine approximation constants
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
