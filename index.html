@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.1</title>
+    <title>DIG IT! v1.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2699,6 +2699,24 @@ function renderExportPage() {
                 <textarea id="import-survey-log" rows="6" readonly placeholder="Import log will appear here." 
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-2"></textarea>
             </div>
+<!-- Import Target via QR Code -->
+            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mt-4">
+                <h3 class="text-xl font-bold text-primary mb-2">Import Target (QR Code)</h3>
+
+                <p class="text-sm text-gray-600 mb-3">
+                Scan a QR code generated from a Target to import it into the currently open survey.
+                </p>
+
+                <button
+                id="scan-target-qr-btn"
+                class="px-4 py-2 rounded-lg text-white font-bold shadow hover:opacity-90"
+                style="background-color: rgb(var(--color-secondary));"
+                type="button">
+                Scan Target QR
+                </button>
+            </div>
+
+        
         </div>
     `;
 }        
@@ -8263,6 +8281,12 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
             }
         };
     }
+
+        const scanTargetQrBtn = document.getElementById('scan-target-qr-btn');
+if (scanTargetQrBtn) {
+    scanTargetQrBtn.addEventListener('click', openTargetQrScanModal);
+}
+
 
         const sortByIdBtn = document.getElementById('sort-target-id-btn');
 if (sortByIdBtn) {
