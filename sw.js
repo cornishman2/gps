@@ -1,10 +1,11 @@
 const CACHE_NAME = "dig-it-cache-v1";
+
 const urlsToCache = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-  "/assets/icon-192.png",
-  "/assets/icon-512.png"
+  "./",
+  "./index.html",
+  "./manifest.json",
+  "./assets/icon-192.png",
+  "./assets/icon-512.png"
 ];
 
 // Install: cache the app shell
@@ -29,7 +30,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch: serve cached files if available
+// Fetch: cache-first strategy
 self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((response) => {
