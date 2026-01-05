@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIG IT! v1.1</title>
+    <link rel="manifest" href="manifest.json">
+
+    <title>DIG IT! v1.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -8414,17 +8416,18 @@ async function importSurveyWithPhotosFromFile() {
             });
         });
         
-        // 1. Load data first
-        loadDataFromLocalStorage();
-  //      showMessage("Data loaded instantly from local storage.", 'success'); // Show initial load message
+    loadDataFromLocalStorage();
+    render();
 
-        // 2. Initial render call
-        render();
+// Hide splash after first render
+    hideAppSplash();
 
-        hideAppSplash();
-        setTimeout(() => {
-          hideAppSplash();}, 4000);
-
+// Failsafe in case render never completes
+    setTimeout(() => {
+    if (document.getElementById('app-splash')) {
+    hideAppSplash();
+  }
+}, 4000);
 
 
     </script>
