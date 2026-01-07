@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v2</title>
+    <title>DIG IT! v3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -5199,7 +5199,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v2</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v3</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -5755,38 +5755,52 @@ function renderTargetCard(target, surveyId) {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>`;
 
-    switch (target.status) {
-        case 'Signal Detected':
-            statusClass = 'bg-green-100 text-green-800';
-            break;
-        case 'Hole Dug':
-            statusClass = 'bg-amber-100 text-amber-800';
-            statusIcon  = `
-                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M4 6h16M4 10h16M4 14h10"></path>
-                </svg>`;
-            break;
-        case 'Hole Refilled':
-            statusClass = 'bg-blue-100 text-blue-800';
-            statusIcon  = `
-                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M5 13l4 4L19 7"></path>
-                </svg>`;
-            break;
-        case 'Signal Ignored':
-            statusClass = 'bg-gray-100 text-gray-800';
-            statusIcon  = `
-                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                     xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M6 18L18 6M6 6l12 12"></path>
-                </svg>`;
-            break;
-    }
+   // --- Status badge styling ---
+let statusClass = 'bg-blue-100 text-blue-800';
+let statusIcon  = `
+  <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+       xmlns="http://www.w3.org/2000/svg">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+  </svg>`;
+
+const s = target.status || 'Not dug';
+
+switch (s) {
+    case 'Not dug':
+        statusClass = 'bg-blue-100 text-blue-800';
+        break;
+
+    case 'Dug':
+        statusClass = 'bg-amber-100 text-amber-800';
+        statusIcon  = `
+          <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 6h16M4 10h16M4 14h10"></path>
+          </svg>`;
+        break;
+
+    case 'Refilled':
+        statusClass = 'bg-green-100 text-green-800';
+        statusIcon  = `
+          <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M5 13l4 4L19 7"></path>
+          </svg>`;
+        break;
+
+    case 'Ignore':
+        statusClass = 'bg-gray-100 text-gray-800';
+        statusIcon  = `
+          <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"></path>
+          </svg>`;
+        break;
+}
 
     // --- Photo thumbnail block (IndexedDB-aware) ---
     let thumbRef    = '';
@@ -5864,7 +5878,8 @@ function renderTargetCard(target, surveyId) {
 
                 <span class="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${statusClass}">
                     ${statusIcon}
-                    <span>${target.status || 'Signal Detected'}</span>
+                   <span>${target.status || 'Not dug'}</span>
+
                 </span>
             </div>
 
@@ -6230,11 +6245,13 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         .map(t => {
             const { xPct, yPct } = toPercent(t.x, t.y);
 
-            // pin style
-            let pinColor = 'bg-blue-500';
-            if ((t.type || '').toLowerCase().includes('coin')) pinColor = 'bg-yellow-500';
-            if ((t.type || '').toLowerCase().includes('iron')) pinColor = 'bg-gray-700';
-            if ((t.type || '').toLowerCase().includes('relic')) pinColor = 'bg-red-500';
+     // pin style (STATUS-based)
+    const st = (t.status || 'Not dug').toLowerCase();
+
+    let pinColor = 'bg-blue-500';      // Not dug
+    if (st === 'dug')      pinColor = 'bg-amber-500';
+    if (st === 'refilled') pinColor = 'bg-green-500';
+    if (st === 'ignore')   pinColor = 'bg-gray-500';
 
             const pinSize = 'w-4 h-4';
 
