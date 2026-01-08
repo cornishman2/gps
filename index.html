@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v16</title>
+    <title>DIG IT! v17</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1272,6 +1272,36 @@ function isAnyTrackRecording() {
     return Boolean(activeTrackId && activeTrackSurveyId);
 }
         
+
+function ensureTrackingThen(fn) {
+    // If already recording, run immediately
+    if (typeof isAnyTrackRecording === 'function' && isAnyTrackRecording()) {
+        fn();
+        return;
+    }
+
+    // Start a new track
+    if (typeof handleStartTrackClick === 'function') {
+        handleStartTrackClick();
+    }
+
+    // Give the GPS/watch a brief moment to populate coords.
+    // If coords already exist, this returns almost immediately.
+    const start = Date.now();
+    const maxWaitMs = 1200;     // short, keeps UI snappy
+    const tickMs = 100;
+
+    const timer = setInterval(() => {
+        const gps = smoothedUserCoords || currentUserCoords;
+        const hasFix = gps && typeof gps.lat === 'number' && typeof gps.lon === 'number' && !isNaN(gps.lat) && !isNaN(gps.lon);
+
+        if (hasFix || (Date.now() - start) >= maxWaitMs) {
+            clearInterval(timer);
+            fn();
+        }
+    }, tickMs);
+}
+
         
 function pickTrackColor(index) {
     const palette = [
@@ -5200,7 +5230,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v16</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v17</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -8317,7 +8347,10 @@ const stakeBtn = document.getElementById('stake-target-btn');
 if (stakeBtn) {
     stakeBtn.addEventListener('click', () => {
         // Create a special "stake" target. No prompt. User can edit later.
-        quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Stake' });
+        ensureTrackingThen(() => {
+                quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Stake' });
+        });
+
 
         // Optional: feedback (matches your quick buttons behaviour)
         try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
@@ -8371,7 +8404,10 @@ if (stakeBtn) {
         btn.addEventListener('click', () => {
             const min = btn.getAttribute('data-min');
             const max = btn.getAttribute('data-max');
-            quickLogTargetByVDI(randomIntInclusive(min, max), `${min}→${max}`);
+            ensureTrackingThen(() => {
+                quickLogTargetByVDI(randomIntInclusive(min, max), `${min}→${max}`);
+                });
+
         });
     });
 
