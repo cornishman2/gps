@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v18</title>
+    <title>DIG IT! v19</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -5230,7 +5230,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v18</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v19</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -8399,21 +8399,22 @@ if (stakeBtn) {
         btn.addEventListener('click', () => deleteFind(btn.getAttribute('data-find-id')));
     });
 
-    // 7. Compass Page Range Buttons
-    document.querySelectorAll('.compass-range-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const min = btn.getAttribute('data-min');
-            const max = btn.getAttribute('data-max');
-            ensureTrackingThen(() => {
-                quickLogTargetByVDI(-100, 'STAKE', {
-                description: 'STAKE',
-                type: 'Something else'
-                });
-        });
+// 7. Compass Page Range Buttons
+document.querySelectorAll('.compass-range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const min = Number(btn.getAttribute('data-min'));
+        const max = Number(btn.getAttribute('data-max'));
 
+        ensureTrackingThen(() => {
+            const vdi = randomIntInclusive(min, max);
 
+            // Rainbow targets should be Unidentified
+            quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
         });
     });
+});
+
+//    });
 
     // 8. Compass Page Quick Input
     const quickInput = document.getElementById('compass-quick-target-vdi');
