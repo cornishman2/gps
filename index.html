@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v14</title>
+    <title>DIG IT! v15</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2618,7 +2618,8 @@ switch (currentPage) {
  * Shared worker: logs a new quick target into the OPEN survey using the given VDI/Target ID.
  * This is the same logic as your existing "Log New Target" button, centralised.
  */
-function quickLogTargetByVDI(raw, sourceLabel = '') {
+function quickLogTargetByVDI(raw, sourceLabel = '', opts = {}) {
+
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('You must have an open survey to log a target.', 'error');
@@ -2649,10 +2650,10 @@ function quickLogTargetByVDI(raw, sourceLabel = '') {
 
     const newTarget = {
         id: generateId(),
-        description: `Logged ${new Date(now).toLocaleString()}`,
+        description: opts.description || `Logged ${new Date(now).toLocaleString()}`,
         vdi: vdiStr,
         depth: 'Unknown',
-        type: 'Unidentified',
+        type: opts.type || 'Unidentified',
         status: 'Not dug',
         time: now,
         coordinates: coords,
@@ -5199,7 +5200,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v14</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v15</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -6277,7 +6278,12 @@ if (centerTarget) {
                             transform: translateY(-50%) translateX(${5 * invZoom}px) scale(${invZoom});
                         "
                     >
-                        ${t.vdi || 'N/A'}
+                        ${
+                          String(t.vdi).trim() === '-100'
+                            ? (t.description || 'STAKE')
+                            : (t.vdi || 'N/A')
+                        }
+
                     </span>
                 </div>
             `;
@@ -7613,6 +7619,16 @@ ${(() => {
                     Tap a colour to instantly log a target with a Target ID chosen inside that range.
                 </p>
             </div>
+<!-- STAKE button (creates a marker target with VDI -100) -->
+            <div class="mt-3">
+                  <button
+                    id="stake-target-btn"
+                    type="button"
+                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700"
+                    >
+                    STAKE
+                  </button>
+            </div>
 
 
             <!-- Map -->
@@ -8282,6 +8298,21 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
         showMessage('Navigation overlay settings saved.', 'success');
     });
 }
+
+// Compass: STAKE button (no prompt)
+const stakeBtn = document.getElementById('stake-target-btn');
+if (stakeBtn) {
+    stakeBtn.addEventListener('click', () => {
+        // Create a special "stake" target. No prompt. User can edit later.
+        quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Stake' });
+
+        // Optional: feedback (matches your quick buttons behaviour)
+        try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
+        showMessage('STAKE created.', 'success');
+    });
+}
+
+    
         
     // 5. Finds Page Filter Listeners
     const findsSearchInput = document.getElementById('finds-search-input');
