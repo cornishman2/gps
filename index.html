@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v26</title>
+    <title>DIG IT! v1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -957,6 +957,42 @@ let navOverlaySettings = {
     aboveOffsetPct: 50, // default
     belowOffsetPct: 6   // default
 };
+
+function showProgressOverlay(title = 'Working...', message = 'Please wait.') {
+    const overlay = document.getElementById('progress-overlay');
+    if (!overlay) return;
+
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+
+    document.getElementById('progress-title').textContent = title;
+    document.getElementById('progress-message').textContent = message;
+
+    updateProgressOverlay(0, 'Starting…');
+}
+
+function updateProgressOverlay(percent, detailText = '') {
+    const overlay = document.getElementById('progress-overlay');
+    if (!overlay || overlay.classList.contains('hidden')) return;
+
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
+    const bar = document.getElementById('progress-bar');
+    const pct = document.getElementById('progress-percent');
+    const det = document.getElementById('progress-detail');
+
+    if (bar) bar.style.width = `${p}%`;
+    if (pct) pct.textContent = `${Math.round(p)}%`;
+    if (det) det.textContent = detailText || '';
+}
+
+function hideProgressOverlay() {
+    const overlay = document.getElementById('progress-overlay');
+    if (!overlay) return;
+
+    overlay.classList.add('hidden');
+    overlay.classList.remove('flex');
+}
+
         
 function hideAppSplash() {
   const el = document.getElementById('app-splash');
@@ -2405,12 +2441,30 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
     const importedSurvey = payload.survey;
     const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
+    // Count files for progress
+    const allPhotoPaths = [];
+    if (Array.isArray(importedSurvey.photoFiles)) allPhotoPaths.push(...importedSurvey.photoFiles);
+
+    if (Array.isArray(importedSurvey.targets)) {
+        for (const t of importedSurvey.targets) {
+            if (Array.isArray(t.photoFiles)) allPhotoPaths.push(...t.photoFiles);
+        }
+    }
+    for (const f of importedFinds) {
+        if (Array.isArray(f.photoFiles)) allPhotoPaths.push(...f.photoFiles);
+    }
+
+    const totalPhotos = allPhotoPaths.length;
+    let donePhotos = 0;
+
     try {
-        // Ensure survey has an id
+        showProgressOverlay('Importing ZIP', 'Restoring survey + photos…');
+        updateProgressOverlay(1, 'Preparing import…');
+
         if (!importedSurvey.id) importedSurvey.id = generateId();
 
-        // -------- Restore survey photo (if present) --------
-        log('Restoring survey photo (if present)...');
+        // ---- Survey photo ----
+        updateProgressOverlay(5, 'Restoring survey photo…');
         if (Array.isArray(importedSurvey.photoFiles) && importedSurvey.photoFiles.length) {
             const path = importedSurvey.photoFiles[0];
             const zf = zip.file(path);
@@ -2419,13 +2473,19 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
                 const id = await savePhotoBlob(blob);
                 importedSurvey.surveyPhotoRef = makePhotoRef(id);
                 importedSurvey.surveyPhotoData = '';
+                donePhotos++;
+                updateProgressOverlay(
+                    5 + (totalPhotos ? (donePhotos / totalPhotos) * 70 : 0),
+                    `Restoring photos ${donePhotos}/${totalPhotos}…`
+                );
             }
         }
         delete importedSurvey.photoFiles;
 
-        // -------- Restore target photos --------
+        // ---- Targets ----
         if (!Array.isArray(importedSurvey.targets)) importedSurvey.targets = [];
         log(`Restoring ${importedSurvey.targets.length} targets...`);
+        updateProgressOverlay(10, `Restoring ${importedSurvey.targets.length} targets…`);
 
         let tIndex = 0;
         for (const t of importedSurvey.targets) {
@@ -2441,6 +2501,10 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
                 const blob = await zf.async('blob');
                 const id = await savePhotoBlob(blob);
                 refs.push(makePhotoRef(id));
+
+                donePhotos++;
+                const pct = 5 + (totalPhotos ? (donePhotos / totalPhotos) * 70 : 0);
+                updateProgressOverlay(pct, `Restoring photos ${donePhotos}/${totalPhotos}…`);
             }
 
             t.photos = refs;
@@ -2451,8 +2515,10 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
             if (tIndex % 10 === 0) log(`  Targets processed: ${tIndex}/${importedSurvey.targets.length}`);
         }
 
-        // -------- Restore find photos --------
+        // ---- Finds ----
         log(`Restoring ${importedFinds.length} finds...`);
+        updateProgressOverlay(80, `Restoring ${importedFinds.length} finds…`);
+
         let fIndex = 0;
         for (const f of importedFinds) {
             fIndex++;
@@ -2468,6 +2534,10 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
                 const blob = await zf.async('blob');
                 const id = await savePhotoBlob(blob);
                 refs.push(makePhotoRef(id));
+
+                donePhotos++;
+                const pct = 5 + (totalPhotos ? (donePhotos / totalPhotos) * 70 : 0);
+                updateProgressOverlay(pct, `Restoring photos ${donePhotos}/${totalPhotos}…`);
             }
 
             f.photos = refs;
@@ -2478,13 +2548,17 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
             if (fIndex % 10 === 0) log(`  Finds processed: ${fIndex}/${importedFinds.length}`);
         }
 
-        // -------- Merge into local data --------
+        // ---- Merge ----
+        updateProgressOverlay(92, 'Saving imported data…');
         log('Merging imported survey into local data...');
         surveys.push(importedSurvey);
         finds = finds.concat(importedFinds);
 
         saveSurveysToLocalStorage();
         saveFindsToLocalStorage();
+
+        updateProgressOverlay(100, 'Done.');
+        setTimeout(() => hideProgressOverlay(), 400);
 
         log(`"${filename}" imported successfully.`);
         showMessage(
@@ -2498,9 +2572,9 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
         console.error('Error importing ZIP survey:', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
+        hideProgressOverlay();
     }
 }
-
         
 async function handleEditFindSubmit(event) {
     event.preventDefault();
@@ -5786,7 +5860,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v26</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v1</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -8539,7 +8613,6 @@ async function actuallyExportOpenSurvey() {
         btn.innerText = 'Exporting ZIP...';
     }
 
-    // Helpers
     const safeName = (openSurvey.name || 'survey')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
@@ -8561,9 +8634,6 @@ async function actuallyExportOpenSurvey() {
         return 'bin';
     };
 
-    const blobToArrayBuffer = async (blob) => await blob.arrayBuffer();
-
-    // Load blob from a photo ref ("idb:123")
     const loadBlobFromRef = async (ref) => {
         const id = parsePhotoRef(ref);
         if (id == null) return null;
@@ -8571,18 +8641,16 @@ async function actuallyExportOpenSurvey() {
     };
 
     try {
+        showProgressOverlay('Exporting ZIP', 'Packaging survey + photos…');
+        updateProgressOverlay(1, 'Preparing data…');
+
         log(`Starting ZIP export for survey: ${openSurvey.name || 'Unnamed survey'}`);
 
-        // 1) Deep copy (no mutation of live data)
+        // Deep copy (no mutation of live data)
         const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
-
-        // 2) Collect finds linked to this survey
         const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === openSurvey.id);
         const findsCopy   = linkedFinds.map(f => JSON.parse(JSON.stringify(f)));
 
-        // 3) Build a payload that references photo files (NOT embedded base64)
-        //    We'll attach a "photoFiles" list to each entity so import knows what to load.
-        //    We also remove any old/export-only fields to keep it clean.
         const cleanEntityForExport = (obj) => {
             if (!obj || typeof obj !== 'object') return obj;
             const o = JSON.parse(JSON.stringify(obj));
@@ -8602,105 +8670,124 @@ async function actuallyExportOpenSurvey() {
             finds: findsCopy.map(cleanEntityForExport)
         };
 
-        // Normalise photo fields into arrays we can export from:
-        // survey: surveyPhotoRef
-        // targets: photos[] OR targetPhotoRef
-        // finds: photos[] OR findPhotoRef
         const zip = new JSZip();
-
-        const photosFolder = zip.folder('photos');
-        const surveyFolder = photosFolder.folder('survey');
+        const photosFolder  = zip.folder('photos');
+        const surveyFolder  = photosFolder.folder('survey');
         const targetsFolder = photosFolder.folder('targets');
-        const findsFolder = photosFolder.folder('finds');
+        const findsFolder   = photosFolder.folder('finds');
 
-        let photoCount = 0;
+        // Compute total photo refs up front (for progress)
+        const refsToExport = [];
 
-        // 4) Survey photo
-        payload.survey.photoFiles = [];
+        // Survey photo
         if (payload.survey && payload.survey.surveyPhotoRef) {
-            const blob = await loadBlobFromRef(payload.survey.surveyPhotoRef);
-            if (blob) {
-                const ext = extFromMime(blob.type);
-                const filename = `survey_photo.${ext}`;
-                surveyFolder.file(filename, blob);
-                payload.survey.photoFiles.push(`photos/survey/${filename}`);
-                photoCount++;
-            }
+            refsToExport.push({ kind: 'survey', owner: payload.survey, ref: payload.survey.surveyPhotoRef });
         }
 
-        // 5) Target photos
+        // Targets photos
         if (!Array.isArray(payload.survey.targets)) payload.survey.targets = [];
         for (const t of payload.survey.targets) {
-            t.photoFiles = [];
-
-            // prefer photos array, fallback to single ref
             const refs = Array.isArray(t.photos) && t.photos.length
                 ? t.photos
                 : (t.targetPhotoRef ? [t.targetPhotoRef] : []);
+            for (const ref of refs) refsToExport.push({ kind: 'target', owner: t, ref });
+        }
 
-            // We do NOT export stake vs non-stake differently here; it’s just photos.
-            let idx = 0;
-            for (const ref of refs) {
-                const blob = await loadBlobFromRef(ref);
-                if (!blob) continue;
+        // Finds photos
+        for (const f of payload.finds) {
+            const refs = Array.isArray(f.photos) && f.photos.length
+                ? f.photos
+                : (f.findPhotoRef ? [f.findPhotoRef] : []);
+            for (const ref of refs) refsToExport.push({ kind: 'find', owner: f, ref });
+        }
 
-                idx++;
-                const ext = extFromMime(blob.type);
-                const tid = (t.id || `target_${Math.random().toString(16).slice(2)}`).replace(/[^\w-]/g, '');
-                const filename = `${tid}_${idx}.${ext}`;
+        const totalPhotos = refsToExport.length;
+        let donePhotos = 0;
 
-                targetsFolder.file(filename, blob);
-                t.photoFiles.push(`photos/targets/${filename}`);
-                photoCount++;
+        // Prepare photoFiles arrays
+        payload.survey.photoFiles = [];
+
+        for (const t of payload.survey.targets) t.photoFiles = [];
+        for (const f of payload.finds) f.photoFiles = [];
+
+        // Export photos one-by-one (bounded memory)
+        for (const item of refsToExport) {
+            donePhotos++;
+
+            const base = 5;          // start percent for photo pass
+            const span = 75;         // photo pass occupies 75% of bar
+            const pct = totalPhotos ? base + (donePhotos / totalPhotos) * span : base + span;
+
+            updateProgressOverlay(
+                pct,
+                `Adding photos ${donePhotos}/${totalPhotos}…`
+            );
+
+            const blob = await loadBlobFromRef(item.ref);
+            if (!blob) continue;
+
+            const ext = extFromMime(blob.type);
+
+            if (item.kind === 'survey') {
+                const filename = `survey_photo.${ext}`;
+                surveyFolder.file(filename, blob);
+                payload.survey.photoFiles.push(`photos/survey/${filename}`);
             }
 
-            // Strip photo storage fields from export (we recreate on import)
+            if (item.kind === 'target') {
+                const t = item.owner;
+                const tid = (t.id || `target_${Math.random().toString(16).slice(2)}`).replace(/[^\w-]/g, '');
+                const idx = (t.photoFiles.length + 1);
+                const filename = `${tid}_${idx}.${ext}`;
+                targetsFolder.file(filename, blob);
+                t.photoFiles.push(`photos/targets/${filename}`);
+            }
+
+            if (item.kind === 'find') {
+                const f = item.owner;
+                const fid = (f.id || `find_${Math.random().toString(16).slice(2)}`).replace(/[^\w-]/g, '');
+                const idx = (f.photoFiles.length + 1);
+                const filename = `${fid}_${idx}.${ext}`;
+                findsFolder.file(filename, blob);
+                f.photoFiles.push(`photos/finds/${filename}`);
+            }
+        }
+
+        // Strip photo refs from export objects (we recreate them on import)
+        delete payload.survey.surveyPhotoRef;
+        delete payload.survey.surveyPhotoData;
+
+        for (const t of payload.survey.targets) {
             delete t.photos;
             delete t.targetPhotoRef;
             delete t.targetPhotoData;
         }
-
-        // 6) Find photos
         for (const f of payload.finds) {
-            f.photoFiles = [];
-
-            const refs = Array.isArray(f.photos) && f.photos.length
-                ? f.photos
-                : (f.findPhotoRef ? [f.findPhotoRef] : []);
-
-            let idx = 0;
-            for (const ref of refs) {
-                const blob = await loadBlobFromRef(ref);
-                if (!blob) continue;
-
-                idx++;
-                const ext = extFromMime(blob.type);
-                const fid = (f.id || `find_${Math.random().toString(16).slice(2)}`).replace(/[^\w-]/g, '');
-                const filename = `${fid}_${idx}.${ext}`;
-
-                findsFolder.file(filename, blob);
-                f.photoFiles.push(`photos/finds/${filename}`);
-                photoCount++;
-            }
-
             delete f.photos;
             delete f.findPhotoRef;
             delete f.targetPhotoData;
         }
 
-        // 7) Write the JSON manifest
+        updateProgressOverlay(82, 'Writing survey.json…');
         zip.file('survey.json', JSON.stringify(payload, null, 2));
 
         log(`Targets: ${payload.survey.targets.length}`);
         log(`Linked finds: ${payload.finds.length}`);
-        log(`Photos included: ${photoCount}`);
+        log(`Photos included: ${totalPhotos}`);
 
-        // 8) Generate ZIP and download
-        const zipBlob = await zip.generateAsync({
-            type: 'blob',
-            compression: 'DEFLATE',
-            compressionOptions: { level: 6 }
-        });
+        updateProgressOverlay(86, 'Compressing ZIP…');
+
+        const zipBlob = await zip.generateAsync(
+            { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+            (meta) => {
+                // meta.percent goes 0..100 for compression stage
+                // map it into the last ~14% of the overlay
+                const p = 86 + (meta.percent * 0.14);
+                updateProgressOverlay(p, `Compressing… ${Math.round(meta.percent)}%`);
+            }
+        );
+
+        updateProgressOverlay(99, 'Saving file…');
 
         const filename = `geoFind_${safeName}_${timestamp}.zip`;
         const url = URL.createObjectURL(zipBlob);
@@ -8714,6 +8801,9 @@ async function actuallyExportOpenSurvey() {
 
         setTimeout(() => URL.revokeObjectURL(url), 2000);
 
+        updateProgressOverlay(100, 'Done.');
+        setTimeout(() => hideProgressOverlay(), 400);
+
         log(`Export complete. "${filename}" saved to Downloads.`);
         showMessage('Survey export completed (ZIP with photos).', 'success');
 
@@ -8721,6 +8811,7 @@ async function actuallyExportOpenSurvey() {
         console.error('Error exporting open survey ZIP:', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Could not export open survey: ${e.message || 'Unknown error'}`, 'error');
+        hideProgressOverlay();
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -8728,7 +8819,9 @@ async function actuallyExportOpenSurvey() {
         }
     }
 }
-/**
+
+        
+    /**
  * Internal worker to import a survey JSON string  and add it
  * to existing data. Uses a log function to report progress.
  */
@@ -9191,6 +9284,22 @@ async function importSurveyWithPhotosFromFile() {
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<!-- Progress Overlay -->
+<div id="progress-overlay" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl p-5 w-[92%] max-w-md">
+    <div id="progress-title" class="text-lg font-bold mb-2">Working...</div>
+    <div id="progress-message" class="text-sm text-gray-700 mb-3">Please wait.</div>
+
+    <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+      <div id="progress-bar" class="h-3 bg-sky-600" style="width: 0%"></div>
+    </div>
+
+    <div class="flex justify-between text-xs text-gray-600 mt-2">
+      <div id="progress-detail">Starting…</div>
+      <div id="progress-percent">0%</div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
