@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v24</title>
+    <title>DIG IT! v25</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2313,6 +2313,193 @@ function closeEditFindModal() {
  * Save changes from Edit Find form back into the find object.
  * This now supports multiple photos via find.photos.
  */
+async function handleSurveyWithPhotosImport(event) {
+    const file = event?.target?.files?.[0];
+    const logBox = document.getElementById('import-survey-log');
+
+    const log = (msg) => {
+        if (!logBox) return;
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    if (logBox) logBox.value = '';
+
+    if (!file) {
+        showMessage('Please choose a survey file to import.', 'error');
+        return;
+    }
+
+    // Confirm first
+    showImportConfirmModal(file.name, async () => {
+        try {
+            log(`Reading "${file.name}"...`);
+
+            const lower = file.name.toLowerCase();
+
+            // Legacy JSON import still supported
+            if (lower.endsWith('.json')) {
+                const text = await file.text();
+                log('JSON read successfully. Importing...');
+                await performSurveyImport(text, file.name, log);
+                return;
+            }
+
+            // ZIP import
+            if (!lower.endsWith('.zip')) {
+                showMessage('Unsupported file type. Please select a .zip or .json export.', 'error');
+                log('ERROR: Unsupported file type.');
+                return;
+            }
+
+            if (typeof JSZip === 'undefined') {
+                showMessage('ZIP import needs JSZip. Add the JSZip <script> tag first.', 'error');
+                log('ERROR: JSZip missing.');
+                return;
+            }
+
+            log('Loading ZIP...');
+            const zip = await JSZip.loadAsync(file);
+
+            const surveyJsonFile = zip.file('survey.json');
+            if (!surveyJsonFile) {
+                showMessage('Import failed: survey.json not found in the ZIP.', 'error');
+                log('ERROR: survey.json not found in ZIP.');
+                return;
+            }
+
+            const jsonText = await surveyJsonFile.async('string');
+            log('survey.json extracted. Importing...');
+            await performSurveyZipImport(zip, jsonText, file.name, log);
+
+        } catch (e) {
+            console.error('Survey ZIP import error:', e);
+            log(`ERROR: ${e.message || 'Unknown error'}`);
+            showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
+        } finally {
+            // reset file input so selecting same file again triggers onchange
+            try { event.target.value = ''; } catch (_) {}
+        }
+    });
+}
+async function performSurveyZipImport(zip, jsonText, filename, log) {
+    let payload;
+
+    log(`Parsing survey.json from "${filename}"...`);
+    try {
+        payload = JSON.parse(jsonText);
+    } catch (e) {
+        log(`ERROR: Invalid JSON (${e.message})`);
+        showMessage(`Import failed: invalid JSON (${e.message})`, 'error');
+        return;
+    }
+
+    if (!payload || !payload.survey) {
+        log('ERROR: This ZIP does not look like a survey export.');
+        showMessage('Import failed: this ZIP does not look like a survey export.', 'error');
+        return;
+    }
+
+    const importedSurvey = payload.survey;
+    const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
+
+    try {
+        // Ensure survey has an id
+        if (!importedSurvey.id) importedSurvey.id = generateId();
+
+        // -------- Restore survey photo (if present) --------
+        log('Restoring survey photo (if present)...');
+        if (Array.isArray(importedSurvey.photoFiles) && importedSurvey.photoFiles.length) {
+            const path = importedSurvey.photoFiles[0];
+            const zf = zip.file(path);
+            if (zf) {
+                const blob = await zf.async('blob');
+                const id = await savePhotoBlob(blob);
+                importedSurvey.surveyPhotoRef = makePhotoRef(id);
+                importedSurvey.surveyPhotoData = '';
+            }
+        }
+        delete importedSurvey.photoFiles;
+
+        // -------- Restore target photos --------
+        if (!Array.isArray(importedSurvey.targets)) importedSurvey.targets = [];
+        log(`Restoring ${importedSurvey.targets.length} targets...`);
+
+        let tIndex = 0;
+        for (const t of importedSurvey.targets) {
+            tIndex++;
+            if (!t.id) t.id = generateId();
+
+            const files = Array.isArray(t.photoFiles) ? t.photoFiles : [];
+            const refs = [];
+
+            for (const path of files) {
+                const zf = zip.file(path);
+                if (!zf) continue;
+                const blob = await zf.async('blob');
+                const id = await savePhotoBlob(blob);
+                refs.push(makePhotoRef(id));
+            }
+
+            t.photos = refs;
+            t.targetPhotoRef = refs[0] || '';
+            t.targetPhotoData = '';
+            delete t.photoFiles;
+
+            if (tIndex % 10 === 0) log(`  Targets processed: ${tIndex}/${importedSurvey.targets.length}`);
+        }
+
+        // -------- Restore find photos --------
+        log(`Restoring ${importedFinds.length} finds...`);
+        let fIndex = 0;
+        for (const f of importedFinds) {
+            fIndex++;
+            if (!f.id) f.id = generateId();
+            if (!f.surveyId) f.surveyId = importedSurvey.id;
+
+            const files = Array.isArray(f.photoFiles) ? f.photoFiles : [];
+            const refs = [];
+
+            for (const path of files) {
+                const zf = zip.file(path);
+                if (!zf) continue;
+                const blob = await zf.async('blob');
+                const id = await savePhotoBlob(blob);
+                refs.push(makePhotoRef(id));
+            }
+
+            f.photos = refs;
+            f.findPhotoRef = refs[0] || '';
+            f.targetPhotoData = '';
+            delete f.photoFiles;
+
+            if (fIndex % 10 === 0) log(`  Finds processed: ${fIndex}/${importedFinds.length}`);
+        }
+
+        // -------- Merge into local data --------
+        log('Merging imported survey into local data...');
+        surveys.push(importedSurvey);
+        finds = finds.concat(importedFinds);
+
+        saveSurveysToLocalStorage();
+        saveFindsToLocalStorage();
+
+        log(`"${filename}" imported successfully.`);
+        showMessage(
+            `Imported survey "${importedSurvey.name || 'Unnamed survey'}" with ` +
+            `${Array.isArray(importedSurvey.targets) ? importedSurvey.targets.length : 0} targets and ` +
+            `${importedFinds.length} finds.`,
+            'success'
+        );
+
+    } catch (e) {
+        console.error('Error importing ZIP survey:', e);
+        log(`ERROR: ${e.message || 'Unknown error'}`);
+        showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
+    }
+}
+
+        
 async function handleEditFindSubmit(event) {
     event.preventDefault();
     const form = event.target;
@@ -3049,9 +3236,9 @@ function renderExportPage() {
             <h2 class="text-3xl font-bold text-primary mb-6">Data Export & Import</h2>
 
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey as JSON</h4>
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey as ZIPZIP</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    This creates a <strong>.json file</strong> containing the currently open survey, all its targets, and any finds linked to that survey. This can be imported on any phone with this app.
+                    This creates a <strong>.zip file</strong> containing the currently open survey, all its targets, and any finds linked to that survey. This can be imported on any phone with this app.
                 </p>
                 <button id="export-open-survey-with-photos-btn" onclick="exportOpenSurveyWithPhotos()" 
                         class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
@@ -3130,10 +3317,10 @@ function renderExportPage() {
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    Import a survey export file (.json). The survey and its finds will be added to your existing local data.
+                    Import a survey export file (.zip). The survey and its finds will be added to your existing local data.
                 </p>
                 <div class="mb-3">
-                    <input type="file" id="import-survey-with-photos-input" accept=".json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
+                    <input type="file" id="import-survey-with-photos-input" accept=".zip,.json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
                     <button onclick="document.getElementById('import-survey-with-photos-input').click()" 
                             class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition">
                         <i class="fas fa-upload mr-1"></i> Select File & Import
@@ -5597,7 +5784,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v22</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v25</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -8290,14 +8477,11 @@ async function buildPhotoDataUrlsFromRefs(refs, fallbackSingleDataUrl) {
     return result;
 }
 
-// ------------------------------------------------------
-// Confirmation modals for Export + Import
-// (reuse the generic showConfirmationModal)
-// ------------------------------------------------------
 function showExportConfirmModal(onConfirmCallback) {
     showConfirmationModal(
         "Export survey",
-        "Export the open survey, its targets and finds?",
+        "Export the open survey as a <strong>.zip package</strong> including photos?<br><br>" +
+        "This is the recommended format for backups and moving surveys between devices.",
         onConfirmCallback
     );
 }
@@ -8311,10 +8495,6 @@ function showImportConfirmModal(filename, onConfirmCallback) {
     );
 }
 
-/**
- * Entry point for the Export button.
- * Checks there is an open survey, then shows a confirmation modal.
- */
 function exportOpenSurveyWithPhotos() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -8323,17 +8503,19 @@ function exportOpenSurveyWithPhotos() {
     }
 
     showExportConfirmModal(() => {
-        actuallyExportOpenSurvey();
+        actuallyExportOpenSurvey(); // we keep the function name to avoid changing your button wiring
     });
 }
 
-/**
- * Worker that does the actual export once the user has confirmed.
- */
 async function actuallyExportOpenSurvey() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('No open survey to export.', 'error');
+        return;
+    }
+
+    if (typeof JSZip === 'undefined') {
+        showMessage('ZIP export needs JSZip. Add the JSZip <script> tag first.', 'error');
         return;
     }
 
@@ -8352,82 +8534,174 @@ async function actuallyExportOpenSurvey() {
     if (btn) {
         originalBtnText = btn.innerText;
         btn.disabled = true;
-        btn.innerText = 'Exporting...';
+        btn.innerText = 'Exporting ZIP...';
     }
 
-    try {
-        log(`Starting export (NO PHOTOS) for survey: ${openSurvey.name || 'Unnamed survey'}`);
+    // Helpers
+    const safeName = (openSurvey.name || 'survey')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'survey';
 
-        // 1) Deep copy so we don't mutate live data
+    const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, '')
+        .replace('T', '_')
+        .replace('Z', '');
+
+    const extFromMime = (mime) => {
+        const m = String(mime || '').toLowerCase();
+        if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+        if (m.includes('png')) return 'png';
+        if (m.includes('webp')) return 'webp';
+        if (m.includes('gif')) return 'gif';
+        return 'bin';
+    };
+
+    const blobToArrayBuffer = async (blob) => await blob.arrayBuffer();
+
+    // Load blob from a photo ref ("idb:123")
+    const loadBlobFromRef = async (ref) => {
+        const id = parsePhotoRef(ref);
+        if (id == null) return null;
+        return await loadPhotoBlob(id);
+    };
+
+    try {
+        log(`Starting ZIP export for survey: ${openSurvey.name || 'Unnamed survey'}`);
+
+        // 1) Deep copy (no mutation of live data)
         const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
 
-        // 2) Strip survey-level photo fields
-        delete surveyCopy.surveyPhotoRef;
-        delete surveyCopy.surveyPhotoData;
-        delete surveyCopy.exportSurveyPhotoDataUrl; // (if it ever existed)
+        // 2) Collect finds linked to this survey
+        const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === openSurvey.id);
+        const findsCopy   = linkedFinds.map(f => JSON.parse(JSON.stringify(f)));
 
-        // 3) Strip photo fields from targets
-        if (!Array.isArray(surveyCopy.targets)) surveyCopy.targets = [];
-        surveyCopy.targets = surveyCopy.targets.map(t => {
-            const tCopy = JSON.parse(JSON.stringify(t));
-
-            // Remove anything photo-related (covers old + new naming)
-            delete tCopy.photos;
-            delete tCopy.targetPhotoRef;
-            delete tCopy.targetPhotoData;
-            delete tCopy.photoDataUrl;
-            delete tCopy.exportPhotosDataUrls;
-
-            return tCopy;
-        });
-
-        // 4) Finds linked to this survey (strip photo fields)
-        const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
-        const findsCopy = linkedFinds.map(f => {
-            const fCopy = JSON.parse(JSON.stringify(f));
-
-            delete fCopy.photos;
-            delete fCopy.findPhotoRef;
-            delete fCopy.targetPhotoData;
-            delete fCopy.photoDataUrl;
-            delete fCopy.exportPhotosDataUrls;
-
-            return fCopy;
-        });
-
-        log(`Targets: ${surveyCopy.targets.length}`);
-        log(`Linked finds: ${findsCopy.length}`);
-
-        // 5) Build export payload (NO photos embedded)
-        const payload = {
-            version: 'geoFind-open-survey-no-photos-v1',
-            exportedAt: new Date().toISOString(),
-            profile: userProfile,
-            survey: surveyCopy,
-            finds: findsCopy
+        // 3) Build a payload that references photo files (NOT embedded base64)
+        //    We'll attach a "photoFiles" list to each entity so import knows what to load.
+        //    We also remove any old/export-only fields to keep it clean.
+        const cleanEntityForExport = (obj) => {
+            if (!obj || typeof obj !== 'object') return obj;
+            const o = JSON.parse(JSON.stringify(obj));
+            delete o.photoDataUrl;
+            delete o.targetPhotoData;
+            delete o.surveyPhotoData;
+            delete o.exportPhotosDataUrls;
+            delete o.exportSurveyPhotoDataUrl;
+            return o;
         };
 
-        const jsonString = JSON.stringify(payload);
-        const sizeKb = Math.round(jsonString.length / 1024);
-        log(`Payload size: ~${sizeKb} KB`);
+        const payload = {
+            version: 'geoFind-survey-zip-v1',
+            exportedAt: new Date().toISOString(),
+            profile: userProfile,
+            survey: cleanEntityForExport(surveyCopy),
+            finds: findsCopy.map(cleanEntityForExport)
+        };
 
-        // 6) Download the file
-        const safeName = (openSurvey.name || 'survey')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            || 'survey';
+        // Normalise photo fields into arrays we can export from:
+        // survey: surveyPhotoRef
+        // targets: photos[] OR targetPhotoRef
+        // finds: photos[] OR findPhotoRef
+        const zip = new JSZip();
 
-        const timestamp = new Date()
-            .toISOString()
-            .replace(/[:.]/g, '')
-            .replace('T', '_')
-            .replace('Z', '');
+        const photosFolder = zip.folder('photos');
+        const surveyFolder = photosFolder.folder('survey');
+        const targetsFolder = photosFolder.folder('targets');
+        const findsFolder = photosFolder.folder('finds');
 
-        const filename = `geoFind_${safeName}_${timestamp}_no_photos.json`;
+        let photoCount = 0;
 
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url  = URL.createObjectURL(blob);
+        // 4) Survey photo
+        payload.survey.photoFiles = [];
+        if (payload.survey && payload.survey.surveyPhotoRef) {
+            const blob = await loadBlobFromRef(payload.survey.surveyPhotoRef);
+            if (blob) {
+                const ext = extFromMime(blob.type);
+                const filename = `survey_photo.${ext}`;
+                surveyFolder.file(filename, blob);
+                payload.survey.photoFiles.push(`photos/survey/${filename}`);
+                photoCount++;
+            }
+        }
+
+        // 5) Target photos
+        if (!Array.isArray(payload.survey.targets)) payload.survey.targets = [];
+        for (const t of payload.survey.targets) {
+            t.photoFiles = [];
+
+            // prefer photos array, fallback to single ref
+            const refs = Array.isArray(t.photos) && t.photos.length
+                ? t.photos
+                : (t.targetPhotoRef ? [t.targetPhotoRef] : []);
+
+            // We do NOT export stake vs non-stake differently here; it’s just photos.
+            let idx = 0;
+            for (const ref of refs) {
+                const blob = await loadBlobFromRef(ref);
+                if (!blob) continue;
+
+                idx++;
+                const ext = extFromMime(blob.type);
+                const tid = (t.id || `target_${Math.random().toString(16).slice(2)}`).replace(/[^\w-]/g, '');
+                const filename = `${tid}_${idx}.${ext}`;
+
+                targetsFolder.file(filename, blob);
+                t.photoFiles.push(`photos/targets/${filename}`);
+                photoCount++;
+            }
+
+            // Strip photo storage fields from export (we recreate on import)
+            delete t.photos;
+            delete t.targetPhotoRef;
+            delete t.targetPhotoData;
+        }
+
+        // 6) Find photos
+        for (const f of payload.finds) {
+            f.photoFiles = [];
+
+            const refs = Array.isArray(f.photos) && f.photos.length
+                ? f.photos
+                : (f.findPhotoRef ? [f.findPhotoRef] : []);
+
+            let idx = 0;
+            for (const ref of refs) {
+                const blob = await loadBlobFromRef(ref);
+                if (!blob) continue;
+
+                idx++;
+                const ext = extFromMime(blob.type);
+                const fid = (f.id || `find_${Math.random().toString(16).slice(2)}`).replace(/[^\w-]/g, '');
+                const filename = `${fid}_${idx}.${ext}`;
+
+                findsFolder.file(filename, blob);
+                f.photoFiles.push(`photos/finds/${filename}`);
+                photoCount++;
+            }
+
+            delete f.photos;
+            delete f.findPhotoRef;
+            delete f.targetPhotoData;
+        }
+
+        // 7) Write the JSON manifest
+        zip.file('survey.json', JSON.stringify(payload, null, 2));
+
+        log(`Targets: ${payload.survey.targets.length}`);
+        log(`Linked finds: ${payload.finds.length}`);
+        log(`Photos included: ${photoCount}`);
+
+        // 8) Generate ZIP and download
+        const zipBlob = await zip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 }
+        });
+
+        const filename = `geoFind_${safeName}_${timestamp}.zip`;
+        const url = URL.createObjectURL(zipBlob);
 
         const a = document.createElement('a');
         a.href = url;
@@ -8435,16 +8709,16 @@ async function actuallyExportOpenSurvey() {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
 
         log(`Export complete. "${filename}" saved to Downloads.`);
-        showMessage('Survey export completed (no photos).', 'success');
+        showMessage('Survey export completed (ZIP with photos).', 'success');
 
     } catch (e) {
-        console.error('Error exporting open survey (no photos):', e);
+        console.error('Error exporting open survey ZIP:', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Could not export open survey: ${e.message || 'Unknown error'}`, 'error');
-
     } finally {
         if (btn) {
             btn.disabled = false;
