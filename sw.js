@@ -1,4 +1,4 @@
-const CACHE_NAME = "dig-it-cache-v24"; // <-- bump this on every deployment
+const CACHE_NAME = "dig-it-cache-v25"; // <-- bump this on every deployment
 
 const APP_SHELL = [
   "./",
