@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v22</title>
+    <title>DIG IT! v23</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2715,6 +2715,8 @@ function quickLogTargetByVDI(raw, sourceLabel = '', opts = {}) {
     // Re-render once so the new pin appears immediately
     updateMapWithUserLocationAndRender();
 }
+
+        
 function exportOpenSurveyAsGPX() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -2722,9 +2724,22 @@ function exportOpenSurveyAsGPX() {
         return;
     }
 
+    const exportTargets = document.getElementById('gpx-export-targets')?.checked ?? true;
+    const exportStakes  = document.getElementById('gpx-export-stakes')?.checked ?? true;
+    const exportFinds   = document.getElementById('gpx-export-finds')?.checked ?? true;
+    const exportTracks  = document.getElementById('gpx-export-tracks')?.checked ?? true;
+
+    const parts = [];
+    if (exportTargets) parts.push('Targets');
+    if (exportStakes)  parts.push('Stakes');
+    if (exportFinds)   parts.push('Finds');
+    if (exportTracks)  parts.push('Tracks');
+
+    const what = parts.length ? parts.join(', ') : 'Nothing (no boxes ticked)';
+
     showConfirmationModal(
         'Export GPX',
-        'Export the open survey to a GPX file (targets, finds, stakes, tracks)?',
+        `Export the open survey to a GPX file?\n\nIncluded: ${what}`,
         () => actuallyExportOpenSurveyAsGPX()
     );
 }
@@ -2754,6 +2769,21 @@ function actuallyExportOpenSurveyAsGPX() {
         btn.innerText = 'Exporting GPX...';
     }
 
+    // Read export options (default ON if UI missing)
+    const exportTargets = document.getElementById('gpx-export-targets')?.checked ?? true;
+    const exportStakes  = document.getElementById('gpx-export-stakes')?.checked ?? true;
+    const exportFinds   = document.getElementById('gpx-export-finds')?.checked ?? true;
+    const exportTracks  = document.getElementById('gpx-export-tracks')?.checked ?? true;
+
+    if (!exportTargets && !exportStakes && !exportFinds && !exportTracks) {
+        showMessage('Nothing selected to export (tick at least one box).', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalBtnText || 'Export Open Survey as GPX';
+        }
+        return;
+    }
+
     try {
         const nowIso = new Date().toISOString();
 
@@ -2762,7 +2792,7 @@ function actuallyExportOpenSurveyAsGPX() {
         const COLOR_FINDS   = '#00FF00'; // green
         const COLOR_STAKES  = '#000000'; // black
 
-        // Garmin-friendly symbols
+        // Garmin-friendly symbols (also safe as plain text elsewhere)
         const SYM_TARGET = 'Flag, Blue';
         const SYM_FIND   = 'Flag, Green';
         const SYM_STAKE  = 'Pin, Black';
@@ -2819,9 +2849,13 @@ function actuallyExportOpenSurveyAsGPX() {
                     const tRaw = p.time || p.timestamp || p.date || null;
                     const timeIso = tRaw ? new Date(tRaw).toISOString() : '';
 
+                    const acc = (p.accuracy != null && String(p.accuracy).trim() !== '') ? String(p.accuracy) : '';
+                    const ext = acc
+                        ? `\n        <extensions>\n          <accuracy>${xmlEscape(acc)}</accuracy>\n        </extensions>`
+                        : '';
+
                     return `
-      <trkpt lat="${p.lat}" lon="${p.lon}">
-        ${timeIso ? `<time>${timeIso}</time>` : ''}
+      <trkpt lat="${p.lat}" lon="${p.lon}">${timeIso ? `\n        <time>${timeIso}</time>` : ''}${ext}
       </trkpt>`;
                 })
                 .filter(Boolean)
@@ -2830,6 +2864,8 @@ function actuallyExportOpenSurveyAsGPX() {
             if (!pts) return '';
 
             const name = track.name || 'Track';
+
+            // Keep track colour from your app (do NOT override)
             const color = track.color || track.colour || track.strokeColor || '';
 
             const trackExt = color
@@ -2844,6 +2880,7 @@ function actuallyExportOpenSurveyAsGPX() {
   </trk>`;
         };
 
+        // Header/metadata (best practice)
         const header = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1"
      creator="Dig It"
@@ -2853,30 +2890,61 @@ function actuallyExportOpenSurveyAsGPX() {
     <time>${nowIso}</time>
   </metadata>`;
 
-        // Targets + Stakes
         const openTargets = Array.isArray(openSurvey.targets) ? openSurvey.targets : [];
-        let wptCountTargets = 0;
 
-        const wptsTargets = openTargets.map(t => {
+        // Split targets vs stakes (stake = vdi == -100)
+        const isStakeTarget = (t) => String(t?.vdi).trim() === '-100';
+
+        let wptCountTargets = 0;
+        let wptCountStakes  = 0;
+
+        const wptsTargets = (!exportTargets) ? '' : openTargets.map(t => {
+            if (!t || isStakeTarget(t)) return ''; // targets export excludes stakes
             const ll = parseLatLon(t.coordinates);
             if (!ll) return '';
-
-            const isStake = String(t.vdi).trim() === '-100';
 
             wptCountTargets++;
 
             return makeWpt({
                 lat: ll.lat,
                 lon: ll.lon,
-                name: isStake ? (t.description || 'STAKE') : (t.vdi || 'N/A'),
+                name: (t.vdi || 'N/A'),
                 desc: t.description || '',
-                sym: isStake ? SYM_STAKE : SYM_TARGET,
+                sym: SYM_TARGET,
                 extensionsObj: {
-                    kind: isStake ? 'stake' : 'target',
-                    color: isStake ? COLOR_STAKES : COLOR_TARGETS,
+                    kind: 'target',
+                    color: COLOR_TARGETS,
                     vdi: t.vdi ?? '',
+                    type: t.type ?? '',
                     status: t.status ?? '',
                     depth: t.depth ?? '',
+                    accuracy: t.accuracy ?? '',
+                    user: t.user ?? '',
+                    detector: t.detector ?? '',
+                    time: t.time ? new Date(t.time).toISOString() : '',
+                    surveyId: openSurvey.id || ''
+                }
+            });
+        }).filter(Boolean).join('');
+
+        const wptsStakes = (!exportStakes) ? '' : openTargets.map(t => {
+            if (!t || !isStakeTarget(t)) return '';
+            const ll = parseLatLon(t.coordinates);
+            if (!ll) return '';
+
+            wptCountStakes++;
+
+            return makeWpt({
+                lat: ll.lat,
+                lon: ll.lon,
+                name: (t.description || 'STAKE'),
+                desc: t.description || '',
+                sym: SYM_STAKE,
+                extensionsObj: {
+                    kind: 'stake',
+                    color: COLOR_STAKES,
+                    vdi: t.vdi ?? '',
+                    status: t.status ?? '',
                     accuracy: t.accuracy ?? '',
                     time: t.time ? new Date(t.time).toISOString() : '',
                     surveyId: openSurvey.id || ''
@@ -2884,48 +2952,64 @@ function actuallyExportOpenSurveyAsGPX() {
             });
         }).filter(Boolean).join('');
 
-        // Finds
+        // Finds (conditional)
         const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === openSurvey.id);
         let wptCountFinds = 0;
 
-        const wptsFinds = linkedFinds.map(f => {
+        const wptsFinds = (!exportFinds) ? '' : linkedFinds.map(f => {
             const ll = parseLatLon(f.coordinates);
             if (!ll) return '';
 
             wptCountFinds++;
 
+            const name = f.description || f.name || (f.vdi ? `Find ${f.vdi}` : 'Find');
+            const desc = f.description || '';
+
             return makeWpt({
                 lat: ll.lat,
                 lon: ll.lon,
-                name: f.description || f.name || 'Find',
-                desc: f.description || '',
+                name,
+                desc,
                 sym: SYM_FIND,
                 extensionsObj: {
                     kind: 'find',
                     color: COLOR_FINDS,
                     vdi: f.vdi ?? '',
+                    type: f.type ?? '',
                     status: f.status ?? '',
                     depth: f.depth ?? '',
                     accuracy: f.accuracy ?? '',
+                    user: f.user ?? '',
+                    detector: f.detector ?? '',
                     time: f.time ? new Date(f.time).toISOString() : '',
                     surveyId: f.surveyId || ''
                 }
             });
         }).filter(Boolean).join('');
 
-        // Tracks (unchanged colours)
+        // Tracks (conditional)
         const surveyTracks = Array.isArray(openSurvey.tracks) ? openSurvey.tracks : [];
         let trkCount = 0;
 
-        const trks = surveyTracks.map(tr => {
+        const trks = (!exportTracks) ? '' : surveyTracks.map(tr => {
             const xml = makeTrk(tr);
             if (xml) trkCount++;
             return xml;
         }).filter(Boolean).join('');
 
-        const gpx = header + '\n' + wptsTargets + '\n' + wptsFinds + '\n' + trks + '\n</gpx>\n';
+        const footer = `\n</gpx>\n`;
 
-        const filename = `DigIt_${new Date().toISOString().slice(0,10)}.gpx`;
+        const gpx = header + '\n' + wptsTargets + '\n' + wptsStakes + '\n' + wptsFinds + '\n' + trks + footer;
+
+        // Filename helps Garmin infer collection name (no Garmin-only tags needed)
+        const safeName = String(openSurvey.name || 'open-survey')
+            .trim()
+            .replace(/[^\w\- ]+/g, '')
+            .replace(/\s+/g, '-')
+            .slice(0, 60) || 'open-survey';
+
+        const filename = `DigIt_${safeName}_${new Date().toISOString().slice(0,10)}.gpx`;
+
         const blob = new Blob([gpx], { type: 'application/gpx+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
 
@@ -2938,15 +3022,17 @@ function actuallyExportOpenSurveyAsGPX() {
 
         setTimeout(() => URL.revokeObjectURL(url), 2000);
 
-        log(`Waypoints (targets+stakes): ${wptCountTargets}`);
-        log(`Waypoints (finds): ${wptCountFinds}`);
-        log(`Tracks: ${trkCount}`);
-        showMessage('GPX export complete.', 'success');
+        log(`GPX exported: ${filename}`);
+        log(exportTargets ? `Waypoints (targets): ${wptCountTargets}` : `Waypoints (targets): SKIPPED`);
+        log(exportStakes  ? `Waypoints (stakes): ${wptCountStakes}`  : `Waypoints (stakes): SKIPPED`);
+        log(exportFinds   ? `Waypoints (finds): ${wptCountFinds}`    : `Waypoints (finds): SKIPPED`);
+        log(exportTracks  ? `Tracks: ${trkCount}`                    : `Tracks: SKIPPED`);
 
+        showMessage('GPX export complete.', 'success');
     } catch (e) {
-        console.error(e);
+        console.error('GPX export failed:', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
-        showMessage('GPX export failed.', 'error');
+        showMessage(`GPX export failed: ${e.message || 'Unknown error'}`, 'error');
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -2981,18 +3067,40 @@ function renderExportPage() {
                     This creates a <strong>.GPX file</strong> containing the currently open survey, all its targets, and any finds linked to that survey. 
                     This can be imported into many mapping apps.
                 </p>
-           <button id="export-open-survey-gpx-btn"
-            type="button"
-            onclick="exportOpenSurveyAsGPX()"
-            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150 mt-3">
-            <i class="fas fa-map-marked-alt mr-1"></i> Export Open Survey as GPX
-            </button>
+         <div class="mt-3 space-y-2 text-sm">
+  <label class="flex items-center gap-2">
+    <input id="gpx-export-targets" type="checkbox" checked class="h-4 w-4">
+    <span><strong>Export Targets</strong></span>
+  </label>
 
-            <textarea id="export-open-survey-gpx-log"
-            rows="6"
-            readonly
-            placeholder="GPX export log will appear here."
-            class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-2"></textarea>
+  <label class="flex items-center gap-2">
+    <input id="gpx-export-stakes" type="checkbox" checked class="h-4 w-4">
+    <span><strong>Export Stakes</strong></span>
+  </label>
+
+  <label class="flex items-center gap-2">
+    <input id="gpx-export-finds" type="checkbox" checked class="h-4 w-4">
+    <span><strong>Export Finds</strong></span>
+  </label>
+
+  <label class="flex items-center gap-2">
+    <input id="gpx-export-tracks" type="checkbox" checked class="h-4 w-4">
+    <span><strong>Export Tracks</strong></span>
+  </label>
+</div>
+
+<button id="export-open-survey-gpx-btn"
+  type="button"
+  onclick="exportOpenSurveyAsGPX()"
+  class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150 mt-3">
+  <i class="fas fa-map-marked-alt mr-1"></i> Export Open Survey as GPX
+</button>
+
+<textarea id="export-open-survey-gpx-log"
+  rows="6"
+  readonly
+  placeholder="GPX export log will appear here."
+  class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-2"></textarea>
 
             </div>
 
