@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
 
-    <title>DIG IT! v21</title>
+    <title>DIG IT! v22</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -2757,6 +2757,16 @@ function actuallyExportOpenSurveyAsGPX() {
     try {
         const nowIso = new Date().toISOString();
 
+        // Colours
+        const COLOR_TARGETS = '#0000FF'; // blue
+        const COLOR_FINDS   = '#00FF00'; // green
+        const COLOR_STAKES  = '#000000'; // black
+
+        // Garmin-friendly symbols
+        const SYM_TARGET = 'Flag, Blue';
+        const SYM_FIND   = 'Flag, Green';
+        const SYM_STAKE  = 'Pin, Black';
+
         const xmlEscape = (s) => String(s ?? '')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -2806,19 +2816,12 @@ function actuallyExportOpenSurveyAsGPX() {
                     if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return '';
                     if (p.lat < -90 || p.lat > 90 || p.lon < -180 || p.lon > 180) return '';
 
-                    // time fields vary a bit; try common ones
                     const tRaw = p.time || p.timestamp || p.date || null;
                     const timeIso = tRaw ? new Date(tRaw).toISOString() : '';
 
-                    const acc = (p.accuracy != null && String(p.accuracy).trim() !== '') ? String(p.accuracy) : '';
-
-                    let ext = '';
-                    if (acc) {
-                        ext = `\n        <extensions>\n          <accuracy>${xmlEscape(acc)}</accuracy>\n        </extensions>`;
-                    }
-
                     return `
-      <trkpt lat="${p.lat}" lon="${p.lon}">${timeIso ? `\n        <time>${timeIso}</time>` : ''}${ext}
+      <trkpt lat="${p.lat}" lon="${p.lon}">
+        ${timeIso ? `<time>${timeIso}</time>` : ''}
       </trkpt>`;
                 })
                 .filter(Boolean)
@@ -2841,9 +2844,6 @@ function actuallyExportOpenSurveyAsGPX() {
   </trk>`;
         };
 
-        // -----------------------------
-        // Build GPX content
-        // -----------------------------
         const header = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1"
      creator="Dig It"
@@ -2853,7 +2853,7 @@ function actuallyExportOpenSurveyAsGPX() {
     <time>${nowIso}</time>
   </metadata>`;
 
-        // Waypoints: Targets + Stakes
+        // Targets + Stakes
         const openTargets = Array.isArray(openSurvey.targets) ? openSurvey.targets : [];
         let wptCountTargets = 0;
 
@@ -2863,34 +2863,28 @@ function actuallyExportOpenSurveyAsGPX() {
 
             const isStake = String(t.vdi).trim() === '-100';
 
-            const name = isStake ? (t.description || 'STAKE') : (t.vdi || 'N/A');
-            const desc = t.description || '';
-            const sym  = isStake ? 'Flag' : 'Waypoint';
-
             wptCountTargets++;
 
             return makeWpt({
                 lat: ll.lat,
                 lon: ll.lon,
-                name,
-                desc,
-                sym,
+                name: isStake ? (t.description || 'STAKE') : (t.vdi || 'N/A'),
+                desc: t.description || '',
+                sym: isStake ? SYM_STAKE : SYM_TARGET,
                 extensionsObj: {
                     kind: isStake ? 'stake' : 'target',
+                    color: isStake ? COLOR_STAKES : COLOR_TARGETS,
                     vdi: t.vdi ?? '',
-                    type: t.type ?? '',
                     status: t.status ?? '',
                     depth: t.depth ?? '',
                     accuracy: t.accuracy ?? '',
-                    user: t.user ?? '',
-                    detector: t.detector ?? '',
                     time: t.time ? new Date(t.time).toISOString() : '',
                     surveyId: openSurvey.id || ''
                 }
             });
         }).filter(Boolean).join('');
 
-        // Waypoints: Finds linked to survey
+        // Finds
         const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === openSurvey.id);
         let wptCountFinds = 0;
 
@@ -2900,32 +2894,26 @@ function actuallyExportOpenSurveyAsGPX() {
 
             wptCountFinds++;
 
-            const name = f.description || f.name || (f.vdi ? `Find ${f.vdi}` : 'Find');
-            const desc = f.description || '';
-            const sym  = 'Treasure';
-
             return makeWpt({
                 lat: ll.lat,
                 lon: ll.lon,
-                name,
-                desc,
-                sym,
+                name: f.description || f.name || 'Find',
+                desc: f.description || '',
+                sym: SYM_FIND,
                 extensionsObj: {
                     kind: 'find',
+                    color: COLOR_FINDS,
                     vdi: f.vdi ?? '',
-                    type: f.type ?? '',
                     status: f.status ?? '',
                     depth: f.depth ?? '',
                     accuracy: f.accuracy ?? '',
-                    user: f.user ?? '',
-                    detector: f.detector ?? '',
                     time: f.time ? new Date(f.time).toISOString() : '',
                     surveyId: f.surveyId || ''
                 }
             });
         }).filter(Boolean).join('');
 
-        // Tracks
+        // Tracks (unchanged colours)
         const surveyTracks = Array.isArray(openSurvey.tracks) ? openSurvey.tracks : [];
         let trkCount = 0;
 
@@ -2935,21 +2923,9 @@ function actuallyExportOpenSurveyAsGPX() {
             return xml;
         }).filter(Boolean).join('');
 
-        const footer = `\n</gpx>\n`;
+        const gpx = header + '\n' + wptsTargets + '\n' + wptsFinds + '\n' + trks + '\n</gpx>\n';
 
-        const gpx = header + '\n' + wptsTargets + '\n' + wptsFinds + '\n' + trks + footer;
-
-        // -----------------------------
-        // Download
-        // -----------------------------
-        const safeName = String(openSurvey.name || 'open-survey')
-            .trim()
-            .replace(/[^\w\- ]+/g, '')
-            .replace(/\s+/g, '-')
-            .slice(0, 60) || 'open-survey';
-
-        const filename = `DigIt_${safeName}_${new Date().toISOString().slice(0,10)}.gpx`;
-
+        const filename = `DigIt_${new Date().toISOString().slice(0,10)}.gpx`;
         const blob = new Blob([gpx], { type: 'application/gpx+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
 
@@ -2962,15 +2938,15 @@ function actuallyExportOpenSurveyAsGPX() {
 
         setTimeout(() => URL.revokeObjectURL(url), 2000);
 
-        log(`GPX exported: ${filename}`);
         log(`Waypoints (targets+stakes): ${wptCountTargets}`);
         log(`Waypoints (finds): ${wptCountFinds}`);
         log(`Tracks: ${trkCount}`);
         showMessage('GPX export complete.', 'success');
+
     } catch (e) {
-        console.error('GPX export failed:', e);
+        console.error(e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
-        showMessage(`GPX export failed: ${e.message || 'Unknown error'}`, 'error');
+        showMessage('GPX export failed.', 'error');
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -2978,7 +2954,6 @@ function actuallyExportOpenSurveyAsGPX() {
         }
     }
 }
-
 
 /** Renders the content for the new Export page. */
 function renderExportPage() {
@@ -5514,7 +5489,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v21</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v22</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
