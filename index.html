@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v3</title>
+    <title>DIG IT! v4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1083,10 +1083,13 @@ function fmtDateTime(ts) {
     try { return new Date(ts).toLocaleString(); } catch { return String(ts); }
 }
 
-function escapeHtml(s) {
-    return String(s ?? '')
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Resolve one photo ref or dataURL into a Blob
@@ -5840,7 +5843,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v3</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v4</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -8925,7 +8928,39 @@ async function performSurveyImport(text, filename, log) {
         showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
     }
 }
+function renameTrack(trackId, newName) {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey || !Array.isArray(openSurvey.tracks)) {
+        showMessage('No open survey or no tracks to rename.', 'error');
+        return;
+    }
 
+    const track = openSurvey.tracks.find(t => String(t.id) === String(trackId));
+    if (!track) {
+        showMessage('Track not found.', 'error');
+        return;
+    }
+
+    track.name = newName;
+    track.dateLastChanged = new Date().toISOString();
+
+    // Persist (use your existing save function if you have one)
+    if (typeof saveSurveysToLocalStorage === 'function') {
+        saveSurveysToLocalStorage();
+    }
+
+    showMessage('Track renamed.', 'success');
+
+    // Refresh current UI safely
+    if (typeof renderCurrentPage === 'function') {
+        renderCurrentPage();
+    } else if (typeof navigateToPage === 'function') {
+        // fallback: reload the current page if you track it
+        // (do nothing if your app doesn’t have this)
+    }
+}
+
+        
     /** Attaches event listeners for dynamically rendered elements */
 function attachPageEventListeners() {
 
@@ -8996,7 +9031,14 @@ if (gpsBtn) {
         stopTrackBtn.addEventListener('click', handleStopTrackClick);
     }
 
-    
+  // Track rename buttons
+document.querySelectorAll('.track-rename-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const trackId = e.currentTarget.getAttribute('data-track-id');
+        promptRenameTrack(trackId);
+    });
+});
+  
     // 3. Page Action Buttons (New Survey, Log Target, Export/Import)
     const newSurveyBtn = document.getElementById('new-survey-btn');
     if (newSurveyBtn) newSurveyBtn.addEventListener('click', showNewSurveyModal);
