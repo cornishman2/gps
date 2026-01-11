@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v7</title>
+    <title>DIG IT! v8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3503,76 +3503,12 @@ function renderExportPage() {
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
             </div>
 
+            <!-- IMPORT SURVEY ZIP/JSON -->
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey as GPX</h4>
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey (ZIP or JSON)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    This creates a <strong>.GPX file</strong> containing the currently open survey, all its targets, and any finds linked to that survey. 
-                    This can be imported into many mapping apps.
-                </p>
-         <div class="mt-3 space-y-2 text-sm">
-  <label class="flex items-center gap-2">
-    <input id="gpx-export-targets" type="checkbox" checked class="h-4 w-4">
-    <span><strong>Export Targets</strong></span>
-  </label>
-
-  <label class="flex items-center gap-2">
-    <input id="gpx-export-stakes" type="checkbox" checked class="h-4 w-4">
-    <span><strong>Export Stakes</strong></span>
-  </label>
-
-  <label class="flex items-center gap-2">
-    <input id="gpx-export-finds" type="checkbox" checked class="h-4 w-4">
-    <span><strong>Export Finds</strong></span>
-  </label>
-
-  <label class="flex items-center gap-2">
-    <input id="gpx-export-tracks" type="checkbox" checked class="h-4 w-4">
-    <span><strong>Export Tracks</strong></span>
-  </label>
-</div>
-
-<button id="export-open-survey-gpx-btn"
-  type="button"
-  onclick="exportOpenSurveyAsGPX()"
-  class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150 mt-3">
-  <i class="fas fa-map-marked-alt mr-1"></i> Export Open Survey as GPX
-</button>
-
-<textarea id="export-open-survey-gpx-log"
-  rows="6"
-  readonly
-  placeholder="GPX export log will appear here."
-  class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-2"></textarea>
-
-            </div>
-
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-sky-500">
-                <h4 class="text-lg font-semibold text-sky-700 mb-2">Export Photo Gallery</h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Step 1: Pick a folder. Step 2: Export the gallery into that folder.
-                </p>
-                <div class="flex flex-col gap-2">
-                    <button id="pick-gallery-folder-btn" type="button" onclick="pickPhotoGalleryExportFolder()" 
-                            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150">
-                        <i class="fas fa-folder-open mr-1"></i> Step 1: Pick Folder
-                    </button>
-                  <input id="gallery-export-folder-name" type="text" readonly 
-                   value="${photoGalleryExportRootHandle ? photoGalleryExportRootHandle.name : ''}" 
-                   placeholder="No folder selected" 
-                   class="w-full p-2 border border-sky-400 rounded-md text-sm" /> 
-                    <button id="export-gallery-to-folder-btn" type="button" onclick="exportPhotoGalleryToSelectedFolder()" 
-                            class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                        <i class="fas fa-download mr-1"></i> Step 2: Export to Selected Folder
-                    </button>
-                </div>
-                <textarea id="export-photo-gallery-log" rows="8" readonly placeholder="Export log will appear here." 
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
-            </div>
-
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey</h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Import a survey export file (.zip). The survey and its finds will be added to your existing local data.
+                    Import a survey export file (<strong>.zip</strong> or <strong>.json</strong>). 
+                    The survey and its finds will be added to your existing local data.
                 </p>
                 <div class="mb-3">
                     <input type="file" id="import-survey-with-photos-input" accept=".zip,.json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
@@ -3584,28 +3520,58 @@ function renderExportPage() {
                 <textarea id="import-survey-log" rows="6" readonly placeholder="Import log will appear here." 
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-2"></textarea>
             </div>
-<!-- Import Target via QR Code -->
+
+            <!-- IMPORT GPX -->
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-sky-500">
+                <h4 class="text-lg font-semibold text-sky-700 mb-2">Import GPX</h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    Import a <strong>.gpx</strong> file containing waypoints and/or tracks.
+                    Waypoints will be imported as Targets (and Finds if marked as such in GPX extensions).
+                </p>
+
+                <label class="flex items-center gap-2 text-sm text-gray-700 mb-3">
+                    <input id="import-gpx-create-new-cb" type="checkbox" class="h-4 w-4">
+                    <span>
+                        Close current Open survey and create a <strong>new</strong> survey from this GPX
+                    </span>
+                </label>
+
+                <input type="file" id="import-gpx-input" accept=".gpx" class="hidden" onchange="handleGpxImport(event)">
+
+                <button
+                    type="button"
+                    onclick="document.getElementById('import-gpx-input').click()"
+                    class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition">
+                    <i class="fas fa-file-import mr-1"></i> Select GPX & Import
+                </button>
+
+                <textarea id="import-gpx-log" rows="6" readonly placeholder="GPX import log will appear here."
+                          class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-3"></textarea>
+            </div>
+
+            <!-- Import Target via QR Code -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mt-4">
                 <h3 class="text-xl font-bold text-primary mb-2">Import Target (QR Code)</h3>
 
                 <p class="text-sm text-gray-600 mb-3">
-                Scan a QR code generated from a Target to import it into the currently open survey.
+                    Scan a QR code generated from a Target to import it into the currently open survey.
                 </p>
 
                 <button
-                id="scan-target-qr-btn"
-                class="px-4 py-2 rounded-lg text-white font-bold shadow hover:opacity-90"
-                style="background-color: rgb(var(--color-secondary));"
-                type="button">
-                Scan Target QR
+                    id="scan-target-qr-btn"
+                    class="px-4 py-2 rounded-lg text-white font-bold shadow hover:opacity-90"
+                    style="background-color: ${secondaryColor};"
+                    type="button">
+                    Scan Target QR
                 </button>
             </div>
 
-        
         </div>
     `;
-}        
-function promptEditTrackMeta(trackId) {
+}
+
+        
+        function promptEditTrackMeta(trackId) {
     // Backwards-compatible wrapper: old callers now open the modal
     openEditTrackModal(trackId);
 }
@@ -3962,6 +3928,326 @@ function triggerImportSurvey() {
 
         
 // --- HELPER FUNCTIONS ---
+
+async function handleGpxImport(event) {
+    const file = event?.target?.files?.[0];
+    const logBox = document.getElementById('import-gpx-log');
+    const createNewCb = document.getElementById('import-gpx-create-new-cb');
+
+    const log = (msg) => {
+        if (!logBox) return;
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    if (logBox) logBox.value = '';
+
+    if (!file) {
+        showMessage('Please choose a GPX file to import.', 'error');
+        return;
+    }
+
+    const wantNewSurvey = !!(createNewCb && createNewCb.checked);
+
+    const proceed = async () => {
+        try {
+            log(`Reading "${file.name}"...`);
+            const gpxText = await file.text();
+            log('Parsing GPX...');
+
+            const parsed = parseGpxToObjects(gpxText);
+
+            const now = Date.now();
+
+            // Decide destination survey
+            let destSurvey = surveys.find(s => s.status === 'Open') || null;
+
+            if (wantNewSurvey || !destSurvey) {
+                // Reset any live recording/navigation state safely before closing/opening surveys
+                if (typeof resetLiveTrackingAndRecordingState === 'function') {
+                    resetLiveTrackingAndRecordingState();
+                }
+
+                // Close existing open survey (if any)
+                surveys.forEach(s => {
+                    if (s.status === 'Open') {
+                        s.status = 'Active';
+                        s.dateLastChanged = now;
+                    }
+                });
+
+                const baseName =
+                    (parsed.metadataName && String(parsed.metadataName).trim()) ||
+                    file.name.replace(/\.gpx$/i, '') ||
+                    'Imported GPX';
+
+                destSurvey = {
+                    id: generateId(),
+                    name: baseName,
+                    description: `Imported from GPX: ${file.name}`,
+                    status: 'Open',
+                    creationDate: now,
+                    dateLastChanged: now,
+                    targets: [],
+                    finds: [],
+                    tracks: [],
+                    surveyPhotoRef: '',
+                    surveyPhotoData: ''
+                };
+
+                surveys.unshift(destSurvey);
+                log(`Created new survey: "${destSurvey.name}"`);
+            } else {
+                log(`Merging into open survey: "${destSurvey.name}"`);
+                if (!Array.isArray(destSurvey.targets)) destSurvey.targets = [];
+                if (!Array.isArray(destSurvey.tracks)) destSurvey.tracks = [];
+            }
+
+            // Import waypoints -> targets/finds
+            let importedTargets = 0;
+            let importedFinds = 0;
+
+            for (const w of parsed.waypoints) {
+                // Default classification
+                const kind = (w.extensions.kind || '').toLowerCase();
+
+                const coords = `${Number(w.lat).toFixed(6)}, ${Number(w.lon).toFixed(6)}`;
+
+                // Treat stakes as a special target (vdi=-100)
+                const isStake =
+                    kind === 'stake' ||
+                    String(w.sym || '').toLowerCase().includes('stake') ||
+                    String(w.name || '').toUpperCase() === 'STAKE';
+
+                // Treat finds as library finds (linked to destSurvey)
+                const isFind = kind === 'find';
+
+                if (isFind) {
+                    const f = {
+                        id: generateId(),
+
+                        surveyId: destSurvey.id,
+                        surveyName: destSurvey.name || 'Untitled survey',
+                        surveyDescription: destSurvey.description || '',
+                        targetId: '',
+
+                        description: w.desc || w.name || 'Imported Find',
+                        vdi: w.extensions.vdi || '',
+                        depth: w.extensions.depth || '',
+                        type: w.extensions.type || 'Unknown',
+                        coordinates: coords,
+                        accuracy: w.extensions.accuracy || '',
+                        centerOnMap: false,
+
+                        targetPhotoData: '',
+                        photos: [],
+                        findPhotoRef: '',
+
+                        statusAtSave: w.extensions.status || '',
+                        user: w.extensions.user || userProfile.name || '',
+                        detector: w.extensions.detector || userProfile.detector || ''
+                    };
+
+                    finds.push(f);
+                    importedFinds++;
+                    continue;
+                }
+
+                // Otherwise import as a target (including stake)
+                const t = {
+                    id: generateId(),
+                    description: w.desc || w.name || (isStake ? 'STAKE' : 'Imported Target'),
+                    vdi: isStake ? '-100' : (w.extensions.vdi || inferVdiFromName(w.name) || 'N/A'),
+                    depth: w.extensions.depth || '',
+                    type: isStake ? 'Something else' : (w.extensions.type || 'Unidentified'),
+                    status: w.extensions.status || (isStake ? 'Stake' : 'Signal Detected'),
+                    time: w.extensions.time ? Date.parse(w.extensions.time) : now,
+                    coordinates: coords,
+                    accuracy: w.extensions.accuracy || '',
+                    user: w.extensions.user || userProfile.name || '',
+                    detector: w.extensions.detector || userProfile.detector || '',
+                    centerOnMap: false,
+
+                    photos: [],
+                    targetPhotoRef: '',
+                    targetPhotoData: ''
+                };
+
+                destSurvey.targets.unshift(t);
+                importedTargets++;
+            }
+
+            // Import tracks
+            let importedTracks = 0;
+            for (const trk of parsed.tracks) {
+                const pts = Array.isArray(trk.points) ? trk.points : [];
+                if (!pts.length) continue;
+
+                const newTrack = {
+                    id: generateId(),
+                    name: trk.name || `Imported Track ${destSurvey.tracks.length + 1}`,
+                    description: trk.desc || '',
+                    createdAt: pts[0].time || now,
+                    isRecording: false,
+                    isVisible: true,
+                    color: pickTrackColor(destSurvey.tracks.length),
+                    points: pts.map(p => ({
+                        time: p.time || now,
+                        lat: p.lat,
+                        lon: p.lon,
+                        accuracy: (p.accuracy != null ? p.accuracy : null)
+                    }))
+                };
+
+                destSurvey.tracks.push(newTrack);
+                importedTracks++;
+            }
+
+            destSurvey.dateLastChanged = Date.now();
+
+            // Persist
+            saveSurveysToLocalStorage();
+            if (typeof saveFindsToLocalStorage === 'function') {
+                saveFindsToLocalStorage();
+            }
+
+            log('---');
+            log(`Imported targets: ${importedTargets}`);
+            log(`Imported finds:   ${importedFinds}`);
+            log(`Imported tracks:  ${importedTracks}`);
+
+            showMessage(
+                `GPX import complete: ${importedTargets} targets, ${importedFinds} finds, ${importedTracks} tracks.`,
+                'success'
+            );
+
+            // Keep user on Export/Import so they can read the log
+            render();
+        } catch (e) {
+            console.error('GPX import failed:', e);
+            log(`ERROR: ${e.message || e}`);
+            showMessage(`GPX import failed: ${e.message || 'Unknown error'}`, 'error');
+        } finally {
+            // reset so selecting same file again triggers onchange
+            try { event.target.value = ''; } catch (_) {}
+        }
+    };
+
+    // Confirm if they are creating a new survey (because it closes the open one)
+    if (wantNewSurvey) {
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        const openName = openSurvey ? (openSurvey.name || 'Open survey') : '(none)';
+
+        showConfirmationModal(
+            'Import GPX as New Survey',
+            `This will close the current Open survey (<strong>${openName}</strong>) and create a new survey from:<br><br>
+             <strong>${file.name}</strong><br>
+             <span class="text-sm text-gray-600">Continue?</span>`,
+            proceed
+        );
+    } else {
+        proceed();
+    }
+}
+
+/** Parse GPX into waypoints + tracks (namespace-safe). */
+function parseGpxToObjects(gpxText) {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(gpxText, 'application/xml');
+
+    // Detect parse errors
+    const pe = xml.getElementsByTagName('parsererror');
+    if (pe && pe.length) {
+        throw new Error('GPX XML parse error.');
+    }
+
+    const getFirstTextByLocal = (parent, localName) => {
+        if (!parent) return '';
+        const nodes = parent.getElementsByTagNameNS('*', localName);
+        if (nodes && nodes[0] && nodes[0].textContent != null) return nodes[0].textContent.trim();
+        return '';
+    };
+
+    const parseExtensions = (parent) => {
+        const out = {};
+        if (!parent) return out;
+
+        const extNodes = parent.getElementsByTagNameNS('*', 'extensions');
+        const ext = extNodes && extNodes[0] ? extNodes[0] : null;
+        if (!ext) return out;
+
+        for (const ch of Array.from(ext.childNodes || [])) {
+            if (ch.nodeType !== 1) continue; // ELEMENT_NODE
+            const k = ch.localName || ch.nodeName;
+            const v = (ch.textContent || '').trim();
+            if (k && v) out[k] = v;
+        }
+        return out;
+    };
+
+    // Metadata name (optional)
+    const md = xml.getElementsByTagNameNS('*', 'metadata')[0] || null;
+    const metadataName = md ? getFirstTextByLocal(md, 'name') : '';
+
+    // Waypoints
+    const wptNodes = Array.from(xml.getElementsByTagNameNS('*', 'wpt'));
+    const waypoints = wptNodes.map(wpt => {
+        const lat = Number(wpt.getAttribute('lat'));
+        const lon = Number(wpt.getAttribute('lon'));
+        const name = getFirstTextByLocal(wpt, 'name');
+        const desc = getFirstTextByLocal(wpt, 'desc');
+        const sym  = getFirstTextByLocal(wpt, 'sym');
+        const extensions = parseExtensions(wpt);
+
+        return {
+            lat, lon,
+            name, desc, sym,
+            extensions
+        };
+    }).filter(w => Number.isFinite(w.lat) && Number.isFinite(w.lon));
+
+    // Tracks
+    const trkNodes = Array.from(xml.getElementsByTagNameNS('*', 'trk'));
+    const tracks = trkNodes.map(trk => {
+        const name = getFirstTextByLocal(trk, 'name') || '';
+        const desc = getFirstTextByLocal(trk, 'desc') || '';
+
+        const trkptNodes = Array.from(trk.getElementsByTagNameNS('*', 'trkpt'));
+        const points = trkptNodes.map(pt => {
+            const lat = Number(pt.getAttribute('lat'));
+            const lon = Number(pt.getAttribute('lon'));
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+            const timeStr = getFirstTextByLocal(pt, 'time');
+            const t = timeStr ? Date.parse(timeStr) : null;
+
+            const ext = parseExtensions(pt);
+            const acc = (ext.accuracy != null && String(ext.accuracy).trim() !== '')
+                ? Number(ext.accuracy)
+                : null;
+
+            return {
+                lat, lon,
+                time: (t && !isNaN(t)) ? t : null,
+                accuracy: (acc != null && !isNaN(acc)) ? acc : null
+            };
+        }).filter(Boolean);
+
+        return { name, desc, points };
+    });
+
+    return { metadataName, waypoints, tracks };
+}
+
+/** If a waypoint <name> looks like a VDI number, use it. */
+function inferVdiFromName(name) {
+    const s = String(name || '').trim();
+    if (!s) return '';
+    // allow "-7", "28", etc.
+    if (/^-?\d+(\.\d+)?$/.test(s)) return s;
+    return '';
+}
+
 function stopCompassAutoRefresh() {
     if (autoRefreshIntervalId) {
         clearInterval(autoRefreshIntervalId);
