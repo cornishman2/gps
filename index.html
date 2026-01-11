@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v9</title>
+    <title>DIG IT! v10</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3582,12 +3582,11 @@ function renderExportPage() {
 
                 <input type="file" id="import-gpx-input" accept=".gpx" class="hidden" onchange="handleGpxImport(event)">
 
-                <button
-                    type="button"
-                    onclick="document.getElementById('import-gpx-input').click()"
-                    class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition">
-                    <i class="fas fa-file-import mr-1"></i> Select GPX & Import
-                </button>
+<button type="button"
+  onclick="(function(){ const i=document.getElementById('import-gpx-input'); if(i){ i.value=''; i.click(); } })()"
+  class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition">
+  Import GPX
+</button>
 
                 <textarea id="import-gpx-log" rows="6" readonly placeholder="GPX import log will appear here."
                           class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-3"></textarea>
@@ -3971,14 +3970,15 @@ function triggerImportSurvey() {
 }
 
         
-// --- HELPER FUNCTIONS ---
-
 async function handleGpxImport(event) {
-    const file = event?.target?.files?.[0];
+    const fileInput = event?.target;
+    const file = fileInput?.files?.[0];
+
     const logBox = document.getElementById('import-gpx-log');
     const createNewCb = document.getElementById('import-gpx-create-new-cb');
 
     const log = (msg) => {
+        console.log('[GPX Import]', msg);
         if (!logBox) return;
         logBox.value += msg + '\n';
         logBox.scrollTop = logBox.scrollHeight;
@@ -3987,32 +3987,37 @@ async function handleGpxImport(event) {
     if (logBox) logBox.value = '';
 
     if (!file) {
-        showMessage('Please choose a GPX file to import.', 'error');
+        showMessage('No GPX file selected.', 'error');
         return;
     }
 
     const wantNewSurvey = !!(createNewCb && createNewCb.checked);
 
-    const proceed = async () => {
+    const doImport = async () => {
         try {
-            log(`Reading "${file.name}"...`);
-            const gpxText = await file.text();
-            log('Parsing GPX...');
+            log(`Selected file: ${file.name}`);
+            log('Reading file…');
 
-            const parsed = parseGpxToObjects(gpxText);
+            const gpxText = await file.text();
+
+            log('Parsing GPX…');
+            const parsed = parseGpxToObjects_Loose(gpxText);
+
+            log(`Detected: ${parsed.waypoints.length} waypoint(s), ${parsed.tracks.length} track(s)`);
+
+            if (!parsed.waypoints.length && !parsed.tracks.length) {
+                showMessage('No waypoints or tracks found in this GPX.', 'warning');
+                log('Nothing to import (no <wpt> and no <trkpt> found).');
+                return;
+            }
 
             const now = Date.now();
 
-            // Decide destination survey
+            // ---- choose destination survey ----
             let destSurvey = surveys.find(s => s.status === 'Open') || null;
 
             if (wantNewSurvey || !destSurvey) {
-                // Reset any live recording/navigation state safely before closing/opening surveys
-                if (typeof resetLiveTrackingAndRecordingState === 'function') {
-                    resetLiveTrackingAndRecordingState();
-                }
-
-                // Close existing open survey (if any)
+                // Close any open survey
                 surveys.forEach(s => {
                     if (s.status === 'Open') {
                         s.status = 'Active';
@@ -4042,70 +4047,25 @@ async function handleGpxImport(event) {
                 surveys.unshift(destSurvey);
                 log(`Created new survey: "${destSurvey.name}"`);
             } else {
-                log(`Merging into open survey: "${destSurvey.name}"`);
                 if (!Array.isArray(destSurvey.targets)) destSurvey.targets = [];
                 if (!Array.isArray(destSurvey.tracks)) destSurvey.tracks = [];
+                log(`Merging into open survey: "${destSurvey.name}"`);
             }
 
-            // Import waypoints -> targets/finds
+            // ---- import waypoints -> targets ----
             let importedTargets = 0;
-            let importedFinds = 0;
 
             for (const w of parsed.waypoints) {
-                // Default classification
-                const kind = (w.extensions.kind || '').toLowerCase();
-
                 const coords = `${Number(w.lat).toFixed(6)}, ${Number(w.lon).toFixed(6)}`;
 
-                // Treat stakes as a special target (vdi=-100)
-                const isStake =
-                    kind === 'stake' ||
-                    String(w.sym || '').toLowerCase().includes('stake') ||
-                    String(w.name || '').toUpperCase() === 'STAKE';
-
-                // Treat finds as library finds (linked to destSurvey)
-                const isFind = kind === 'find';
-
-                if (isFind) {
-                    const f = {
-                        id: generateId(),
-
-                        surveyId: destSurvey.id,
-                        surveyName: destSurvey.name || 'Untitled survey',
-                        surveyDescription: destSurvey.description || '',
-                        targetId: '',
-
-                        description: w.desc || w.name || 'Imported Find',
-                        vdi: w.extensions.vdi || '',
-                        depth: w.extensions.depth || '',
-                        type: w.extensions.type || 'Unknown',
-                        coordinates: coords,
-                        accuracy: w.extensions.accuracy || '',
-                        centerOnMap: false,
-
-                        targetPhotoData: '',
-                        photos: [],
-                        findPhotoRef: '',
-
-                        statusAtSave: w.extensions.status || '',
-                        user: w.extensions.user || userProfile.name || '',
-                        detector: w.extensions.detector || userProfile.detector || ''
-                    };
-
-                    finds.push(f);
-                    importedFinds++;
-                    continue;
-                }
-
-                // Otherwise import as a target (including stake)
                 const t = {
                     id: generateId(),
-                    description: w.desc || w.name || (isStake ? 'STAKE' : 'Imported Target'),
-                    vdi: isStake ? '-100' : (w.extensions.vdi || inferVdiFromName(w.name) || 'N/A'),
+                    description: w.desc || w.name || 'Imported Target',
+                    vdi: inferVdiFromName(w.name) || (w.extensions.vdi || 'N/A'),
                     depth: w.extensions.depth || '',
-                    type: isStake ? 'Something else' : (w.extensions.type || 'Unidentified'),
-                    status: w.extensions.status || (isStake ? 'Stake' : 'Signal Detected'),
-                    time: w.extensions.time ? Date.parse(w.extensions.time) : now,
+                    type: w.extensions.type || 'Unidentified',
+                    status: w.extensions.status || 'Signal Detected',
+                    time: (w.timeMs || now),
                     coordinates: coords,
                     accuracy: w.extensions.accuracy || '',
                     user: w.extensions.user || userProfile.name || '',
@@ -4121,22 +4081,22 @@ async function handleGpxImport(event) {
                 importedTargets++;
             }
 
-            // Import tracks
+            // ---- import tracks ----
             let importedTracks = 0;
+
             for (const trk of parsed.tracks) {
-                const pts = Array.isArray(trk.points) ? trk.points : [];
-                if (!pts.length) continue;
+                if (!trk.points || !trk.points.length) continue;
 
                 const newTrack = {
                     id: generateId(),
                     name: trk.name || `Imported Track ${destSurvey.tracks.length + 1}`,
                     description: trk.desc || '',
-                    createdAt: pts[0].time || now,
+                    createdAt: trk.points[0].timeMs || now,
                     isRecording: false,
                     isVisible: true,
                     color: pickTrackColor(destSurvey.tracks.length),
-                    points: pts.map(p => ({
-                        time: p.time || now,
+                    points: trk.points.map(p => ({
+                        time: p.timeMs || now,
                         lat: p.lat,
                         lon: p.lon,
                         accuracy: (p.accuracy != null ? p.accuracy : null)
@@ -4148,36 +4108,27 @@ async function handleGpxImport(event) {
             }
 
             destSurvey.dateLastChanged = Date.now();
-
-            // Persist
             saveSurveysToLocalStorage();
-            if (typeof saveFindsToLocalStorage === 'function') {
-                saveFindsToLocalStorage();
-            }
 
             log('---');
             log(`Imported targets: ${importedTargets}`);
-            log(`Imported finds:   ${importedFinds}`);
             log(`Imported tracks:  ${importedTracks}`);
 
-            showMessage(
-                `GPX import complete: ${importedTargets} targets, ${importedFinds} finds, ${importedTracks} tracks.`,
-                'success'
-            );
+            showMessage(`GPX imported: ${importedTargets} targets, ${importedTracks} tracks.`, 'success');
 
-            // Keep user on Export/Import so they can read the log
-            render();
+            // Refresh UI
+            if (typeof render === 'function') render();
+
         } catch (e) {
             console.error('GPX import failed:', e);
-            log(`ERROR: ${e.message || e}`);
-            showMessage(`GPX import failed: ${e.message || 'Unknown error'}`, 'error');
+            showMessage(`GPX import failed: ${e?.message || e}`, 'error');
+            log(`ERROR: ${e?.message || e}`);
         } finally {
-            // reset so selecting same file again triggers onchange
-            try { event.target.value = ''; } catch (_) {}
+            // allow selecting same file again
+            try { fileInput.value = ''; } catch (_) {}
         }
     };
 
-    // Confirm if they are creating a new survey (because it closes the open one)
     if (wantNewSurvey) {
         const openSurvey = surveys.find(s => s.status === 'Open');
         const openName = openSurvey ? (openSurvey.name || 'Open survey') : '(none)';
@@ -4185,13 +4136,120 @@ async function handleGpxImport(event) {
         showConfirmationModal(
             'Import GPX as New Survey',
             `This will close the current Open survey (<strong>${openName}</strong>) and create a new survey from:<br><br>
-             <strong>${file.name}</strong><br>
-             <span class="text-sm text-gray-600">Continue?</span>`,
-            proceed
+             <strong>${file.name}</strong><br><br>
+             Continue?`,
+            doImport
         );
     } else {
-        proceed();
+        doImport();
     }
+}
+
+/**
+ * GPX parser that is tolerant of namespaces and different exporters.
+ * It does NOT require getElementsByTagNameNS; it matches by element.localName.
+ */
+function parseGpxToObjects_Loose(gpxText) {
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(gpxText, 'application/xml');
+
+    // Detect parse errors
+    if (xml.getElementsByTagName('parsererror').length) {
+        throw new Error('GPX XML parse error.');
+    }
+
+    const allElements = Array.from(xml.getElementsByTagName('*'));
+
+    const firstChildText = (el, local) => {
+        if (!el) return '';
+        const child = Array.from(el.getElementsByTagName('*'))
+            .find(n => (n.localName || n.nodeName) === local);
+        return child && child.textContent ? child.textContent.trim() : '';
+    };
+
+    const parseExtensionsLoose = (el) => {
+        const out = {};
+        if (!el) return out;
+
+        const ext = Array.from(el.getElementsByTagName('*'))
+            .find(n => (n.localName || n.nodeName) === 'extensions');
+        if (!ext) return out;
+
+        Array.from(ext.children || []).forEach(ch => {
+            const k = ch.localName || ch.nodeName;
+            const v = (ch.textContent || '').trim();
+            if (k && v) out[k] = v;
+        });
+
+        return out;
+    };
+
+    // metadata name
+    const metadata = allElements.find(n => (n.localName || n.nodeName) === 'metadata') || null;
+    const metadataName = metadata ? firstChildText(metadata, 'name') : '';
+
+    // waypoints
+    const wptEls = allElements.filter(n => (n.localName || n.nodeName) === 'wpt');
+    const waypoints = wptEls.map(wpt => {
+        const lat = Number(wpt.getAttribute('lat'));
+        const lon = Number(wpt.getAttribute('lon'));
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+        const name = firstChildText(wpt, 'name');
+        const desc = firstChildText(wpt, 'desc');
+        const timeStr = firstChildText(wpt, 'time');
+        const timeMs = timeStr ? Date.parse(timeStr) : null;
+
+        const extensions = parseExtensionsLoose(wpt);
+
+        return {
+            lat, lon,
+            name, desc,
+            timeMs: (timeMs && !isNaN(timeMs)) ? timeMs : null,
+            extensions
+        };
+    }).filter(Boolean);
+
+    // tracks + points
+    const trkEls = allElements.filter(n => (n.localName || n.nodeName) === 'trk');
+    const tracks = trkEls.map(trk => {
+        const name = firstChildText(trk, 'name') || '';
+        const desc = firstChildText(trk, 'desc') || '';
+
+        const trkptEls = Array.from(trk.getElementsByTagName('*'))
+            .filter(n => (n.localName || n.nodeName) === 'trkpt');
+
+        const points = trkptEls.map(pt => {
+            const lat = Number(pt.getAttribute('lat'));
+            const lon = Number(pt.getAttribute('lon'));
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+            const timeStr = firstChildText(pt, 'time');
+            const timeMs = timeStr ? Date.parse(timeStr) : null;
+
+            const ext = parseExtensionsLoose(pt);
+            const acc = (ext.accuracy != null && String(ext.accuracy).trim() !== '')
+                ? Number(ext.accuracy)
+                : null;
+
+            return {
+                lat, lon,
+                timeMs: (timeMs && !isNaN(timeMs)) ? timeMs : null,
+                accuracy: (acc != null && !isNaN(acc)) ? acc : null
+            };
+        }).filter(Boolean);
+
+        return { name, desc, points };
+    });
+
+    return { metadataName, waypoints, tracks };
+}
+
+function inferVdiFromName(name) {
+    const s = String(name || '').trim();
+    if (!s) return '';
+    if (/^-?\d+(\.\d+)?$/.test(s)) return s;
+    return '';
 }
 
 /** Parse GPX into waypoints + tracks (namespace-safe). */
