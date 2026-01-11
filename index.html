@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v6</title>
+    <title>DIG IT! v7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -300,6 +300,65 @@
             </form>
         </div>
     </div>
+
+<!-- Edit Track Modal -->
+<div id="edit-track-modal" class="modal">
+  <div class="modal-content bg-white p-6 shadow-2xl">
+    <h3 id="edit-track-title" class="text-xl font-bold text-primary mb-4">
+      Edit Track
+    </h3>
+
+    <form id="edit-track-form">
+      <input type="hidden" id="edit-track-id" name="trackId" />
+
+      <div class="mb-4">
+        <label for="edit-track-name" class="block text-sm font-medium text-gray-700">
+          Track Name *
+        </label>
+        <input
+          type="text"
+          id="edit-track-name"
+          name="trackName"
+          required
+          class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+          placeholder="e.g., Foreshore sweep"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label for="edit-track-description" class="block text-sm font-medium text-gray-700">
+          Description (optional)
+        </label>
+        <textarea
+          id="edit-track-description"
+          name="trackDescription"
+          rows="3"
+          class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+          placeholder="e.g., Started at car park, worked north along the dunes…"
+        ></textarea>
+      </div>
+
+      <div class="flex justify-end space-x-3 mt-6">
+        <button
+          type="button"
+          onclick="closeEditTrackModal()"
+          class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+          style="background-color: rgb(var(--color-secondary));"
+        >
+          Save Track
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+    
 
 <div id="edit-survey-modal" class="modal">
     <div class="modal-content bg-white p-6 shadow-2xl">
@@ -2359,6 +2418,107 @@ function closeEditFindModal() {
     closeModal('edit-find-modal');
 }
 
+function openEditTrackModal(trackId, options = {}) {
+    const found = findTrackById(trackId);
+    if (!found || !found.track || !found.survey) {
+        showMessage('Track not found.', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('edit-track-modal');
+    const form  = document.getElementById('edit-track-form');
+    if (!modal || !form) {
+        showMessage('Edit Track modal not found in page.', 'error');
+        return;
+    }
+
+    const titleEl = document.getElementById('edit-track-title');
+    const idEl    = document.getElementById('edit-track-id');
+    const nameEl  = document.getElementById('edit-track-name');
+    const descEl  = document.getElementById('edit-track-description');
+
+    const track = found.track;
+
+    // Title
+    const isNew = !!options.isNew;
+    if (titleEl) titleEl.textContent = isNew ? 'New Track Details' : 'Edit Track';
+
+    // Fill fields
+    if (idEl)   idEl.value = track.id;
+    if (nameEl) nameEl.value = String(track.name || 'Track');
+    if (descEl) descEl.value = String(track.description || '');
+
+    // Attach submit safely (you already use this pattern elsewhere)
+    if (typeof attachFormSubmitHandler === 'function') {
+        attachFormSubmitHandler('edit-track-form', handleEditTrackSubmit);
+    } else {
+        // Fallback (in case attachFormSubmitHandler isn't in this build)
+        form.onsubmit = handleEditTrackSubmit;
+    }
+
+    openModal('edit-track-modal');
+
+    // Focus for faster editing on mobile
+    setTimeout(() => {
+        try {
+            if (nameEl) {
+                nameEl.focus();
+                nameEl.setSelectionRange(nameEl.value.length, nameEl.value.length);
+            }
+        } catch (e) {}
+    }, 50);
+}
+
+function closeEditTrackModal() {
+    closeModal('edit-track-modal');
+}
+
+function handleEditTrackSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+
+    const trackId = (form['trackId']?.value || '').trim();
+    const newName = String(form['trackName']?.value || '').trim();
+    const newDesc = String(form['trackDescription']?.value || '').trim();
+
+    if (!trackId) {
+        showMessage('Missing track id.', 'error');
+        return;
+    }
+    if (!newName) {
+        showMessage('Track name is required.', 'error');
+        return;
+    }
+
+    const found = findTrackById(trackId);
+    if (!found || !found.track || !found.survey) {
+        showMessage('Track not found.', 'error');
+        closeEditTrackModal();
+        return;
+    }
+
+    found.track.name = newName;
+    found.track.description = newDesc;
+
+    found.survey.dateLastChanged = Date.now();
+
+    if (typeof saveSurveysToLocalStorage === 'function') {
+        saveSurveysToLocalStorage();
+    }
+
+    closeEditTrackModal();
+    showMessage('Track updated.', 'success');
+
+    // Refresh UI (Compass list + map)
+    if (typeof rerenderCompassIfActive === 'function') {
+        rerenderCompassIfActive();
+    } else if (typeof render === 'function') {
+        render();
+    }
+}
+
+
 /**
  * Save changes from Edit Find form back into the find object.
  * This now supports multiple photos via find.photos.
@@ -3446,39 +3606,8 @@ function renderExportPage() {
     `;
 }        
 function promptEditTrackMeta(trackId) {
-    const found = findTrackById(trackId);
-    if (!found) {
-        showMessage('Track not found.', 'error');
-        return;
-    }
-
-    const track = found.track;
-
-    const currentName = String(track.name || 'Track');
-    const currentDesc = String(track.description || '');
-
-    const newNameRaw = prompt('Edit track name:', currentName);
-    if (newNameRaw === null) return; // user cancelled
-    const newName = String(newNameRaw).trim() || 'Track';
-
-    const newDescRaw = prompt('Edit track description:', currentDesc);
-    if (newDescRaw === null) return; // user cancelled
-    const newDesc = String(newDescRaw).trim();
-
-    track.name = newName;
-    track.description = newDesc;
-
-    found.survey.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-
-    showMessage('Track updated.', 'success');
-
-    // Refresh UI (Compass list + map)
-    if (typeof rerenderCompassIfActive === 'function') {
-        rerenderCompassIfActive();
-    } else if (typeof render === 'function') {
-        render();
-    }
+    // Backwards-compatible wrapper: old callers now open the modal
+    openEditTrackModal(trackId);
 }
 
         
@@ -8016,6 +8145,9 @@ function handleStartTrackClick() {
     saveSurveysToLocalStorage();
     showMessage(`Started recording ${name}.`, 'success');
     render();
+    // After render(), pop the modal so user can name/describe immediately
+    openEditTrackModal(newTrack.id, { isNew: true });
+
 }
 
 /**
@@ -9129,6 +9261,20 @@ document.querySelectorAll('.track-edit-btn').forEach(btn => {
         promptEditTrackMeta(trackId);
     });
 });
+
+// 2b. Track Edit Buttons (name + description modal)
+const trackEditButtons = document.querySelectorAll('.track-edit-btn');
+if (trackEditButtons && trackEditButtons.length > 0) {
+    trackEditButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const trackId = btn.getAttribute('data-track-id');
+            openEditTrackModal(trackId);
+        });
+    });
+}
+
   
     // 3. Page Action Buttons (New Survey, Log Target, Export/Import)
     const newSurveyBtn = document.getElementById('new-survey-btn');
