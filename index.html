@@ -2496,6 +2496,18 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
 
         // ---- Targets ----
         if (!Array.isArray(importedSurvey.targets)) importedSurvey.targets = [];
+        // Ensure tracks exist and are well-formed (backwards compatible)
+if (!Array.isArray(importedSurvey.tracks)) importedSurvey.tracks = [];
+for (const tr of importedSurvey.tracks) {
+    if (!tr) continue;
+    if (!tr.id) tr.id = generateId();
+    tr.name = String(tr.name || 'Track');
+    tr.description = String(tr.description || '');
+    if (tr.isVisible === undefined) tr.isVisible = true;
+    if (!tr.color) tr.color = pickTrackColor(0); // only if missing; won’t override existing colours
+    if (!Array.isArray(tr.points)) tr.points = [];
+}
+
         log(`Restoring ${importedSurvey.targets.length} targets...`);
         updateProgressOverlay(10, `Restoring ${importedSurvey.targets.length} targets…`);
 
@@ -3138,22 +3150,17 @@ function actuallyExportOpenSurveyAsGPX() {
 
             if (!pts) return '';
 
-            const name = track.name || 'Track';
+ const name = track.name || 'Track';
+const desc = track.description || '';
 
-            // Keep track colour from your app (do NOT override)
-            const color = track.color || track.colour || track.strokeColor || '';
-
-            const trackExt = color
-                ? `\n    <extensions>\n      <color>${xmlEscape(color)}</color>\n    </extensions>`
-                : '';
-
-            return `
+return `
   <trk>
-    <name>${xmlEscape(name)}</name>${trackExt}
+    <name>${xmlEscape(name)}</name>
+    <desc>${xmlEscape(desc)}</desc>${trackExt}
     <trkseg>${pts}
     </trkseg>
   </trk>`;
-        };
+       };
 
         // Header/metadata (best practice)
         const header = `<?xml version="1.0" encoding="UTF-8"?>
@@ -3438,7 +3445,44 @@ function renderExportPage() {
         </div>
     `;
 }        
-function deleteTrack(trackId) {
+function promptEditTrackMeta(trackId) {
+    const found = findTrackById(trackId);
+    if (!found) {
+        showMessage('Track not found.', 'error');
+        return;
+    }
+
+    const track = found.track;
+
+    const currentName = String(track.name || 'Track');
+    const currentDesc = String(track.description || '');
+
+    const newNameRaw = prompt('Edit track name:', currentName);
+    if (newNameRaw === null) return; // user cancelled
+    const newName = String(newNameRaw).trim() || 'Track';
+
+    const newDescRaw = prompt('Edit track description:', currentDesc);
+    if (newDescRaw === null) return; // user cancelled
+    const newDesc = String(newDescRaw).trim();
+
+    track.name = newName;
+    track.description = newDesc;
+
+    found.survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    showMessage('Track updated.', 'success');
+
+    // Refresh UI (Compass list + map)
+    if (typeof rerenderCompassIfActive === 'function') {
+        rerenderCompassIfActive();
+    } else if (typeof render === 'function') {
+        render();
+    }
+}
+
+        
+        function deleteTrack(trackId) {
     const found = findTrackById(trackId);
     if (!found) {
         showMessage('Track not found.', 'error');
@@ -7931,9 +7975,6 @@ function logPointToActiveTrack(lat, lon, accuracy) {
     saveSurveysToLocalStorage();
 }
 
-/**
- * Start recording a new track for the current open survey.
- */
 function handleStartTrackClick() {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
@@ -7946,6 +7987,7 @@ function handleStartTrackClick() {
         showMessage('A track is already being recorded. Stop it before starting a new one.', 'warning');
         return;
     }
+
     isTrackingActive = true;
     startLiveMapLocationWatch();
     startCompassAutoRefresh();
@@ -7955,15 +7997,16 @@ function handleStartTrackClick() {
     const nextIndex = openSurvey.tracks.length + 1;
     const name = `Track ${nextIndex}`;
 
-   const newTrack = {
-    id: generateId(),
-    name,
-    createdAt: Date.now(),
-    isRecording: true,
-    isVisible: true,
-    color: pickTrackColor(openSurvey.tracks.length), // ✅ ADD THIS
-    points: []
-};
+    const newTrack = {
+        id: generateId(),
+        name,
+        description: '',              // ✅ NEW: GPX supports <desc>
+        createdAt: Date.now(),
+        isRecording: true,
+        isVisible: true,
+        color: pickTrackColor(openSurvey.tracks.length), // ✅ keep your colour logic
+        points: []
+    };
 
     openSurvey.tracks.push(newTrack);
 
@@ -8041,6 +8084,8 @@ function renderTracksPanel(openSurvey) {
                 ? new Date(track.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : '';
 
+            const desc = String(track.description || '').trim();
+
             const activeBadge = track.isRecording
                 ? `<span class="ml-2 inline-flex items-center text-[10px] text-red-600 font-semibold">
                         <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1 animate-pulse"></span>
@@ -8064,6 +8109,11 @@ function renderTracksPanel(openSurvey) {
                             <span class="text-xs text-gray-500 truncate">
                                 ${pointsCount} points${created ? ` · ${created}` : ''}
                             </span>
+                            ${desc ? `
+                                <span class="text-[11px] text-gray-400 truncate">
+                                    ${desc}
+                                </span>
+                            ` : ''}
                         </div>
                     </label>
 
@@ -8072,12 +8122,12 @@ function renderTracksPanel(openSurvey) {
 
                         <button
                             type="button"
-                            class="track-rename-btn px-3 py-2 rounded-lg bg-slate-700 text-white text-sm hover:bg-slate-800"
+                            class="track-edit-btn px-3 py-2 rounded-lg bg-slate-700 text-white text-sm hover:bg-slate-800"
                             data-track-id="${track.id}"
-                            title="Rename track"
-                            aria-label="Rename track"
+                            title="Edit track name & description"
+                            aria-label="Edit track"
                         >
-                            Rename
+                            <i class="fas fa-pen"></i>
                         </button>
 
                         <button
@@ -8887,6 +8937,17 @@ async function performSurveyImport(text, filename, log) {
         if (!Array.isArray(importedSurvey.targets)) {
             importedSurvey.targets = [];
         }
+// Ensure tracks exist and are well-formed (backwards compatible)
+if (!Array.isArray(importedSurvey.tracks)) importedSurvey.tracks = [];
+for (const tr of importedSurvey.tracks) {
+    if (!tr) continue;
+    if (!tr.id) tr.id = generateId();
+    tr.name = String(tr.name || 'Track');
+    tr.description = String(tr.description || '');
+    if (tr.isVisible === undefined) tr.isVisible = true;
+    if (!tr.color) tr.color = pickTrackColor(0); // only if missing; won’t override existing colours
+    if (!Array.isArray(tr.points)) tr.points = [];
+}
 
         log(`Restoring ${importedSurvey.targets.length} targets...`);
         let tIndex = 0;
@@ -9034,6 +9095,8 @@ if (gpsBtn) {
         };
     });
 
+    
+
     // 2. Track Delete Buttons
     const trackDeleteButtons = document.querySelectorAll('.track-delete-btn');
     if (trackDeleteButtons && trackDeleteButtons.length > 0) {
@@ -9057,11 +9120,13 @@ if (gpsBtn) {
         stopTrackBtn.addEventListener('click', handleStopTrackClick);
     }
 
-  // Track rename buttons
-document.querySelectorAll('.track-rename-btn').forEach(btn => {
+// Track edit (name + description)
+document.querySelectorAll('.track-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const trackId = e.currentTarget.getAttribute('data-track-id');
-        promptRenameTrack(trackId);
+        promptEditTrackMeta(trackId);
     });
 });
   
