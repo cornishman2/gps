@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v13</title>
+    <title>DIG IT! v14</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3486,36 +3486,67 @@ return `
 /** Renders the content for the new Export page. */
 function renderExportPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
+
+    // Show chosen folder name (if user already picked one this session)
+    const chosenFolderName =
+        (typeof photoGalleryExportRootHandle !== 'undefined' && photoGalleryExportRootHandle && photoGalleryExportRootHandle.name)
+            ? photoGalleryExportRootHandle.name
+            : '';
+
     return `
         <div class="p-4 space-y-6">
             <h2 class="text-3xl font-bold text-primary mb-6">Data Export & Import</h2>
 
-            <!-- Export Open Survey as ZIP -->
+            <!-- EXPORT OPEN SURVEY ZIP/JSON -->
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey as ZIP</h4>
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey (ZIP)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    This creates a <strong>.zip file</strong> containing the currently open survey, all its targets, and any finds linked to that survey. This can be imported on any phone with this app.
+                    Export the currently open survey and its photos as a <strong>.zip</strong> file.
                 </p>
-                <button id="export-open-survey-with-photos-btn" onclick="exportOpenSurveyWithPhotos()"
+
+                <button id="export-open-survey-with-photos-btn"
+                        type="button"
+                        onclick="exportOpenSurveyWithPhotos()"
                         class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                    <i class="fas fa-download mr-1"></i> Export Open Survey
+                    <i class="fas fa-file-archive mr-1"></i> Export Open Survey as ZIP
                 </button>
-                <textarea id="export-open-survey-log" rows="6" readonly placeholder="Export log will appear here."
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-4"></textarea>
+
+                <textarea id="export-open-survey-log"
+                          rows="6"
+                          readonly
+                          placeholder="Export log will appear here."
+                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-3"></textarea>
             </div>
 
-            <!-- Export Photo Gallery to Folder -->
+            <!-- EXPORT PHOTO GALLERY (FIXED: STEP 1 + TEXTBOX + STEP 2) -->
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-amber-500">
-                <h4 class="text-lg font-semibold text-amber-700 mb-2">Export Open Survey Photo Gallery (Folder)</h4>
+                <h4 class="text-lg font-semibold text-amber-700 mb-2">Export Photo Gallery (Folder)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    Export the Open survey’s photos into a folder you choose (Targets and Finds). Useful for sharing or backing up full-size images.
+                    Creates a shareable <strong>index.html</strong> gallery (with embedded images) and also writes JPGs into
+                    <strong>Survey/</strong>, <strong>Finds/</strong>, and optionally <strong>Targets/</strong>.
                 </p>
 
+                <!-- Step 1: Pick folder + show name -->
+                <button id="pick-gallery-export-folder-btn"
+                        type="button"
+                        onclick="pickPhotoGalleryExportFolder()"
+                        class="w-full bg-amber-200 text-amber-900 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-amber-300 transition duration-150">
+                    <i class="fas fa-folder mr-1"></i> Step 1: Pick Folder
+                </button>
+
+                <input id="gallery-export-folder-name"
+                       type="text"
+                       readonly
+                       value="${chosenFolderName}"
+                       placeholder="No folder selected yet."
+                       class="w-full mt-2 p-2 border border-amber-300 rounded-md text-sm bg-amber-50" />
+
+                <!-- Step 2: Export into selected folder -->
                 <button id="export-gallery-to-folder-btn"
                         type="button"
-                        onclick="exportOpenSurveyPhotoGallery_ToFolder()"
-                        class="w-full bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-amber-700 transition duration-150">
-                    <i class="fas fa-folder-open mr-1"></i> Export Photo Gallery to Folder
+                        onclick="exportPhotoGalleryToSelectedFolder()"
+                        class="w-full mt-3 bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-amber-700 transition duration-150">
+                    <i class="fas fa-folder-open mr-1"></i> Step 2: Export to Selected Folder
                 </button>
 
                 <textarea id="export-photo-gallery-log"
@@ -3637,6 +3668,7 @@ function renderExportPage() {
         </div>
     `;
 }
+
         
         function promptEditTrackMeta(trackId) {
     // Backwards-compatible wrapper: old callers now open the modal
@@ -6501,7 +6533,7 @@ function renderHomePage() {
     />
 </div>
 
-        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v6</h2>
+        <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard v14</h2>
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
