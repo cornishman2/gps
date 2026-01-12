@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v14</title>
+    <title>DIG IT! v15</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1124,6 +1124,7 @@ function needsGpsNow() {
 }
 
 /** Step 1: user picks a folder; we store the handle and show its name in the textbox. */
+// Step 1: Pick folder (FIXED: must be async)
 async function pickPhotoGalleryExportFolder() {
     try {
         if (!window.showDirectoryPicker) {
@@ -1133,7 +1134,9 @@ async function pickPhotoGalleryExportFolder() {
 
         const handle = await window.showDirectoryPicker();
         photoGalleryExportRootHandle = handle;
-        render();
+
+        // If you re-render the page, keep this (your UI uses it)
+        if (typeof render === 'function') render();
 
         const box = document.getElementById('gallery-export-folder-name');
         if (box) box.value = handle.name || 'Selected folder';
@@ -1150,13 +1153,207 @@ async function pickPhotoGalleryExportFolder() {
     }
 }
 
-/** Step 2: checks we have a stored handle, then runs the export into that folder. */
-function exportPhotoGalleryToSelectedFolder() {
+
+// Step 2: Export (Open survey OR All surveys)
+async function exportPhotoGalleryToSelectedFolder() {
     if (!photoGalleryExportRootHandle) {
         showMessage('Please pick a folder first (Step 1).', 'error');
         return;
     }
-    exportOpenSurveyPhotoGallery_ToFolder(photoGalleryExportRootHandle);
+
+    const cb = document.getElementById('export-photo-gallery-all-surveys-cb');
+    const exportAll = !!(cb && cb.checked);
+
+    if (!exportAll) {
+        // Existing behaviour: export Open survey gallery into chosen folder
+        // (Your existing function name)
+        await exportOpenSurveyPhotoGallery_ToFolder(photoGalleryExportRootHandle);
+        return;
+    }
+
+    // New behaviour: export all surveys + create a master index.html
+    await exportAllSurveysPhotoGalleries_ToFolder(photoGalleryExportRootHandle);
+}
+
+
+// NEW: Export every survey into its own subfolder, plus a master index.html
+async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
+    const logBox = document.getElementById('export-photo-gallery-log');
+    const btn = document.getElementById('export-gallery-to-folder-btn');
+
+    const log = (msg) => {
+        console.log('[Gallery Export All]', msg);
+        if (!logBox) return;
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+    if (logBox) logBox.value = '';
+
+    if (!Array.isArray(surveys) || surveys.length === 0) {
+        showMessage('No surveys to export.', 'error');
+        return;
+    }
+
+    let originalBtnText = '';
+    if (btn) {
+        originalBtnText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Exporting all surveys...';
+    }
+
+    // Helpers
+    const safeFolderName = (s) => {
+        const base = String(s ?? '').trim() || 'Survey';
+        // keep it filesystem friendly
+        return base
+            .replace(/[\/\\:*?"<>|]/g, '_')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 60);
+    };
+
+    const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('File read failed'));
+        reader.readAsDataURL(blob);
+    });
+
+    const getSurveyThumbDataUrl = async (survey) => {
+        // Prefer embedded data URL if present
+        if (survey && typeof survey.surveyPhotoData === 'string' && survey.surveyPhotoData.startsWith('data:image/')) {
+            return survey.surveyPhotoData;
+        }
+
+        // Otherwise, try IndexedDB photo ref -> blob -> data URL
+        if (survey && survey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(survey.surveyPhotoRef)) {
+            try {
+                if (typeof parsePhotoRef === 'function' && typeof loadPhotoBlob === 'function') {
+                    const id = parsePhotoRef(survey.surveyPhotoRef);
+                    const blob = await loadPhotoBlob(id);
+                    if (blob) return await blobToDataUrl(blob);
+                }
+            } catch (e) {
+                console.warn('Thumb load failed for survey', survey?.id, e);
+            }
+        }
+
+        return ''; // no thumb available
+    };
+
+    const masterCards = [];
+
+    try {
+        log(`Exporting ${surveys.length} surveys...`);
+
+        // IMPORTANT: We reuse your existing exporter by temporarily marking each survey as Open.
+        // This avoids duplicating your big gallery export logic.
+        const originalStatuses = surveys.map(s => ({ id: s.id, status: s.status }));
+
+        for (let i = 0; i < surveys.length; i++) {
+            const s = surveys[i];
+            const title = s?.name || `Survey ${i + 1}`;
+
+            // Create a subfolder per survey
+            const folderName = `${safeFolderName(title)}_${String(s?.id || i + 1).slice(0, 8)}`;
+            log(`\n[${i + 1}/${surveys.length}] ${title} -> ${folderName}/`);
+
+            const subDir = await rootPick.getDirectoryHandle(folderName, { create: true });
+
+            // Temporarily set THIS survey Open, all others not Open
+            surveys.forEach(x => { if (x) x.status = (x.id === s.id ? 'Open' : (x.status === 'Open' ? 'Closed' : x.status)); });
+
+            // Run your existing exporter into the subfolder
+            await exportOpenSurveyPhotoGallery_ToFolder(subDir);
+
+            // Build master index entry using survey photo as clickable image
+            const thumbDataUrl = await getSurveyThumbDataUrl(s);
+            masterCards.push({ title, folderName, thumbDataUrl });
+        }
+
+        // Restore statuses
+        originalStatuses.forEach(os => {
+            const s = surveys.find(x => x.id === os.id);
+            if (s) s.status = os.status;
+        });
+        if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
+
+        // Write the master index.html at root
+        const now = new Date();
+        const masterHtml = `
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DIG IT — Photo Galleries</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
+    header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb}
+    h1{margin:0;font-size:20px}
+    p{margin:6px 0 0;color:#444;font-size:13px}
+    main{padding:16px;max-width:1100px;margin:0 auto}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    a.card{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+    .thumb{aspect-ratio:4/3;background:#eee;display:flex;align-items:center;justify-content:center}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .meta{padding:10px 12px}
+    .title{font-weight:700;font-size:14px;line-height:1.2}
+    .hint{font-size:12px;color:#666;margin-top:4px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Photo Galleries</h1>
+    <p>Exported ${now.toLocaleString()} — click a survey to open its gallery.</p>
+  </header>
+  <main>
+    <div class="grid">
+      ${masterCards.map(c => `
+        <a class="card" href="./${c.folderName}/index.html">
+          <div class="thumb">
+            ${c.thumbDataUrl
+                ? `<img src="${c.thumbDataUrl}" alt="${escapeHtml(c.title)}">`
+                : `<div style="padding:12px;color:#666;font-size:12px;text-align:center">No survey photo</div>`
+            }
+          </div>
+          <div class="meta">
+            <div class="title">${escapeHtml(c.title)}</div>
+            <div class="hint">Open gallery</div>
+          </div>
+        </a>
+      `).join('')}
+    </div>
+  </main>
+</body>
+</html>`.trim();
+
+        // escapeHtml helper (inline)
+        function escapeHtml(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        const masterFile = await rootPick.getFileHandle('index.html', { create: true });
+        const writable = await masterFile.createWritable();
+        await writable.write(masterHtml);
+        await writable.close();
+
+        log('\nDone. Wrote master index.html in the selected folder.');
+        showMessage('All surveys exported + master index created.', 'success');
+    } catch (e) {
+        console.error('exportAllSurveysPhotoGalleries_ToFolder error:', e);
+        showMessage(`Export all surveys failed: ${e.message || e}`, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            if (originalBtnText) btn.innerText = originalBtnText;
+        }
+    }
 }
 
 function safeSlug(str) {
@@ -3540,6 +3737,12 @@ function renderExportPage() {
                        value="${chosenFolderName}"
                        placeholder="No folder selected yet."
                        class="w-full mt-2 p-2 border border-amber-300 rounded-md text-sm bg-amber-50" />
+
+                <!-- Export all surveys checkbox -->
+                <label class="flex items-center gap-2 mt-3 text-sm text-gray-700">
+                      <input id="export-photo-gallery-all-surveys-cb" type="checkbox" class="h-4 w-4">
+                      <span><strong>Export all surveys?</strong> (Creates a master index linking to each survey gallery)</span>
+                </label>
 
                 <!-- Step 2: Export into selected folder -->
                 <button id="export-gallery-to-folder-btn"
