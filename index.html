@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v17</title>
+    <title>DIG IT! v18</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -9575,7 +9575,6 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
     });
 }
 
-
 /**
  * Core exporter: writes ONE survey gallery directly into `galleryDir`.
  * Returns true if it wrote index.html, false if there were no photos.
@@ -9598,6 +9597,60 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
         reader.readAsDataURL(blob);
     });
 
+    // Gather ALL photo references from all possible fields (deduped)
+    const collectPhotoInputs = (obj, kind) => {
+        const out = [];
+        const add = (v) => {
+            if (!v) return;
+            if (Array.isArray(v)) {
+                v.forEach(add);
+                return;
+            }
+            const s = String(v).trim();
+            if (!s) return;
+            out.push(s);
+        };
+
+        // New/primary fields
+        add(obj?.photos);
+        add(obj?.photoRefs); // some records may still have this
+
+        // Kind-specific single fields
+        if (kind === 'survey') {
+            add(obj?.surveyPhotoRef);
+            add(obj?.surveyPhotoData);
+            add(obj?.surveyPhotoDataUrl);
+        } else if (kind === 'find') {
+            add(obj?.findPhotoRef);
+            add(obj?.findPhotoData);
+            add(obj?.findPhotoDataUrl);
+            // older/alternate naming you’ve used in places
+            add(obj?.photoRef);
+            add(obj?.photoData);
+            add(obj?.photoDataUrl);
+            // very old carry-over (some finds were created from targets)
+            add(obj?.targetPhotoRef);
+            add(obj?.targetPhotoData);
+        } else if (kind === 'target') {
+            add(obj?.targetPhotoRef);
+            add(obj?.targetPhotoData);
+            add(obj?.targetPhotoDataUrl);
+            add(obj?.photoRef);
+            add(obj?.photoData);
+            add(obj?.photoDataUrl);
+        }
+
+        // Deduplicate while preserving order
+        const seen = new Set();
+        const deduped = [];
+        for (const x of out) {
+            if (seen.has(x)) continue;
+            seen.add(x);
+            deduped.push(x);
+        }
+        return deduped;
+    };
+
     async function saveJpg(dirHandle, filenameBase, photoRefOrDataUrl) {
         const rawBlob = await resolvePhotoBlob(photoRefOrDataUrl);
         if (!rawBlob) return null;
@@ -9615,19 +9668,16 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
     const findsDir   = await getOrCreateDir(galleryDir, 'Finds');
     const targetsDir = await getOrCreateDir(galleryDir, 'Targets');
 
-    // Build item list (same logic as your existing exporter)
+    // Build item list (ONE item per photo)
     const items = [];
 
-    const surveyPhotoInput =
-        (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef))
-            ? openSurvey.surveyPhotoRef
-            : (openSurvey.surveyPhotoData || openSurvey.surveyPhotoDataUrl || '');
-
-    if (surveyPhotoInput) {
+    // Survey photo(s)
+    const surveyPhotos = collectPhotoInputs(openSurvey, 'survey');
+    for (let i = 0; i < surveyPhotos.length; i++) {
         items.push({
             kind: 'survey',
             parentId: openSurvey.id,
-            indexInParent: 1,
+            indexInParent: i + 1,
             title: openSurvey.name || 'Survey photo',
             type: 'Survey',
             vdi: '',
@@ -9635,18 +9685,14 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
             time: openSurvey.creationDate || openSurvey.dateLastChanged || '',
             coords: '',
             accuracy: '',
-            photoRefOrDataUrl: surveyPhotoInput
+            photoRefOrDataUrl: surveyPhotos[i]
         });
     }
 
-    const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
+    // Finds
+    const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f.surveyId === openSurvey.id);
     for (const f of linkedFinds) {
-        const refs = Array.isArray(f.photos) ? f.photos : [];
-        const legacy = (f.targetPhotoData || f.photoData || f.photoDataUrl)
-            ? [f.targetPhotoData || f.photoData || f.photoDataUrl]
-            : [];
-        const photoInputs = refs.length ? refs : legacy;
-
+        const photoInputs = collectPhotoInputs(f, 'find');
         for (let i = 0; i < photoInputs.length; i++) {
             items.push({
                 kind: 'find',
@@ -9664,14 +9710,10 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
         }
     }
 
+    // Targets (optional)
     if (includeTargets && Array.isArray(openSurvey.targets)) {
         for (const t of openSurvey.targets) {
-            const refs = Array.isArray(t.photos) ? t.photos : [];
-            const legacy = (t.targetPhotoData || t.photoDataUrl)
-                ? [t.targetPhotoData || t.photoDataUrl]
-                : [];
-            const photoInputs = refs.length ? refs : legacy;
-
+            const photoInputs = collectPhotoInputs(t, 'target');
             for (let i = 0; i < photoInputs.length; i++) {
                 items.push({
                     kind: 'target',
@@ -9692,7 +9734,7 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
 
     if (!items.length) return false;
 
-    log?.(`  Total photos: ${items.length}`);
+    log?.(`  Total photos discovered: ${items.length}`);
     showSpinner?.(`Processing 0/${items.length}…`);
 
     let surveyHeroHtml = '';
@@ -9717,11 +9759,14 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
         const dataUrl = await blobToDataUrl(outBlob);
 
         if (it.kind === 'survey') {
-            surveyHeroHtml = `
-              <div class="surveyHero">
-                <img class="surveyImg" src="${escapeHtml(dataUrl)}" alt="Survey photo">
-              </div>
-            `;
+            // Use first survey photo as hero; additional survey photos go into “Full Photos”
+            if (!surveyHeroHtml) {
+                surveyHeroHtml = `
+                  <div class="surveyHero">
+                    <img class="surveyImg" src="${escapeHtml(dataUrl)}" alt="Survey photo">
+                  </div>
+                `;
+            }
         } else {
             const card = `
               <div class="card">
@@ -9743,7 +9788,7 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
           <div class="detail" id="${anchorId}">
             <p class="back"><a href="#top">↑ Back to top</a></p>
             <h3>${escapeHtml(it.title)}</h3>
-            <p class="muted">${escapeHtml(it.kind)}</p>
+            <p class="muted">${escapeHtml(it.kind)} photo ${it.indexInParent}</p>
             <img class="full" src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
             <ul class="meta">
               <li><strong>Type:</strong> ${escapeHtml(it.type)}</li>
@@ -9827,6 +9872,7 @@ async function exportSurveyPhotoGallery_NoModal({ survey, galleryDir, includeTar
     await writeFileToHandle(galleryDir, 'index.html', new Blob([indexHtml], { type: 'text/html' }));
     return true;
 }
+
 
         /** Exports all data (surveys and profile) to a JSON string and displays it. */
         function exportData() {
