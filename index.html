@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v19</title>
+    <title>DIG IT! v20</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1243,6 +1243,11 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
     try {
         log(`Exporting ${surveys.length} surveys...`);
 
+        // IMPORTANT (phone fix): Put EVERYTHING inside ONE container folder
+        // so content:// navigation stays within the same tree.
+        const containerDir = await rootPick.getDirectoryHandle('MASTER_GALLERY', { create: true });
+        log(`Using container folder: MASTER_GALLERY/`);
+
         // IMPORTANT: We reuse your existing exporter by temporarily marking each survey as Open.
         // This avoids duplicating your big gallery export logic.
         const originalStatuses = surveys.map(s => ({ id: s.id, status: s.status }));
@@ -1251,14 +1256,18 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
             const s = surveys[i];
             const title = s?.name || `Survey ${i + 1}`;
 
-            // Create a subfolder per survey
+            // Create a subfolder per survey INSIDE containerDir
+            // (You said you deleted the prefix — fine. Keep whatever you prefer here.)
             const folderName = `${safeFolderName(title)}_${String(s?.id || i + 1).slice(0, 8)}`;
-            log(`\n[${i + 1}/${surveys.length}] ${title} -> ${folderName}/`);
+            log(`\n[${i + 1}/${surveys.length}] ${title} -> MASTER_GALLERY/${folderName}/`);
 
-            const subDir = await rootPick.getDirectoryHandle(folderName, { create: true });
+            const subDir = await containerDir.getDirectoryHandle(folderName, { create: true });
 
             // Temporarily set THIS survey Open, all others not Open
-            surveys.forEach(x => { if (x) x.status = (x.id === s.id ? 'Open' : (x.status === 'Open' ? 'Closed' : x.status)); });
+            surveys.forEach(x => {
+                if (!x) return;
+                x.status = (x.id === s.id ? 'Open' : (x.status === 'Open' ? 'Closed' : x.status));
+            });
 
             // Run your existing exporter into the subfolder
             await exportOpenSurveyPhotoGallery_ToFolder(subDir);
@@ -1275,7 +1284,7 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
         });
         if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
 
-        // Write the master index.html at root
+        // Write the master index.html INSIDE containerDir
         const now = new Date();
         const masterHtml = `
 <!doctype html>
@@ -1307,7 +1316,7 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
   <main>
     <div class="grid">
       ${masterCards.map(c => `
-        <a class="card" href="./${c.folderName}/index.html">
+        <a class="card" href="./${encodeURIComponent(c.folderName)}/index.html">
           <div class="thumb">
             ${c.thumbDataUrl
                 ? `<img src="${c.thumbDataUrl}" alt="${escapeHtml(c.title)}">`
@@ -1335,13 +1344,14 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
                 .replace(/'/g, '&#39;');
         }
 
-        const masterFile = await rootPick.getFileHandle('index.html', { create: true });
+        const masterFile = await containerDir.getFileHandle('index.html', { create: true });
         const writable = await masterFile.createWritable();
         await writable.write(masterHtml);
         await writable.close();
 
-        log('\nDone. Wrote master index.html in the selected folder.');
-        showMessage('All surveys exported + master index created.', 'success');
+        log('\nDone.');
+        log('Open MASTER_GALLERY/index.html on your phone.');
+        showMessage('All surveys exported + master index created (inside MASTER_GALLERY).', 'success');
     } catch (e) {
         console.error('exportAllSurveysPhotoGalleries_ToFolder error:', e);
         showMessage(`Export all surveys failed: ${e.message || e}`, 'error');
@@ -1353,7 +1363,7 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
     }
 }
 
-function safeSlug(str) {
+    function safeSlug(str) {
     return String(str || '')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
