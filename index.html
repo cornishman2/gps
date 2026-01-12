@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v11</title>
+    <title>DIG IT! v12</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -3979,17 +3979,34 @@ async function handleGpxImport(event) {
     const fileInput = event?.target;
     const file = fileInput?.files?.[0];
 
-    const logBox = document.getElementById('import-gpx-log');
     const createNewCb = document.getElementById('import-gpx-create-new-cb');
 
-    const log = (msg) => {
-        console.log('[GPX Import]', msg);
-        if (!logBox) return;
-        logBox.value += msg + '\n';
-        logBox.scrollTop = logBox.scrollHeight;
+    // Keep a buffer so we can restore the log even if render() re-builds the page
+    let logBuffer = '';
+
+    const appendLog = (msg) => {
+        const line = String(msg);
+        console.log('[GPX Import]', line);
+        logBuffer += line + '\n';
+
+        const logBoxNow = document.getElementById('import-gpx-log');
+        if (logBoxNow) {
+            logBoxNow.value = logBuffer;
+            logBoxNow.scrollTop = logBoxNow.scrollHeight;
+        }
     };
 
-    if (logBox) logBox.value = '';
+    const setLog = (text) => {
+        logBuffer = String(text || '');
+        const logBoxNow = document.getElementById('import-gpx-log');
+        if (logBoxNow) {
+            logBoxNow.value = logBuffer;
+            logBoxNow.scrollTop = logBoxNow.scrollHeight;
+        }
+    };
+
+    // Clear current log
+    setLog('');
 
     if (!file) {
         showMessage('No GPX file selected.', 'error');
@@ -3998,21 +4015,38 @@ async function handleGpxImport(event) {
 
     const wantNewSurvey = !!(createNewCb && createNewCb.checked);
 
+    // Helper: show a longer toast if your toast supports it; otherwise fall back.
+    const showMessageLong = (text, type = 'info', ms = 4500) => {
+        try {
+            // If you later extend showMessage to accept duration, this will just work.
+            if (typeof showMessage === 'function') showMessage(text, type);
+            // Also keep a visible console hint:
+            console.log(`[Toast:${type}] ${text} (${ms}ms requested)`);
+        } catch (_) {
+            // no-op
+        }
+    };
+
     const doImport = async () => {
         try {
-            log(`Selected file: ${file.name}`);
-            log('Reading file…');
+            showMessageLong('Importing GPX…', 'info', 2500);
+
+            appendLog(`Selected file: ${file.name}`);
+            appendLog('Reading file…');
 
             const gpxText = await file.text();
 
-            log('Parsing GPX…');
+            appendLog('Parsing GPX…');
             const parsed = parseGpxToObjects_Loose(gpxText);
 
-            log(`Detected: ${parsed.waypoints.length} waypoint(s), ${parsed.tracks.length} track(s)`);
+            const wptCount = parsed?.waypoints?.length || 0;
+            const trkCount = parsed?.tracks?.length || 0;
 
-            if (!parsed.waypoints.length && !parsed.tracks.length) {
-                showMessage('No waypoints or tracks found in this GPX.', 'warning');
-                log('Nothing to import (no <wpt> and no <trkpt> found).');
+            appendLog(`Detected: ${wptCount} waypoint(s), ${trkCount} track(s)`);
+
+            if (!wptCount && !trkCount) {
+                showMessageLong('No waypoints or tracks found in this GPX.', 'warning', 5000);
+                appendLog('Nothing to import (no <wpt> and no <trkpt> found).');
                 return;
             }
 
@@ -4050,31 +4084,31 @@ async function handleGpxImport(event) {
                 };
 
                 surveys.unshift(destSurvey);
-                log(`Created new survey: "${destSurvey.name}"`);
+                appendLog(`Created new survey: "${destSurvey.name}"`);
             } else {
                 if (!Array.isArray(destSurvey.targets)) destSurvey.targets = [];
                 if (!Array.isArray(destSurvey.tracks)) destSurvey.tracks = [];
-                log(`Merging into open survey: "${destSurvey.name}"`);
+                appendLog(`Merging into open survey: "${destSurvey.name}"`);
             }
 
             // ---- import waypoints -> targets ----
             let importedTargets = 0;
 
-            for (const w of parsed.waypoints) {
+            for (const w of (parsed.waypoints || [])) {
                 const coords = `${Number(w.lat).toFixed(6)}, ${Number(w.lon).toFixed(6)}`;
 
                 const t = {
                     id: generateId(),
                     description: w.desc || w.name || 'Imported Target',
-                    vdi: inferVdiFromName(w.name) || (w.extensions.vdi || 'N/A'),
-                    depth: w.extensions.depth || '',
-                    type: w.extensions.type || 'Unidentified',
-                    status: w.extensions.status || 'Signal Detected',
+                    vdi: inferVdiFromName(w.name) || ((w.extensions && w.extensions.vdi) || 'N/A'),
+                    depth: (w.extensions && w.extensions.depth) || '',
+                    type: (w.extensions && w.extensions.type) || 'Unidentified',
+                    status: (w.extensions && w.extensions.status) || 'Signal Detected',
                     time: (w.timeMs || now),
                     coordinates: coords,
-                    accuracy: w.extensions.accuracy || '',
-                    user: w.extensions.user || userProfile.name || '',
-                    detector: w.extensions.detector || userProfile.detector || '',
+                    accuracy: (w.extensions && w.extensions.accuracy) || '',
+                    user: (w.extensions && w.extensions.user) || userProfile.name || '',
+                    detector: (w.extensions && w.extensions.detector) || userProfile.detector || '',
                     centerOnMap: false,
 
                     photos: [],
@@ -4089,7 +4123,7 @@ async function handleGpxImport(event) {
             // ---- import tracks ----
             let importedTracks = 0;
 
-            for (const trk of parsed.tracks) {
+            for (const trk of (parsed.tracks || [])) {
                 if (!trk.points || !trk.points.length) continue;
 
                 const newTrack = {
@@ -4115,19 +4149,30 @@ async function handleGpxImport(event) {
             destSurvey.dateLastChanged = Date.now();
             saveSurveysToLocalStorage();
 
-            log('---');
-            log(`Imported targets: ${importedTargets}`);
-            log(`Imported tracks:  ${importedTracks}`);
+            appendLog('---');
+            appendLog(`Imported targets: ${importedTargets}`);
+            appendLog(`Imported tracks:  ${importedTracks}`);
 
-            showMessage(`GPX imported: ${importedTargets} targets, ${importedTracks} tracks.`, 'success');
+            showMessageLong(`GPX imported: ${importedTargets} targets, ${importedTracks} tracks.`, 'success', 6000);
 
-            // Refresh UI
-            if (typeof render === 'function') render();
+            // IMPORTANT: Don't wipe the log by re-rendering the Export page.
+            // If you're currently on the Export page, keep the UI as-is so the log stays visible.
+            // If you're on some other page, a render refresh is useful.
+            const isExportPageActive =
+                (typeof currentPage === 'string' && currentPage.toLowerCase().includes('export')) ||
+                document.getElementById('import-gpx-log'); // heuristic: export page has this textarea
+
+            if (!isExportPageActive) {
+                if (typeof render === 'function') render();
+            } else {
+                // ensure the log is visible even if something else refreshed parts of the DOM
+                setLog(logBuffer);
+            }
 
         } catch (e) {
             console.error('GPX import failed:', e);
-            showMessage(`GPX import failed: ${e?.message || e}`, 'error');
-            log(`ERROR: ${e?.message || e}`);
+            showMessageLong(`GPX import failed: ${e?.message || e}`, 'error', 8000);
+            appendLog(`ERROR: ${e?.message || e}`);
         } finally {
             // allow selecting same file again
             try { fileInput.value = ''; } catch (_) {}
@@ -4149,7 +4194,6 @@ async function handleGpxImport(event) {
         doImport();
     }
 }
-
 /**
  * GPX parser that is tolerant of namespaces and different exporters.
  * It does NOT require getElementsByTagNameNS; it matches by element.localName.
