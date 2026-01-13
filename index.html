@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v22</title>
+    <title>DIG IT! v24</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1017,7 +1017,423 @@ let navOverlaySettings = {
     belowOffsetPct: 6   // default
 };
 
-function showProgressOverlay(title = 'Working...', message = 'Please wait.') {
+function downloadBlob(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+    }, 1000);
+}
+
+function downloadTextFile(filename, text, mime = 'text/html') {
+    downloadBlob(filename, new Blob([text], { type: mime }));
+}
+async function exportPhotoGallery_Download() {
+    const logBox = document.getElementById('export-photo-gallery-log');
+    const btn = document.getElementById('export-gallery-download-btn');
+
+    const log = (msg) => {
+        console.log('[Gallery Download]', msg);
+        if (!logBox) return;
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+    if (logBox) logBox.value = '';
+
+    // ---- Read checkboxes A–G ----
+    const createIndex     = !!document.getElementById('gallery-dl-create-index')?.checked;
+    const exportOpen      = !!document.getElementById('gallery-dl-export-open')?.checked;
+    const exportOther     = !!document.getElementById('gallery-dl-export-other')?.checked;
+    const includeTargets  = !!document.getElementById('gallery-dl-include-targets')?.checked;
+    const includeFinds    = !!document.getElementById('gallery-dl-include-finds')?.checked;
+    const writeTargetJpgs = !!document.getElementById('gallery-dl-write-target-jpgs')?.checked;
+    const writeFindJpgs   = !!document.getElementById('gallery-dl-write-find-jpgs')?.checked;
+
+    const maxW = (typeof getMaxPhotoWidth === 'function') ? getMaxPhotoWidth() : 1000;
+
+    // ---- Validation ----
+    if (!exportOpen && !exportOther) {
+        showMessage('Select Open Survey and/or Other Surveys.', 'error');
+        return;
+    }
+    if (!includeTargets && !includeFinds) {
+        showMessage('Select Targets and/or Finds to include.', 'error');
+        return;
+    }
+    if (typeof resolvePhotoBlob !== 'function' || typeof resizeBlobToMaxWidthJpeg !== 'function') {
+        showMessage('Photo helpers missing (resolvePhotoBlob / resizeBlobToMaxWidthJpeg).', 'error');
+        return;
+    }
+
+    let originalBtnText = '';
+    if (btn) {
+        originalBtnText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Exporting…';
+    }
+
+    const escapeHtml = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+    });
+
+    async function photoRefToDataUrl(ref) {
+        if (!ref) return '';
+        try {
+            const raw = await resolvePhotoBlob(ref);
+            if (!raw) return '';
+            const resized = await resizeBlobToMaxWidthJpeg(raw, maxW, 0.85);
+            return await blobToDataUrl(resized);
+        } catch {
+            return '';
+        }
+    }
+
+    try {
+        const allSurveys = Array.isArray(surveys) ? surveys : [];
+        const openSurvey = allSurveys.find(s => s.status === 'Open');
+
+        let selected = [];
+        if (exportOpen && openSurvey) selected.push(openSurvey);
+        if (exportOther) selected = selected.concat(allSurveys.filter(s => s.status !== 'Open'));
+
+        // Deduplicate
+        const seen = new Set();
+        selected = selected.filter(s => {
+            const k = s.id ?? s.name;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+
+        log(`Surveys selected: ${selected.length}`);
+
+        const cards = [];
+        const sections = [];
+
+        for (const s of selected) {
+            const title = s.name || 'Survey';
+            const sid = `survey_${String(s.id ?? title).replace(/[^a-z0-9]+/gi,'_')}`;
+
+            let thumb = await photoRefToDataUrl(s.surveyPhotoData || s.surveyPhotoRef);
+
+            cards.push(`
+              <a class="cardTop" href="#${sid}">
+                <div class="thumb">
+                  ${thumb ? `<img src="${thumb}">` : `<div class="noThumb">No photo</div>`}
+                </div>
+                <div class="meta">
+                  <div class="title">${escapeHtml(title)}</div>
+                </div>
+              </a>
+            `);
+
+            const photos = [];
+
+            if (includeFinds) {
+                (Array.isArray(finds) ? finds : [])
+                    .filter(f => f.surveyId === s.id)
+                    .forEach(f => {
+                        const refs = Array.isArray(f.photos) ? f.photos : [f.photoData, f.targetPhotoData].filter(Boolean);
+                        refs.forEach(async ref => {
+                            const d = await photoRefToDataUrl(ref);
+                            if (d) photos.push(`<img class="full" src="${d}">`);
+                        });
+                    });
+            }
+
+            if (includeTargets && Array.isArray(s.targets)) {
+                s.targets.forEach(t => {
+                    const refs = Array.isArray(t.photos) ? t.photos : [t.targetPhotoData].filter(Boolean);
+                    refs.forEach(async ref => {
+                        const d = await photoRefToDataUrl(ref);
+                        if (d) photos.push(`<img class="full" src="${d}">`);
+                    });
+                });
+            }
+
+            sections.push(`
+              <section id="${sid}" class="surveySection">
+                <h2>${escapeHtml(title)}</h2>
+                ${photos.length ? photos.join('') : '<p>No photos.</p>'}
+              </section>
+            `);
+        }
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>geoFind Gallery</title>
+<style>
+body{font-family:system-ui;margin:0;background:#f7f7f7}
+header{padding:16px;background:#fff;border-bottom:1px solid #ddd}
+.gridTop{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:16px}
+.cardTop{background:#fff;border-radius:12px;overflow:hidden;text-decoration:none;color:#000}
+.thumb{aspect-ratio:4/3;background:#eee}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.full{width:100%;margin-top:10px}
+.surveySection{padding:16px}
+</style>
+</head>
+<body>
+<header><h1>Photo Gallery</h1></header>
+<div class="gridTop">${cards.join('')}</div>
+${sections.join('')}
+</body>
+</html>`;
+
+        if (createIndex) {
+            downloadTextFile('index.html', html);
+        } else {
+            downloadTextFile(`gallery_${Date.now()}.html`, html);
+        }
+
+        showMessage('Gallery downloaded to Downloads.', 'success');
+        log('DONE');
+    } catch (e) {
+        console.error(e);
+        showMessage('Export failed.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalBtnText || 'Export Gallery to Downloads';
+        }
+    }
+}
+
+        
+    function downloadTextFile(filename, text, mime = 'text/plain') {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+    }, 1000);
+}
+
+/**
+ * Phone-safe export: creates ONE self-contained HTML file (no folder handles).
+ * Uses embedded images (data URLs). Works reliably on Android.
+ *
+ * Assumes you already have:
+ * - surveys[]
+ * - finds[]
+ * - resolvePhotoBlob(ref) OR the older idb/dataURL logic you used
+ * - resizeBlobToMaxWidthJpeg(blob, maxW, quality)
+ */
+async function exportAllSurveysGallery_DownloadSingleHtml({ includeTargets = true, includeFinds = true, maxW = 1000 } = {}) {
+    const logBox = document.getElementById('export-photo-gallery-log');
+    const log = (msg) => {
+        console.log('[Gallery Download]', msg);
+        if (!logBox) return;
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+    if (logBox) logBox.value = '';
+
+    if (!Array.isArray(surveys) || surveys.length === 0) {
+        showMessage('No surveys to export.', 'error');
+        return;
+    }
+
+    const escapeHtml = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(r.error || new Error('File read failed'));
+        r.readAsDataURL(blob);
+    });
+
+    async function photoRefToDataUrl(photoRef) {
+        if (!photoRef) return '';
+        try {
+            const raw = await resolvePhotoBlob(photoRef); // your existing helper
+            if (!raw) return '';
+            const resized = await resizeBlobToMaxWidthJpeg(raw, maxW, 0.85);
+            if (!resized) return '';
+            return await blobToDataUrl(resized);
+        } catch {
+            return '';
+        }
+    }
+
+    // Build master cards + embedded sections
+    const cards = [];
+    const sections = [];
+
+    log(`Building single HTML gallery for ${surveys.length} surveys...`);
+    log(`Max width: ${maxW}px`);
+
+    for (let i = 0; i < surveys.length; i++) {
+        const s = surveys[i];
+        const title = s?.name || `Survey ${i + 1}`;
+        const sid = `survey_${String(s?.id ?? i + 1).replace(/[^a-z0-9]+/gi,'_')}`;
+
+        // Survey thumb (prefer survey photo)
+        const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
+        let thumb = await photoRefToDataUrl(surveyPhotoRef);
+
+        // If no survey photo, fallback to first find/target photo
+        if (!thumb && includeFinds) {
+            const sf = (Array.isArray(finds) ? finds : []).find(f => f && f.surveyId === s.id);
+            const pref = (sf?.photos && sf.photos[0]) || sf?.photoData || sf?.targetPhotoData || '';
+            thumb = await photoRefToDataUrl(pref);
+        }
+        if (!thumb && includeTargets) {
+            const t = Array.isArray(s?.targets) ? s.targets.find(x => x) : null;
+            const pref = (t?.photos && t.photos[0]) || t?.targetPhotoData || t?.photoDataUrl || '';
+            thumb = await photoRefToDataUrl(pref);
+        }
+
+        cards.push(`
+          <a class="cardTop" href="#${sid}">
+            <div class="thumb">
+              ${thumb ? `<img src="${thumb}" alt="${escapeHtml(title)}">`
+                     : `<div class="noThumb">No photo</div>`}
+            </div>
+            <div class="meta">
+              <div class="title">${escapeHtml(title)}</div>
+              <div class="hint">Jump to gallery</div>
+            </div>
+          </a>
+        `);
+
+        // Build survey section (simple: just show all photos in one stream)
+        const photoBlocks = [];
+
+        // Survey photo
+        if (surveyPhotoRef) {
+            const d = await photoRefToDataUrl(surveyPhotoRef);
+            if (d) photoBlocks.push(`<img class="full" src="${d}" alt="Survey photo">`);
+        }
+
+        // Finds
+        if (includeFinds) {
+            const sf = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === s.id);
+            for (const f of sf) {
+                const refs = Array.isArray(f.photos) && f.photos.length
+                    ? f.photos
+                    : [f.photoData, f.targetPhotoData, f.photoDataUrl].filter(Boolean);
+
+                for (let p = 0; p < refs.length; p++) {
+                    const d = await photoRefToDataUrl(refs[p]);
+                    if (d) photoBlocks.push(`<img class="full" src="${d}" alt="Find photo">`);
+                }
+            }
+        }
+
+        // Targets
+        if (includeTargets && Array.isArray(s?.targets)) {
+            for (const t of s.targets) {
+                const refs = Array.isArray(t.photos) && t.photos.length
+                    ? t.photos
+                    : [t.targetPhotoData, t.photoDataUrl, t.photoRef].filter(Boolean);
+
+                for (let p = 0; p < refs.length; p++) {
+                    const d = await photoRefToDataUrl(refs[p]);
+                    if (d) photoBlocks.push(`<img class="full" src="${d}" alt="Target photo">`);
+                }
+            }
+        }
+
+        sections.push(`
+          <section class="surveySection" id="${sid}">
+            <div class="surveyHeader">
+              <h2>${escapeHtml(title)}</h2>
+              <a href="#top">Back to top</a>
+            </div>
+            ${photoBlocks.length ? photoBlocks.join('\n') : `<p class="muted">No photos found.</p>`}
+          </section>
+        `);
+
+        log(`[${i + 1}/${surveys.length}] Added: ${title}`);
+    }
+
+    const now = new Date();
+    const html = `
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>geoFind Gallery</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
+  header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:10}
+  h1{margin:0;font-size:20px}
+  .sub{margin:6px 0 0;color:#444;font-size:13px}
+  main{padding:16px;max-width:1100px;margin:0 auto}
+  .gridTop{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+  a.cardTop{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .thumb{aspect-ratio:4/3;background:#eee;display:flex;align-items:center;justify-content:center}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .noThumb{padding:12px;color:#666;font-size:12px;text-align:center}
+  .meta{padding:10px 12px}
+  .title{font-weight:800;font-size:14px;line-height:1.2}
+  .hint{font-size:12px;color:#666;margin-top:4px}
+  .surveySection{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:18px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+  .surveyHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .surveyHeader h2{margin:0;font-size:18px}
+  .muted{color:#64748b;font-size:13px}
+  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:12px;display:block}
+</style>
+</head>
+<body>
+<a id="top"></a>
+<header>
+  <h1>Photo Galleries</h1>
+  <p class="sub">Exported ${escapeHtml(now.toLocaleString())} — this file is self-contained (phone-safe).</p>
+</header>
+<main>
+  <div class="gridTop">
+    ${cards.join('\n')}
+  </div>
+
+  ${sections.join('\n')}
+</main>
+</body>
+</html>`.trim();
+
+    const filename = `geoFind_gallery_${now.toISOString().slice(0,10)}.html`;
+    downloadTextFile(filename, html, 'text/html');
+
+    showMessage('Gallery HTML downloaded (check Downloads).', 'success');
+    log('DONE: Download triggered.');
+}
+
+        
+    function showProgressOverlay(title = 'Working...', message = 'Please wait.') {
     const overlay = document.getElementById('progress-overlay');
     if (!overlay) return;
 
@@ -4046,85 +4462,69 @@ function renderExportPage() {
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-3"></textarea>
             </div>
 
-   <!-- EXPORT PHOTO GALLERY (MASTER FOLDER MODE) -->
 <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-amber-500">
-  <h4 class="text-lg font-semibold text-amber-700 mb-2">Export Photo Gallery (Master Folder)</h4>
+  <h4 class="text-lg font-semibold text-amber-700 mb-2">Export Photo Gallery (Download)</h4>
   <p class="text-sm text-gray-600 mb-3">
-    Writes gallery HTML files (and optional JPGs) directly into the selected folder.
-    This is designed to work reliably on phones (content://).
+    Downloads gallery files to your device (no folder selection; works the same on laptop & phone).
   </p>
 
-  <!-- Step 1: Pick folder + show name -->
-  <button id="pick-gallery-export-folder-btn"
-          type="button"
-          onclick="pickPhotoGalleryExportFolder()"
-          class="w-full bg-amber-200 text-amber-900 font-bold py-2 px-4 rounded-lg shadow-md hover:bg-amber-300 transition duration-150">
-    <i class="fas fa-folder mr-1"></i> Step 1: Pick Master Folder
-  </button>
-
-  <input id="gallery-export-folder-name"
-         type="text"
-         readonly
-         value=""
-         placeholder="No folder selected yet."
-         class="w-full mt-2 p-2 border border-amber-300 rounded-md text-sm bg-amber-50" />
-
-  <!-- Options -->
-  <div class="mt-3 space-y-2 text-sm text-gray-700">
+  <div class="mt-2 space-y-2 text-sm text-gray-700">
     <label class="flex items-center gap-2">
-      <input id="gallery-opt-create-index" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>Create linking index.html</strong> (may overwrite)</span>
-    </label>
-
-    <div class="mt-2 font-semibold text-gray-800">Which surveys?</div>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-opt-export-open" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>Export Open survey</strong></span>
+      <input id="gallery-dl-create-index" type="checkbox" class="h-4 w-4" checked>
+      <span><strong>A)</strong> Create linking <code>index.html</code> (may overwrite)</span>
     </label>
 
     <label class="flex items-center gap-2">
-      <input id="gallery-opt-export-other" type="checkbox" class="h-4 w-4">
-      <span><strong>Export all other surveys</strong> (Closed/Archived)</span>
-    </label>
-
-    <div class="mt-2 font-semibold text-gray-800">Include in gallery (HTML)</div>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-opt-include-targets" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>Export Targets</strong> (include in gallery)</span>
+      <input id="gallery-dl-export-open" type="checkbox" class="h-4 w-4" checked>
+      <span><strong>B)</strong> Export Open Survey</span>
     </label>
 
     <label class="flex items-center gap-2">
-      <input id="gallery-opt-include-finds" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>Export Finds</strong> (include in gallery)</span>
+      <input id="gallery-dl-export-other" type="checkbox" class="h-4 w-4">
+      <span><strong>C)</strong> Export all other surveys (Closed/Archived)</span>
     </label>
 
-    <div class="mt-2 font-semibold text-gray-800">Also write JPG files (optional)</div>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-opt-write-target-jpgs" type="checkbox" class="h-4 w-4">
-      <span><strong>Export Target JPGs</strong> (write files to Master folder)</span>
-    </label>
+    <hr class="my-2">
 
     <label class="flex items-center gap-2">
-      <input id="gallery-opt-write-find-jpgs" type="checkbox" class="h-4 w-4">
-      <span><strong>Export Find JPGs</strong> (write files to Master folder)</span>
+      <input id="gallery-dl-include-targets" type="checkbox" class="h-4 w-4" checked>
+      <span><strong>D)</strong> Export Targets (include in gallery)</span>
     </label>
+
+    <label class="flex items-center gap-2">
+      <input id="gallery-dl-include-finds" type="checkbox" class="h-4 w-4" checked>
+      <span><strong>E)</strong> Export Finds (include in gallery)</span>
+    </label>
+
+    <hr class="my-2">
+
+    <label class="flex items-center gap-2">
+      <input id="gallery-dl-write-target-jpgs" type="checkbox" class="h-4 w-4">
+      <span><strong>F)</strong> Export Target JPGs (download files)</span>
+    </label>
+
+    <label class="flex items-center gap-2">
+      <input id="gallery-dl-write-find-jpgs" type="checkbox" class="h-4 w-4">
+      <span><strong>G)</strong> Export Find JPGs (download files)</span>
+    </label>
+
+    <p class="text-xs text-gray-500 mt-1">
+      Note: Browsers download files individually. If you select JPG exports, you may get lots of downloads.
+      (We can switch to ZIP later if you want one single download.)
+    </p>
   </div>
 
-  <!-- Step 2 -->
-  <button id="export-gallery-to-folder-btn"
+  <button id="export-gallery-download-btn"
           type="button"
-          onclick="exportPhotoGalleryToSelectedFolder()"
+          onclick="exportPhotoGallery_Download()"
           class="w-full mt-4 bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-amber-700 transition duration-150">
-    <i class="fas fa-folder-open mr-1"></i> Step 2: Export to Master Folder
+    <i class="fas fa-download mr-1"></i> Export Gallery to Downloads
   </button>
 
   <textarea id="export-photo-gallery-log"
             rows="7"
             readonly
-            placeholder="Photo gallery export log will appear here."
+            placeholder="Export log will appear here."
             class="w-full p-2 border border-amber-500 rounded-md font-mono text-xs mt-3"></textarea>
 </div>
 
