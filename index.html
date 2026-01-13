@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v29</title>
+    <title>DIG IT! v30</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1036,6 +1036,7 @@ async function exportPhotoGallery_Download() {
     const exportOther      = !!document.getElementById('gallery-dl-export-other')?.checked;      // C
     const includeTargets   = !!document.getElementById('gallery-dl-include-targets')?.checked;   // D
     const includeFinds     = !!document.getElementById('gallery-dl-include-finds')?.checked;     // E
+    // F/G are not needed for single-file download mode, but keep reading them (your UI has them)
     const writeTargetJpgs  = !!document.getElementById('gallery-dl-write-target-jpgs')?.checked; // F
     const writeFindJpgs    = !!document.getElementById('gallery-dl-write-find-jpgs')?.checked;   // G
 
@@ -1087,21 +1088,6 @@ async function exportPhotoGallery_Download() {
         r.readAsDataURL(blob);
     });
 
-    // Resolve -> resize -> returns { blob, dataUrl } (jpeg)
-    async function refToJpeg(ref) {
-        if (!ref) return null;
-        try {
-            const raw = await resolvePhotoBlob(ref);
-            if (!raw) return null;
-            const resizedJpeg = await resizeBlobToMaxWidthJpeg(raw, maxW, 0.85);
-            if (!resizedJpeg) return null;
-            const dataUrl = await blobToDataUrl(resizedJpeg);
-            return { blob: resizedJpeg, dataUrl };
-        } catch {
-            return null;
-        }
-    }
-
     // Choose surveys
     function pickSurveys() {
         const all = Array.isArray(surveys) ? surveys : [];
@@ -1111,7 +1097,7 @@ async function exportPhotoGallery_Download() {
         if (exportOpen && open) selected.push(open);
         if (exportOther) selected = selected.concat(all.filter(s => s && s.status !== 'Open'));
 
-        // dedupe by id
+        // dedupe by id/name
         const seen = new Set();
         const uniq = [];
         for (const s of selected) {
@@ -1121,6 +1107,82 @@ async function exportPhotoGallery_Download() {
             uniq.push(s);
         }
         return { uniq, openExists: !!open };
+    }
+
+    // Wrap helper defined inside so you only paste ONE function
+    function wrapHtmlDocument({ title, topCardsHtml, bodyHtml, exportedText }) {
+        return `
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+  /* Base */
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
+  a{color:inherit}
+  header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:10}
+  h1{margin:0;font-size:20px}
+  .sub{margin:6px 0 0;color:#333;font-size:13px}
+  main{padding:16px;max-width:1100px;margin:0 auto}
+
+  /* Top master cards (NOW: two per row thumbnails) */
+  .gridTop{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px}
+  @media (max-width:420px){.gridTop{gap:10px}}
+  a.cardTop{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .thumb{background:#eee;display:flex;align-items:center;justify-content:center}
+  .thumb img{width:100%;height:120px;object-fit:cover;display:block}
+  .noThumb{height:120px;display:flex;align-items:center;justify-content:center;color:#555;font-size:12px;text-align:center;background:#f1f5f9}
+  .meta{padding:10px 12px}
+  .title{font-weight:800;font-size:14px;line-height:1.2}
+  .hint{font-size:12px;color:#555;margin-top:4px}
+
+  /* Survey sections */
+  .surveySection{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:18px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+  .surveyHeaderTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .surveyTitle{margin:0;font-size:18px}
+  .backTop{font-size:12px;color:#111;text-decoration:underline}
+  .surveyDesc{margin:8px 0 0;color:#222;font-size:13px}
+  .surveyMeta{margin:8px 0 0;color:#222;font-size:12px;display:flex;gap:12px;flex-wrap:wrap}
+  .muted{color:#333;font-size:13px}
+
+  /* Thumbnails grid (two per row) */
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+  @media (max-width:420px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+
+  a.thumbLink{display:block;text-decoration:none}
+  a.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+  a.card img{width:100%;height:120px;object-fit:cover;display:block}
+  .noimg{height:120px;display:flex;align-items:center;justify-content:center;color:#555;background:#f1f5f9;font-size:12px}
+
+  .cap{padding:8px 10px}
+  .tTitle{font-weight:800;font-size:13px;line-height:1.2;color:#111}
+  .metaLine{font-size:12px;color:#333;margin-top:3px}
+
+  /* Full photo detail blocks */
+  h3{margin:18px 0 8px;font-size:14px;color:#111}
+  .detail{margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb}
+  .back{font-size:12px;color:#111;margin-bottom:8px}
+  .back a{text-decoration:underline}
+  .sep{display:inline-block;margin:0 8px;color:#555}
+  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:10px;display:block}
+  .metaList{margin:10px 0 0;padding-left:18px;color:#111;font-size:13px}
+  .metaList li{margin:4px 0}
+</style>
+</head>
+<body>
+<a id="top"></a>
+<header>
+  <h1>Photo Galleries</h1>
+  <p class="sub">${escapeHtml(exportedText || '')} — self-contained (phone safe)</p>
+</header>
+<main>
+  ${topCardsHtml ? `<div class="gridTop">${topCardsHtml}</div>` : ``}
+  ${bodyHtml || ''}
+</main>
+</body>
+</html>`.trim();
     }
 
     try {
@@ -1138,8 +1200,6 @@ async function exportPhotoGallery_Download() {
         log(`Surveys selected: ${selectedSurveys.length}`);
         log(`Include Finds: ${includeFinds ? 'YES' : 'NO'}`);
         log(`Include Targets: ${includeTargets ? 'YES' : 'NO'}`);
-        log(`Write Find JPGs: ${writeFindJpgs ? 'YES' : 'NO'}`);
-        log(`Write Target JPGs: ${writeTargetJpgs ? 'YES' : 'NO'}`);
         log(`Max width: ${maxW}px`);
         log(`Create index.html: ${createIndex ? 'YES' : 'NO'}`);
         log('---');
@@ -1165,19 +1225,19 @@ async function exportPhotoGallery_Download() {
                     const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
                     if (!resized) return '';
                     return await blobToDataUrl(resized);
-                } catch (e) {
+                } catch {
                     return '';
                 }
             }
 
-            // Collect survey hero photo (first one)
+            // Survey photo refs (hero + thumb)
             const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
             const heroDataUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, maxW) : '';
+            const heroThumbUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, 320) : '';
 
-            // Build photo items
+            // Items in the intended priority order: Finds first, then Targets
             const items = [];
 
-            // Finds
             if (includeFinds) {
                 const sf = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === s.id);
                 for (const f of sf) {
@@ -1202,7 +1262,6 @@ async function exportPhotoGallery_Download() {
                 }
             }
 
-            // Targets
             if (includeTargets && Array.isArray(s?.targets)) {
                 for (const t of s.targets) {
                     const refs = Array.isArray(t.photos) && t.photos.length
@@ -1226,24 +1285,31 @@ async function exportPhotoGallery_Download() {
                 }
             }
 
-            // Create thumbnail cards + full detail sections
             const thumbCards = [];
             const fullBlocks = [];
+
+            // For master thumbnail fallback:
+            let firstFindThumb = '';
+            let firstTargetThumb = '';
 
             for (let n = 0; n < items.length; n++) {
                 const it = items[n];
                 const pid = `${sid}-${safeId(it.kind)}-${safeId(it.parentId)}-${it.indexInParent}`;
 
-                // Smaller thumbnail than before
                 const thumbUrl = await photoRefToDataUrlSized(it.photoRef, 320);
                 const fullUrl  = await photoRefToDataUrlSized(it.photoRef, maxW);
+
+                if (thumbUrl) {
+                    if (!firstFindThumb && it.kind === 'Find') firstFindThumb = thumbUrl;
+                    if (!firstTargetThumb && it.kind === 'Target') firstTargetThumb = thumbUrl;
+                }
 
                 thumbCards.push(`
 <a class="thumbLink card" href="#${pid}">
   ${thumbUrl
-      ? `<img src="${thumbUrl}" alt="${escapeHtml(it.kind)} photo">`
-      : `<div class="noimg">No photo</div>`
-  }
+        ? `<img src="${thumbUrl}" alt="${escapeHtml(it.kind)} photo">`
+        : `<div class="noimg">No photo</div>`
+    }
   <div class="cap">
     <div class="tTitle">${escapeHtml(it.kind)} — ${escapeHtml(it.title)}</div>
     ${it.type ? `<div class="metaLine">Type: ${escapeHtml(it.type)}</div>` : `<div class="metaLine">&nbsp;</div>`}
@@ -1274,10 +1340,9 @@ async function exportPhotoGallery_Download() {
 </div>`.trim());
             }
 
-            // Survey thumb for the top “master cards” area
-            const thumbDataUrl =
-                heroDataUrl ||
-                (thumbCards[0]?.match(/src="([^"]+)"/)?.[1] || '');
+            // Master card thumb priority:
+            // Survey photo thumb -> Find thumb -> Target thumb
+            const thumbDataUrl = heroThumbUrl || firstFindThumb || firstTargetThumb || '';
 
             const surveyHeroHtml = heroDataUrl
                 ? `<div class="heroWrap"><img class="heroImg" src="${heroDataUrl}" alt="Survey photo"></div>`
@@ -1314,16 +1379,14 @@ async function exportPhotoGallery_Download() {
             built.push(await buildSingleSurveyHtml(s));
         }
 
-        // If A is unchecked:
-        // - if 1 survey: download that one gallery file
-        // - if multiple: download one file per survey (no index.html)
+        // If A is unchecked: download one HTML per survey (or single)
         if (!createIndex) {
             if (built.length === 1) {
                 const one = built[0];
                 const now = new Date();
                 const page = wrapHtmlDocument({
                     title: `Gallery — ${one.title}`,
-                    topCardsHtml: '', // no master cards
+                    topCardsHtml: '',
                     bodyHtml: one.sectionHtml,
                     exportedText: `Exported ${now.toLocaleString()}`
                 });
@@ -1347,7 +1410,7 @@ async function exportPhotoGallery_Download() {
             return;
         }
 
-        // A is checked: create ONE index.html with master thumbnails + embedded sections (anchor links)
+        // A is checked: create ONE index.html with master thumbnails + embedded sections
         const cardsHtml = built.map(b => `
 <a class="cardTop" href="#${b.sid}">
   <div class="thumb">
@@ -1386,83 +1449,7 @@ async function exportPhotoGallery_Download() {
             btn.innerText = originalBtnText || 'Export Gallery to Downloads';
         }
     }
-
-    // Wrap helper defined inside so you only paste ONE function
-    function wrapHtmlDocument({ title, topCardsHtml, bodyHtml, exportedText }) {
-        return `
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<style>
-  /* Base */
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
-  a{color:inherit}
-  header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:10}
-  h1{margin:0;font-size:20px}
-  .sub{margin:6px 0 0;color:#333;font-size:13px}
-  main{padding:16px;max-width:1100px;margin:0 auto}
-
-  /* Top master cards */
-  .gridTop{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
-  a.cardTop{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
-  .thumb{aspect-ratio:4/3;background:#eee;display:flex;align-items:center;justify-content:center}
-  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-  .noThumb{padding:12px;color:#555;font-size:12px;text-align:center}
-  .meta{padding:10px 12px}
-  .title{font-weight:800;font-size:14px;line-height:1.2}
-  .hint{font-size:12px;color:#555;margin-top:4px}
-
-  /* Survey sections */
-  .surveySection{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:18px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  .surveyHeaderTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .surveyTitle{margin:0;font-size:18px}
-  .backTop{font-size:12px;color:#111;text-decoration:underline}
-  .surveyDesc{margin:8px 0 0;color:#222;font-size:13px}
-  .surveyMeta{margin:8px 0 0;color:#222;font-size:12px;display:flex;gap:12px;flex-wrap:wrap}
-  .muted{color:#333;font-size:13px}
-
-  /* Thumbnails grid (THIS is what you wanted) */
-  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
-  @media (max-width:420px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
-
-  a.thumbLink{display:block;text-decoration:none}
-  a.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.05)}
-  a.card img{width:100%;height:120px;object-fit:cover;display:block}
-  .noimg{height:120px;display:flex;align-items:center;justify-content:center;color:#555;background:#f1f5f9;font-size:12px}
-
-  .cap{padding:8px 10px}
-  .tTitle{font-weight:800;font-size:13px;line-height:1.2;color:#111}
-  .metaLine{font-size:12px;color:#333;margin-top:3px}
-
-  /* Full photo detail blocks */
-  h3{margin:18px 0 8px;font-size:14px;color:#111}
-  .detail{margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb}
-  .back{font-size:12px;color:#111;margin-bottom:8px}
-  .back a{text-decoration:underline}
-  .sep{display:inline-block;margin:0 8px;color:#555}
-  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:10px;display:block}
-  .metaList{margin:10px 0 0;padding-left:18px;color:#111;font-size:13px}
-  .metaList li{margin:4px 0}
-</style>
-</head>
-<body>
-<a id="top"></a>
-<header>
-  <h1>Photo Galleries</h1>
-  <p class="sub">${escapeHtml(exportedText || '')} — self-contained (phone safe)</p>
-</header>
-<main>
-  ${topCardsHtml ? `<div class="gridTop">${topCardsHtml}</div>` : ``}
-  ${bodyHtml || ''}
-</main>
-</body>
-</html>`.trim();
-    }
 }
-
 
 
         
