@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v24</title>
+    <title>DIG IT! v25</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1017,23 +1017,7 @@ let navOverlaySettings = {
     belowOffsetPct: 6   // default
 };
 
-function downloadBlob(filename, blob) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
 
-    setTimeout(() => {
-        URL.revokeObjectURL(url);
-        a.remove();
-    }, 1000);
-}
-
-function downloadTextFile(filename, text, mime = 'text/html') {
-    downloadBlob(filename, new Blob([text], { type: mime }));
-}
 async function exportPhotoGallery_Download() {
     const logBox = document.getElementById('export-photo-gallery-log');
     const btn = document.getElementById('export-gallery-download-btn');
@@ -1047,13 +1031,13 @@ async function exportPhotoGallery_Download() {
     if (logBox) logBox.value = '';
 
     // ---- Read checkboxes A–G ----
-    const createIndex     = !!document.getElementById('gallery-dl-create-index')?.checked;
-    const exportOpen      = !!document.getElementById('gallery-dl-export-open')?.checked;
-    const exportOther     = !!document.getElementById('gallery-dl-export-other')?.checked;
-    const includeTargets  = !!document.getElementById('gallery-dl-include-targets')?.checked;
-    const includeFinds    = !!document.getElementById('gallery-dl-include-finds')?.checked;
-    const writeTargetJpgs = !!document.getElementById('gallery-dl-write-target-jpgs')?.checked;
-    const writeFindJpgs   = !!document.getElementById('gallery-dl-write-find-jpgs')?.checked;
+    const createIndex      = !!document.getElementById('gallery-dl-create-index')?.checked;      // A
+    const exportOpen       = !!document.getElementById('gallery-dl-export-open')?.checked;       // B
+    const exportOther      = !!document.getElementById('gallery-dl-export-other')?.checked;      // C
+    const includeTargets   = !!document.getElementById('gallery-dl-include-targets')?.checked;   // D
+    const includeFinds     = !!document.getElementById('gallery-dl-include-finds')?.checked;     // E
+    const writeTargetJpgs  = !!document.getElementById('gallery-dl-write-target-jpgs')?.checked; // F
+    const writeFindJpgs    = !!document.getElementById('gallery-dl-write-find-jpgs')?.checked;   // G
 
     const maxW = (typeof getMaxPhotoWidth === 'function') ? getMaxPhotoWidth() : 1000;
 
@@ -1063,11 +1047,15 @@ async function exportPhotoGallery_Download() {
         return;
     }
     if (!includeTargets && !includeFinds) {
-        showMessage('Select Targets and/or Finds to include.', 'error');
+        showMessage('Select Targets and/or Finds to include in the gallery.', 'error');
         return;
     }
     if (typeof resolvePhotoBlob !== 'function' || typeof resizeBlobToMaxWidthJpeg !== 'function') {
         showMessage('Photo helpers missing (resolvePhotoBlob / resizeBlobToMaxWidthJpeg).', 'error');
+        return;
+    }
+    if (typeof downloadBlob !== 'function' || typeof downloadTextFile !== 'function') {
+        showMessage('Download helpers missing (downloadBlob / downloadTextFile).', 'error');
         return;
     }
 
@@ -1078,12 +1066,19 @@ async function exportPhotoGallery_Download() {
         btn.innerText = 'Exporting…';
     }
 
+    // ---- Helpers ----
     const escapeHtml = (s) => String(s ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+
+    const safeSlug = (s) => String(s ?? 'survey')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50) || 'survey';
 
     const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -1092,132 +1087,333 @@ async function exportPhotoGallery_Download() {
         r.readAsDataURL(blob);
     });
 
-    async function photoRefToDataUrl(ref) {
-        if (!ref) return '';
+    // Collect photo refs from modern + legacy fields
+    function collectPhotoRefs(obj, kind) {
+        const out = [];
+        const add = (v) => {
+            if (!v) return;
+            if (Array.isArray(v)) { v.forEach(add); return; }
+            const s = String(v).trim();
+            if (!s) return;
+            out.push(s);
+        };
+
+        // Modern arrays
+        add(obj?.photos);
+        add(obj?.photoRefs);
+
+        // Generic legacy singles
+        add(obj?.photoRef);
+        add(obj?.photoData);
+        add(obj?.photoDataUrl);
+
+        if (kind === 'survey') {
+            add(obj?.surveyPhotoRef);
+            add(obj?.surveyPhotoData);
+            add(obj?.surveyPhotoDataUrl);
+        }
+        if (kind === 'find') {
+            add(obj?.findPhotoRef);
+            add(obj?.findPhotoData);
+            add(obj?.findPhotoDataUrl);
+            // sometimes copied from targets
+            add(obj?.targetPhotoRef);
+            add(obj?.targetPhotoData);
+            add(obj?.targetPhotoDataUrl);
+        }
+        if (kind === 'target') {
+            add(obj?.targetPhotoRef);
+            add(obj?.targetPhotoData);
+            add(obj?.targetPhotoDataUrl);
+        }
+
+        // dedupe keep order
+        const seen = new Set();
+        const dedup = [];
+        for (const x of out) {
+            if (seen.has(x)) continue;
+            seen.add(x);
+            dedup.push(x);
+        }
+        return dedup;
+    }
+
+    // Resolve -> resize -> returns { blob, dataUrl } (jpeg)
+    async function refToJpeg(ref) {
+        if (!ref) return null;
         try {
             const raw = await resolvePhotoBlob(ref);
-            if (!raw) return '';
-            const resized = await resizeBlobToMaxWidthJpeg(raw, maxW, 0.85);
-            return await blobToDataUrl(resized);
+            if (!raw) return null;
+            const resizedJpeg = await resizeBlobToMaxWidthJpeg(raw, maxW, 0.85);
+            if (!resizedJpeg) return null;
+            const dataUrl = await blobToDataUrl(resizedJpeg);
+            return { blob: resizedJpeg, dataUrl };
         } catch {
-            return '';
+            return null;
         }
     }
 
-    try {
-        const allSurveys = Array.isArray(surveys) ? surveys : [];
-        const openSurvey = allSurveys.find(s => s.status === 'Open');
-
+    // Choose surveys
+    function pickSurveys() {
+        const all = Array.isArray(surveys) ? surveys : [];
+        const open = all.find(s => s && s.status === 'Open');
         let selected = [];
-        if (exportOpen && openSurvey) selected.push(openSurvey);
-        if (exportOther) selected = selected.concat(allSurveys.filter(s => s.status !== 'Open'));
 
-        // Deduplicate
+        if (exportOpen && open) selected.push(open);
+        if (exportOther) selected = selected.concat(all.filter(s => s && s.status !== 'Open'));
+
+        // dedupe by id
         const seen = new Set();
-        selected = selected.filter(s => {
-            const k = s.id ?? s.name;
-            if (seen.has(k)) return false;
+        const uniq = [];
+        for (const s of selected) {
+            const k = (s?.id != null) ? `id:${s.id}` : `name:${s?.name}`;
+            if (seen.has(k)) continue;
             seen.add(k);
-            return true;
+            uniq.push(s);
+        }
+        return { uniq, openExists: !!open };
+    }
+
+    try {
+        const { uniq: selectedSurveys, openExists } = pickSurveys();
+
+        if (exportOpen && !openExists) {
+            showMessage('No Open survey found (uncheck Export Open Survey or open one).', 'error');
+            return;
+        }
+        if (selectedSurveys.length === 0) {
+            showMessage('No surveys matched your selection.', 'error');
+            return;
+        }
+
+        log(`Surveys selected: ${selectedSurveys.length}`);
+        log(`Include Finds: ${includeFinds ? 'YES' : 'NO'}`);
+        log(`Include Targets: ${includeTargets ? 'YES' : 'NO'}`);
+        log(`Write Find JPGs: ${writeFindJpgs ? 'YES' : 'NO'}`);
+        log(`Write Target JPGs: ${writeTargetJpgs ? 'YES' : 'NO'}`);
+        log(`Max width: ${maxW}px`);
+        log(`Create index.html: ${createIndex ? 'YES' : 'NO'}`);
+        log('---');
+
+        // Build per-survey gallery HTML (embedded images)
+        async function buildSingleSurveyHtml(survey) {
+            const title = survey?.name || 'Survey';
+            const sid = `survey_${String(survey?.id ?? title).replace(/[^a-z0-9]+/gi, '_')}`;
+
+            // Survey hero photos
+            const surveyPhotoRefs = collectPhotoRefs(survey, 'survey');
+            const surveyPhotos = [];
+            for (let i = 0; i < surveyPhotoRefs.length; i++) {
+                const r = await refToJpeg(surveyPhotoRefs[i]);
+                if (!r) continue;
+                surveyPhotos.push(r);
+
+                // No checkbox for “Survey JPGs”, so we don’t download these as JPG files.
+            }
+
+            // Finds photos
+            const findBlocks = [];
+            if (includeFinds) {
+                const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === survey.id);
+                for (const f of linkedFinds) {
+                    const refs = collectPhotoRefs(f, 'find');
+                    for (let p = 0; p < refs.length; p++) {
+                        const r = await refToJpeg(refs[p]);
+                        if (!r) continue;
+
+                        if (writeFindJpgs) {
+                            const fn = `${safeSlug(title)}__find__${safeSlug(f.id ?? 'id')}__p${String(p + 1).padStart(2, '0')}.jpg`;
+                            downloadBlob(fn, r.blob);
+                        }
+
+                        findBlocks.push(`<img class="full" src="${r.dataUrl}" alt="Find photo">`);
+                    }
+                }
+            }
+
+            // Targets photos
+            const targetBlocks = [];
+            if (includeTargets && Array.isArray(survey.targets)) {
+                for (const t of survey.targets) {
+                    const refs = collectPhotoRefs(t, 'target');
+                    for (let p = 0; p < refs.length; p++) {
+                        const r = await refToJpeg(refs[p]);
+                        if (!r) continue;
+
+                        if (writeTargetJpgs) {
+                            const fn = `${safeSlug(title)}__target__${safeSlug(t.id ?? 'id')}__p${String(p + 1).padStart(2, '0')}.jpg`;
+                            downloadBlob(fn, r.blob);
+                        }
+
+                        targetBlocks.push(`<img class="full" src="${r.dataUrl}" alt="Target photo">`);
+                    }
+                }
+            }
+
+            // Thumbnail for master cards: first survey photo, else first find/target photo
+            let thumbDataUrl = '';
+            if (surveyPhotos[0]?.dataUrl) thumbDataUrl = surveyPhotos[0].dataUrl;
+            else if (findBlocks[0]) {
+                // extract src from first image tag quickly (safe enough here)
+                const m = findBlocks[0].match(/src="([^"]+)"/);
+                if (m) thumbDataUrl = m[1];
+            } else if (targetBlocks[0]) {
+                const m = targetBlocks[0].match(/src="([^"]+)"/);
+                if (m) thumbDataUrl = m[1];
+            }
+
+            const surveyPhotosHtml = surveyPhotos.map(p => `<img class="full" src="${p.dataUrl}" alt="Survey photo">`).join('\n');
+
+            const html = `
+<section id="${sid}" class="surveySection">
+  <div class="surveyHeader">
+    <h2>${escapeHtml(title)}</h2>
+    <a href="#top">Back to top</a>
+  </div>
+
+  ${surveyPhotosHtml || ''}
+
+  ${includeFinds ? `<h3>Finds</h3>${findBlocks.join('\n')}` : ``}
+  ${includeTargets ? `<h3>Targets</h3>${targetBlocks.join('\n')}` : ``}
+
+  ${(!surveyPhotosHtml && findBlocks.length === 0 && targetBlocks.length === 0)
+      ? `<p class="muted">No photos found.</p>` : ``}
+</section>`.trim();
+
+            return { title, sid, thumbDataUrl, sectionHtml: html };
+        }
+
+        // Build all survey sections
+        const built = [];
+        for (let i = 0; i < selectedSurveys.length; i++) {
+            const s = selectedSurveys[i];
+            log(`[${i + 1}/${selectedSurveys.length}] Processing: ${s?.name || 'Survey'}`);
+            built.push(await buildSingleSurveyHtml(s));
+        }
+
+        // If A is unchecked:
+        // - if 1 survey: download that one gallery file
+        // - if multiple: download one file per survey (no index.html)
+        if (!createIndex) {
+            if (built.length === 1) {
+                const one = built[0];
+                const now = new Date();
+                const page = wrapHtmlDocument({
+                    title: `Gallery — ${one.title}`,
+                    topCardsHtml: '', // no master cards
+                    bodyHtml: one.sectionHtml,
+                    exportedText: `Exported ${now.toLocaleString()}`
+                });
+                downloadTextFile(`gallery__${safeSlug(one.title)}.html`, page, 'text/html');
+                showMessage('Gallery downloaded (single survey).', 'success');
+                log('DONE: downloaded single survey gallery.');
+            } else {
+                for (const one of built) {
+                    const now = new Date();
+                    const page = wrapHtmlDocument({
+                        title: `Gallery — ${one.title}`,
+                        topCardsHtml: '',
+                        bodyHtml: one.sectionHtml,
+                        exportedText: `Exported ${now.toLocaleString()}`
+                    });
+                    downloadTextFile(`gallery__${safeSlug(one.title)}.html`, page, 'text/html');
+                }
+                showMessage('Galleries downloaded (one file per survey).', 'success');
+                log('DONE: downloaded multiple survey gallery files (no index.html).');
+            }
+            return;
+        }
+
+        // A is checked: create ONE index.html with master thumbnails + embedded sections (anchor links)
+        const cardsHtml = built.map(b => `
+<a class="cardTop" href="#${b.sid}">
+  <div class="thumb">
+    ${b.thumbDataUrl
+        ? `<img src="${b.thumbDataUrl}" alt="${escapeHtml(b.title)}">`
+        : `<div class="noThumb">No photo</div>`}
+  </div>
+  <div class="meta">
+    <div class="title">${escapeHtml(b.title)}</div>
+    <div class="hint">Jump to gallery</div>
+  </div>
+</a>
+        `.trim()).join('\n');
+
+        const bodyHtml = built.map(b => b.sectionHtml).join('\n\n');
+
+        const now = new Date();
+        const indexHtml = wrapHtmlDocument({
+            title: 'geoFind Gallery',
+            topCardsHtml: cardsHtml,
+            bodyHtml,
+            exportedText: `Exported ${now.toLocaleString()}`
         });
 
-        log(`Surveys selected: ${selected.length}`);
+        downloadTextFile('index.html', indexHtml, 'text/html');
+        showMessage('index.html downloaded (master gallery).', 'success');
+        log('DONE: downloaded index.html.');
 
-        const cards = [];
-        const sections = [];
-
-        for (const s of selected) {
-            const title = s.name || 'Survey';
-            const sid = `survey_${String(s.id ?? title).replace(/[^a-z0-9]+/gi,'_')}`;
-
-            let thumb = await photoRefToDataUrl(s.surveyPhotoData || s.surveyPhotoRef);
-
-            cards.push(`
-              <a class="cardTop" href="#${sid}">
-                <div class="thumb">
-                  ${thumb ? `<img src="${thumb}">` : `<div class="noThumb">No photo</div>`}
-                </div>
-                <div class="meta">
-                  <div class="title">${escapeHtml(title)}</div>
-                </div>
-              </a>
-            `);
-
-            const photos = [];
-
-            if (includeFinds) {
-                (Array.isArray(finds) ? finds : [])
-                    .filter(f => f.surveyId === s.id)
-                    .forEach(f => {
-                        const refs = Array.isArray(f.photos) ? f.photos : [f.photoData, f.targetPhotoData].filter(Boolean);
-                        refs.forEach(async ref => {
-                            const d = await photoRefToDataUrl(ref);
-                            if (d) photos.push(`<img class="full" src="${d}">`);
-                        });
-                    });
-            }
-
-            if (includeTargets && Array.isArray(s.targets)) {
-                s.targets.forEach(t => {
-                    const refs = Array.isArray(t.photos) ? t.photos : [t.targetPhotoData].filter(Boolean);
-                    refs.forEach(async ref => {
-                        const d = await photoRefToDataUrl(ref);
-                        if (d) photos.push(`<img class="full" src="${d}">`);
-                    });
-                });
-            }
-
-            sections.push(`
-              <section id="${sid}" class="surveySection">
-                <h2>${escapeHtml(title)}</h2>
-                ${photos.length ? photos.join('') : '<p>No photos.</p>'}
-              </section>
-            `);
-        }
-
-        const html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>geoFind Gallery</title>
-<style>
-body{font-family:system-ui;margin:0;background:#f7f7f7}
-header{padding:16px;background:#fff;border-bottom:1px solid #ddd}
-.gridTop{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:16px}
-.cardTop{background:#fff;border-radius:12px;overflow:hidden;text-decoration:none;color:#000}
-.thumb{aspect-ratio:4/3;background:#eee}
-.thumb img{width:100%;height:100%;object-fit:cover}
-.full{width:100%;margin-top:10px}
-.surveySection{padding:16px}
-</style>
-</head>
-<body>
-<header><h1>Photo Gallery</h1></header>
-<div class="gridTop">${cards.join('')}</div>
-${sections.join('')}
-</body>
-</html>`;
-
-        if (createIndex) {
-            downloadTextFile('index.html', html);
-        } else {
-            downloadTextFile(`gallery_${Date.now()}.html`, html);
-        }
-
-        showMessage('Gallery downloaded to Downloads.', 'success');
-        log('DONE');
     } catch (e) {
-        console.error(e);
-        showMessage('Export failed.', 'error');
+        console.error('exportPhotoGallery_Download error:', e);
+        showMessage(`Export failed: ${e.message || e}`, 'error');
+        log(`ERROR: ${e.message || e}`);
     } finally {
         if (btn) {
             btn.disabled = false;
             btn.innerText = originalBtnText || 'Export Gallery to Downloads';
         }
     }
+
+    // Wrap helper defined inside so you only paste ONE function
+    function wrapHtmlDocument({ title, topCardsHtml, bodyHtml, exportedText }) {
+        return `
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
+  header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:10}
+  h1{margin:0;font-size:20px}
+  .sub{margin:6px 0 0;color:#444;font-size:13px}
+  main{padding:16px;max-width:1100px;margin:0 auto}
+
+  .gridTop{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+  a.cardTop{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+  .thumb{aspect-ratio:4/3;background:#eee;display:flex;align-items:center;justify-content:center}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .noThumb{padding:12px;color:#666;font-size:12px;text-align:center}
+  .meta{padding:10px 12px}
+  .title{font-weight:800;font-size:14px;line-height:1.2}
+  .hint{font-size:12px;color:#666;margin-top:4px}
+
+  .surveySection{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:18px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+  .surveyHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .surveyHeader h2{margin:0;font-size:18px}
+  .muted{color:#64748b;font-size:13px}
+
+  h3{margin:18px 0 8px;font-size:14px;color:#111}
+  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:12px;display:block}
+</style>
+</head>
+<body>
+<a id="top"></a>
+<header>
+  <h1>Photo Galleries</h1>
+  <p class="sub">${escapeHtml(exportedText || '')} — self-contained (phone safe)</p>
+</header>
+<main>
+  ${topCardsHtml ? `<div class="gridTop">${topCardsHtml}</div>` : ``}
+  ${bodyHtml || ''}
+</main>
+</body>
+</html>`.trim();
+    }
 }
+
+
 
         
     function downloadTextFile(filename, text, mime = 'text/plain') {
