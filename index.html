@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v25</title>
+    <title>DIG IT! v26</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1416,21 +1416,39 @@ async function exportPhotoGallery_Download() {
 
 
         
-    function downloadTextFile(filename, text, mime = 'text/plain') {
-    const blob = new Blob([text], { type: mime });
-    const url = URL.createObjectURL(blob);
+// ================================
+// DOWNLOAD HELPERS (Gallery export)
+// ================================
+function downloadBlob(filename, blob) {
+    try {
+        const url = URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
 
-    setTimeout(() => {
-        URL.revokeObjectURL(url);
-        a.remove();
-    }, 1000);
+        // Some browsers behave better if it's in the DOM
+        document.body.appendChild(a);
+        a.click();
+
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+            a.remove();
+        }, 1000);
+    } catch (e) {
+        console.error('downloadBlob failed:', e);
+        showMessage?.(`Download failed: ${e?.message || e}`, 'error');
+    }
 }
+
+function downloadTextFile(filename, text, mime = 'text/plain') {
+    const blob = new Blob([text], { type: mime });
+    downloadBlob(filename, blob);
+}
+
+// ---- Compatibility aliases (common typos / older code paths) ----
+window.downloadBlod = downloadBlob;          // typo safety
+window.downloadTextfile = downloadTextFile;  // case/typo safety
 
 /**
  * Phone-safe export: creates ONE self-contained HTML file (no folder handles).
