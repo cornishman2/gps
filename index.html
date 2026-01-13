@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v28</title>
+    <title>DIG IT! v29</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1087,57 +1087,6 @@ async function exportPhotoGallery_Download() {
         r.readAsDataURL(blob);
     });
 
-    // Collect photo refs from modern + legacy fields
-    function collectPhotoRefs(obj, kind) {
-        const out = [];
-        const add = (v) => {
-            if (!v) return;
-            if (Array.isArray(v)) { v.forEach(add); return; }
-            const s = String(v).trim();
-            if (!s) return;
-            out.push(s);
-        };
-
-        // Modern arrays
-        add(obj?.photos);
-        add(obj?.photoRefs);
-
-        // Generic legacy singles
-        add(obj?.photoRef);
-        add(obj?.photoData);
-        add(obj?.photoDataUrl);
-
-        if (kind === 'survey') {
-            add(obj?.surveyPhotoRef);
-            add(obj?.surveyPhotoData);
-            add(obj?.surveyPhotoDataUrl);
-        }
-        if (kind === 'find') {
-            add(obj?.findPhotoRef);
-            add(obj?.findPhotoData);
-            add(obj?.findPhotoDataUrl);
-            // sometimes copied from targets
-            add(obj?.targetPhotoRef);
-            add(obj?.targetPhotoData);
-            add(obj?.targetPhotoDataUrl);
-        }
-        if (kind === 'target') {
-            add(obj?.targetPhotoRef);
-            add(obj?.targetPhotoData);
-            add(obj?.targetPhotoDataUrl);
-        }
-
-        // dedupe keep order
-        const seen = new Set();
-        const dedup = [];
-        for (const x of out) {
-            if (seen.has(x)) continue;
-            seen.add(x);
-            dedup.push(x);
-        }
-        return dedup;
-    }
-
     // Resolve -> resize -> returns { blob, dataUrl } (jpeg)
     async function refToJpeg(ref) {
         if (!ref) return null;
@@ -1195,122 +1144,125 @@ async function exportPhotoGallery_Download() {
         log(`Create index.html: ${createIndex ? 'YES' : 'NO'}`);
         log('---');
 
-async function buildSingleSurveyHtml(s) {
-    const title = s?.name || 'Survey';
+        async function buildSingleSurveyHtml(s) {
+            const title = s?.name || 'Survey';
 
-    // Safe anchor IDs
-    const safeId = (v) => String(v ?? '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 80) || 'item';
+            // Safe anchor IDs
+            const safeId = (v) => String(v ?? '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 80) || 'item';
 
-    const sid = `survey-${safeId(s?.id ?? title)}`;
+            const sid = `survey-${safeId(s?.id ?? title)}`;
 
-    // Convert a photoRef -> dataUrl at a requested size
-    async function photoRefToDataUrlSized(photoRef, maxWidthPx) {
-        if (!photoRef) return '';
-        try {
-            const raw = await resolvePhotoBlob(photoRef);
-            if (!raw) return '';
-            const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
-            if (!resized) return '';
-            return await blobToDataUrl(resized);
-        } catch (e) {
-            return '';
-        }
-    }
-
-    // Collect survey hero photo (first one)
-    const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
-    const heroDataUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, maxW) : '';
-
-    // Build photo items (each one becomes: a thumb card + a full detail block)
-    const items = [];
-
-    // Finds
-    if (includeFinds) {
-        const sf = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === s.id);
-        for (const f of sf) {
-            const refs = Array.isArray(f.photos) && f.photos.length
-                ? f.photos
-                : [f.photoData, f.targetPhotoData, f.photoDataUrl].filter(Boolean);
-
-            for (let i = 0; i < refs.length; i++) {
-                items.push({
-                    kind: 'Find',
-                    parentId: f.id,
-                    indexInParent: i + 1,
-                    title: f.description || `Find ${f.id}`,
-                    type: f.type || '',
-                    vdi: f.vdi || '',
-                    depth: f.depth || '',
-                    coords: f.coordinates || '',
-                    accuracy: f.accuracy || '',
-                    photoRef: refs[i]
-                });
+            // Convert a photoRef -> dataUrl at a requested size
+            async function photoRefToDataUrlSized(photoRef, maxWidthPx) {
+                if (!photoRef) return '';
+                try {
+                    const raw = await resolvePhotoBlob(photoRef);
+                    if (!raw) return '';
+                    const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
+                    if (!resized) return '';
+                    return await blobToDataUrl(resized);
+                } catch (e) {
+                    return '';
+                }
             }
-        }
-    }
 
-    // Targets
-    if (includeTargets && Array.isArray(s?.targets)) {
-        for (const t of s.targets) {
-            const refs = Array.isArray(t.photos) && t.photos.length
-                ? t.photos
-                : [t.targetPhotoData, t.photoDataUrl, t.photoRef].filter(Boolean);
+            // Collect survey hero photo (first one)
+            const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
+            const heroDataUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, maxW) : '';
 
-            for (let i = 0; i < refs.length; i++) {
-                items.push({
-                    kind: 'Target',
-                    parentId: t.id,
-                    indexInParent: i + 1,
-                    title: t.description || `Target ${t.id}`,
-                    type: t.type || '',
-                    vdi: t.vdi || '',
-                    depth: t.depth || '',
-                    coords: t.coordinates || '',
-                    accuracy: t.accuracy || '',
-                    photoRef: refs[i]
-                });
+            // Build photo items
+            const items = [];
+
+            // Finds
+            if (includeFinds) {
+                const sf = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === s.id);
+                for (const f of sf) {
+                    const refs = Array.isArray(f.photos) && f.photos.length
+                        ? f.photos
+                        : [f.photoData, f.targetPhotoData, f.photoDataUrl].filter(Boolean);
+
+                    for (let i = 0; i < refs.length; i++) {
+                        items.push({
+                            kind: 'Find',
+                            parentId: f.id,
+                            indexInParent: i + 1,
+                            title: f.description || `Find ${f.id}`,
+                            type: f.type || '',
+                            vdi: f.vdi || '',
+                            depth: f.depth || '',
+                            coords: f.coordinates || '',
+                            accuracy: f.accuracy || '',
+                            photoRef: refs[i]
+                        });
+                    }
+                }
             }
-        }
-    }
 
-    // Create thumbnail cards + full detail sections
-    const thumbCards = [];
-    const fullBlocks = [];
+            // Targets
+            if (includeTargets && Array.isArray(s?.targets)) {
+                for (const t of s.targets) {
+                    const refs = Array.isArray(t.photos) && t.photos.length
+                        ? t.photos
+                        : [t.targetPhotoData, t.photoDataUrl, t.photoRef].filter(Boolean);
 
-    for (let n = 0; n < items.length; n++) {
-        const it = items[n];
-        const pid = `${sid}-${safeId(it.kind)}-${safeId(it.parentId)}-${it.indexInParent}`;
-        const thumbUrl = await photoRefToDataUrlSized(it.photoRef, 420); // smaller thumbs
-        const fullUrl  = await photoRefToDataUrlSized(it.photoRef, maxW); // big image
+                    for (let i = 0; i < refs.length; i++) {
+                        items.push({
+                            kind: 'Target',
+                            parentId: t.id,
+                            indexInParent: i + 1,
+                            title: t.description || `Target ${t.id}`,
+                            type: t.type || '',
+                            vdi: t.vdi || '',
+                            depth: t.depth || '',
+                            coords: t.coordinates || '',
+                            accuracy: t.accuracy || '',
+                            photoRef: refs[i]
+                        });
+                    }
+                }
+            }
 
-        // Thumbnail card (brief info) -> links to full block
-        thumbCards.push(`
+            // Create thumbnail cards + full detail sections
+            const thumbCards = [];
+            const fullBlocks = [];
+
+            for (let n = 0; n < items.length; n++) {
+                const it = items[n];
+                const pid = `${sid}-${safeId(it.kind)}-${safeId(it.parentId)}-${it.indexInParent}`;
+
+                // Smaller thumbnail than before
+                const thumbUrl = await photoRefToDataUrlSized(it.photoRef, 320);
+                const fullUrl  = await photoRefToDataUrlSized(it.photoRef, maxW);
+
+                thumbCards.push(`
 <a class="thumbLink card" href="#${pid}">
   ${thumbUrl
       ? `<img src="${thumbUrl}" alt="${escapeHtml(it.kind)} photo">`
       : `<div class="noimg">No photo</div>`
   }
   <div class="cap">
-    <div class="title">${escapeHtml(it.kind)} — ${escapeHtml(it.title)}</div>
-    <div class="metaLine">${escapeHtml(it.type ? `Type: ${it.type}` : '')}</div>
-    <div class="metaLine">${escapeHtml(it.vdi ? `VDI: ${it.vdi}` : '')} ${escapeHtml(it.depth ? `Depth: ${it.depth}` : '')}</div>
+    <div class="tTitle">${escapeHtml(it.kind)} — ${escapeHtml(it.title)}</div>
+    ${it.type ? `<div class="metaLine">Type: ${escapeHtml(it.type)}</div>` : `<div class="metaLine">&nbsp;</div>`}
+    <div class="metaLine">
+      ${it.vdi ? `VDI: ${escapeHtml(it.vdi)}` : ''}
+      ${it.depth ? `&nbsp;&nbsp;Depth: ${escapeHtml(it.depth)}` : ''}
+    </div>
   </div>
 </a>`.trim());
 
-        // Full detail block (full info) + back links
-        fullBlocks.push(`
+                fullBlocks.push(`
 <div class="detail" id="${pid}">
   <div class="back">
     <a href="#${sid}-thumbs">Back to thumbnails</a>
-    &nbsp;|&nbsp;
+    <span class="sep">|</span>
     <a href="#top">Top</a>
   </div>
   ${fullUrl ? `<img class="full" src="${fullUrl}" alt="${escapeHtml(it.kind)} photo">` : ''}
-  <ul class="meta">
+  <ul class="metaList">
     <li><strong>Kind:</strong> ${escapeHtml(it.kind)}</li>
     <li><strong>Title:</strong> ${escapeHtml(it.title)}</li>
     ${it.type ? `<li><strong>Type:</strong> ${escapeHtml(it.type)}</li>` : ''}
@@ -1320,18 +1272,18 @@ async function buildSingleSurveyHtml(s) {
     ${it.accuracy ? `<li><strong>Accuracy:</strong> ${escapeHtml(it.accuracy)}</li>` : ''}
   </ul>
 </div>`.trim());
-    }
+            }
 
-    // Survey thumb for the top “master cards” area
-    const thumbDataUrl =
-        heroDataUrl ||
-        (thumbCards[0]?.match(/src="([^"]+)"/)?.[1] || '');
+            // Survey thumb for the top “master cards” area
+            const thumbDataUrl =
+                heroDataUrl ||
+                (thumbCards[0]?.match(/src="([^"]+)"/)?.[1] || '');
 
-    const surveyHeroHtml = heroDataUrl
-        ? `<div class="heroWrap"><img class="heroImg" src="${heroDataUrl}" alt="Survey photo"></div>`
-        : '';
+            const surveyHeroHtml = heroDataUrl
+                ? `<div class="heroWrap"><img class="heroImg" src="${heroDataUrl}" alt="Survey photo"></div>`
+                : '';
 
-    const surveyInfoHtml = `
+            const surveyInfoHtml = `
 <div class="surveySection" id="${sid}">
   <div class="surveyHeaderTop">
     <h2 class="surveyTitle">${escapeHtml(title)}</h2>
@@ -1351,8 +1303,8 @@ async function buildSingleSurveyHtml(s) {
   ${thumbCards.length ? `<h3>Full Photos</h3>${fullBlocks.join('')}` : ``}
 </div>`.trim();
 
-    return { title, sid, thumbDataUrl, sectionHtml: surveyInfoHtml };
-}
+            return { title, sid, thumbDataUrl, sectionHtml: surveyInfoHtml };
+        }
 
         // Build all survey sections
         const built = [];
@@ -1445,28 +1397,55 @@ async function buildSingleSurveyHtml(s) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <style>
+  /* Base */
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
+  a{color:inherit}
   header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:10}
   h1{margin:0;font-size:20px}
-  .sub{margin:6px 0 0;color:#444;font-size:13px}
+  .sub{margin:6px 0 0;color:#333;font-size:13px}
   main{padding:16px;max-width:1100px;margin:0 auto}
 
+  /* Top master cards */
   .gridTop{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
   a.cardTop{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
   .thumb{aspect-ratio:4/3;background:#eee;display:flex;align-items:center;justify-content:center}
   .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-  .noThumb{padding:12px;color:#666;font-size:12px;text-align:center}
+  .noThumb{padding:12px;color:#555;font-size:12px;text-align:center}
   .meta{padding:10px 12px}
   .title{font-weight:800;font-size:14px;line-height:1.2}
-  .hint{font-size:12px;color:#666;margin-top:4px}
+  .hint{font-size:12px;color:#555;margin-top:4px}
 
+  /* Survey sections */
   .surveySection{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:18px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  .surveyHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .surveyHeader h2{margin:0;font-size:18px}
-  .muted{color:#64748b;font-size:13px}
+  .surveyHeaderTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .surveyTitle{margin:0;font-size:18px}
+  .backTop{font-size:12px;color:#111;text-decoration:underline}
+  .surveyDesc{margin:8px 0 0;color:#222;font-size:13px}
+  .surveyMeta{margin:8px 0 0;color:#222;font-size:12px;display:flex;gap:12px;flex-wrap:wrap}
+  .muted{color:#333;font-size:13px}
 
+  /* Thumbnails grid (THIS is what you wanted) */
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+  @media (max-width:420px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+
+  a.thumbLink{display:block;text-decoration:none}
+  a.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+  a.card img{width:100%;height:120px;object-fit:cover;display:block}
+  .noimg{height:120px;display:flex;align-items:center;justify-content:center;color:#555;background:#f1f5f9;font-size:12px}
+
+  .cap{padding:8px 10px}
+  .tTitle{font-weight:800;font-size:13px;line-height:1.2;color:#111}
+  .metaLine{font-size:12px;color:#333;margin-top:3px}
+
+  /* Full photo detail blocks */
   h3{margin:18px 0 8px;font-size:14px;color:#111}
-  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:12px;display:block}
+  .detail{margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb}
+  .back{font-size:12px;color:#111;margin-bottom:8px}
+  .back a{text-decoration:underline}
+  .sep{display:inline-block;margin:0 8px;color:#555}
+  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:10px;display:block}
+  .metaList{margin:10px 0 0;padding-left:18px;color:#111;font-size:13px}
+  .metaList li{margin:4px 0}
 </style>
 </head>
 <body>
