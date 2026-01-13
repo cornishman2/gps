@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v26</title>
+    <title>DIG IT! v27</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1195,93 +1195,164 @@ async function exportPhotoGallery_Download() {
         log(`Create index.html: ${createIndex ? 'YES' : 'NO'}`);
         log('---');
 
-        // Build per-survey gallery HTML (embedded images)
-        async function buildSingleSurveyHtml(survey) {
-            const title = survey?.name || 'Survey';
-            const sid = `survey_${String(survey?.id ?? title).replace(/[^a-z0-9]+/gi, '_')}`;
+async function buildSingleSurveyHtml(s) {
+    const title = s?.name || 'Survey';
 
-            // Survey hero photos
-            const surveyPhotoRefs = collectPhotoRefs(survey, 'survey');
-            const surveyPhotos = [];
-            for (let i = 0; i < surveyPhotoRefs.length; i++) {
-                const r = await refToJpeg(surveyPhotoRefs[i]);
-                if (!r) continue;
-                surveyPhotos.push(r);
+    // Safe anchor IDs
+    const safeId = (v) => String(v ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || 'item';
 
-                // No checkbox for “Survey JPGs”, so we don’t download these as JPG files.
+    const sid = `survey-${safeId(s?.id ?? title)}`;
+
+    // Convert a photoRef -> dataUrl at a requested size
+    async function photoRefToDataUrlSized(photoRef, maxWidthPx) {
+        if (!photoRef) return '';
+        try {
+            const raw = await resolvePhotoBlob(photoRef);
+            if (!raw) return '';
+            const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
+            if (!resized) return '';
+            return await blobToDataUrl(resized);
+        } catch (e) {
+            return '';
+        }
+    }
+
+    // Collect survey hero photo (first one)
+    const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
+    const heroDataUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, maxW) : '';
+
+    // Build photo items (each one becomes: a thumb card + a full detail block)
+    const items = [];
+
+    // Finds
+    if (includeFinds) {
+        const sf = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === s.id);
+        for (const f of sf) {
+            const refs = Array.isArray(f.photos) && f.photos.length
+                ? f.photos
+                : [f.photoData, f.targetPhotoData, f.photoDataUrl].filter(Boolean);
+
+            for (let i = 0; i < refs.length; i++) {
+                items.push({
+                    kind: 'Find',
+                    parentId: f.id,
+                    indexInParent: i + 1,
+                    title: f.description || `Find ${f.id}`,
+                    type: f.type || '',
+                    vdi: f.vdi || '',
+                    depth: f.depth || '',
+                    coords: f.coordinates || '',
+                    accuracy: f.accuracy || '',
+                    photoRef: refs[i]
+                });
             }
+        }
+    }
 
-            // Finds photos
-            const findBlocks = [];
-            if (includeFinds) {
-                const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === survey.id);
-                for (const f of linkedFinds) {
-                    const refs = collectPhotoRefs(f, 'find');
-                    for (let p = 0; p < refs.length; p++) {
-                        const r = await refToJpeg(refs[p]);
-                        if (!r) continue;
+    // Targets
+    if (includeTargets && Array.isArray(s?.targets)) {
+        for (const t of s.targets) {
+            const refs = Array.isArray(t.photos) && t.photos.length
+                ? t.photos
+                : [t.targetPhotoData, t.photoDataUrl, t.photoRef].filter(Boolean);
 
-                        if (writeFindJpgs) {
-                            const fn = `${safeSlug(title)}__find__${safeSlug(f.id ?? 'id')}__p${String(p + 1).padStart(2, '0')}.jpg`;
-                            downloadBlob(fn, r.blob);
-                        }
-
-                        findBlocks.push(`<img class="full" src="${r.dataUrl}" alt="Find photo">`);
-                    }
-                }
+            for (let i = 0; i < refs.length; i++) {
+                items.push({
+                    kind: 'Target',
+                    parentId: t.id,
+                    indexInParent: i + 1,
+                    title: t.description || `Target ${t.id}`,
+                    type: t.type || '',
+                    vdi: t.vdi || '',
+                    depth: t.depth || '',
+                    coords: t.coordinates || '',
+                    accuracy: t.accuracy || '',
+                    photoRef: refs[i]
+                });
             }
+        }
+    }
 
-            // Targets photos
-            const targetBlocks = [];
-            if (includeTargets && Array.isArray(survey.targets)) {
-                for (const t of survey.targets) {
-                    const refs = collectPhotoRefs(t, 'target');
-                    for (let p = 0; p < refs.length; p++) {
-                        const r = await refToJpeg(refs[p]);
-                        if (!r) continue;
+    // Create thumbnail cards + full detail sections
+    const thumbCards = [];
+    const fullBlocks = [];
 
-                        if (writeTargetJpgs) {
-                            const fn = `${safeSlug(title)}__target__${safeSlug(t.id ?? 'id')}__p${String(p + 1).padStart(2, '0')}.jpg`;
-                            downloadBlob(fn, r.blob);
-                        }
+    for (let n = 0; n < items.length; n++) {
+        const it = items[n];
+        const pid = `${sid}-${safeId(it.kind)}-${safeId(it.parentId)}-${it.indexInParent}`;
+        const thumbUrl = await photoRefToDataUrlSized(it.photoRef, 420); // smaller thumbs
+        const fullUrl  = await photoRefToDataUrlSized(it.photoRef, maxW); // big image
 
-                        targetBlocks.push(`<img class="full" src="${r.dataUrl}" alt="Target photo">`);
-                    }
-                }
-            }
+        // Thumbnail card (brief info) -> links to full block
+        thumbCards.push(`
+<a class="thumbLink card" href="#${pid}">
+  ${thumbUrl
+      ? `<img src="${thumbUrl}" alt="${escapeHtml(it.kind)} photo">`
+      : `<div class="noimg">No photo</div>`
+  }
+  <div class="cap">
+    <div class="title">${escapeHtml(it.kind)} — ${escapeHtml(it.title)}</div>
+    <div class="metaLine">${escapeHtml(it.type ? `Type: ${it.type}` : '')}</div>
+    <div class="metaLine">${escapeHtml(it.vdi ? `VDI: ${it.vdi}` : '')} ${escapeHtml(it.depth ? `Depth: ${it.depth}` : '')}</div>
+  </div>
+</a>`.trim());
 
-            // Thumbnail for master cards: first survey photo, else first find/target photo
-            let thumbDataUrl = '';
-            if (surveyPhotos[0]?.dataUrl) thumbDataUrl = surveyPhotos[0].dataUrl;
-            else if (findBlocks[0]) {
-                // extract src from first image tag quickly (safe enough here)
-                const m = findBlocks[0].match(/src="([^"]+)"/);
-                if (m) thumbDataUrl = m[1];
-            } else if (targetBlocks[0]) {
-                const m = targetBlocks[0].match(/src="([^"]+)"/);
-                if (m) thumbDataUrl = m[1];
-            }
+        // Full detail block (full info) + back links
+        fullBlocks.push(`
+<div class="detail" id="${pid}">
+  <div class="back">
+    <a href="#${sid}-thumbs">Back to thumbnails</a>
+    &nbsp;|&nbsp;
+    <a href="#top">Top</a>
+  </div>
+  ${fullUrl ? `<img class="full" src="${fullUrl}" alt="${escapeHtml(it.kind)} photo">` : ''}
+  <ul class="meta">
+    <li><strong>Kind:</strong> ${escapeHtml(it.kind)}</li>
+    <li><strong>Title:</strong> ${escapeHtml(it.title)}</li>
+    ${it.type ? `<li><strong>Type:</strong> ${escapeHtml(it.type)}</li>` : ''}
+    ${it.vdi ? `<li><strong>VDI:</strong> ${escapeHtml(it.vdi)}</li>` : ''}
+    ${it.depth ? `<li><strong>Depth:</strong> ${escapeHtml(it.depth)}</li>` : ''}
+    ${it.coords ? `<li><strong>GPS:</strong> ${escapeHtml(it.coords)}</li>` : ''}
+    ${it.accuracy ? `<li><strong>Accuracy:</strong> ${escapeHtml(it.accuracy)}</li>` : ''}
+  </ul>
+</div>`.trim());
+    }
 
-            const surveyPhotosHtml = surveyPhotos.map(p => `<img class="full" src="${p.dataUrl}" alt="Survey photo">`).join('\n');
+    // Survey thumb for the top “master cards” area
+    const thumbDataUrl =
+        heroDataUrl ||
+        (thumbCards[0]?.match(/src="([^"]+)"/)?.[1] || '');
 
-            const html = `
-<section id="${sid}" class="surveySection">
-  <div class="surveyHeader">
-    <h2>${escapeHtml(title)}</h2>
-    <a href="#top">Back to top</a>
+    const surveyHeroHtml = heroDataUrl
+        ? `<div class="heroWrap"><img class="heroImg" src="${heroDataUrl}" alt="Survey photo"></div>`
+        : '';
+
+    const surveyInfoHtml = `
+<div class="surveySection" id="${sid}">
+  <div class="surveyHeaderTop">
+    <h2 class="surveyTitle">${escapeHtml(title)}</h2>
+    <a class="backTop" href="#top">Back to top</a>
+  </div>
+  ${s?.description ? `<div class="surveyDesc">${escapeHtml(s.description)}</div>` : ''}
+  <div class="surveyMeta">
+    ${s?.status ? `<span><strong>Status:</strong> ${escapeHtml(s.status)}</span>` : ''}
+    ${s?.dateCreated ? `<span><strong>Created:</strong> ${escapeHtml(formatDate(s.dateCreated))}</span>` : ''}
   </div>
 
-  ${surveyPhotosHtml || ''}
+  ${surveyHeroHtml}
 
-  ${includeFinds ? `<h3>Finds</h3>${findBlocks.join('\n')}` : ``}
-  ${includeTargets ? `<h3>Targets</h3>${targetBlocks.join('\n')}` : ``}
+  <h3 id="${sid}-thumbs">Thumbnails</h3>
+  ${thumbCards.length ? `<div class="grid">${thumbCards.join('')}</div>` : `<p class="muted">No photos found.</p>`}
 
-  ${(!surveyPhotosHtml && findBlocks.length === 0 && targetBlocks.length === 0)
-      ? `<p class="muted">No photos found.</p>` : ``}
-</section>`.trim();
+  ${thumbCards.length ? `<h3>Full Photos</h3>${fullBlocks.join('')}` : ``}
+</div>`.trim();
 
-            return { title, sid, thumbDataUrl, sectionHtml: html };
-        }
+    return { title, sid, thumbDataUrl, sectionHtml: surveyInfoHtml };
+}
 
         // Build all survey sections
         const built = [];
