@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 
-    <title>DIG IT! v31</title>
+    <title>DIG IT! v32</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
@@ -1036,8 +1036,8 @@ async function exportPhotoGallery_Download() {
     const exportOther      = !!document.getElementById('gallery-dl-export-other')?.checked;      // C
     const includeTargets   = !!document.getElementById('gallery-dl-include-targets')?.checked;   // D
     const includeFinds     = !!document.getElementById('gallery-dl-include-finds')?.checked;     // E
-    const writeTargetJpgs  = !!document.getElementById('gallery-dl-write-target-jpgs')?.checked; // F (unused here)
-    const writeFindJpgs    = !!document.getElementById('gallery-dl-write-find-jpgs')?.checked;   // G (unused here)
+    const writeTargetJpgs  = !!document.getElementById('gallery-dl-write-target-jpgs')?.checked; // F
+    const writeFindJpgs    = !!document.getElementById('gallery-dl-write-find-jpgs')?.checked;   // G
 
     const maxW = (typeof getMaxPhotoWidth === 'function') ? getMaxPhotoWidth() : 1000;
 
@@ -1050,12 +1050,16 @@ async function exportPhotoGallery_Download() {
         showMessage('Select Targets and/or Finds to include in the gallery.', 'error');
         return;
     }
+    if (typeof JSZip === 'undefined') {
+        showMessage('ZIP export needs JSZip (the JSZip <script> tag).', 'error');
+        return;
+    }
     if (typeof resolvePhotoBlob !== 'function' || typeof resizeBlobToMaxWidthJpeg !== 'function') {
         showMessage('Photo helpers missing (resolvePhotoBlob / resizeBlobToMaxWidthJpeg).', 'error');
         return;
     }
-    if (typeof downloadBlob !== 'function' || typeof downloadTextFile !== 'function') {
-        showMessage('Download helpers missing (downloadBlob / downloadTextFile).', 'error');
+    if (typeof downloadBlob !== 'function') {
+        showMessage('Download helper missing (downloadBlob).', 'error');
         return;
     }
 
@@ -1078,7 +1082,13 @@ async function exportPhotoGallery_Download() {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
-        .slice(0, 50) || 'survey';
+        .slice(0, 60) || 'survey';
+
+    const safeFilePart = (s) => String(s ?? 'item')
+        .replace(/[\/\\:*?"<>|]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80) || 'item';
 
     const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -1086,6 +1096,8 @@ async function exportPhotoGallery_Download() {
         r.onerror = () => reject(r.error);
         r.readAsDataURL(blob);
     });
+
+    const yieldToUi = async () => new Promise(r => setTimeout(r, 0));
 
     function pickSurveys() {
         const all = Array.isArray(surveys) ? surveys : [];
@@ -1115,7 +1127,6 @@ async function exportPhotoGallery_Download() {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <style>
-  /* Base */
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f7f7;color:#111}
   a{color:inherit}
   header{padding:18px 16px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:10}
@@ -1123,18 +1134,16 @@ async function exportPhotoGallery_Download() {
   .sub{margin:6px 0 0;color:#333;font-size:13px}
   main{padding:16px;max-width:1100px;margin:0 auto}
 
-  /* Top master cards (two per row; thumbnails choose natural height) */
   .gridTop{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px}
   @media (max-width:420px){.gridTop{gap:10px}}
   a.cardTop{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.05)}
   .thumb{background:#eee;display:flex;align-items:center;justify-content:center}
-  .thumb img{width:100%;height:auto;display:block} /* <-- natural height */
+  .thumb img{width:100%;height:auto;display:block}
   .noThumb{padding:18px 12px;min-height:80px;display:flex;align-items:center;justify-content:center;color:#555;font-size:12px;text-align:center;background:#f1f5f9}
   .meta{padding:10px 12px}
   .title{font-weight:800;font-size:14px;line-height:1.2}
   .hint{font-size:12px;color:#555;margin-top:4px}
 
-  /* Survey sections */
   .surveySection{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin:18px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
   .surveyHeaderTop{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .surveyTitle{margin:0;font-size:18px}
@@ -1143,43 +1152,25 @@ async function exportPhotoGallery_Download() {
   .surveyMeta{margin:8px 0 0;color:#222;font-size:12px;display:flex;gap:12px;flex-wrap:wrap}
   .muted{color:#333;font-size:13px}
 
-  /* Hero image (like large photos, slightly under full width, natural height) */
   .heroWrap{display:flex;justify-content:center;margin:12px 0 10px}
-  .heroImg{
-    width:98%;
-    height:auto;
-    border-radius:14px;
-    border:1px solid #e5e7eb;
-    display:block;
-  }
+  .heroImg{width:98%;height:auto;border-radius:14px;border:1px solid #e5e7eb;display:block}
 
-  /* Thumbnails grid (two per row; thumbs choose natural height) */
   .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
   @media (max-width:420px){.grid{gap:8px}}
-
   a.thumbLink{display:block;text-decoration:none}
   a.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.05)}
-  a.card img{width:100%;height:auto;display:block} /* <-- natural height */
+  a.card img{width:100%;height:auto;display:block}
   .noimg{padding:18px 12px;min-height:80px;display:flex;align-items:center;justify-content:center;color:#555;background:#f1f5f9;font-size:12px}
-
   .cap{padding:8px 10px}
   .tTitle{font-weight:800;font-size:13px;line-height:1.2;color:#111}
   .metaLine{font-size:12px;color:#333;margin-top:3px}
 
-  /* Full photo detail blocks */
   h3{margin:18px 0 8px;font-size:14px;color:#111}
   .detail{margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb}
   .back{font-size:12px;color:#111;margin-bottom:8px}
   .back a{text-decoration:underline}
   .sep{display:inline-block;margin:0 8px;color:#555}
-  img.full{
-    width:100%;
-    height:auto;
-    border-radius:14px;
-    border:1px solid #e5e7eb;
-    margin-top:10px;
-    display:block
-  }
+  img.full{width:100%;height:auto;border-radius:14px;border:1px solid #e5e7eb;margin-top:10px;display:block}
   .metaList{margin:10px 0 0;padding-left:18px;color:#111;font-size:13px}
   .metaList li{margin:4px 0}
 </style>
@@ -1210,38 +1201,91 @@ async function exportPhotoGallery_Download() {
             return;
         }
 
+        const alsoWriteJpgs = !!(writeTargetJpgs || writeFindJpgs);
+
         log(`Surveys selected: ${selectedSurveys.length}`);
         log(`Include Finds: ${includeFinds ? 'YES' : 'NO'}`);
         log(`Include Targets: ${includeTargets ? 'YES' : 'NO'}`);
         log(`Max width: ${maxW}px`);
         log(`Create index.html: ${createIndex ? 'YES' : 'NO'}`);
+        log(`Also create JPGs: ${alsoWriteJpgs ? 'YES' : 'NO'} (Finds: ${writeFindJpgs ? 'YES' : 'NO'} | Targets: ${writeTargetJpgs ? 'YES' : 'NO'})`);
         log('---');
 
-        async function buildSingleSurveyHtml(s) {
-            const title = s?.name || 'Survey';
+        // Prepare ZIP
+        const zip = new JSZip();
+        const jpgRoot = alsoWriteJpgs ? zip.folder('JPG') : null;
+        const jpgFindsFolder = (alsoWriteJpgs && writeFindJpgs) ? jpgRoot.folder('Finds') : null;
+        const jpgTargetsFolder = (alsoWriteJpgs && writeTargetJpgs) ? jpgRoot.folder('Targets') : null;
 
-            const safeId = (v) => String(v ?? '')
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-+|-+$/g, '')
-                .slice(0, 80) || 'item';
+        // Count work up front (for log/progress pacing)
+        let totalPhotosPlanned = 0;
+        for (const s of selectedSurveys) {
+            if (!s) continue;
 
-            const sid = `survey-${safeId(s?.id ?? title)}`;
+            // survey hero (used for html but not jpg)
+            const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
+            if (surveyPhotoRef) totalPhotosPlanned += 1;
 
-            async function photoRefToDataUrlSized(photoRef, maxWidthPx) {
-                if (!photoRef) return '';
-                try {
-                    const raw = await resolvePhotoBlob(photoRef);
-                    if (!raw) return '';
-                    const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
-                    if (!resized) return '';
-                    return await blobToDataUrl(resized);
-                } catch {
-                    return '';
+            if (includeFinds) {
+                const sf = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === s.id);
+                for (const f of sf) {
+                    const refs = Array.isArray(f.photos) && f.photos.length
+                        ? f.photos
+                        : [f.photoData, f.targetPhotoData, f.photoDataUrl].filter(Boolean);
+                    totalPhotosPlanned += refs.length;
                 }
             }
 
-            // Survey photo refs (hero + thumb)
+            if (includeTargets && Array.isArray(s?.targets)) {
+                for (const t of s.targets) {
+                    const refs = Array.isArray(t.photos) && t.photos.length
+                        ? t.photos
+                        : [t.targetPhotoData, t.photoDataUrl, t.photoRef].filter(Boolean);
+                    totalPhotosPlanned += refs.length;
+                }
+            }
+        }
+
+        let photosDone = 0;
+        const bumpProgressLog = (force = false) => {
+            if (!totalPhotosPlanned) return;
+            if (!force && (photosDone % 8 !== 0)) return; // log every ~8 photos
+            const pct = Math.min(100, Math.round((photosDone / totalPhotosPlanned) * 100));
+            log(`Progress: ${photosDone}/${totalPhotosPlanned} photos processed (${pct}%)`);
+        };
+
+        async function photoRefToDataUrlSized(photoRef, maxWidthPx) {
+            if (!photoRef) return '';
+            try {
+                const raw = await resolvePhotoBlob(photoRef);
+                if (!raw) return '';
+                const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
+                if (!resized) return '';
+                return await blobToDataUrl(resized);
+            } catch {
+                return '';
+            }
+        }
+
+        async function photoRefToResizedJpegBlob(photoRef, maxWidthPx) {
+            if (!photoRef) return null;
+            try {
+                const raw = await resolvePhotoBlob(photoRef);
+                if (!raw) return null;
+                const resized = await resizeBlobToMaxWidthJpeg(raw, maxWidthPx, 0.85);
+                return resized || null;
+            } catch {
+                return null;
+            }
+        }
+
+        async function buildSingleSurveyHtmlAndMaybeJpgs(s, surveyIndex) {
+            const title = s?.name || 'Survey';
+            const surveySlug = safeSlug(title);
+            const surveyIdShort = (s?.id != null) ? String(s.id).slice(-6) : '';
+            const sid = `survey-${surveySlug}${surveyIdShort ? `-${surveyIdShort}` : ''}`.slice(0, 90);
+
+            // Survey hero + thumb
             const surveyPhotoRef = s?.surveyPhotoData || s?.surveyPhotoRef || '';
             const heroDataUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, maxW) : '';
             const heroThumbUrl = surveyPhotoRef ? await photoRefToDataUrlSized(surveyPhotoRef, 320) : '';
@@ -1303,16 +1347,41 @@ async function exportPhotoGallery_Download() {
             let firstFindThumb = '';
             let firstTargetThumb = '';
 
+            // Process photos (keep log alive)
             for (let n = 0; n < items.length; n++) {
                 const it = items[n];
-                const pid = `${sid}-${safeId(it.kind)}-${safeId(it.parentId)}-${it.indexInParent}`;
 
-                const thumbUrl = await photoRefToDataUrlSized(it.photoRef, 320);
-                const fullUrl  = await photoRefToDataUrlSized(it.photoRef, maxW);
+                // UI pacing
+                photosDone++;
+                if (photosDone % 2 === 0) await yieldToUi();
+
+                // Build ids
+                const pid = `${sid}-${safeSlug(it.kind)}-${safeSlug(it.parentId)}-${it.indexInParent}`;
+
+                // Make thumb + full
+                // (we generate blobs for full anyway so we can also save JPGs without refetching)
+                let fullBlob = await photoRefToResizedJpegBlob(it.photoRef, maxW);
+                let thumbBlob = await photoRefToResizedJpegBlob(it.photoRef, 320);
+
+                const fullUrl = fullBlob ? await blobToDataUrl(fullBlob) : '';
+                const thumbUrl = thumbBlob ? await blobToDataUrl(thumbBlob) : '';
 
                 if (thumbUrl) {
                     if (!firstFindThumb && it.kind === 'Find') firstFindThumb = thumbUrl;
                     if (!firstTargetThumb && it.kind === 'Target') firstTargetThumb = thumbUrl;
+                }
+
+                // Optional JPG writing into ZIP
+                if (alsoWriteJpgs && fullBlob) {
+                    const base =
+                        `${safeFilePart(surveySlug)}__${safeFilePart(it.kind)}__${safeFilePart(it.parentId)}__${String(it.indexInParent).padStart(2, '0')}`;
+
+                    if (it.kind === 'Find' && writeFindJpgs && jpgFindsFolder) {
+                        jpgFindsFolder.file(`${base}.jpg`, fullBlob);
+                    }
+                    if (it.kind === 'Target' && writeTargetJpgs && jpgTargetsFolder) {
+                        jpgTargetsFolder.file(`${base}.jpg`, fullBlob);
+                    }
                 }
 
                 thumbCards.push(`
@@ -1349,18 +1418,22 @@ async function exportPhotoGallery_Download() {
     ${it.accuracy ? `<li><strong>Accuracy:</strong> ${escapeHtml(it.accuracy)}</li>` : ''}
   </ul>
 </div>`.trim());
+
+                // keep log alive
+                bumpProgressLog(false);
             }
+
+            bumpProgressLog(true);
 
             // Master card thumb priority:
             // Survey photo thumb -> Find thumb -> Target thumb
             const thumbDataUrl = heroThumbUrl || firstFindThumb || firstTargetThumb || '';
 
-            // NOTE: hero uses class heroImg so it matches "large" styling but slightly narrower
             const surveyHeroHtml = heroDataUrl
                 ? `<div class="heroWrap"><img class="heroImg" src="${heroDataUrl}" alt="Survey photo"></div>`
                 : '';
 
-            const surveyInfoHtml = `
+            const sectionHtml = `
 <div class="surveySection" id="${sid}">
   <div class="surveyHeaderTop">
     <h2 class="surveyTitle">${escapeHtml(title)}</h2>
@@ -1380,7 +1453,12 @@ async function exportPhotoGallery_Download() {
   ${thumbCards.length ? `<h3>Full Photos</h3>${fullBlocks.join('')}` : ``}
 </div>`.trim();
 
-            return { title, sid, thumbDataUrl, sectionHtml: surveyInfoHtml };
+            // HTML name for ZIP
+            const htmlName = createIndex
+                ? null
+                : `gallery__${surveySlug}${surveyIdShort ? `__${surveyIdShort}` : ''}.html`;
+
+            return { title, sid, thumbDataUrl, sectionHtml, htmlName };
         }
 
         // Build all survey sections
@@ -1388,42 +1466,29 @@ async function exportPhotoGallery_Download() {
         for (let i = 0; i < selectedSurveys.length; i++) {
             const s = selectedSurveys[i];
             log(`[${i + 1}/${selectedSurveys.length}] Processing: ${s?.name || 'Survey'}`);
-            built.push(await buildSingleSurveyHtml(s));
+            built.push(await buildSingleSurveyHtmlAndMaybeJpgs(s, i + 1));
         }
 
-        // If A is unchecked: download one HTML per survey (or single)
+        // Write HTML into ZIP
+        const now = new Date();
+        const exportedText = `Exported ${now.toLocaleString()}`;
+
         if (!createIndex) {
-            if (built.length === 1) {
-                const one = built[0];
-                const now = new Date();
+            // one HTML per survey
+            for (const one of built) {
                 const page = wrapHtmlDocument({
                     title: `Gallery — ${one.title}`,
                     topCardsHtml: '',
                     bodyHtml: one.sectionHtml,
-                    exportedText: `Exported ${now.toLocaleString()}`
+                    exportedText
                 });
-                downloadTextFile(`gallery__${safeSlug(one.title)}.html`, page, 'text/html');
-                showMessage('Gallery downloaded (single survey).', 'success');
-                log('DONE: downloaded single survey gallery.');
-            } else {
-                for (const one of built) {
-                    const now = new Date();
-                    const page = wrapHtmlDocument({
-                        title: `Gallery — ${one.title}`,
-                        topCardsHtml: '',
-                        bodyHtml: one.sectionHtml,
-                        exportedText: `Exported ${now.toLocaleString()}`
-                    });
-                    downloadTextFile(`gallery__${safeSlug(one.title)}.html`, page, 'text/html');
-                }
-                showMessage('Galleries downloaded (one file per survey).', 'success');
-                log('DONE: downloaded multiple survey gallery files (no index.html).');
+                const fname = one.htmlName || `gallery__${safeSlug(one.title)}.html`;
+                zip.file(fname, page);
             }
-            return;
-        }
-
-        // A is checked: create ONE index.html with master thumbnails + embedded sections
-        const cardsHtml = built.map(b => `
+            log(`Added ${built.length} gallery HTML file(s) to ZIP.`);
+        } else {
+            // ONE index.html with master thumbnails + embedded sections
+            const cardsHtml = built.map(b => `
 <a class="cardTop" href="#${b.sid}">
   <div class="thumb">
     ${b.thumbDataUrl
@@ -1434,22 +1499,39 @@ async function exportPhotoGallery_Download() {
     <div class="title">${escapeHtml(b.title)}</div>
     <div class="hint">Jump to gallery</div>
   </div>
-</a>
-        `.trim()).join('\n');
+</a>`.trim()).join('\n');
 
-        const bodyHtml = built.map(b => b.sectionHtml).join('\n\n');
+            const bodyHtml = built.map(b => b.sectionHtml).join('\n\n');
 
-        const now = new Date();
-        const indexHtml = wrapHtmlDocument({
-            title: 'geoFind Gallery',
-            topCardsHtml: cardsHtml,
-            bodyHtml,
-            exportedText: `Exported ${now.toLocaleString()}`
-        });
+            const indexHtml = wrapHtmlDocument({
+                title: 'geoFind Gallery',
+                topCardsHtml: cardsHtml,
+                bodyHtml,
+                exportedText
+            });
 
-        downloadTextFile('index.html', indexHtml, 'text/html');
-        showMessage('index.html downloaded (master gallery).', 'success');
-        log('DONE: downloaded index.html.');
+            zip.file('index.html', indexHtml);
+            log('Added index.html to ZIP.');
+        }
+
+        // Generate ZIP with progress
+        log('Building ZIP… (this can take a while)');
+        const zipBlob = await zip.generateAsync(
+            { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+            (meta) => {
+                const pct = Math.round(meta.percent || 0);
+                // Keep log alive without spamming
+                if (pct % 10 === 0) {
+                    log(`ZIP progress: ${pct}%`);
+                }
+            }
+        );
+
+        const zipName = `geoFind_gallery_${now.toISOString().slice(0, 10)}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.zip`;
+        downloadBlob(zipName, zipBlob);
+
+        showMessage('Gallery ZIP downloaded (check Downloads).', 'success');
+        log('DONE: ZIP download triggered.');
 
     } catch (e) {
         console.error('exportPhotoGallery_Download error:', e);
@@ -1462,6 +1544,7 @@ async function exportPhotoGallery_Download() {
         }
     }
 }
+
 
 
         
