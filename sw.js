@@ -1,4 +1,4 @@
-const CACHE_NAME = "detekta-cache-v2"; // <-- bump this on every deployment
+const CACHE_NAME = "detekta-cache-v3"; // <-- bump this on every deployment
 
 const APP_SHELL = [
   "./",
