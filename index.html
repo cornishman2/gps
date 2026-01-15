@@ -13,6 +13,16 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     
     <style>
+/* Active navigation button */
+.nav-btn.active {
+    color: rgb(var(--color-primary));
+}
+
+.nav-btn.active span {
+    font-weight: 600;
+}
+
+        
         /* Custom colors using CSS variables for guaranteed consistency */
         :root {
             --color-primary: 29 78 216;      /* Blue (For contrast/borders) */
@@ -1033,6 +1043,16 @@ let navOverlaySettings = {
     aboveOffsetPct: 50, // default
     belowOffsetPct: 6   // default
 };
+
+function updateActiveNavButtons() {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.page === currentPage) {
+            btn.classList.add('active');
+        }
+    });
+}
+        
 
 function renderHelpPage() {
     return `
@@ -4586,7 +4606,10 @@ switch (currentPage) {
             appContent.innerHTML = contentHtml;
             // Re-attach event listeners specific to the rendered page
             attachPageEventListeners();
-        }
+            updateActiveNavButtons();
+
+       
+}
 
         
         function randomIntInclusive(min, max) {
