@@ -11928,6 +11928,25 @@ function renameTrack(trackId, newName) {
     }
 }
 
+let navDelegationAttached = false;
+
+function attachNavDelegationOnce() {
+    if (navDelegationAttached) return;
+    navDelegationAttached = true;
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.nav-btn');
+        if (!btn) return;
+
+        const targetPage = btn.dataset.page;
+        if (targetPage && targetPage !== currentPage) {
+            currentPage = targetPage;
+            render();
+        }
+    });
+}
+
+    
         
     /** Attaches event listeners for dynamically rendered elements */
 function attachPageEventListeners() {
@@ -11972,15 +11991,15 @@ if (privacyBtn) {
 
 
     // 1. Navigation Button Listener
-    document.querySelectorAll('.nav-btn').forEach(button => {
-        button.onclick = (e) => {
-            const targetPage = e.currentTarget.dataset.page;
-            if (targetPage && targetPage !== currentPage) {
-                currentPage = targetPage;
-                render();
-            }
-        };
-    });
+//    document.querySelectorAll('.nav-btn').forEach(button => {
+//        button.onclick = (e) => {
+//            const targetPage = e.currentTarget.dataset.page;
+//            if (targetPage && targetPage !== currentPage) {
+//                currentPage = targetPage;
+//                render();
+//            }
+//        };
+//    });
 
     
 
@@ -12287,6 +12306,7 @@ async function importSurveyWithPhotosFromFile() {
         });
         
     loadDataFromLocalStorage();
+    attachNavDelegationOnce();
     render();
 
 // Hide splash after first render
