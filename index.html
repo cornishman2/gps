@@ -94,6 +94,10 @@
                   <button class="nav-btn p-2 rounded-full text-gray-500 hover:text-primary transition duration-150" data-page="Settings">
                         <i class="fas fa-cog text-xl"></i>
                   </button>
+                    <button  class="w-full px-4 py-3 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300" onclick="navigateToPage('Help')">
+                        <i class="fas fa-question-circle mr-2"></i>
+                    </button>
+
                 </div>
             </div>
         </div>
@@ -1027,6 +1031,49 @@ let navOverlaySettings = {
     belowOffsetPct: 6   // default
 };
 
+function renderHelpPage() {
+    return `
+      <div class="p-4 space-y-4">
+        <h2 class="text-2xl font-bold text-primary mb-4">
+          Help & Getting Started
+        </h2>
+
+        <pre class="whitespace-pre-wrap text-sm bg-white p-4 rounded-xl shadow border border-gray-200">
+Detekta – A Metal Detecting App
+Help & Getting Started
+
+Detekta is a field logging and navigation app designed for metal detectorists.
+It works fully offline and stores all data locally on your device.
+
+GETTING STARTED
+
+1. Create a Survey
+A survey represents a detecting session or location.
+Create and open a survey before logging targets.
+
+2. Logging Targets
+Use “Log New Target” to record detected signals.
+You can record description, target ID, depth, GPS location, and photos.
+
+3. Finds
+Targets can be converted into Finds once confirmed.
+
+4. GPS & Tracking
+GPS is used only while the app is active and is never uploaded.
+
+5. Exporting Data
+You can export your data in GPX, JSON, ZIP, and photo formats.
+
+DATA & PRIVACY
+All data is stored locally on your device.
+
+TIPS
+• Open a survey before logging targets
+• Export your data regularly
+        </pre>
+      </div>
+    `;
+}
 
 async function exportPhotoGallery_Download() {
     const logBox = document.getElementById('export-photo-gallery-log');
@@ -4376,6 +4423,10 @@ switch (currentPage) {
     case 'Settings':
         contentHtml = renderSettingsPage();
         break;
+    case 'Help':
+        contentHtml = renderHelpPage();
+        break;
+        
     default:
         contentHtml = `<div class="p-4 text-center">Page Not Found</div>`;
 }
