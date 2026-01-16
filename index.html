@@ -1037,6 +1037,42 @@ let photoSettings = {
     maxWidth: 1000
 };
 
+function purgeDeletedEverywhere({ alsoSave = true } = {}) {
+    let removedTargets = 0;
+    let removedFinds = 0;
+
+    if (Array.isArray(surveys)) {
+        for (const s of surveys) {
+            if (Array.isArray(s?.targets)) {
+                const before = s.targets.length;
+                s.targets = s.targets.filter(t => t && !t.deleted);
+                removedTargets += (before - s.targets.length);
+            }
+            // If you ever store finds inside surveys too
+            if (Array.isArray(s?.finds)) {
+                const before = s.finds.length;
+                s.finds = s.finds.filter(f => f && !f.deleted);
+                removedFinds += (before - s.finds.length);
+            }
+        }
+    }
+
+    if (Array.isArray(finds)) {
+        const before = finds.length;
+        finds = finds.filter(f => f && !f.deleted);
+        removedFinds += (before - finds.length);
+    }
+
+    if (alsoSave) {
+        try { saveSurveysToLocalStorage(); } catch (_) {}
+        try { saveFindsToLocalStorage(); } catch (_) {}
+    }
+
+    showMessage(`Purged deleted: ${removedTargets} targets, ${removedFinds} finds.`, 'success');
+    return { removedTargets, removedFinds };
+}
+
+
 const NAV_OVERLAY_SETTINGS_KEY = "metal_finder_nav_overlay_settings";
 
 let navOverlaySettings = {
