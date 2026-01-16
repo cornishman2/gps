@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1044,7 +1044,58 @@ let navOverlaySettings = {
     belowOffsetPct: 6   // default
 };
 
-function updateActiveNavButtons() {
+function isStakeTarget(t) {
+    return String(t?.vdi ?? '').trim() === '-100';
+}
+
+function getSurveyTargetsOnly(survey) {
+    const arr = Array.isArray(survey?.targets) ? survey.targets : [];
+    return arr.filter(t => t && !t.deleted && !isStakeTarget(t));
+}
+
+function getSurveyStakesOnly(survey) {
+    const arr = Array.isArray(survey?.targets) ? survey.targets : [];
+    return arr.filter(t => t && !t.deleted && isStakeTarget(t));
+}
+
+// Finds: prefer global 'finds' array (your app uses this) but also include survey.finds if present.
+function getSurveyFindsCount(survey) {
+    const sid = survey?.id;
+    const fromGlobal = Array.isArray(finds) && sid ? finds.filter(f => f && !f.deleted && f.surveyId === sid) : [];
+    const fromSurvey = Array.isArray(survey?.finds) ? survey.finds.filter(f => f && !f.deleted) : [];
+
+    // de-dupe by id (in case both exist)
+    const seen = new Set();
+    let n = 0;
+    for (const f of [...fromGlobal, ...fromSurvey]) {
+        const id = f?.id || JSON.stringify(f);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        n++;
+    }
+    return n;
+}
+
+function getAppTotals() {
+    const allSurveys = Array.isArray(surveys) ? surveys : [];
+    const totalSurveys = allSurveys.length;
+
+    let totalTargets = 0;
+    let totalStakes  = 0;
+    for (const s of allSurveys) {
+        totalTargets += getSurveyTargetsOnly(s).length;
+        totalStakes  += getSurveyStakesOnly(s).length;
+    }
+
+    const totalFinds = Array.isArray(finds)
+        ? finds.filter(f => f && !f.deleted).length
+        : 0;
+
+    return { totalSurveys, totalTargets, totalStakes, totalFinds };
+}
+
+
+    function updateActiveNavButtons() {
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.page === currentPage) {
@@ -8341,6 +8392,8 @@ function handleTargetAction(element) {
 }
 
 function renderHomePage() {
+    const totals = getAppTotals();
+
     const openSurvey = surveys.find(s => s.status === 'Open');
     const activeSurveys = surveys.filter(s => s.status === 'Active');
     const archivedSurveys = surveys.filter(s => s.status === 'Archived');
@@ -8364,6 +8417,17 @@ function renderHomePage() {
 </div>
 
         <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
+
+        <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
+  <h3 class="text-lg font-bold text-indigo-700 mb-2">Totals (All Surveys)</h3>
+  <div class="grid grid-cols-2 gap-3 text-sm">
+    <div class="p-2 rounded-lg bg-gray-50 border border-gray-200"><strong>Surveys:</strong> ${totals.totalSurveys}</div>
+    <div class="p-2 rounded-lg bg-gray-50 border border-gray-200"><strong>Finds:</strong> ${totals.totalFinds}</div>
+    <div class="p-2 rounded-lg bg-gray-50 border border-gray-200"><strong>Targets:</strong> ${totals.totalTargets}</div>
+    <div class="p-2 rounded-lg bg-gray-50 border border-gray-200"><strong>Stakes:</strong> ${totals.totalStakes}</div>
+  </div>
+</div>
+
 
         <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-yellow-500">
             <h3 class="text-xl font-bold text-yellow-700 mb-2">
@@ -8503,7 +8567,10 @@ function renderSurveyCard(survey, isOpen = false) {
             ${photoHtml}
             <div class="flex justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 mt-2">
                 <span>Created: ${formatDate(survey.creationDate)}</span>
-                <span>Targets: ${getActiveTargets(survey).length}</span>
+                <span>Targets: ${getSurveyTargetsOnly(survey).length}</span>
+                <span>Stakes: ${getSurveyStakesOnly(survey).length}</span>
+                <span>Finds: ${getSurveyFindsCount(survey)}</span>
+
                 <span>Last Change: ${formatDate(survey.dateLastChanged)}</span>
             </div>
         </div>
