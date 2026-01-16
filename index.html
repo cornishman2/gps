@@ -1053,6 +1053,121 @@ function updateActiveNavButtons() {
     });
 }
         
+// -------------------- App Limits / Expiry (Tester build controls) --------------------
+const APP_LIMITS_STORAGE_KEY = 'detekta_app_limits_v1';
+const APP_RUNS_STORAGE_KEY   = 'detekta_app_runs_v1';
+
+function getDefaultAppLimits() {
+    return {
+        maxSurveys: 3,
+        maxTargets: 50,
+        maxFinds: 30,
+        expiryDate: '2026-06-01' // ISO YYYY-MM-DD
+    };
+}
+
+function loadAppLimits() {
+    const defaults = getDefaultAppLimits();
+    try {
+        const raw = localStorage.getItem(APP_LIMITS_STORAGE_KEY);
+        if (!raw) return { ...defaults };
+
+        const obj = JSON.parse(raw) || {};
+        // Blank/undefined means "no limit" except defaults apply if key missing entirely.
+        // If you want "blank" to persist as unlimited, store null.
+        return {
+            maxSurveys: (obj.maxSurveys === null) ? null : (Number.isFinite(+obj.maxSurveys) ? +obj.maxSurveys : defaults.maxSurveys),
+            maxTargets: (obj.maxTargets === null) ? null : (Number.isFinite(+obj.maxTargets) ? +obj.maxTargets : defaults.maxTargets),
+            maxFinds:   (obj.maxFinds   === null) ? null : (Number.isFinite(+obj.maxFinds)   ? +obj.maxFinds   : defaults.maxFinds),
+            expiryDate: (obj.expiryDate === null) ? null : (typeof obj.expiryDate === 'string' && obj.expiryDate.trim() ? obj.expiryDate.trim() : defaults.expiryDate)
+        };
+    } catch {
+        return { ...defaults };
+    }
+}
+
+function saveAppLimits(limits) {
+    const normIntOrNull = (v) => {
+        const s = String(v ?? '').trim();
+        if (!s) return null;                 // blank => unlimited
+        const n = Math.max(0, Math.floor(+s));
+        return Number.isFinite(n) ? n : null;
+    };
+    const normDateOrNull = (v) => {
+        const s = String(v ?? '').trim();
+        if (!s) return null;                 // blank => no expiry
+        // Expect YYYY-MM-DD
+        return s;
+    };
+
+    const toSave = {
+        maxSurveys: normIntOrNull(limits.maxSurveys),
+        maxTargets: normIntOrNull(limits.maxTargets),
+        maxFinds:   normIntOrNull(limits.maxFinds),
+        expiryDate: normDateOrNull(limits.expiryDate)
+    };
+    localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(toSave));
+    return loadAppLimits(); // return normalised
+}
+
+function getAppRunCount() {
+    const n = parseInt(localStorage.getItem(APP_RUNS_STORAGE_KEY) || '0', 10);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function incrementAppRunCount() {
+    const n = getAppRunCount() + 1;
+    localStorage.setItem(APP_RUNS_STORAGE_KEY, String(n));
+    return n;
+}
+
+function isExpired(limits = loadAppLimits()) {
+    if (!limits.expiryDate) return false;
+    const today = new Date();
+    const exp = new Date(limits.expiryDate + 'T00:00:00');
+    // expired if today is on/after expiry date
+    return today >= exp;
+}
+
+/**
+ * Returns { ok, reason, type } where type: 'surveys'|'targets'|'finds'|'expired'
+ */
+function canCreate(type, openSurvey = null) {
+    const limits = loadAppLimits();
+
+    if (isExpired(limits)) {
+        return { ok: false, reason: `This test version expired on ${limits.expiryDate}.`, type: 'expired' };
+    }
+
+    // Count surveys
+    const surveysCount = Array.isArray(surveys) ? surveys.length : 0;
+
+    // Count targets/finds (prefer open survey if supplied, else all)
+    const allTargets = [];
+    const allFinds = [];
+
+    if (Array.isArray(surveys)) {
+        surveys.forEach(s => {
+            (Array.isArray(s.targets) ? s.targets : []).forEach(t => allTargets.push(t));
+            (Array.isArray(s.finds) ? s.finds : []).forEach(f => allFinds.push(f));
+        });
+    }
+
+    const targetsCount = allTargets.length;
+    const findsCount   = allFinds.length;
+
+    if (type === 'surveys' && limits.maxSurveys !== null && surveysCount >= limits.maxSurveys) {
+        return { ok: false, reason: `Max surveys reached (${limits.maxSurveys}).`, type: 'surveys' };
+    }
+    if (type === 'targets' && limits.maxTargets !== null && targetsCount >= limits.maxTargets) {
+        return { ok: false, reason: `Max targets reached (${limits.maxTargets}).`, type: 'targets' };
+    }
+    if (type === 'finds' && limits.maxFinds !== null && findsCount >= limits.maxFinds) {
+        return { ok: false, reason: `Max finds reached (${limits.maxFinds}).`, type: 'finds' };
+    }
+
+    return { ok: true, reason: '', type: type };
+}
 
 function renderHelpPage() {
     return `
@@ -10571,6 +10686,18 @@ ${(() => {
 /** Renders the content for the Settings page. */
 function renderSettingsPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
+
+    // Limits (Tester build)
+    const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {
+        maxSurveys: 3,
+        maxTargets: 50,
+        maxFinds: 30,
+        expiryDate: '2026-06-01'
+    };
+
+    const valOrBlank = (v) => (v === null || v === undefined) ? '' : String(v);
+    const expired = (typeof isExpired === 'function') ? isExpired(limits) : false;
+
     return `
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-6">Settings & Local Data Management</h2>
@@ -10648,6 +10775,79 @@ function renderSettingsPage() {
   <p class="text-xs text-gray-500 mt-2">
     Detekta stores your data locally on your device. No analytics. No tracking.
   </p>
+</div>
+
+<!-- APP LIMITS (TESTER BUILD) -->
+<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits (Tester Build)</h4>
+      <p class="text-sm text-gray-600">
+        Leave a field blank for <strong>no limit</strong>. If expired, no new surveys/targets/finds can be created.
+      </p>
+    </div>
+    ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
+  </div>
+
+  <div class="mt-4 space-y-3">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-surveys">
+        Max number of surveys
+      </label>
+      <input id="limits-max-surveys"
+             type="number"
+             inputmode="numeric"
+             min="0"
+             class="w-full border border-gray-300 rounded-lg p-2"
+             placeholder="(blank = unlimited)"
+             value="${valOrBlank(limits.maxSurveys)}" />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-targets">
+        Max number of targets
+      </label>
+      <input id="limits-max-targets"
+             type="number"
+             inputmode="numeric"
+             min="0"
+             class="w-full border border-gray-300 rounded-lg p-2"
+             placeholder="(blank = unlimited)"
+             value="${valOrBlank(limits.maxTargets)}" />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-finds">
+        Max number of finds
+      </label>
+      <input id="limits-max-finds"
+             type="number"
+             inputmode="numeric"
+             min="0"
+             class="w-full border border-gray-300 rounded-lg p-2"
+             placeholder="(blank = unlimited)"
+             value="${valOrBlank(limits.maxFinds)}" />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-expiry-date">
+        Expiration date
+      </label>
+      <input id="limits-expiry-date"
+             type="date"
+             class="w-full border border-gray-300 rounded-lg p-2"
+             value="${valOrBlank(limits.expiryDate)}" />
+      <p class="text-xs text-gray-500 mt-1">
+        Suggested default for testers: <strong>1 June 2026</strong>
+      </p>
+    </div>
+
+    <button id="limits-save-btn"
+            type="button"
+            class="w-full bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-800 transition duration-150">
+      Save Limits
+    </button>
+  </div>
 </div>
 
             <!-- Danger Zone: Reset All Data -->
