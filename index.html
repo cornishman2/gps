@@ -10687,7 +10687,8 @@ ${(() => {
 function renderSettingsPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
 
-    // Limits (Tester build)
+    // Limits (Tester build) - display only
+    // Assumes you have loadAppLimits() + isExpired(); falls back to your defaults if not present yet.
     const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {
         maxSurveys: 3,
         maxTargets: 50,
@@ -10695,8 +10696,14 @@ function renderSettingsPage() {
         expiryDate: '2026-06-01'
     };
 
-    const valOrBlank = (v) => (v === null || v === undefined) ? '' : String(v);
+    const valOrBlank = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
     const expired = (typeof isExpired === 'function') ? isExpired(limits) : false;
+
+    // Display strings (blank means unlimited / no expiry)
+    const displayMaxSurveys = valOrBlank(limits.maxSurveys);
+    const displayMaxTargets = valOrBlank(limits.maxTargets);
+    const displayMaxFinds   = valOrBlank(limits.maxFinds);
+    const displayExpiryDate = valOrBlank(limits.expiryDate);
 
     return `
         <div class="p-4">
@@ -10767,9 +10774,8 @@ function renderSettingsPage() {
       <i class="fas fa-shield-alt mr-2"></i> Privacy & Legal
     </button>
     <p class="text-xs text-gray-500 mt-2">
-  Privacy policy, disclaimer, and copyright information.
-</p>
-
+      Privacy policy, disclaimer, and copyright information.
+    </p>
   </div>
 
   <p class="text-xs text-gray-500 mt-2">
@@ -10777,13 +10783,13 @@ function renderSettingsPage() {
   </p>
 </div>
 
-<!-- APP LIMITS (TESTER BUILD) -->
+<!-- APP LIMITS (TESTER BUILD) - READ ONLY -->
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
   <div class="flex items-start justify-between gap-3">
     <div>
       <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits (Tester Build)</h4>
       <p class="text-sm text-gray-600">
-        Leave a field blank for <strong>no limit</strong>. If expired, no new surveys/targets/finds can be created.
+        These limits are set by the build. Blank means <strong>unlimited</strong>.
       </p>
     </div>
     ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
@@ -10795,12 +10801,11 @@ function renderSettingsPage() {
         Max number of surveys
       </label>
       <input id="limits-max-surveys"
-             type="number"
-             inputmode="numeric"
-             min="0"
-             class="w-full border border-gray-300 rounded-lg p-2"
-             placeholder="(blank = unlimited)"
-             value="${valOrBlank(limits.maxSurveys)}" />
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayMaxSurveys}"
+             placeholder="Unlimited" />
     </div>
 
     <div>
@@ -10808,12 +10813,11 @@ function renderSettingsPage() {
         Max number of targets
       </label>
       <input id="limits-max-targets"
-             type="number"
-             inputmode="numeric"
-             min="0"
-             class="w-full border border-gray-300 rounded-lg p-2"
-             placeholder="(blank = unlimited)"
-             value="${valOrBlank(limits.maxTargets)}" />
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayMaxTargets}"
+             placeholder="Unlimited" />
     </div>
 
     <div>
@@ -10821,12 +10825,11 @@ function renderSettingsPage() {
         Max number of finds
       </label>
       <input id="limits-max-finds"
-             type="number"
-             inputmode="numeric"
-             min="0"
-             class="w-full border border-gray-300 rounded-lg p-2"
-             placeholder="(blank = unlimited)"
-             value="${valOrBlank(limits.maxFinds)}" />
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayMaxFinds}"
+             placeholder="Unlimited" />
     </div>
 
     <div>
@@ -10834,19 +10837,15 @@ function renderSettingsPage() {
         Expiration date
       </label>
       <input id="limits-expiry-date"
-             type="date"
-             class="w-full border border-gray-300 rounded-lg p-2"
-             value="${valOrBlank(limits.expiryDate)}" />
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayExpiryDate}"
+             placeholder="No expiry" />
       <p class="text-xs text-gray-500 mt-1">
-        Suggested default for testers: <strong>1 June 2026</strong>
+        If expired, no new surveys, targets, or finds can be created.
       </p>
     </div>
-
-    <button id="limits-save-btn"
-            type="button"
-            class="w-full bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-800 transition duration-150">
-      Save Limits
-    </button>
   </div>
 </div>
 
