@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4833,17 +4833,16 @@ switch (currentPage) {
 function quickLogTargetByVDI(raw, sourceLabel = '', opts = {}) {
 
     // LIMITS: block quick target creation if over limit / expired
-const r = canCreate('targets');
-if (!r.ok) {
-    showMessage(r.reason, 'error');
-    return;
-}
-
+    const r = canCreate('targets');
+    if (!r.ok) {
+        showMessage(r.reason, 'error');
+        return false;
+    }
 
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('You must have an open survey to log a target.', 'error');
-        return;
+        return false;
     }
 
     const vdiStr = String(raw).trim();
@@ -4851,7 +4850,7 @@ if (!r.ok) {
     // Must be an integer, allow negatives
     if (!/^-?\d+$/.test(vdiStr)) {
         showMessage('Target ID must be a whole number (you can use negatives).', 'error');
-        return;
+        return false;
     }
 
     const now = Date.now();
@@ -4904,8 +4903,9 @@ if (!r.ok) {
 
     // Re-render once so the new pin appears immediately
     updateMapWithUserLocationAndRender();
-}
 
+    return true;
+}
         
 function exportOpenSurveyAsGPX() {
     const openSurvey = surveys.find(s => s.status === 'Open');
@@ -12518,19 +12518,24 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
 const stakeBtn = document.getElementById('stake-target-btn');
 if (stakeBtn) {
     stakeBtn.addEventListener('click', () => {
-        // Create a special "stake" target. No prompt. User can edit later.
+
+        // Optional: keep this check so you get an instant message even before ensureTrackingThen
+        const r = canCreate('targets');
+        if (!r.ok) {
+            showMessage(r.reason, 'error');
+            return;
+        }
+
         ensureTrackingThen(() => {
-                quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Something else' });
+            // quickLogTargetByVDI now returns true/false and already shows the correct toast + vibration.
+            const ok = quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Something else' });
+
+            // If it failed, quickLogTargetByVDI already displayed the reason.
+            // So we do nothing here.
+            if (!ok) return;
         });
-
-
-        // Optional: feedback (matches your quick buttons behaviour)
-        try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
-        showMessage('STAKE created.', 'success');
     });
 }
-
-    
         
     // 5. Finds Page Filter Listeners
     const findsSearchInput = document.getElementById('finds-search-input');
