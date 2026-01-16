@@ -12544,6 +12544,25 @@ async function importSurveyWithPhotosFromFile() {
         
     loadDataFromLocalStorage();
     attachNavDelegationOnce();   // your delegated nav handler
+
+    const APP_LIMITS_STORAGE_KEY = 'detekta_app_limits_v1';
+
+function bootstrapAppLimitsIfMissing() {
+    if (localStorage.getItem(APP_LIMITS_STORAGE_KEY)) return;
+
+    const testerDefaults = {
+        maxSurveys: 3,
+        maxTargets: 50,
+        maxFinds: 30,
+        expiryDate: '2026-06-01'
+    };
+
+    localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(testerDefaults));
+}
+
+// Call once on app start
+bootstrapAppLimitsIfMissing();
+
     render();                    // renders Home by default
     updateActiveNavButtons();    // highlights Home
 
