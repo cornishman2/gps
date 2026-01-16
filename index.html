@@ -1170,6 +1170,25 @@ function canCreate(type, openSurvey = null) {
     return { ok: true, reason: '', type: type };
 }
 
+function enforceCanCreateOrWarn(type) {
+    if (typeof canCreate !== 'function') return true; // limits not wired yet
+    const r = canCreate(type);
+
+    if (r.ok) return true;
+
+    // Prefer long message if you have it
+    if (typeof showMessageLong === 'function') {
+        showMessageLong(r.reason || 'Limit reached.', 'error', 7000);
+    } else if (typeof showMessage === 'function') {
+        showMessage(r.reason || 'Limit reached.', 'error');
+    } else {
+        alert(r.reason || 'Limit reached.');
+    }
+
+    // If expired, you may also want to bounce user to Settings/Home
+    return false;
+}
+        
 function renderHelpPage() {
     return `
       <div class="p-4 space-y-4">
@@ -4228,6 +4247,7 @@ async function handleSurveyWithPhotosImport(event) {
         }
     });
 }
+        
 async function performSurveyZipImport(zip, jsonText, filename, log) {
     let payload;
 
@@ -4248,6 +4268,45 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
 
     const importedSurvey = payload.survey;
     const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
+
+    // LIMITS: importing a ZIP creates a NEW survey, so enforce survey limit / expiry
+    const rs = canCreate('surveys');
+    if (!rs.ok) {
+        log(`LIMIT: ${rs.reason}`);
+        showMessage(rs.reason, 'error');
+        return;
+    }
+
+    // ---------- LIMITS: compute remaining slots ONCE for this import ----------
+    // Reason: canCreate() won't "see" imported items until we merge at the end.
+    const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : null;
+
+    const countExistingTargets = () => {
+        let n = 0;
+        if (Array.isArray(surveys)) {
+            surveys.forEach(s => {
+                n += (Array.isArray(s?.targets) ? s.targets.length : 0);
+            });
+        }
+        return n;
+    };
+
+    const countExistingFinds = () => {
+        // Your app uses global 'finds' as the library (you merge into it below),
+        // so this is the most accurate count for enforcing maxFinds.
+        return Array.isArray(finds) ? finds.length : 0;
+    };
+
+    const existingTargets = countExistingTargets();
+    const existingFinds   = countExistingFinds();
+
+    const remainingTargets = (!limits || limits.maxTargets == null)
+        ? Infinity
+        : Math.max(0, limits.maxTargets - existingTargets);
+
+    const remainingFinds = (!limits || limits.maxFinds == null)
+        ? Infinity
+        : Math.max(0, limits.maxFinds - existingFinds);
 
     // Count files for progress
     const allPhotoPaths = [];
@@ -4292,24 +4351,37 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
 
         // ---- Targets ----
         if (!Array.isArray(importedSurvey.targets)) importedSurvey.targets = [];
+
         // Ensure tracks exist and are well-formed (backwards compatible)
-if (!Array.isArray(importedSurvey.tracks)) importedSurvey.tracks = [];
-for (const tr of importedSurvey.tracks) {
-    if (!tr) continue;
-    if (!tr.id) tr.id = generateId();
-    tr.name = String(tr.name || 'Track');
-    tr.description = String(tr.description || '');
-    if (tr.isVisible === undefined) tr.isVisible = true;
-    if (!tr.color) tr.color = pickTrackColor(0); // only if missing; won’t override existing colours
-    if (!Array.isArray(tr.points)) tr.points = [];
-}
+        if (!Array.isArray(importedSurvey.tracks)) importedSurvey.tracks = [];
+        for (const tr of importedSurvey.tracks) {
+            if (!tr) continue;
+            if (!tr.id) tr.id = generateId();
+            tr.name = String(tr.name || 'Track');
+            tr.description = String(tr.description || '');
+            if (tr.isVisible === undefined) tr.isVisible = true;
+            if (!tr.color) tr.color = pickTrackColor(0); // only if missing; won’t override existing colours
+            if (!Array.isArray(tr.points)) tr.points = [];
+        }
 
         log(`Restoring ${importedSurvey.targets.length} targets...`);
         updateProgressOverlay(10, `Restoring ${importedSurvey.targets.length} targets…`);
 
         let tIndex = 0;
+        let importedTargetsThisZip = 0;
+
         for (const t of importedSurvey.targets) {
+            // LIMITS: stop importing targets once we hit remaining slots
+            if (importedTargetsThisZip >= remainingTargets) {
+                log(`LIMIT: Max targets reached (${limits?.maxTargets}). Stopping target import.`);
+                // Keep only targets already processed
+                importedSurvey.targets = importedSurvey.targets.slice(0, tIndex);
+                break;
+            }
+
             tIndex++;
+            importedTargetsThisZip++;
+
             if (!t.id) t.id = generateId();
 
             const files = Array.isArray(t.photoFiles) ? t.photoFiles : [];
@@ -4341,6 +4413,12 @@ for (const tr of importedSurvey.tracks) {
 
         let fIndex = 0;
         for (const f of importedFinds) {
+            // LIMITS: stop importing finds once we hit remaining slots
+            if (fIndex >= remainingFinds) {
+                log(`LIMIT: Max finds reached (${limits?.maxFinds}). Stopping finds import.`);
+                break;
+            }
+
             fIndex++;
             if (!f.id) f.id = generateId();
             if (!f.surveyId) f.surveyId = importedSurvey.id;
@@ -4371,8 +4449,11 @@ for (const tr of importedSurvey.tracks) {
         // ---- Merge ----
         updateProgressOverlay(92, 'Saving imported data…');
         log('Merging imported survey into local data...');
+
         surveys.push(importedSurvey);
-        finds = finds.concat(importedFinds);
+
+        const importedFindsAllowed = importedFinds.slice(0, fIndex);
+        finds = finds.concat(importedFindsAllowed);
 
         saveSurveysToLocalStorage();
         saveFindsToLocalStorage();
@@ -4380,11 +4461,14 @@ for (const tr of importedSurvey.tracks) {
         updateProgressOverlay(100, 'Done.');
         setTimeout(() => hideProgressOverlay(), 400);
 
+        const importedTargetsActual = Array.isArray(importedSurvey.targets) ? importedSurvey.targets.length : 0;
+        const importedFindsActual   = importedFindsAllowed.length;
+
         log(`"${filename}" imported successfully.`);
         showMessage(
             `Imported survey "${importedSurvey.name || 'Unnamed survey'}" with ` +
-            `${Array.isArray(importedSurvey.targets) ? importedSurvey.targets.length : 0} targets and ` +
-            `${importedFinds.length} finds.`,
+            `${importedTargetsActual} targets and ` +
+            `${importedFindsActual} finds.`,
             'success'
         );
 
@@ -4395,8 +4479,8 @@ for (const tr of importedSurvey.tracks) {
         hideProgressOverlay();
     }
 }
-        
-async function handleEditFindSubmit(event) {
+
+    async function handleEditFindSubmit(event) {
     event.preventDefault();
     const form = event.target;
 
@@ -4521,6 +4605,14 @@ function saveFindsToLocalStorage() {
 }
 
 function createFindFromTarget(target, survey) {
+// LIMITS: block creating finds if over limit / expired
+const r = canCreate('finds');
+if (!r.ok) {
+    showMessage(r.reason, 'error');
+    return;
+}
+
+        
     // Photos from the target (we now prefer IndexedDB refs)
     let photoRefs = [];
     let thumbDataUrl = '';
@@ -4739,6 +4831,14 @@ switch (currentPage) {
  * This is the same logic as your existing "Log New Target" button, centralised.
  */
 function quickLogTargetByVDI(raw, sourceLabel = '', opts = {}) {
+
+    // LIMITS: block quick target creation if over limit / expired
+const r = canCreate('targets');
+if (!r.ok) {
+    showMessage(r.reason, 'error');
+    return;
+}
+
 
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -5696,7 +5796,6 @@ function triggerImportSurvey() {
     importSurveyWithPhotosFromFile();
 }
 
-        
 async function handleGpxImport(event) {
     const fileInput = event?.target;
     const file = fileInput?.files?.[0];
@@ -5778,6 +5877,15 @@ async function handleGpxImport(event) {
             let destSurvey = surveys.find(s => s.status === 'Open') || null;
 
             if (wantNewSurvey || !destSurvey) {
+
+                // LIMITS: block creating a NEW survey from GPX if over limit / expired
+                const rs = canCreate('surveys');
+                if (!rs.ok) {
+                    showMessage(rs.reason, 'error');
+                    appendLog(`LIMIT: ${rs.reason}`);
+                    return; // stop the whole import (because this mode needs a new survey)
+                }
+
                 // Close any open survey
                 surveys.forEach(s => {
                     if (s.status === 'Open') {
@@ -5815,8 +5923,20 @@ async function handleGpxImport(event) {
 
             // ---- import waypoints -> targets ----
             let importedTargets = 0;
+            let stoppedEarly = false;
+            let stopReason = '';
 
             for (const w of (parsed.waypoints || [])) {
+
+                // LIMITS: stop importing targets once limit/expiry is reached
+                const r = canCreate('targets');
+                if (!r.ok) {
+                    stoppedEarly = true;
+                    stopReason = r.reason || 'Limit reached.';
+                    appendLog(`LIMIT: ${stopReason} Stopping target import.`);
+                    break;
+                }
+
                 const coords = `${Number(w.lat).toFixed(6)}, ${Number(w.lon).toFixed(6)}`;
 
                 const t = {
@@ -5875,7 +5995,14 @@ async function handleGpxImport(event) {
             appendLog(`Imported targets: ${importedTargets}`);
             appendLog(`Imported tracks:  ${importedTracks}`);
 
-            showMessageLong(`GPX imported: ${importedTargets} targets, ${importedTracks} tracks.`, 'success', 6000);
+            // Final message: success if full import, info + reason if stopped early
+            const baseMsg = `GPX imported: ${importedTargets} targets, ${importedTracks} tracks.`;
+            if (stoppedEarly) {
+                appendLog(`NOTE: Import stopped early — ${stopReason}`);
+                showMessageLong(`${baseMsg} (Stopped early: ${stopReason})`, 'info', 7000);
+            } else {
+                showMessageLong(baseMsg, 'success', 6000);
+            }
 
             // IMPORTANT: Don't wipe the log by re-rendering the Export page.
             // If you're currently on the Export page, keep the UI as-is so the log stays visible.
@@ -5916,6 +6043,7 @@ async function handleGpxImport(event) {
         doImport();
     }
 }
+        
 /**
  * GPX parser that is tolerant of namespaces and different exporters.
  * It does NOT require getElementsByTagNameNS; it matches by element.localName.
@@ -6453,6 +6581,14 @@ async function handleNewSurveySubmit(event) {
         return;
     }
 
+// LIMITS: block creating new surveys if over limit / expired
+    const r = canCreate('surveys');
+    if (!r.ok) {
+        showMessage(r.reason, 'error');
+        return;
+    }
+
+
     // ✅ CRITICAL: new survey must start "clean" (no leftover tracking/recording)
     resetLiveTrackingAndRecordingState();
 
@@ -6684,6 +6820,14 @@ async function handleNewTargetSubmit(event) {
         showMessage('Error: Survey not found for this target.', 'error');
         return;
     }
+
+        // LIMITS: block creating new targets if over limit / expired
+    const r = canCreate('targets');
+    if (!r.ok) {
+        showMessage(r.reason, 'error');
+        return;
+    }
+
 
     const newDescription = form['targetDescription'].value.trim();
     const newVDI         = form['targetVDI'].value.trim() || 'N/A';
@@ -8028,6 +8172,14 @@ function handleTargetQrScanned(text) {
     `;
 
     const doImport = () => {
+
+        // LIMITS: block QR target import if over limit / expired
+const r = canCreate('targets');
+if (!r.ok) {
+    showMessage(r.reason, 'error');
+    return;
+}
+
         const now = Date.now();
 
         const newTarget = {
@@ -12561,8 +12713,18 @@ function bootstrapAppLimitsIfMissing() {
     localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(testerDefaults));
 }
 
-// Call once on app start
-bootstrapAppLimitsIfMissing();
+try {
+    if (typeof bootStrapAppLimitsIfmissing === 'function') {
+        bootStrapAppLimitsIfmissing();
+    }
+} catch (e) {
+    console.warn('bootStrapAppLimitsIfmissing failed:', e);
+}
+
+// Optional: count launches (you already have incrementAppRunCount())
+try {
+    if (typeof incrementAppRunCount === 'function') incrementAppRunCount();
+} catch (e) {}
 
     render();                    // renders Home by default
     updateActiveNavButtons();    // highlights Home
