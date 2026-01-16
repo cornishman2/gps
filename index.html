@@ -1037,6 +1037,24 @@ let photoSettings = {
     maxWidth: 1000
 };
 
+function deleteFindPermanently(findId) {
+    const idx = Array.isArray(finds)
+        ? finds.findIndex(f => f && f.id === findId)
+        : -1;
+
+    if (idx < 0) {
+        showMessage('Delete failed: find not found.', 'error');
+        return false;
+    }
+
+    finds.splice(idx, 1);
+    saveFindsToLocalStorage();
+
+    showMessage('Find deleted.', 'success');
+    return true;
+}
+
+        
 function deleteTargetPermanently(surveyId, targetId) {
     const s = surveys.find(x => x.id === surveyId);
     if (!s || !Array.isArray(s.targets)) {
@@ -4661,29 +4679,27 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
     showMessage('Find updated.', 'success');
     render();
 }
- function deleteFind(findId) {
-    const find = finds.find(f => f.id === findId);
+        
+function deleteFind(findId) {
+    const find = finds.find(f => f && f.id === findId);
     if (!find) {
         showMessage('Find not found.', 'error');
         return;
     }
 
     const executeDelete = () => {
-        finds = finds.filter(f => f.id !== findId);
-        saveFindsToLocalStorage();
-        showMessage('Find deleted.', 'success');
-        render();
+        if (deleteFindPermanently(findId)) {
+            render();
+        }
     };
 
-    const title = `Confirm Delete Find: ${find.description || 'this find'}`;
-    const body  = `
-        Are you sure you want to permanently delete this find?<br>
-        <span class="text-sm text-gray-600">This cannot be undone.</span>
-    `;
-
-    showConfirmationModal(title, body, executeDelete);
+    showConfirmationModal(
+        `Confirm Delete Find: ${find.description || 'this find'}`,
+        `Are you sure you want to permanently delete this find?<br>
+         <span class="text-sm text-gray-600">This cannot be undone.</span>`,
+        executeDelete
+    );
 }
-
 
         /** Generates a simple unique ID. */
         function generateId() {
@@ -11157,6 +11173,20 @@ function renderSettingsPage() {
                     This will delete all saved surveys, targets, finds and photos stored locally on this device.
                     Use this only after exporting anything important.
                 </p>
+                  <p class="text-sm text-gray-600 mb-3">
+    Maintenance tools for cleaning local data. Use carefully.
+  </p>
+
+  <button id="maintenance-btn"
+          type="button"
+          class="w-full bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-800 transition">
+    <i class="fas fa-broom mr-1"></i> Maintenance: Clean Local Data
+  </button>
+
+  <p class="text-xs text-gray-500 mt-2">
+    Removes any leftover “deleted” items and tidies storage.
+  </p>
+
             </div>
         </div>
     `;
@@ -12766,6 +12796,26 @@ if (sortByDateBtn) {
         render();
     });
 }
+
+    const maintenanceBtn = document.getElementById('maintenance-btn');
+if (maintenanceBtn) {
+  maintenanceBtn.addEventListener('click', () => {
+    showConfirmationModal(
+      'Run Maintenance',
+      'This will permanently remove any leftover deleted items and tidy local data.<br><br>Continue?',
+      async () => {
+        // call your helper(s) here
+        // e.g. purgeDeletedTargetsPermanently(); purgeDeletedFindsPermanently(); etc.
+        // then persist:
+        saveSurveysToLocalStorage();
+        saveFindsToLocalStorage?.();
+        showMessage('Maintenance complete.', 'success');
+        render();
+      }
+    );
+  });
+}
+
 
 
     // 10. Resolve thumbnails
