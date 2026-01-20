@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V20
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V21
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8942,7 +8942,6 @@ function handleTargetAction(element) {
 
     const executeAction = () => {
         switch (action) {
-
             case 'setStatus': {
                 const newStatus = element.dataset.status || element.dataset.value || '';
                 if (!newStatus) {
@@ -8955,8 +8954,35 @@ function handleTargetAction(element) {
             }
 
             case 'saveFind': {
+                // 1) Create the Find snapshot
                 target.isFind = true;
-                createFindFromTarget(target, survey);
+                const created = createFindFromTarget(target, survey);
+
+                // If creation was blocked (limits/expiry), do NOT delete the target
+                if (!created) return;
+
+                // 2) Now delete the original target (user request)
+                // IMPORTANT: we do NOT delete IndexedDB photos here because the Find references them.
+                const maybePromise = deleteTargetPermanently(surveyId, targetId);
+
+                // Support both sync + async implementations of deleteTargetPermanently
+                if (maybePromise && typeof maybePromise.then === 'function') {
+                    maybePromise.then((ok) => {
+                        if (ok && navigationTargetId === targetId) navigationTargetId = null;
+                        showMessage('Copied to Finds and removed from Targets.', 'success');
+                        render();
+                    }).catch((e) => {
+                        console.error('Error deleting target after saving find:', e);
+                        showMessage('Find saved, but failed to remove the target.', 'warning');
+                        render();
+                    });
+                    return; // we’ll finish in the promise handlers
+                } else {
+                    const ok = !!maybePromise;
+                    if (ok && navigationTargetId === targetId) navigationTargetId = null;
+                    showMessage('Copied to Finds and removed from Targets.', 'success');
+                }
+
                 break;
             }
 
@@ -8981,16 +9007,22 @@ function handleTargetAction(element) {
             }
 
             case 'delete': {
-    (async () => {
-        const ok = await deleteTargetPermanently(surveyId, targetId);
-        if (ok && navigationTargetId === targetId) {
-            navigationTargetId = null;
-        }
-        render();
-    })();
+                // ✅ HARD DELETE (no deleted flag)
+                const maybePromise = deleteTargetPermanently(surveyId, targetId);
 
-    return; // IMPORTANT: stop further processing
-}
+                if (maybePromise && typeof maybePromise.then === 'function') {
+                    maybePromise.then((ok) => {
+                        if (ok && navigationTargetId === targetId) navigationTargetId = null;
+                        render();
+                    });
+                    return; // IMPORTANT: stop further processing
+                } else {
+                    const ok = !!maybePromise;
+                    if (ok && navigationTargetId === targetId) navigationTargetId = null;
+                    render(); // target is gone; re-render immediately
+                    return;   // IMPORTANT: stop further processing
+                }
+            }
 
             default:
                 console.warn('Unknown target action:', action);
@@ -9011,17 +9043,17 @@ function handleTargetAction(element) {
         );
     } else if (action === 'saveFind') {
         showConfirmationModal(
-            'Promote to Find',
-            `Save <strong>${target.description}</strong> to your Finds library?<br>
+            'Copy to Finds',
+            `Copy <strong>${target.description}</strong> to your Finds library?<br>
              <span class="text-sm text-gray-600">
-                 You can review and edit it later on the <strong>Finds</strong> tab.
+               The original target will then be <strong>removed from Targets</strong>.
              </span>`,
             executeAction
         );
     } else {
         executeAction();
     }
-}  
+}
 
 function renderHomePage() {
     const totals = getAppTotals();
