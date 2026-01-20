@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V13
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V14
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8632,15 +8632,7 @@ function renderHomePage() {
         ${renderSurveyList(activeSurveys)}
     </div>
 
-    <!-- Archived Surveys -->
-    <h3 class="text-2xl font-bold text-gray-700 mb-3">
-        Archived Surveys (${archivedSurveys.length})
-    </h3>
-
-    <div id="archived-surveys-list" class="space-y-4">
-        ${renderSurveyList(archivedSurveys)}
-    </div>
-
+  
 </div>
 `;
 }
@@ -8724,7 +8716,7 @@ function renderSurveyCard(survey, isOpen = false) {
         (async () => {
             try {
                 const photoUrl = await getPhotoUrlFromRef(survey.surveyPhotoRef);
-                const photoContainer = document.getElementById(`survey-photo-${survey.id}`);
+                const photoContainer = document.getElementById(\`survey-photo-\${survey.id}\`);
                 if (photoContainer && photoUrl) {
                     photoContainer.innerHTML = `
                         <img
@@ -8751,23 +8743,21 @@ function renderSurveyCard(survey, isOpen = false) {
         `;
     }
 
-    // For the Open survey card on the dashboard, we don't repeat the name
-    const titleName = isOpen ? '' : survey.name;
-
     const createdStr = formatDateDMY(survey.creationDate);
     const changedStr = formatDateDMY(survey.dateLastChanged);
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 ${isOpen ? 'border-yellow-500' : 'border-primary'}">
-            <div class="flex justify-between items-start mb-2">
+
+            <!-- Header: ALWAYS show the survey name (including the Open card on Home) -->
+            <div class="mb-2">
                 <h4 class="text-lg font-bold text-gray-800">
-                    ${statusBadge}${titleName}
+                    ${statusBadge}${survey.name}
                 </h4>
-                <div class="flex space-x-2">
-                    ${actions}
-                </div>
             </div>
+
             <p class="text-sm text-gray-600 mb-2">${survey.description}</p>
+
             ${photoHtml}
 
             <!-- Two-row stats under the photo (headings + centred values) -->
@@ -8787,9 +8777,18 @@ function renderSurveyCard(survey, isOpen = false) {
                     <div class="text-center">${changedStr || '&nbsp;'}</div>
                 </div>
             </div>
+
+            <!-- Actions moved to the BOTTOM, under the stats -->
+            ${actions ? `
+                <div class="mt-3 flex gap-2 justify-end">
+                    ${actions}
+                </div>
+            ` : ''}
+
         </div>
     `;
 }
+
         /** Renders the content for the Targets page. */
         function renderTargetsPage() {
             const openSurvey = surveys.find(s => s.status === 'Open');
