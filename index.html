@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V17
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V18
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1054,7 +1054,185 @@ function deleteFindPermanently(findId) {
     return true;
 }
 
-        
+ /**
+ * Extract IndexedDB photo IDs from any mixture of:
+ *  - "idb:123" strings
+ *  - arrays of refs ["idb:1","idb:2"]
+ *  - null/empty/legacy base64 data URLs (ignored)
+ */
+function collectIndexedDbPhotoIdsFromRefs(refsOrSingle) {
+    const ids = new Set();
+
+    const addRef = (ref) => {
+        if (!ref || typeof ref !== 'string') return;
+        if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(ref)) {
+            const id = (typeof parsePhotoRef === 'function') ? parsePhotoRef(ref) : null;
+            if (id != null) ids.add(id);
+        }
+    };
+
+    if (Array.isArray(refsOrSingle)) {
+        refsOrSingle.forEach(addRef);
+    } else {
+        addRef(refsOrSingle);
+    }
+
+    return ids;
+}
+
+/**
+ * Collect all IndexedDB photo IDs referenced by a survey + its targets.
+ */
+function collectIndexedDbPhotoIdsFromSurvey(survey) {
+    const ids = new Set();
+
+    if (!survey) return ids;
+
+    // Survey photo
+    if (survey.surveyPhotoRef) {
+        collectIndexedDbPhotoIdsFromRefs(survey.surveyPhotoRef).forEach(id => ids.add(id));
+    }
+
+    // Targets
+    const targets = Array.isArray(survey.targets) ? survey.targets : [];
+    for (const t of targets) {
+        if (!t) continue;
+
+        // Preferred modern structure: t.photos = ["idb:..", ...]
+        if (Array.isArray(t.photos) && t.photos.length) {
+            collectIndexedDbPhotoIdsFromRefs(t.photos).forEach(id => ids.add(id));
+        }
+
+        // Convenience single-ref fields (if present)
+        if (t.targetPhotoRef) {
+            collectIndexedDbPhotoIdsFromRefs(t.targetPhotoRef).forEach(id => ids.add(id));
+        }
+
+        // Legacy fields sometimes used in older builds
+        if (t.photoRef) {
+            collectIndexedDbPhotoIdsFromRefs(t.photoRef).forEach(id => ids.add(id));
+        }
+    }
+
+    return ids;
+}
+
+/**
+ * Collect all IndexedDB photo IDs referenced by a find.
+ */
+function collectIndexedDbPhotoIdsFromFind(find) {
+    const ids = new Set();
+    if (!find) return ids;
+
+    // Preferred modern structure
+    if (Array.isArray(find.photos) && find.photos.length) {
+        collectIndexedDbPhotoIdsFromRefs(find.photos).forEach(id => ids.add(id));
+    }
+
+    // Convenience single-ref field (if present)
+    if (find.findPhotoRef) {
+        collectIndexedDbPhotoIdsFromRefs(find.findPhotoRef).forEach(id => ids.add(id));
+    }
+
+    // Legacy fields (rare)
+    if (find.photoRef) {
+        collectIndexedDbPhotoIdsFromRefs(find.photoRef).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+/**
+ * Collect all IndexedDB photo IDs used by the entire app,
+ * EXCLUDING a given surveyId (and excluding finds linked to that surveyId).
+ * This is used to avoid deleting photos that are still referenced elsewhere.
+ */
+function collectIndexedDbPhotoIdsInUseExcludingSurveyId(excludeSurveyId) {
+    const ids = new Set();
+
+    // Other surveys
+    const allSurveys = Array.isArray(surveys) ? surveys : [];
+    for (const s of allSurveys) {
+        if (!s) continue;
+        if (s.id === excludeSurveyId) continue;
+
+        collectIndexedDbPhotoIdsFromSurvey(s).forEach(id => ids.add(id));
+    }
+
+    // Other finds
+    const allFinds = Array.isArray(finds) ? finds : [];
+    for (const f of allFinds) {
+        if (!f) continue;
+        if (f.surveyId === excludeSurveyId) continue;
+
+        collectIndexedDbPhotoIdsFromFind(f).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+/**
+ * DELETE a survey + its targets + its finds + its IndexedDB photos.
+ * Photos are only deleted if they are not referenced by other surveys/finds.
+ */
+async function deleteSurveyAndAllAssociatedData(surveyId) {
+    if (!surveyId) return false;
+
+    const survey = (Array.isArray(surveys) ? surveys : []).find(s => s && s.id === surveyId);
+    if (!survey) return false;
+
+    // If deleting the OPEN survey, stop tracking/nav cleanly first
+    try {
+        if (survey.status === 'Open' && typeof resetLiveTrackingAndRecordingState === 'function') {
+            resetLiveTrackingAndRecordingState();
+        }
+    } catch (_) {}
+
+    // 1) Collect photo IDs referenced by THIS survey + its linked finds
+    const idsThisSurvey = new Set();
+
+    collectIndexedDbPhotoIdsFromSurvey(survey).forEach(id => idsThisSurvey.add(id));
+
+    const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === surveyId);
+    for (const f of linkedFinds) {
+        collectIndexedDbPhotoIdsFromFind(f).forEach(id => idsThisSurvey.add(id));
+    }
+
+    // 2) Collect IDs that are still in use elsewhere (so we don't delete shared photos)
+    const idsStillUsedElsewhere = collectIndexedDbPhotoIdsInUseExcludingSurveyId(surveyId);
+
+    // 3) Delete only the photos that are not used elsewhere
+    const idsToDelete = [...idsThisSurvey].filter(id => !idsStillUsedElsewhere.has(id));
+
+    if (idsToDelete.length && typeof deletePhotoBlob === 'function') {
+        // Best-effort delete: continue even if one fails
+        for (const id of idsToDelete) {
+            try {
+                await deletePhotoBlob(id);
+            } catch (e) {
+                console.warn('Failed to delete photo blob id', id, e);
+            }
+        }
+    }
+
+    // 4) Remove the survey (targets are inside it, so they go too)
+    surveys = (Array.isArray(surveys) ? surveys : []).filter(s => s && s.id !== surveyId);
+
+    // 5) Remove linked finds
+    finds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId !== surveyId);
+
+    // 6) Persist
+    if (typeof saveSurveysToLocalStorage === 'function') {
+        saveSurveysToLocalStorage();
+    } else {
+        // Fallback: older builds sometimes save separately
+        try { localStorage.setItem('geoFindSurveys', JSON.stringify(surveys)); } catch (_) {}
+        try { localStorage.setItem('geoFindFinds', JSON.stringify(finds)); } catch (_) {}
+    }
+
+    return true;
+}
+       
 function deleteTargetPermanently(surveyId, targetId) {
     const s = surveys.find(x => x.id === surveyId);
     if (!s || !Array.isArray(s.targets)) {
@@ -7925,7 +8103,10 @@ async function handleEditTargetSubmit(event) {
 
         // --- SURVEY & TARGET LOGIC (Action Handlers) ---
 
-function handleSurveyAction(button) {
+
+    // --- SURVEY & TARGET LOGIC (Action Handlers) ---
+
+async function handleSurveyAction(button) {
     const id = button.dataset.id;
     const action = button.dataset.action;
     const name = button.dataset.name;
@@ -7933,7 +8114,7 @@ function handleSurveyAction(button) {
     const survey = surveys.find(s => s.id === id);
     if (!survey) return;
 
-    const executeAction = () => {
+    const executeAction = async () => {
         const now = Date.now();
 
         switch (action) {
@@ -7982,12 +8163,17 @@ function handleSurveyAction(button) {
                 render();
                 break;
 
-            case 'delete':
-                surveys = surveys.filter(s => s.id !== id);
-                saveSurveysToLocalStorage();
-                showMessage(`Survey '${name}' deleted.`, 'success');
+            case 'delete': {
+                // NEW: cascading delete (survey + targets + finds + IndexedDB photos)
+                const ok = await deleteSurveyAndAllAssociatedData(id);
+                if (ok) {
+                    showMessage(`Survey '${name}' deleted (including targets, finds, and photos).`, 'success');
+                } else {
+                    showMessage(`Could not delete survey '${name}'.`, 'error');
+                }
                 render();
                 break;
+            }
 
             default:
                 console.warn("Unknown survey action:", action);
@@ -7998,7 +8184,8 @@ function handleSurveyAction(button) {
     if (action === 'delete') {
         showConfirmationModal(
             `Delete: ${name}`,
-            `Are you sure you want to delete this survey? This cannot be undone.`,
+            `Are you sure you want to delete this survey?<br>
+             <span class="text-sm text-gray-600">This will also delete its targets, its finds, and any IndexedDB photos linked to it. This cannot be undone.</span>`,
             executeAction
         );
     } else if (action === 'archive') {
@@ -8008,11 +8195,11 @@ function handleSurveyAction(button) {
             executeAction
         );
     } else {
-        executeAction();
+        await executeAction();
     }
 }
-
-function handleMapTargetClick(event, targetId) {
+    
+    function handleMapTargetClick(event, targetId) {
     // Don’t let this click bubble up to the map container,
     // so it does NOT trigger toggleMapFullscreen().
     event.stopPropagation();
