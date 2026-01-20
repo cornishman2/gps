@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V19
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V20
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1424,39 +1424,226 @@ async function deleteTargetPermanently(surveyId, targetId) {
     return true;
 }
         
-function purgeDeletedEverywhere({ alsoSave = true } = {}) {
-    let removedTargets = 0;
-    let removedFinds = 0;
+async function purgeDeletedEverywhere() {
 
-    if (Array.isArray(surveys)) {
-        for (const s of surveys) {
-            if (Array.isArray(s?.targets)) {
-                const before = s.targets.length;
-                s.targets = s.targets.filter(t => t && !t.deleted);
-                removedTargets += (before - s.targets.length);
+    // Try to log somewhere sensible (safe if not found)
+    const logBox =
+        document.getElementById('export-photo-gallery-log')
+        || document.getElementById('import-gpx-log')
+        || document.getElementById('export-open-survey-gpx-log')
+        || document.getElementById('app-log-box');
+
+    const log = (msg) => {
+        console.log('[Purge]', msg);
+        if (!logBox) return;
+        logBox.value += msg + '\n';
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    // -----------------------------
+    // Helpers (kept inside function)
+    // -----------------------------
+    const collectIdsFromRefs = (refsOrSingle) => {
+        const ids = new Set();
+
+        const addRef = (ref) => {
+            if (!ref || typeof ref !== 'string') return;
+            if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(ref)) {
+                const id = (typeof parsePhotoRef === 'function') ? parsePhotoRef(ref) : null;
+                if (id != null) ids.add(id);
             }
-            // If you ever store finds inside surveys too
-            if (Array.isArray(s?.finds)) {
-                const before = s.finds.length;
-                s.finds = s.finds.filter(f => f && !f.deleted);
-                removedFinds += (before - s.finds.length);
-            }
+        };
+
+        if (Array.isArray(refsOrSingle)) refsOrSingle.forEach(addRef);
+        else addRef(refsOrSingle);
+
+        return ids;
+    };
+
+    const collectIdsFromTarget = (t) => {
+        const ids = new Set();
+        if (!t) return ids;
+
+        if (Array.isArray(t.photos)) {
+            collectIdsFromRefs(t.photos).forEach(id => ids.add(id));
         }
+        if (t.targetPhotoRef) {
+            collectIdsFromRefs(t.targetPhotoRef).forEach(id => ids.add(id));
+        }
+        if (t.photoRef) { // legacy safety
+            collectIdsFromRefs(t.photoRef).forEach(id => ids.add(id));
+        }
+
+        return ids;
+    };
+
+    const collectIdsFromFind = (f) => {
+        const ids = new Set();
+        if (!f) return ids;
+
+        if (Array.isArray(f.photos)) {
+            collectIdsFromRefs(f.photos).forEach(id => ids.add(id));
+        }
+        if (f.findPhotoRef) {
+            collectIdsFromRefs(f.findPhotoRef).forEach(id => ids.add(id));
+        }
+        if (f.photoRef) { // legacy safety
+            collectIdsFromRefs(f.photoRef).forEach(id => ids.add(id));
+        }
+        if (f.targetPhotoRef) { // legacy safety
+            collectIdsFromRefs(f.targetPhotoRef).forEach(id => ids.add(id));
+        }
+
+        return ids;
+    };
+
+    const collectIdsFromSurvey = (s) => {
+        const ids = new Set();
+        if (!s) return ids;
+
+        if (s.surveyPhotoRef) {
+            collectIdsFromRefs(s.surveyPhotoRef).forEach(id => ids.add(id));
+        }
+
+        const targets = Array.isArray(s.targets) ? s.targets : [];
+        for (const t of targets) {
+            collectIdsFromTarget(t).forEach(id => ids.add(id));
+        }
+
+        return ids;
+    };
+
+    const collectAllReferencedPhotoIds = () => {
+        const ids = new Set();
+
+        const ss = Array.isArray(surveys) ? surveys : [];
+        const ff = Array.isArray(finds) ? finds : [];
+
+        for (const s of ss) collectIdsFromSurvey(s).forEach(id => ids.add(id));
+        for (const f of ff) collectIdsFromFind(f).forEach(id => ids.add(id));
+
+        return ids;
+    };
+
+    // -----------------------------
+    // 1) Purge deleted records
+    // -----------------------------
+    try {
+        log('Purging deleted surveys / targets / finds...');
+
+        const beforeSurveys = Array.isArray(surveys) ? surveys.length : 0;
+        const beforeFinds   = Array.isArray(finds) ? finds.length : 0;
+
+        // Purge deleted surveys (entire survey removed)
+        surveys = (Array.isArray(surveys) ? surveys : []).filter(s => s && s.deleted !== true);
+
+        // Purge deleted targets inside remaining surveys
+        let purgedTargetsCount = 0;
+        for (const s of surveys) {
+            if (!s || !Array.isArray(s.targets)) continue;
+            const before = s.targets.length;
+            s.targets = s.targets.filter(t => t && t.deleted !== true);
+            purgedTargetsCount += (before - s.targets.length);
+        }
+
+        // Purge deleted finds
+        finds = (Array.isArray(finds) ? finds : []).filter(f => f && f.deleted !== true);
+
+        const afterSurveys = surveys.length;
+        const afterFinds   = finds.length;
+
+        log(`Surveys purged: ${beforeSurveys - afterSurveys}`);
+        log(`Targets purged: ${purgedTargetsCount}`);
+        log(`Finds purged:   ${beforeFinds - afterFinds}`);
+
+        // Persist
+        if (typeof saveSurveysToLocalStorage === 'function') {
+            saveSurveysToLocalStorage();
+        } else {
+            try { localStorage.setItem('geoFindSurveys', JSON.stringify(surveys)); } catch (_) {}
+        }
+
+        if (typeof saveFindsToLocalStorage === 'function') {
+            saveFindsToLocalStorage();
+        } else {
+            try { localStorage.setItem('geoFindFinds', JSON.stringify(finds)); } catch (_) {}
+        }
+    } catch (e) {
+        console.warn('Purge deleted records failed:', e);
+        log('WARNING: purge deleted records failed (see console).');
     }
 
-    if (Array.isArray(finds)) {
-        const before = finds.length;
-        finds = finds.filter(f => f && !f.deleted);
-        removedFinds += (before - finds.length);
+    // -----------------------------
+    // 2) Delete orphaned IndexedDB photos
+    // -----------------------------
+    try {
+        if (typeof indexedDB === 'undefined') {
+            log('IndexedDB not available; skipping orphan photo cleanup.');
+        } else if (typeof openPhotoDB !== 'function') {
+            log('openPhotoDB() not found; skipping orphan photo cleanup.');
+        } else if (typeof deletePhotoBlob !== 'function') {
+            log('deletePhotoBlob() not found; skipping orphan photo cleanup.');
+        } else if (typeof isIndexedDbPhotoRef !== 'function' || typeof parsePhotoRef !== 'function') {
+            log('isIndexedDbPhotoRef()/parsePhotoRef() not found; skipping orphan photo cleanup.');
+        } else {
+            log('Scanning IndexedDB for orphaned photos...');
+
+            const referenced = collectAllReferencedPhotoIds(); // Set<number>
+
+            // Read ALL keys from the store
+            const db = await openPhotoDB();
+
+            const allKeys = await new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(PHOTO_STORE_NAME, 'readonly');
+                    const store = tx.objectStore(PHOTO_STORE_NAME);
+                    const req = store.getAllKeys();
+                    req.onerror = () => reject(req.error);
+                    req.onsuccess = () => resolve(req.result || []);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+
+            // Convert keys (likely numbers) to Set<string> for robust comparison
+            const referencedStr = new Set([...referenced].map(x => String(x)));
+            const allKeysStr = (allKeys || []).map(k => String(k));
+
+            const orphanKeysStr = allKeysStr.filter(k => !referencedStr.has(k));
+
+            log(`Photo store: "${PHOTO_STORE_NAME}" (DB: "${PHOTO_DB_NAME}")`);
+            log(`Total blobs:      ${allKeysStr.length}`);
+            log(`Referenced blobs: ${referencedStr.size}`);
+            log(`Orphan blobs:     ${orphanKeysStr.length}`);
+
+            let deletedCount = 0;
+            for (const kStr of orphanKeysStr) {
+                const id = (/^\d+$/).test(kStr) ? Number(kStr) : kStr;
+                try {
+                    await deletePhotoBlob(id);
+                    deletedCount++;
+                } catch (e) {
+                    console.warn('Failed to delete orphan photo blob', id, e);
+                }
+            }
+
+            log(`Orphan deletions completed: ${deletedCount}/${orphanKeysStr.length}`);
+
+            try { db.close(); } catch (_) {}
+        }
+    } catch (e) {
+        console.warn('Orphan photo cleanup failed:', e);
+        log('WARNING: orphan photo cleanup failed (see console).');
     }
 
-    if (alsoSave) {
-        try { saveSurveysToLocalStorage(); } catch (_) {}
-        try { saveFindsToLocalStorage(); } catch (_) {}
-    }
+    // -----------------------------
+    // 3) Final UI refresh
+    // -----------------------------
+    try {
+        showMessage('Purge complete (deleted records removed; orphan photos cleaned).', 'success');
+    } catch (_) {}
 
-    showMessage(`Purged deleted: ${removedTargets} targets, ${removedFinds} finds.`, 'success');
-    return { removedTargets, removedFinds };
+    try { render(); } catch (_) {}
 }
 
 
