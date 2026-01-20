@@ -4827,7 +4827,8 @@ function saveSurveysToLocalStorage() {
 }
         
 /** Loads data from Local Storage. Initializes if no data found. */
-    function loadDataFromLocalStorage() {
+ /** Loads data from Local Storage. Initializes if no data found. */
+function loadDataFromLocalStorage() {
     try {
         const storedSurveys = localStorage.getItem('geoFindSurveys');
         const storedFinds   = localStorage.getItem('geoFindFinds');   // <--- NEW
@@ -4836,30 +4837,13 @@ function saveSurveysToLocalStorage() {
         loadPhotoSettingsFromLocalStorage();
         loadNavOverlaySettingsFromLocalStorage();
 
+        if (storedSurveys) {
+            surveys = JSON.parse(storedSurveys);
+        } else {
+            // ✅ After a reset (or first run), start truly empty (no sample survey)
+            surveys = [];
+        }
 
-
-                if (storedSurveys) {
-                    surveys = JSON.parse(storedSurveys);
-                } else {
-                    // Initialize with sample data if nothing is found
-                    surveys = [
-                        {
-                            id: generateId(),
-                            name: "Sample Grid Survey 2025",
-                            description: "Testing a 10x10 metre grid near the old oak tree.",
-                            status: 'Open',
-                            creationDate: Date.now(),
-                            dateLastChanged: Date.now(),
-                            targets: [
-                                // Sample targets with valid coordinates and accuracy for mapping
-                                { id: generateId(), description: "Small Copper Coin", vdi: "28", depth: "4in", type: "Coin", status: "Signal Detected", time: Date.now(), coordinates: "50.256800, -5.234500", accuracy: "5.5", user: userProfile.name, detector: userProfile.detector },
-                                { id: generateId(), description: "Lead Button", vdi: "30", depth: "6in", type: "Relic", status: "Signal Detected", time: Date.now() - 100000, coordinates: "50.257000, -5.234100", accuracy: "2.1", user: userProfile.name, detector: userProfile.detector },
-                                { id: generateId(), description: "Iron Spike", vdi: "8", depth: "12in", type: "Iron Junk", status: "Signal Ignored", time: Date.now() - 3600000, coordinates: "50.256700, -5.234800", accuracy: "10.0", user: userProfile.name, detector: userProfile.detector }
-                            ],
-                            surveyPhotoData: ''
-                        }
-                    ];
-                }
         // Load Finds (can be empty even if surveys exist)
         if (storedFinds) {
             finds = JSON.parse(storedFinds);
@@ -4867,31 +4851,31 @@ function saveSurveysToLocalStorage() {
             finds = [];
         }
 
-                if (storedProfile) {
-                    // Update userProfile only if storedProfile exists and is valid
-                    const tempProfile = JSON.parse(storedProfile);
-                    if (tempProfile && tempProfile.name && tempProfile.detector) {
-                         userProfile = tempProfile;
-                    }
-                } else {
-                    // Re-initialize sample profile if needed
-                    userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox" };
-                }
-
-                if (storedUserId) {
-                    userId = storedUserId;
-                } else {
-                    userId = generateId();
-                }
-
-                saveSurveysToLocalStorage();
-                clearStaleRecordingTracksOnLoad();
-
-            } catch (e) {
-                console.error("Error loading from Local Storage:", e);
-                showMessage("Error loading data. Data may be reset.", 'error');
+        if (storedProfile) {
+            // Update userProfile only if storedProfile exists and is valid
+            const tempProfile = JSON.parse(storedProfile);
+            if (tempProfile && tempProfile.name && tempProfile.detector) {
+                userProfile = tempProfile;
             }
+        } else {
+            // Re-initialize sample profile if needed
+            userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox" };
         }
+
+        if (storedUserId) {
+            userId = storedUserId;
+        } else {
+            userId = generateId();
+        }
+
+        saveSurveysToLocalStorage();
+        clearStaleRecordingTracksOnLoad();
+
+    } catch (e) {
+        console.error("Error loading from Local Storage:", e);
+        showMessage("Error loading data. Data may be reset.", 'error');
+    }
+}
 
         /** Renders the current page content into the main container. */
         function render() {
