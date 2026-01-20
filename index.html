@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V18
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V19
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1037,7 +1037,134 @@ let photoSettings = {
     maxWidth: 1000
 };
 
-function deleteFindPermanently(findId) {
+// =======================================
+//  SAFE PHOTO-DELETION (IndexedDB) HELPERS
+// =======================================
+
+function collectIndexedDbPhotoIdsFromRefs(refsOrSingle) {
+    const ids = new Set();
+
+    const addRef = (ref) => {
+        if (!ref || typeof ref !== 'string') return;
+        if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(ref)) {
+            const id = (typeof parsePhotoRef === 'function') ? parsePhotoRef(ref) : null;
+            if (id != null) ids.add(id);
+        }
+    };
+
+    if (Array.isArray(refsOrSingle)) refsOrSingle.forEach(addRef);
+    else addRef(refsOrSingle);
+
+    return ids;
+}
+
+function collectIndexedDbPhotoIdsFromTarget(target) {
+    const ids = new Set();
+    if (!target) return ids;
+
+    if (Array.isArray(target.photos) && target.photos.length) {
+        collectIndexedDbPhotoIdsFromRefs(target.photos).forEach(id => ids.add(id));
+    }
+
+    if (target.targetPhotoRef) {
+        collectIndexedDbPhotoIdsFromRefs(target.targetPhotoRef).forEach(id => ids.add(id));
+    }
+
+    // Legacy / older builds (safe no-op if absent)
+    if (target.photoRef) {
+        collectIndexedDbPhotoIdsFromRefs(target.photoRef).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+function collectIndexedDbPhotoIdsFromFind(find) {
+    const ids = new Set();
+    if (!find) return ids;
+
+    if (Array.isArray(find.photos) && find.photos.length) {
+        collectIndexedDbPhotoIdsFromRefs(find.photos).forEach(id => ids.add(id));
+    }
+
+    if (find.findPhotoRef) {
+        collectIndexedDbPhotoIdsFromRefs(find.findPhotoRef).forEach(id => ids.add(id));
+    }
+
+    // Legacy / older builds (safe no-op if absent)
+    if (find.photoRef) {
+        collectIndexedDbPhotoIdsFromRefs(find.photoRef).forEach(id => ids.add(id));
+    }
+
+    // Some older find records may still have targetPhotoRef fields
+    if (find.targetPhotoRef) {
+        collectIndexedDbPhotoIdsFromRefs(find.targetPhotoRef).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+function collectIndexedDbPhotoIdsFromSurvey(survey, { excludeTargetId = null } = {}) {
+    const ids = new Set();
+    if (!survey) return ids;
+
+    if (survey.surveyPhotoRef) {
+        collectIndexedDbPhotoIdsFromRefs(survey.surveyPhotoRef).forEach(id => ids.add(id));
+    }
+
+    const targets = Array.isArray(survey.targets) ? survey.targets : [];
+    for (const t of targets) {
+        if (!t) continue;
+        if (excludeTargetId && t.id === excludeTargetId) continue;
+        collectIndexedDbPhotoIdsFromTarget(t).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+function collectIndexedDbPhotoIdsInUseExcludingTarget(surveyId, targetId) {
+    const ids = new Set();
+
+    // Surveys + targets (skip the one target being deleted)
+    const allSurveys = Array.isArray(surveys) ? surveys : [];
+    for (const s of allSurveys) {
+        if (!s) continue;
+        const exclude = (s.id === surveyId) ? targetId : null;
+        collectIndexedDbPhotoIdsFromSurvey(s, { excludeTargetId: exclude }).forEach(id => ids.add(id));
+    }
+
+    // Finds (all of them)
+    const allFinds = Array.isArray(finds) ? finds : [];
+    for (const f of allFinds) {
+        if (!f) continue;
+        collectIndexedDbPhotoIdsFromFind(f).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+function collectIndexedDbPhotoIdsInUseExcludingFind(findId) {
+    const ids = new Set();
+
+    // All surveys + targets
+    const allSurveys = Array.isArray(surveys) ? surveys : [];
+    for (const s of allSurveys) {
+        if (!s) continue;
+        collectIndexedDbPhotoIdsFromSurvey(s).forEach(id => ids.add(id));
+    }
+
+    // All finds except the one being deleted
+    const allFinds = Array.isArray(finds) ? finds : [];
+    for (const f of allFinds) {
+        if (!f) continue;
+        if (f.id === findId) continue;
+        collectIndexedDbPhotoIdsFromFind(f).forEach(id => ids.add(id));
+    }
+
+    return ids;
+}
+
+
+async function deleteFindPermanently(findId) {
     const idx = Array.isArray(finds)
         ? finds.findIndex(f => f && f.id === findId)
         : -1;
@@ -1047,13 +1174,34 @@ function deleteFindPermanently(findId) {
         return false;
     }
 
+    const find = finds[idx];
+
+    // 1) Photos referenced by THIS find
+    const idsThisFind = collectIndexedDbPhotoIdsFromFind(find);
+
+    // 2) Photos still used elsewhere
+    const idsStillUsedElsewhere = collectIndexedDbPhotoIdsInUseExcludingFind(findId);
+
+    // 3) Delete only those not used elsewhere
+    const idsToDelete = [...idsThisFind].filter(id => !idsStillUsedElsewhere.has(id));
+
+    if (idsToDelete.length && typeof deletePhotoBlob === 'function') {
+        for (const id of idsToDelete) {
+            try {
+                await deletePhotoBlob(id);
+            } catch (e) {
+                console.warn('Failed to delete photo blob id', id, e);
+            }
+        }
+    }
+
+    // 4) Delete the find record
     finds.splice(idx, 1);
     saveFindsToLocalStorage();
 
-    showMessage('Find deleted.', 'success');
+    showMessage('Find deleted (including photos).', 'success');
     return true;
 }
-
  /**
  * Extract IndexedDB photo IDs from any mixture of:
  *  - "idb:123" strings
@@ -1233,7 +1381,7 @@ async function deleteSurveyAndAllAssociatedData(surveyId) {
     return true;
 }
        
-function deleteTargetPermanently(surveyId, targetId) {
+async function deleteTargetPermanently(surveyId, targetId) {
     const s = surveys.find(x => x.id === surveyId);
     if (!s || !Array.isArray(s.targets)) {
         showMessage('Delete failed: survey targets not found.', 'error');
@@ -1246,14 +1394,35 @@ function deleteTargetPermanently(surveyId, targetId) {
         return false;
     }
 
+    const target = s.targets[idx];
+
+    // 1) Photos referenced by THIS target
+    const idsThisTarget = collectIndexedDbPhotoIdsFromTarget(target);
+
+    // 2) Photos still used elsewhere (surveys/targets + finds)
+    const idsStillUsedElsewhere = collectIndexedDbPhotoIdsInUseExcludingTarget(surveyId, targetId);
+
+    // 3) Delete only those not used elsewhere
+    const idsToDelete = [...idsThisTarget].filter(id => !idsStillUsedElsewhere.has(id));
+
+    if (idsToDelete.length && typeof deletePhotoBlob === 'function') {
+        for (const id of idsToDelete) {
+            try {
+                await deletePhotoBlob(id);
+            } catch (e) {
+                console.warn('Failed to delete photo blob id', id, e);
+            }
+        }
+    }
+
+    // 4) Delete the target record
     s.targets.splice(idx, 1);
     s.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
-    showMessage('Target deleted.', 'success');
+    showMessage('Target deleted (including photos).', 'success');
     return true;
 }
-
         
 function purgeDeletedEverywhere({ alsoSave = true } = {}) {
     let removedTargets = 0;
@@ -4865,20 +5034,18 @@ function deleteFind(findId) {
         return;
     }
 
-    const executeDelete = () => {
-        if (deleteFindPermanently(findId)) {
-            render();
-        }
+    const executeDelete = async () => {
+        const ok = await deleteFindPermanently(findId);
+        if (ok) render();
     };
 
     showConfirmationModal(
         `Confirm Delete Find: ${find.description || 'this find'}`,
         `Are you sure you want to permanently delete this find?<br>
-         <span class="text-sm text-gray-600">This cannot be undone.</span>`,
+         <span class="text-sm text-gray-600">This will also delete any IndexedDB photos linked ONLY to this find. This cannot be undone.</span>`,
         executeDelete
     );
 }
-
         /** Generates a simple unique ID. */
         function generateId() {
             return Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
@@ -8627,14 +8794,16 @@ function handleTargetAction(element) {
             }
 
             case 'delete': {
-                // ✅ HARD DELETE (no deleted flag)
-                const ok = deleteTargetPermanently(surveyId, targetId);
-                if (ok && navigationTargetId === targetId) {
-                    navigationTargetId = null;
-                }
-                render(); // target is gone; re-render immediately
-                return;   // IMPORTANT: stop further processing
-            }
+    (async () => {
+        const ok = await deleteTargetPermanently(surveyId, targetId);
+        if (ok && navigationTargetId === targetId) {
+            navigationTargetId = null;
+        }
+        render();
+    })();
+
+    return; // IMPORTANT: stop further processing
+}
 
             default:
                 console.warn('Unknown target action:', action);
