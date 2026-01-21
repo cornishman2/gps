@@ -10411,19 +10411,30 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     }
 
     // 8. Map HTML
+    const transformStyle = `
+        transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
+        transform-origin: center center;
+    `;
+
+    const heightStyle = isMapFullscreen ? 'calc(100vh - 140px)' : '320px';
+
     return `
         <div class="relative w-full bg-gray-50 rounded-xl border border-gray-200 overflow-hidden"
-             style="height: 320px;"
+             style="height: ${heightStyle};"
              onclick="toggleMapFullscreen(event)"
-             id="survey-map-container"
+             id="target-map-container"
+             onmousedown="startMapDrag(event)"
+             ontouchstart="startMapDrag(event)"
         >
-            ${trackSvgHtml}
-            ${navLineHtml}
-            ${pinsHtml}
-            ${userHtml}
+            <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
+                ${trackSvgHtml}
+                ${navLineHtml}
+                ${pinsHtml}
+                ${userHtml}
+            </div>
 
             <!-- Zoom controls -->
-            <div class="absolute right-2 bottom-2 w-14 space-y-2" style="z-index: 30;">
+            <div class="map-zoom-controls absolute right-2 bottom-2 w-14 space-y-2" style="z-index: 30;">
                 <button
                     type="button"
                     class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
