@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V26
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V27
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8152,7 +8152,19 @@ function updateEditFindPhotoPreview() {
         // --- NEW SURVEY PHOTO HELPERS ---
 
 function triggerNewSurveyPhotoInput() {
-    triggerPhotoInput('new-survey-photo-input');
+    const input = document.getElementById('new-survey-photo-input');
+    if (!input) return;
+
+    // IMPORTANT:
+    // Ensure NO capture hint is present so the browser
+    // offers "Take photo" OR "Choose file"
+    input.removeAttribute('capture');
+
+    // Clear previous selection so the same photo can be reselected
+    input.value = '';
+
+    // Open camera/gallery chooser
+    input.click();
 }
 
 function handleNewSurveyPhotoSelected(event) {
