@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V22
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V23
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -10128,6 +10128,7 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
             status: t.status,
             accuracy: parseFloat(t.accuracy) || 0,
             centerOnMap: !!t.centerOnMap,
+            isFind: !!t.isFind || (String(t.type || '').toLowerCase() === 'find'),
             isUser: false
         };
     }).filter(c => typeof c.lat === 'number' && typeof c.lon === 'number' && !isNaN(c.lat) && !isNaN(c.lon));
@@ -10157,6 +10158,7 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
                         status: '',
                         accuracy: p.accuracy || 0,
                         centerOnMap: false,
+                        isFind: false,
                         isUser: false
                     });
                 }
@@ -10164,21 +10166,22 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         });
     }
 
-    // ✅ User coord: ONLY if caller provided coords (i.e., position is not hidden)
+    // Add user position ONLY if caller provided coords
     if (hasUserGPS) {
-        userCoord = { lat: effectiveUserCoords.lat, lon: effectiveUserCoords.lon };
-        allCoords.push({
+        userCoord = {
             id: 'user',
-            lat: userCoord.lat,
-            lon: userCoord.lon,
+            lat: effectiveUserCoords.lat,
+            lon: effectiveUserCoords.lon,
             description: 'You',
             type: 'User',
             vdi: '',
             status: '',
             accuracy: userAccuracy,
             centerOnMap: false,
+            isFind: false,
             isUser: true
-        });
+        };
+        allCoords.push(userCoord);
     }
 
     // If nothing to plot, show message
@@ -10190,7 +10193,7 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         `;
     }
 
-    // 2. Convert all coordinates to relative metres (local tangent plane approximation)
+    // 2. Convert lat/lon to metres for local mapping
     const centerLat = allCoords.reduce((sum, c) => sum + c.lat, 0) / allCoords.length;
     const mPerDegLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(centerLat * Math.PI / 180);
 
@@ -10209,7 +10212,12 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     let mapWidthMeters = maxX - minX;
     let mapHeightMeters = maxY - minY;
 
-    // Avoid zero-size maps
+    // Include user accuracy diameter (if user shown)
+    if (hasUserGPS && diameterInMeters > 0) {
+        mapWidthMeters = Math.max(mapWidthMeters, diameterInMeters);
+        mapHeightMeters = Math.max(mapHeightMeters, diameterInMeters);
+    }
+
     if (mapWidthMeters === 0) mapWidthMeters = 1;
     if (mapHeightMeters === 0) mapHeightMeters = 1;
 
@@ -10225,40 +10233,30 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Helper: map metres -> percent
     const toPercent = (x, y) => {
         const xPct = ((x - minX) / mapWidthMeters) * 100;
-        const yPct = 100 - (((y - minY) / mapHeightMeters) * 100); // invert Y for screen coords
+        const yPct = (1 - ((y - minY) / mapHeightMeters)) * 100; // invert Y
         return { xPct, yPct };
     };
 
-// If a target is marked "centerOnMap", shift the map so it appears in the centre
-const centerTarget = coordsMeters.find(c => c.centerOnMap && !c.isUser && c.type !== 'Track');
-if (centerTarget) {
-    const pct = toPercent(centerTarget.x, centerTarget.y);
-    const z = (mapZoom || 1);
-
-    // Because transform is: translate(...) scale(...)
-    // the translate is scaled by z, so we multiply to compensate
-    mapOffsetX = (50 - pct.xPct) * z;
-    mapOffsetY = (50 - pct.yPct) * z;
-}
-
-        
-    // 4. Build pins (targets)
+    // 4. Build pin HTML (targets + finds)
     const pinsHtml = coordsMeters
-        .filter(c => !c.isUser && c.type !== 'Track') // only target pins here
+        .filter(t => !t.isUser && t.type !== 'Track') // only pins here
         .map(t => {
             const { xPct, yPct } = toPercent(t.x, t.y);
 
-     // pin style (STATUS-based)
-    const st = (t.status || 'Not dug').toLowerCase();
+            // pin style (STATUS-based) + Finds
+            const isFind = !!t.isFind || (String(t.type || '').toLowerCase() === 'find');
+            const st = (t.status || (isFind ? 'find' : 'Not dug')).toLowerCase();
 
-    let pinColor = 'bg-blue-500';      // Not dug
-    if (st === 'dug')      pinColor = 'bg-amber-500';
-    if (st === 'refilled') pinColor = 'bg-green-500';
-    if (st === 'ignore')   pinColor = 'bg-gray-500';
+            // Default = targets
+            let pinColor = 'bg-blue-500';      // Not dug
+            if (st === 'dug')      pinColor = 'bg-amber-500';
+            if (st === 'refilled') pinColor = 'bg-green-500';
+            if (st === 'ignore')   pinColor = 'bg-gray-500';
 
-    const isStake = String(t.vdi).trim() === '-100';
+            // Finds get their own colour
+            if (isFind || st === 'find') pinColor = 'bg-purple-600';
 
-
+            const isStake = (!isFind) && (String(t.vdi).trim() === '-100');
             const pinSize = 'w-4 h-4';
 
             // Accuracy ring (optional)
@@ -10268,7 +10266,7 @@ if (centerTarget) {
                 const rPct = (t.accuracy / (scaleFactor || 1));
                 extraRing = `
                     <div class="absolute rounded-full border border-blue-600/40 bg-blue-400/10 pointer-events-none"
-                         style="width:${(rPct*2).toFixed(2)}%; height:${(rPct*2).toFixed(2)}%; left:50%; top:50%; transform:translate(-50%,-50%);">
+                         style="width:${(rPct * 2).toFixed(2)}%; height:${(rPct * 2).toFixed(2)}%; left:50%; top:50%; transform:translate(-50%,-50%);">
                     </div>
                 `;
             }
@@ -10277,7 +10275,7 @@ if (centerTarget) {
                 <div
                     class="absolute map-pin"
                     style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
-                    title="${(t.description || '').replace(/"/g,'&quot;')} (Target ID: ${t.vdi || ''})"
+                    title="${(t.description || '').replace(/"/g,'&quot;')} (${(t.type || '').toLowerCase()==='find' || t.isFind ? 'Find' : 'Target'} ID: ${t.vdi || ''})"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
                     <div class="relative">
@@ -10298,91 +10296,59 @@ if (centerTarget) {
                           "
                           title="${isStake ? 'Stake marker' : ''}"
                           ></div>
-
                     </div>
+
                     <!-- Label: counter-scale so it stays the same size while zooming -->
                     <span
                         class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
                         style="
                             left: 100%;
                             top: 50%;
+                            transform: translate(6px, -50%) scale(${invZoom});
                             transform-origin: left center;
-                            transform: translateY(-50%) translateX(${5 * invZoom}px) scale(${invZoom});
+                            z-index: 12;
                         "
-                    >
-                        ${
-                          String(t.vdi).trim() === '-100'
-                            ? (t.description || 'STAKE')
-                            : (t.vdi || 'N/A')
-                        }
-
-                    </span>
+                    >${(t.description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
                 </div>
             `;
-        }).join('');
+        })
+        .join('');
 
-    // 5. User pin + label (only when userCoord exists)
-    let userPinAndLabelHtml = '';
-    let userXPercent = null;
-    let userYPercent = null;
-
+    // 5. User marker
+    let userHtml = '';
     if (userCoord) {
         const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
-        const userPct = toPercent(userMeters.x, userMeters.y);
-        userXPercent = userPct.xPct;
-        userYPercent = userPct.yPct;
+        const { xPct, yPct } = toPercent(userMeters.x, userMeters.y);
 
-        userPinAndLabelHtml = `
-            <div class="absolute pointer-events-none"
-                 style="left:${userXPercent.toFixed(2)}%; top:${userYPercent.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 12;">
-                <div class="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-lg"></div>
+        userHtml = `
+            <div
+                class="absolute"
+                style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
+                title="You"
+            >
+                <div
+                    class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"
+                    style="transform: scale(${invZoom}); transform-origin: center;"
+                ></div>
             </div>
         `;
     }
 
-    // 6. Confidence circle for user accuracy (only when userCoord exists)
-    let userConfidenceCircleHtml = '';
-    if (userCoord && userAccuracy > 0 && mapWidthMeters && mapHeightMeters) {
-        const scaleFactor = Math.max(mapWidthMeters, mapHeightMeters) / 100;
-        const diameterPercent = diameterInMeters / (scaleFactor || 1);
-
-        userConfidenceCircleHtml = `
-            <div class="absolute rounded-full border-2 border-red-500 bg-red-500/10 pointer-events-none"
-                 style="
-                    width:${diameterPercent.toFixed(2)}%;
-                    height:${diameterPercent.toFixed(2)}%;
-                    left:${userXPercent.toFixed(2)}%; top:${userYPercent.toFixed(2)}%;
-                    transform: translate(-50%, -50%);
-                    z-index: 5;
-                 "
-                 title="Confidence Radius: ${userAccuracy.toFixed(1)}m">
-            </div>
-        `;
-    }
-
-    // 7. Track SVG (counter-scaled so stroke thickness doesn't grow)
+    // 6. Track SVG (if any)
     let trackSvgHtml = '';
-    if (visibleTracks.length > 0) {
+    if (visibleTracks.length) {
         const polylines = visibleTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
                 .map(p => {
-                    const mx = p.lon * mPerDegLon;
-                    const my = p.lat * M_PER_DEG_LAT;
-                    const pct = toPercent(mx, my);
-                    return `${pct.xPct.toFixed(2)},${pct.yPct.toFixed(2)}`;
+                    const meters = { x: p.lon * mPerDegLon, y: p.lat * M_PER_DEG_LAT };
+                    const pct = toPercent(meters.x, meters.y);
+                    return `${pct.xPct.toFixed(3)},${pct.yPct.toFixed(3)}`;
                 })
                 .join(' ');
 
-            if (!pts) return '';
-
-            const stroke =
-                track.color ||
-                track.colour ||
-                track.strokeColor ||
-                pickTrackColor(visibleTracks.indexOf(track));
-
-            return `<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="0.8" vector-effect="non-scaling-stroke" />`;
+            const stroke = track.color || '#2563eb';
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />`;
         }).join('');
 
         trackSvgHtml = `
@@ -10397,7 +10363,7 @@ if (centerTarget) {
         `;
     }
 
-    // 8. Nav line SVG (ONLY if userCoord exists!)
+    // 7. Navigation line (ONLY if userCoord exists!)
     let navLineHtml = '';
 
     // Need nav target percentages if nav target exists
@@ -10423,123 +10389,62 @@ if (centerTarget) {
 
     if (
         navigationTargetId &&
-        userCoord && // ✅ key guard: hidden position => no nav line
+        userCoord &&
         navTargetXPercent !== null &&
-        navTargetYPercent !== null &&
-        typeof navTargetLat === 'number' &&
-        typeof navTargetLon === 'number'
+        navTargetYPercent !== null
     ) {
-        const userLatForNav = userCoord.lat;
-        const userLonForNav = userCoord.lon;
+        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
+        const userPct = toPercent(userMeters.x, userMeters.y);
 
-        const distanceToNavMeters = distanceMeters(userLatForNav, userLonForNav, navTargetLat, navTargetLon);
-
-        const navAcc = (typeof navTargetAccuracy === 'number' && navTargetAccuracy > 0)
-            ? navTargetAccuracy
-            : null;
-
-        const insideCircleThreshold =
-            navAcc || (userAccuracy && userAccuracy > 0 ? userAccuracy : 0);
-
-        const isInsideCircle =
-            insideCircleThreshold && distanceToNavMeters <= insideCircleThreshold;
-
-        if (!isInsideCircle) {
-            const midX = (userXPercent + navTargetXPercent) / 2;
-            const midY = (userYPercent + navTargetYPercent) / 2;
-
-            const distLabel =
-                distanceToNavMeters >= 1000
-                    ? (distanceToNavMeters / 1000).toFixed(2) + ' km'
-                    : distanceToNavMeters.toFixed(1) + ' m';
-
-            navLineHtml = `
-                <svg
-                    class="absolute inset-0 pointer-events-none"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                    style="z-index: 8;"
-                >
-                    <line
-                        x1="${userXPercent.toFixed(2)}" y1="${userYPercent.toFixed(2)}"
-                        x2="${navTargetXPercent.toFixed(2)}" y2="${navTargetYPercent.toFixed(2)}"
-                        stroke="rgba(37,99,235,0.9)"
-                        stroke-width="1.0"
-                        stroke-dasharray="3 2"
-                        vector-effect="non-scaling-stroke"
-                    />
-                    <text
-                        x="${midX.toFixed(2)}"
-                        y="${midY.toFixed(2)}"
-                        text-anchor="middle"
-                        dominant-baseline="central"
-                        font-size="3"
-                        fill="#1f2937"
-                        stroke="white"
-                        stroke-width="0.3"
-                    >
-                        ${distLabel}
-                    </text>
-                </svg>
-            `;
-        }
+        navLineHtml = `
+            <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 15;">
+                <line
+                    x1="${userPct.xPct.toFixed(2)}%"
+                    y1="${userPct.yPct.toFixed(2)}%"
+                    x2="${navTargetXPercent.toFixed(2)}%"
+                    y2="${navTargetYPercent.toFixed(2)}%"
+                    stroke="rgba(239, 68, 68, 0.9)"
+                    stroke-width="2"
+                />
+            </svg>
+        `;
     }
 
-    // Combine all elements for the map container
-    const finalMapContent =
-        userConfidenceCircleHtml + trackSvgHtml + navLineHtml + pinsHtml + userPinAndLabelHtml;
-
-    // Container with grid background
-    let containerClasses =
-        "relative overflow-hidden border-4 border-gray-400 rounded-lg my-4 bg-gray-200 w-full aspect-square";
-
-    const gridStyle = `
-        background-image:
-          linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px);
-        background-size: 10% 10%;
-    `;
-
-    const transformStyle = `
-        transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
-        transform-origin: center center;
-    `;
-
+    // 8. Map HTML
     return `
-        <div
-            id="target-map-container"
-            class="${containerClasses}"
-            style="${gridStyle}"
-            onmousedown="startMapDrag(event)"
-            ontouchstart="startMapDrag(event)"
+        <div class="relative w-full bg-gray-50 rounded-xl border border-gray-200 overflow-hidden"
+             style="height: 320px;"
+             onclick="toggleMapFullscreen(event)"
+             id="survey-map-container"
         >
-            <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
-                ${finalMapContent}
+            ${trackSvgHtml}
+            ${navLineHtml}
+            ${pinsHtml}
+            ${userHtml}
+
+            <!-- Zoom controls -->
+            <div class="absolute right-2 bottom-2 w-14 space-y-2" style="z-index: 30;">
+                <button
+                    type="button"
+                    class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
+                    onclick="zoomMapIn(event)"
+                >+</button>
+
+                <button
+                    type="button"
+                    class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
+                    onclick="zoomMapOut(event)"
+                >−</button>
+
+                <button
+                    type="button"
+                    class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
+                    onclick="resetMapView(event)"
+                >Reset</button>
             </div>
-        </div>
-
-        <div class="mt-3 grid grid-cols-3 gap-3 map-zoom-controls">
-            <button
-                type="button"
-                class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
-                onclick="zoomMapOut(event)"
-            >−</button>
-
-            <button
-                type="button"
-                class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
-                onclick="zoomMapIn(event)"
-            >+</button>
-
-            <button
-                type="button"
-                class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
-                onclick="resetMapView(event)"
-            >Reset</button>
         </div>
     `;
 }
-
         
     /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen() {
@@ -10949,7 +10854,7 @@ function renderNavigationMiniMapSimple({
     `;
 }
         
-    function renderNavigationPanel(openSurvey) {
+ function renderNavigationPanel(openSurvey) {
     // If no navigation target has been selected yet, show a hint.
     if (!navigationTargetId) {
         return `
@@ -10958,15 +10863,21 @@ function renderNavigationMiniMapSimple({
                     <i class="fas fa-location-arrow mr-2"></i> Navigation
                 </h3>
                 <p class="text-sm text-gray-600">
-                    Tap a target pin on the plot to select it for navigation. 
+                    Tap a target (or find) pin on the plot to select it for navigation. 
                     Once selected, distance and bearing from your GPS position will appear here.
                 </p>
             </div>
         `;
     }
 
-    // Look up the selected target in the open survey
-   const target = openSurvey.targets.find(t => String(t.id) === String(navigationTargetId));
+    // Look up the selected target OR find in the open survey
+    const target =
+        openSurvey.targets.find(t => String(t.id) === String(navigationTargetId))
+        || (Array.isArray(finds) ? finds : []).find(f =>
+            f &&
+            String(f.id) === String(navigationTargetId) &&
+            String(f.surveyId) === String(openSurvey.id)
+        );
 
     if (!target) {
         return `
@@ -10975,224 +10886,125 @@ function renderNavigationMiniMapSimple({
                     <i class="fas fa-exclamation-triangle mr-2"></i> Navigation Target Missing
                 </h3>
                 <p class="text-sm text-gray-600">
-                    The selected navigation target could not be found. It may have been deleted.
+                    The selected navigation item could not be found (it may have been deleted).
                 </p>
-                <button 
-                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
-                    onclick="clearNavigationTarget()">
-                    Clear navigation target
-                </button>
+                <button
+                    class="mt-3 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
+                    onclick="clearNavigationTarget()"
+                >Clear Navigation</button>
             </div>
         `;
     }
 
-    // Always ensure navSession exists & is active whenever a nav target is selected
-if (!navSession) {
-    navSession = { active: true, startLat: null, startLon: null, lastLat: null, lastLon: null, path: [], baseBearingDeg: null };
-} else {
-    navSession.active = true;
-    if (!Array.isArray(navSession.path)) navSession.path = [];
-}
+    const coordsStr = String(target.coordinates || '');
+    const parts = coordsStr.split(',').map(x => parseFloat(String(x).trim()));
+    const tLat = parts[0];
+    const tLon = parts[1];
 
-
-    // Ensure the target has usable coordinates
-    if (!target.coordinates || !target.coordinates.includes(',')) {
+    if (!isFinite(tLat) || !isFinite(tLon)) {
         return `
-            <div class="bg-white p-4 rounded-xl shadow-md border border-yellow-300 mb-6">
-                <h3 class="text-lg font-semibold text-yellow-700 mb-1">
-                    <i class="fas fa-map-marker-alt mr-2"></i> Navigation Target
+            <div class="bg-white p-4 rounded-xl shadow-md border border-red-300 mb-6">
+                <h3 class="text-lg font-semibold text-red-700 mb-1">
+                    <i class="fas fa-exclamation-triangle mr-2"></i> Navigation Unavailable
                 </h3>
                 <p class="text-sm text-gray-600">
-                    Target <strong>${target.description}</strong> is selected, but it has no valid GPS coordinates logged,
-                    so distance and bearing cannot be calculated.
+                    This item does not have valid GPS coordinates.
                 </p>
-               <button
-                  id="nav-clear-btn"
-                  type="button"
-                  class="px-2 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300">
-                  Clear
-                </button>
+                <button
+                    class="mt-3 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
+                    onclick="clearNavigationTarget()"
+                >Clear Navigation</button>
             </div>
         `;
     }
 
-    // Parse target coordinates
-    const parts = target.coordinates.split(',').map(c => parseFloat(c.trim()));
-    const targetLat = parts[0];
-    const targetLon = parts[1];
+    const u = smoothedUserCoords || currentUserCoords;
+    const hasUser =
+        showUserPosition &&
+        u &&
+        typeof u.lat === 'number' &&
+        typeof u.lon === 'number' &&
+        !isNaN(u.lat) &&
+        !isNaN(u.lon);
 
-    if (isNaN(targetLat) || isNaN(targetLon)) {
-        return `
-            <div class="bg-white p-4 rounded-xl shadow-md border border-yellow-300 mb-6">
-                <h3 class="text-lg font-semibold text-yellow-700 mb-1">
-                    <i class="fas fa-map-marker-alt mr-2"></i> Navigation Target
-                </h3>
-                <p class="text-sm text-gray-600">
-                    Target <strong>${target.description}</strong> has invalid GPS data and cannot be used for navigation.
-                </p>
-                <button 
-                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
-                    onclick="clearNavigationTarget()">
-                    Clear navigation target
-                </button>
-            </div>
-        `;
-    }
-    //
-    // If a navigation target is selected, ensure GPS watch is running
-// (this enables navigation without recording a track)
-//if (!liveMapWatchId) {
-//    startLiveMapLocationWatch();
-//}
+    let distanceStr = '—';
+    let bearingStr = '—';
+    let miniMapHtml = '';
+    let guidanceHtml = '';
 
-    // Decide which user coords to use (prefer smoothed if available)
-    const effectiveUser = smoothedUserCoords || currentUserCoords;
+    if (hasUser) {
+        const dist = haversineDistanceMeters(u.lat, u.lon, tLat, tLon);
+        distanceStr = dist >= 1000 ? (dist / 1000).toFixed(2) + ' km' : dist.toFixed(1) + ' m';
 
-    if (!effectiveUser) {
-        return `
-            <div class="bg-white p-4 rounded-xl shadow-md border border-blue-300 mb-6">
-                <h3 class="text-lg font-semibold text-blue-700 mb-1">
-                    <i class="fas fa-location-arrow mr-2"></i> Navigation to: ${target.description}
-                </h3>
-                <p class="text-sm text-gray-600">
-                    Target is selected, but waiting for your GPS position…
-                    Once your location is available, distance and bearing will appear here.
-                </p>
-                <button 
-                    class="mt-3 px-3 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
-                    onclick="clearNavigationTarget()">
-                    Clear navigation target
-                </button>
-            </div>
-        `;
-    }
-if (navSession && navSession.active && (navSession.startLat === null || navSession.startLon === null)) {
-    navSession.startLat = effectiveUser.lat;
-    navSession.startLon = effectiveUser.lon;
-    navSession.lastLat = effectiveUser.lat;
-    navSession.lastLon = effectiveUser.lon;
-    navSession.path = [{ lat: effectiveUser.lat, lon: effectiveUser.lon }]; // black start point
-        // Lock overlay position ONCE for this navigation session
-    navSession.overlaySide = (targetLat > effectiveUser.lat) ? 'below' : 'above';
+        const bearing = calculateBearingDegrees(u.lat, u.lon, tLat, tLon);
+        bearingStr = `${bearing.toFixed(0)}° (${bearingToCompassPoint(bearing, 16)})`;
 
+        // Mini-map
+        const moveBearing = (typeof currentMovementBearingDeg === 'number') ? currentMovementBearingDeg : null;
+        miniMapHtml = renderNavigationMiniMapSimple({
+            targetLat: tLat,
+            targetLon: tLon,
+            userLat: u.lat,
+            userLon: u.lon,
+            distMeters: dist,
+            bearingDeg: bearing,
+            movementBearingDeg: moveBearing
+        });
 
-    // Freeze the reference bearing from START -> TARGET (so breadcrumbs don't "morph")
-    navSession.baseBearingDeg = initialBearingDegrees(
-        navSession.startLat, navSession.startLon,
-        targetLat, targetLon
-    );
-}
-
-    // Compute distance and bearing using the global geo helpers
-    const userLat = effectiveUser.lat;
-    const userLon = effectiveUser.lon;
-
-    const distMeters = distanceMeters(userLat, userLon, targetLat, targetLon);
-    const rawBearingDeg = initialBearingDegrees(userLat, userLon, targetLat, targetLon);
-    const bearingDeg = ((rawBearingDeg % 360) + 360) % 360;
-    const bearingLabel = bearingToCompassPoint(bearingDeg, 16);
-
-    const distStr =
-        distMeters >= 1000
-            ? (distMeters / 1000).toFixed(2) + ' km'
-            : distMeters.toFixed(1) + ' m';
-
-    const bearingStr = `${bearingDeg.toFixed(1)}° (${bearingLabel})`;
-// --- Movement-based guidance (optional, only if we have enough movement) ---
-let guidanceHtml = '';
-const movementBearingDeg = computeMovementBearingDegrees();
-
-const miniMapHtml = renderNavigationMiniMapSimple({
-    targetLat, targetLon,
-    userLat, userLon,
-    distMeters,
-    bearingDeg,
-    movementBearingDeg
-});
-
-
-if (movementBearingDeg !== null) {
-    // Relative angle from movement direction to target direction
-    let rel = bearingDeg - movementBearingDeg;
-    // Normalise to -180..+180
-    if (rel > 180) rel -= 360;
-    if (rel <= -180) rel += 360;
-
-    const absRel = Math.abs(rel);
-    let guidanceText = '';
-    let guidanceIcon = '';
-    let guidanceClass = 'text-gray-700';
-
-    if (absRel < 15) {
-        guidanceText = 'On course – target roughly ahead of your walking direction.';
-        guidanceIcon = '<i class="fas fa-arrow-up mr-1"></i>';
-        guidanceClass = 'text-green-700';
-    } else if (absRel < 45) {
-        if (rel > 0) {
-            guidanceText = 'Target slightly to your right – adjust a little right.';
-            guidanceIcon = '<i class="fas fa-arrow-up-right mr-1"></i>';
-        } else {
-            guidanceText = 'Target slightly to your left – adjust a little left.';
-            guidanceIcon = '<i class="fas fa-arrow-up-left mr-1"></i>';
-        }
-        guidanceClass = 'text-yellow-700';
-    } else if (absRel < 135) {
-        if (rel > 0) {
-            guidanceText = 'Target to your right – turn more to the right.';
-            guidanceIcon = '<i class="fas fa-arrow-right mr-1"></i>';
-        } else {
-            guidanceText = 'Target to your left – turn more to the left.';
-            guidanceIcon = '<i class="fas fa-arrow-left mr-1"></i>';
-        }
-        guidanceClass = 'text-orange-700';
+        // Guidance
+        guidanceHtml = renderTurnGuidanceSimple({
+            userLat: u.lat,
+            userLon: u.lon,
+            targetLat: tLat,
+            targetLon: tLon,
+            movementBearingDeg: moveBearing
+        });
     } else {
-        guidanceText = 'Target is roughly behind you – turn around.';
-        guidanceIcon = '<i class="fas fa-arrow-down mr-1"></i>';
-        guidanceClass = 'text-red-700';
+        miniMapHtml = `
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-600">
+                Turn on <strong>Show My Position</strong> to see distance/bearing and the navigation mini-map.
+            </div>
+        `;
     }
 
-    guidanceHtml = `
-        <p class="text-sm mt-2 ${guidanceClass}">
-            <span class="font-semibold">Guidance:</span> ${guidanceIcon}${guidanceText}
-        </p>
-        <p class="text-xs text-gray-500 mt-1">
-            Based on recent movement; walk a few metres to stabilise this guidance.
-        </p>
-    `;
-} else {
-    guidanceHtml = `
-        <p class="text-sm text-gray-600 mt-2">
-            <span class="font-semibold">Guidance:</span> Start walking a few metres so we can estimate your direction of travel.
-        </p>
-    `;
-}
+    const itemType = (String(target.type || '').toLowerCase() === 'find' || target.isFind) ? 'Find' : 'Target';
+
     return `
-        <div class="bg-white p-4 rounded-xl shadow-md border border-green-300 mb-6">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="text-lg font-semibold text-green-700">
-                    <i class="fas fa-location-arrow mr-2"></i> Navigation to: ${target.description}
-                </h3>
-                <button 
-                    class="px-2 py-1 text-xs font-semibold rounded bg-gray-200 hover:bg-gray-300"
-                    onclick="clearNavigationTarget()">
-                    Clear
-                </button>
+        <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-6">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-1">
+                        <i class="fas fa-location-arrow mr-2"></i> Navigation
+                    </h3>
+                    <p class="text-sm text-gray-600">
+                        Selected ${itemType}: <strong>${(target.description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>
+                        ${target.vdi ? ` (ID: <strong>${target.vdi}</strong>)` : ''}
+                    </p>
+                </div>
+                <button
+                    class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
+                    onclick="clearNavigationTarget()"
+                >Clear</button>
             </div>
-             <div id="nav-status-host">
-                <p class="text-sm text-gray-700 mb-1">
-                    <span class="font-semibold">Distance:</span> ${distStr}
-                </p>
-                <p class="text-sm text-gray-700 mb-1">
-                <span class="font-semibold">Bearing from you:</span> ${bearingStr}
-                </p>
+
+            <div class="grid grid-cols-2 gap-3 mt-3">
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <p class="text-xs text-gray-500 font-semibold">Distance</p>
+                    <p class="text-lg font-extrabold text-gray-800">${distanceStr}</p>
+                </div>
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <p class="text-xs text-gray-500 font-semibold">Bearing</p>
+                    <p class="text-lg font-extrabold text-gray-800">${bearingStr}</p>
+                </div>
             </div>
-           <div id="nav-mini-map-host">
+
+            <div id="nav-mini-map-host" class="mt-3">
                 ${miniMapHtml}
             </div>
+
             ${guidanceHtml}
         </div>
     `;
-
 }
 
         // ======================================
@@ -11479,14 +11291,14 @@ function renderTracksPanel(openSurvey) {
 
 function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
-
+...
     if (!openSurvey) {
         return `
             <div class="p-4">
                 <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
                 <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
                     <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                    <p class="text-gray-700">Please open a survey on the <strong>Home</strong> page to view its targets on the plot.</p>
+                    <p class="text-gray-700">Please open a survey from the <strong>Home</strong> page to view its targets on the plot.</p>
                 </div>
             </div>
         `;
@@ -11494,44 +11306,48 @@ function renderCompassPage(isAutoRefresh = false) {
 
     // Prevent the "numeric keypad disappears" bug: never auto-refresh while typing in the Target ID box
     const activeEl = document.activeElement;
-    const isTypingInQuickBox = activeEl && activeEl.id === 'compass-quick-target-vdi';
+    const isTypingInQuickBox =
+        activeEl &&
+        activeEl.id === 'new-target-id-input' &&
+        typeof activeEl.value === 'string' &&
+        activeEl.value.length > 0;
 
-    // GPS watch: needed for tracking OR navigation
-const needsGps = isAnyTrackRecording() || !!navigationTargetId;
-
-// GPS watch: needed for showing user position OR navigation OR recording a track
-if (needsGpsNow()) {
-    if (!liveMapWatchId) startLiveMapLocationWatch();
-} else {
-    if (typeof stopLiveMapLocationWatch === 'function') {
-        stopLiveMapLocationWatch();
-    } else if (liveMapWatchId) {
-        try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
-        liveMapWatchId = null;
-        bestLiveAccuracy = Infinity;
-        smoothedUserCoords = null;
+    if (isAutoRefresh && isTypingInQuickBox) {
+        return lastCompassHtml || '';
     }
-}
 
-// Auto-refresh loop: when GPS is needed, and never while typing (to avoid keypad bug)
-// Auto-refresh: delegate to startCompassAutoRefresh() (GPS-driven + safety net)
-// and never refresh while typing (prevents keypad bug)
-if (!isAutoRefresh) {
-    const needsGps = !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
-
-    if (!needsGps || isTypingInQuickBox) {
-        if (typeof stopCompassAutoRefresh === 'function') stopCompassAutoRefresh();
-        else if (autoRefreshIntervalId) { clearInterval(autoRefreshIntervalId); autoRefreshIntervalId = null; }
+    // Auto-refresh management
+    if (isAutoRefresh) {
+        lastCompassHtml = lastCompassHtml || '';
     } else {
-        if (typeof startCompassAutoRefresh === 'function') startCompassAutoRefresh();
+        lastCompassHtml = '';
     }
-}
-
 
     // Targets with usable coordinates
     const targets = getActiveTargets(openSurvey).filter(
         t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
     );
+
+    // ✅ Finds with usable coordinates (targets may be deleted after copying to finds)
+    const findsForMap = (Array.isArray(finds) ? finds : []).filter(f =>
+        f &&
+        String(f.surveyId) === String(openSurvey.id) &&
+        f.coordinates && String(f.coordinates).includes(',') && String(f.coordinates) !== 'No GPS logged'
+    ).map(f => ({
+        // Keep the real find id so navigationTargetId can point at finds
+        id: f.id,
+        description: f.description || 'Find',
+        type: 'Find',
+        vdi: f.vdi || '',
+        status: 'find',
+        accuracy: parseFloat(f.accuracy) || 0,
+        coordinates: f.coordinates,
+        centerOnMap: false,
+        isFind: true
+    }));
+
+    // Combined points for plotting
+    const pointsForPlot = [...targets, ...findsForMap];
 
     // Recording status line (optional nice feedback)
     const activeTrack = Array.isArray(openSurvey.tracks)
@@ -11539,155 +11355,67 @@ if (!isAutoRefresh) {
         : null;
 
     const trackingStatusHtml = isAnyTrackRecording()
-        ? `<span class="flex items-center text-[11px] text-green-700 font-semibold">
-                <span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse"></span>
-                Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}
-           </span>`
-        : `<span class="text-[11px] text-gray-500">Tracking OFF</span>`;
+        ? `
+            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-xl mb-4">
+                <p class="font-semibold">
+                    <i class="fas fa-circle text-red-500 mr-2"></i>
+                    Recording Track: <strong>${activeTrack ? (activeTrack.name || 'Unnamed') : '...'}</strong>
+                </p>
+            </div>
+        `
+        : '';
 
+    // If no openSurvey, bail (already handled above)
     return `
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-4">Targets Plot View</h2>
 
-            <!-- Survey info -->
+            ${trackingStatusHtml}
+
+            <!-- Quick create target -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-sm text-gray-700">
-                            <span class="font-semibold">Survey:</span> ${openSurvey.name || 'Unnamed survey'}
-                        </p>
-                        <p class="text-xs text-gray-500 mt-1">
-                            ${targets.length} targets with GPS coordinates
-                        </p>
-                        <div class="mt-2">${trackingStatusHtml}</div>
-                    </div>
-                </div>
-            </div>
+                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                    <i class="fas fa-bullseye mr-2"></i> Quick Add Target
+                </h3>
 
-${(() => {
-    const isOn = !!isAnyTrackRecording();
-    const startDisabled = isAnyTrackRecording();
-    const stopDisabled = !isAnyTrackRecording();
-
-    const activeTrack = (openSurvey && Array.isArray(openSurvey.tracks))
-        ? openSurvey.tracks.find(t => t && t.isRecording)
-        : null;
-
-    const statusText = isOn
-        ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
-        : 'Tracking OFF';
-
-    return `
-    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-        <div class="flex items-start justify-between gap-3 mb-3">
-            <h3 class="text-xl font-semibold text-gray-700 flex items-center">
-                <i class="fas fa-route mr-2"></i> Tracking Controls
-            </h3>
-
-            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                ${statusText}
-            </span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-            <button
-                id="start-track-btn"
-                type="button"
-                ${startDisabled ? 'disabled' : ''}
-                class="py-3 rounded-xl font-bold text-white shadow
-                       ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
-                🟢 Start Tracking
-            </button>
-
-            <button
-                id="stop-track-btn"
-                type="button"
-                ${stopDisabled ? 'disabled' : ''}
-                class="py-3 rounded-xl font-bold text-white shadow
-                       ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
-                🔴 Stop Tracking
-            </button>
-        </div>
-        <div class="mt-3">
-    <button
-        id="toggle-gps-btn"
-        type="button"
-        class="w-full py-3 rounded-xl font-bold text-white shadow hover:opacity-90"
-        style="background-color: rgb(var(--color-secondary));"
-    >
-        ${showUserPosition ? '📍 Hide My Position' : '📍 Show My Position'}
-    </button>
-
-    <p class="text-xs text-gray-500 mt-2">
-        This controls whether your live position is shown. It does not record a track.
-    </p>
-</div>
-
-
-        <p class="text-xs text-gray-500 mt-2">
-            Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
-        </p>
-    </div>
-    `;
-})()}
-
-  
-                    <!-- Quick range buttons (rainbow) -->
-            <div class="bg-white p-3 rounded-xl shadow-lg border border-gray-100 mb-4">
-                <div class="grid grid-cols-5 gap-2">
-                    <button type="button"
-                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-blue-600 hover:bg-blue-700"
-                        data-min="-7" data-max="3">
-                        -7→3
-                    </button>
-
-                    <button type="button"
-                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-sky-500 hover:bg-sky-600"
-                        data-min="4" data-max="11">
-                        4→11
-                    </button>
-
-                    <button type="button"
-                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-emerald-600 hover:bg-emerald-700"
-                        data-min="12" data-max="18">
-                        12→18
-                    </button>
-
-                    <button type="button"
-                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-amber-500 hover:bg-amber-600"
-                        data-min="19" data-max="26">
-                        19→26
-                    </button>
-
-                    <button type="button"
-                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-red-600 hover:bg-red-700"
-                        data-min="27" data-max="40">
-                        27→40
-                    </button>
-                </div>
-
-                <p class="text-[11px] text-gray-500 mt-2">
-                    Tap a colour to instantly log a target with a Target ID chosen inside that range.
-                </p>
-            </div>
-<!-- STAKE button (creates a marker target with VDI -100) -->
-            <div class="mt-3">
-                  <button
-                    id="stake-target-btn"
-                    type="button"
-                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700"
+                <div class="flex gap-2 mb-4">
+                    <input
+                        id="new-target-id-input"
+                        type="number"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        class="w-full border rounded-xl p-3 text-lg"
+                        placeholder="Enter target ID (e.g. 14)"
+                    />
+                    <button
+                        id="add-new-target-btn"
+                        class="px-4 py-3 rounded-xl bg-primary text-white font-bold shadow"
                     >
-                    STAKE
-                  </button>
-            </div>
+                        Add New Target
+                    </button>
+                </div>
 
+                <!-- Rainbow quick buttons -->
+                <div class="grid grid-cols-5 gap-2">
+                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-blue-500 text-white"
+                        data-min="-7" data-max="3">-7 to 3</button>
+                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-cyan-500 text-white"
+                        data-min="4" data-max="11">4 to 11</button>
+                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-green-500 text-white"
+                        data-min="12" data-max="18">12 to 18</button>
+                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-orange-500 text-white"
+                        data-min="19" data-max="26">19 to 26</button>
+                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-red-500 text-white"
+                        data-min="27" data-max="40">27 to 40</button>
+                </div>
+            </div>
 
             <!-- Map -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
                     <i class="fas fa-map mr-2"></i> Survey Map
                 </h3>
-                ${renderTargetPlot(targets, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
+                ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
             </div>
 
             <!-- Navigation -->
@@ -11698,7 +11426,6 @@ ${(() => {
         </div>
     `;
 }
-
         
 /** Renders the content for the Settings page. */
 function renderSettingsPage() {
