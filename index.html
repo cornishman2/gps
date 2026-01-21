@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V23
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V24
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11291,14 +11291,14 @@ function renderTracksPanel(openSurvey) {
 
 function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
-...
+
     if (!openSurvey) {
         return `
             <div class="p-4">
                 <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
                 <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
                     <h3 class="text-xl font-bold text-red-600 mb-3">No Open Survey</h3>
-                    <p class="text-gray-700">Please open a survey from the <strong>Home</strong> page to view its targets on the plot.</p>
+                    <p class="text-gray-700">Please open a survey on the <strong>Home</strong> page to view its targets on the plot.</p>
                 </div>
             </div>
         `;
@@ -11306,21 +11306,37 @@ function renderCompassPage(isAutoRefresh = false) {
 
     // Prevent the "numeric keypad disappears" bug: never auto-refresh while typing in the Target ID box
     const activeEl = document.activeElement;
-    const isTypingInQuickBox =
-        activeEl &&
-        activeEl.id === 'new-target-id-input' &&
-        typeof activeEl.value === 'string' &&
-        activeEl.value.length > 0;
+    const isTypingInQuickBox = activeEl && activeEl.id === 'compass-quick-target-vdi';
 
-    if (isAutoRefresh && isTypingInQuickBox) {
-        return lastCompassHtml || '';
+    // GPS watch: needed for tracking OR navigation
+    const needsGps = isAnyTrackRecording() || !!navigationTargetId;
+
+    // GPS watch: needed for showing user position OR navigation OR recording a track
+    if (needsGpsNow()) {
+        if (!liveMapWatchId) startLiveMapLocationWatch();
+    } else {
+        if (typeof stopLiveMapLocationWatch === 'function') {
+            stopLiveMapLocationWatch();
+        } else if (liveMapWatchId) {
+            try { navigator.geolocation.clearWatch(liveMapWatchId); } catch (e) {}
+            liveMapWatchId = null;
+            bestLiveAccuracy = Infinity;
+            smoothedUserCoords = null;
+        }
     }
 
-    // Auto-refresh management
-    if (isAutoRefresh) {
-        lastCompassHtml = lastCompassHtml || '';
-    } else {
-        lastCompassHtml = '';
+    // Auto-refresh loop: when GPS is needed, and never while typing (to avoid keypad bug)
+    // Auto-refresh: delegate to startCompassAutoRefresh() (GPS-driven + safety net)
+    // and never refresh while typing (prevents keypad bug)
+    if (!isAutoRefresh) {
+        const needsGps = !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
+
+        if (!needsGps || isTypingInQuickBox) {
+            if (typeof stopCompassAutoRefresh === 'function') stopCompassAutoRefresh();
+            else if (autoRefreshIntervalId) { clearInterval(autoRefreshIntervalId); autoRefreshIntervalId = null; }
+        } else {
+            if (typeof startCompassAutoRefresh === 'function') startCompassAutoRefresh();
+        }
     }
 
     // Targets with usable coordinates
@@ -11328,25 +11344,29 @@ function renderCompassPage(isAutoRefresh = false) {
         t => t.coordinates && t.coordinates.includes(',') && t.coordinates !== 'No GPS logged'
     );
 
-    // ✅ Finds with usable coordinates (targets may be deleted after copying to finds)
-    const findsForMap = (Array.isArray(finds) ? finds : []).filter(f =>
-        f &&
-        String(f.surveyId) === String(openSurvey.id) &&
-        f.coordinates && String(f.coordinates).includes(',') && String(f.coordinates) !== 'No GPS logged'
-    ).map(f => ({
-        // Keep the real find id so navigationTargetId can point at finds
-        id: f.id,
-        description: f.description || 'Find',
-        type: 'Find',
-        vdi: f.vdi || '',
-        status: 'find',
-        accuracy: parseFloat(f.accuracy) || 0,
-        coordinates: f.coordinates,
-        centerOnMap: false,
-        isFind: true
-    }));
+    // ✅ FINDS with usable coordinates (because targets may be deleted after copying to finds)
+    const findsForMap = (Array.isArray(finds) ? finds : [])
+        .filter(f =>
+            f &&
+            String(f.surveyId) === String(openSurvey.id) &&
+            f.coordinates &&
+            String(f.coordinates).includes(',') &&
+            String(f.coordinates) !== 'No GPS logged'
+        )
+        .map(f => ({
+            // Important: Keep the real find ID so navigationTargetId can refer to finds
+            id: f.id,
+            description: f.description || 'Find',
+            type: 'Find',
+            vdi: f.vdi || '',
+            status: 'find',
+            accuracy: f.accuracy || '',
+            coordinates: f.coordinates,
+            centerOnMap: false,
+            isFind: true
+        }));
 
-    // Combined points for plotting
+    // ✅ Combined points for plotting
     const pointsForPlot = [...targets, ...findsForMap];
 
     // Recording status line (optional nice feedback)
@@ -11355,59 +11375,146 @@ function renderCompassPage(isAutoRefresh = false) {
         : null;
 
     const trackingStatusHtml = isAnyTrackRecording()
-        ? `
-            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-xl mb-4">
-                <p class="font-semibold">
-                    <i class="fas fa-circle text-red-500 mr-2"></i>
-                    Recording Track: <strong>${activeTrack ? (activeTrack.name || 'Unnamed') : '...'}</strong>
-                </p>
-            </div>
-        `
-        : '';
+        ? `<span class="flex items-center text-[11px] text-green-700 font-semibold">
+                <span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse"></span>
+                Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}
+           </span>`
+        : `<span class="text-[11px] text-gray-500">Tracking OFF</span>`;
 
-    // If no openSurvey, bail (already handled above)
     return `
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-4">Targets Plot View</h2>
 
-            ${trackingStatusHtml}
-
-            <!-- Quick create target -->
+            <!-- Survey info -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
-                    <i class="fas fa-bullseye mr-2"></i> Quick Add Target
-                </h3>
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            <span class="font-semibold">Survey:</span> ${openSurvey.name || 'Unnamed survey'}
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            ${targets.length} targets with GPS coordinates · ${findsForMap.length} finds with GPS coordinates
+                        </p>
+                        <div class="mt-2">${trackingStatusHtml}</div>
+                    </div>
+                </div>
+            </div>
 
-                <div class="flex gap-2 mb-4">
-                    <input
-                        id="new-target-id-input"
-                        type="number"
-                        inputmode="numeric"
-                        pattern="[0-9]*"
-                        class="w-full border rounded-xl p-3 text-lg"
-                        placeholder="Enter target ID (e.g. 14)"
-                    />
-                    <button
-                        id="add-new-target-btn"
-                        class="px-4 py-3 rounded-xl bg-primary text-white font-bold shadow"
-                    >
-                        Add New Target
+${(() => {
+    const isOn = !!isAnyTrackRecording();
+    const startDisabled = isAnyTrackRecording();
+    const stopDisabled = !isAnyTrackRecording();
+
+    const activeTrack = (openSurvey && Array.isArray(openSurvey.tracks))
+        ? openSurvey.tracks.find(t => t && t.isRecording)
+        : null;
+
+    const statusText = isOn
+        ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
+        : 'Tracking OFF';
+
+    return `
+    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <h3 class="text-xl font-semibold text-gray-700 flex items-center">
+                <i class="fas fa-route mr-2"></i> Tracking Controls
+            </h3>
+
+            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                ${statusText}
+            </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button
+                id="start-track-btn"
+                type="button"
+                ${startDisabled ? 'disabled' : ''}
+                class="py-3 rounded-xl font-bold text-white shadow
+                       ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
+                🟢 Start Tracking
+            </button>
+
+            <button
+                id="stop-track-btn"
+                type="button"
+                ${stopDisabled ? 'disabled' : ''}
+                class="py-3 rounded-xl font-bold text-white shadow
+                       ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
+                🔴 Stop Tracking
+            </button>
+        </div>
+        <div class="mt-3">
+    <button
+        id="toggle-gps-btn"
+        type="button"
+        class="w-full py-3 rounded-xl font-bold text-white shadow hover:opacity-90"
+        style="background-color: rgb(var(--color-secondary));"
+    >
+        ${showUserPosition ? '📍 Hide My Position' : '📍 Show My Position'}
+    </button>
+
+    <p class="text-xs text-gray-500 mt-2">
+        This controls whether your live position is shown. It does not record a track.
+    </p>
+</div>
+
+        <p class="text-xs text-gray-500 mt-2">
+            Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
+        </p>
+    </div>
+    `;
+})()}
+
+  
+                    <!-- Quick range buttons (rainbow) -->
+            <div class="bg-white p-3 rounded-xl shadow-lg border border-gray-100 mb-4">
+                <div class="grid grid-cols-5 gap-2">
+                    <button type="button"
+                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-blue-600 hover:bg-blue-700"
+                        data-min="-7" data-max="3">
+                        -7→3
+                    </button>
+
+                    <button type="button"
+                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-sky-500 hover:bg-sky-600"
+                        data-min="4" data-max="11">
+                        4→11
+                    </button>
+
+                    <button type="button"
+                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-emerald-600 hover:bg-emerald-700"
+                        data-min="12" data-max="18">
+                        12→18
+                    </button>
+
+                    <button type="button"
+                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-amber-500 hover:bg-amber-600"
+                        data-min="19" data-max="26">
+                        19→26
+                    </button>
+
+                    <button type="button"
+                        class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow bg-red-600 hover:bg-red-700"
+                        data-min="27" data-max="40">
+                        27→40
                     </button>
                 </div>
 
-                <!-- Rainbow quick buttons -->
-                <div class="grid grid-cols-5 gap-2">
-                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-blue-500 text-white"
-                        data-min="-7" data-max="3">-7 to 3</button>
-                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-cyan-500 text-white"
-                        data-min="4" data-max="11">4 to 11</button>
-                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-green-500 text-white"
-                        data-min="12" data-max="18">12 to 18</button>
-                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-orange-500 text-white"
-                        data-min="19" data-max="26">19 to 26</button>
-                    <button class="quick-range-btn w-full py-3 rounded-xl font-extrabold text-xl shadow bg-red-500 text-white"
-                        data-min="27" data-max="40">27 to 40</button>
-                </div>
+                <p class="text-[11px] text-gray-500 mt-2">
+                    Tap a colour to instantly log a target with a Target ID chosen inside that range.
+                </p>
+            </div>
+
+            <!-- STAKE button (creates a marker target with VDI -100) -->
+            <div class="mt-3">
+                  <button
+                    id="stake-target-btn"
+                    type="button"
+                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700"
+                    >
+                    STAKE
+                  </button>
             </div>
 
             <!-- Map -->
