@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4461,30 +4461,48 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
                 await writeFileToHandle(dirHandle, fileName, outBlob);
                 return outBlob; // return blob for embedding
             }
+// Build item list
+const items = [];
 
-            // Build item list
-            const items = [];
+// Survey photos (supports multi-photo surveys)
+const surveyRefs = Array.isArray(openSurvey.photos) && openSurvey.photos.length
+    ? openSurvey.photos
+    : (openSurvey.surveyPhotoRef ? [openSurvey.surveyPhotoRef] : []);
 
-            const surveyPhotoInput =
-                (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef))
-                    ? openSurvey.surveyPhotoRef
-                    : (openSurvey.surveyPhotoData || openSurvey.surveyPhotoDataUrl || '');
+// Also allow legacy inline data URL fields if present (very old builds)
+const legacySurveyDataUrl = (openSurvey.surveyPhotoData || openSurvey.surveyPhotoDataUrl || '');
 
-            if (surveyPhotoInput) {
-                items.push({
-                    kind: 'survey',
-                    parentId: openSurvey.id,
-                    indexInParent: 1,
-                    title: openSurvey.name || 'Survey photo',
-                    type: 'Survey',
-                    vdi: '',
-                    depth: '',
-                    time: openSurvey.creationDate || openSurvey.dateLastChanged || '',
-                    coords: '',
-                    accuracy: '',
-                    photoRefOrDataUrl: surveyPhotoInput
-                });
-            }
+if (surveyRefs.length) {
+    surveyRefs.forEach((ref, idx) => {
+        if (!ref) return;
+        // Only include IndexedDB refs here; inline data URL handled by legacySurveyDataUrl
+        if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(ref)) {
+            items.push({
+                kind: 'survey',
+                parentId: openSurvey.id,
+                indexInParent: idx + 1,
+                title: `${openSurvey.name || 'Survey'} photo ${idx + 1}`,
+                type: 'Survey',
+                vdi: '',
+                depth: '',
+                time: openSurvey.updatedAt || openSurvey.lastChanged || openSurvey.createdAt || '',
+                photoRefOrDataUrl: ref
+            });
+        }
+    });
+} else if (legacySurveyDataUrl) {
+    items.push({
+        kind: 'survey',
+        parentId: openSurvey.id,
+        indexInParent: 1,
+        title: openSurvey.name || 'Survey photo',
+        type: 'Survey',
+        vdi: '',
+        depth: '',
+        time: openSurvey.updatedAt || openSurvey.lastChanged || openSurvey.createdAt || '',
+        photoRefOrDataUrl: legacySurveyDataUrl
+    });
+}
 
             const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
             for (const f of linkedFinds) {
@@ -4548,6 +4566,8 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
 
             // HTML bits (embedded index.html only)
             let surveyHeroHtml = '';
+            let hasSurveyHero = false;
+            const surveyCards = [];
             const findCards = [];
             const targetCards = [];
             const sections = [];
@@ -4572,8 +4592,9 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
 
                 const dataUrl = await blobToDataUrl(outBlob);
 
-                // Survey hero: full width, only one
-                if (it.kind === 'survey') {
+                // Survey hero: full width, only for the first survey photo
+                if (it.kind === 'survey' && !hasSurveyHero) {
+                    hasSurveyHero = true;
                     surveyHeroHtml = `
                       <div class="surveyHero">
                         <img class="surveyImg" src="${escapeHtml(dataUrl)}" alt="Survey photo">
@@ -4592,7 +4613,8 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
                         </div>
                       </div>
                     `;
-                    if (it.kind === 'find') findCards.push(card);
+                    if (it.kind === 'survey') surveyCards.push(card);
+                    else if (it.kind === 'find') findCards.push(card);
                     else targetCards.push(card);
                 }
 
@@ -4671,6 +4693,8 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
   <div class="wrap">
     ${surveyInfoHtml}
     ${surveyHeroHtml}
+
+    ${surveyCards.length ? `<h2>Survey Photos</h2><div class="grid">${surveyCards.join('')}</div>` : ''}
 
     <h2>Finds</h2>
     <div class="grid">${findCards.join('')}</div>
