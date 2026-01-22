@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V30
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -7192,29 +7192,27 @@ function showConfirmationModal(title, message, onConfirmCallback) {
 
     /** Shows the New Survey Modal and attaches the submit listener. */
 function showNewSurveyModal() {
-   // LIMITS: block opening the modal if over limit / expired
+    // LIMITS: block opening the modal if over limit / expired
     const r = canCreate('surveys');
     if (!r.ok) {
         showMessage(r.reason, 'error');
         return;
     }
 
-        
     // Reset the form whenever the modal is opened
     const form = document.getElementById('new-survey-form');
-    if (form) {
-        form.reset();
-    }
+    if (form) form.reset();
 
-    // Reset photo UI using shared helper
-    initPhotoUI('', {
-        statusId:  'new-survey-photo-status',
-        wrapperId: 'new-survey-photo-preview-wrapper',
-        imgId:     'new-survey-photo-preview',
-        hiddenId:  'new-survey-photo-data'
-    }, {
-        empty: 'No photo captured yet.'
-    });
+    // Reset multi-photo buffer + preview
+    window.currentNewSurveyPhotos = [];
+    updateNewSurveyPhotoPreview();
+
+    // Ensure file input is configured for multi-select + no forced camera
+    const input = document.getElementById('new-survey-photo-input');
+    if (input) {
+        try { input.removeAttribute('capture'); } catch (e) {}
+        input.multiple = true;
+    }
 
     // Use shared helper to attach the submit listener safely
     attachFormSubmitHandler('new-survey-form', handleNewSurveySubmit);
@@ -7241,29 +7239,47 @@ async function handleNewSurveySubmit(event) {
         return;
     }
 
-// LIMITS: block creating new surveys if over limit / expired
+    // LIMITS: block creating new surveys if over limit / expired
     const r = canCreate('surveys');
     if (!r.ok) {
         showMessage(r.reason, 'error');
         return;
     }
 
-
     // ✅ CRITICAL: new survey must start "clean" (no leftover tracking/recording)
     resetLiveTrackingAndRecordingState();
 
-    // Convert survey photo to IndexedDB reference
-    const surveyPhotoDataUrl = form['surveyPhotoData']?.value || '';
-    let surveyPhotoRef = '';
+    // --- Photos: parse JSON array (or single string) from hidden field ---
+    let photosDataUrls = [];
+    const rawPhotoField = form['surveyPhotoData']?.value;
 
-    if (surveyPhotoDataUrl) {
+    if (rawPhotoField) {
         try {
-            const photoRefs = await saveDataUrlsAsPhotoRefs([surveyPhotoDataUrl]);
-            surveyPhotoRef = photoRefs[0] || '';
+            const parsed = JSON.parse(rawPhotoField);
+            if (Array.isArray(parsed)) {
+                photosDataUrls = parsed.filter(p => typeof p === 'string' && p.length > 0);
+            } else if (typeof parsed === 'string' && parsed.length > 0) {
+                photosDataUrls = [parsed];
+            }
         } catch (e) {
-            console.error('Error saving survey photo to IndexedDB:', e);
+            // Not valid JSON? Treat as single data URL
+            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
+                photosDataUrls = [rawPhotoField];
+            }
         }
     }
+
+    // Save these data URLs into IndexedDB and get back lightweight references
+    let photoRefs = [];
+    try {
+        photoRefs = await saveDataUrlsAsPhotoRefs(photosDataUrls);
+    } catch (e) {
+        console.error('Error saving survey photos to IndexedDB:', e);
+        photoRefs = [];
+    }
+
+    const primaryDataUrl = photosDataUrls[0] || '';
+    const primaryRef     = photoRefs[0] || '';
 
     // 1. Close any currently open survey
     surveys.forEach(s => {
@@ -7286,8 +7302,12 @@ async function handleNewSurveySubmit(event) {
         finds: [],
         tracks: [],
 
-        surveyPhotoRef: surveyPhotoRef,
-        surveyPhotoData: surveyPhotoRef ? '' : surveyPhotoDataUrl
+        // NEW: multi-photo truth
+        photos: photoRefs,
+
+        // Back-compat single fields (first photo)
+        surveyPhotoRef: primaryRef,
+        surveyPhotoData: photoRefs.length > 0 ? '' : primaryDataUrl
     };
 
     // 3. Add the new survey to the start of the list
@@ -7295,6 +7315,10 @@ async function handleNewSurveySubmit(event) {
 
     // 4. Save and re-render
     saveSurveysToLocalStorage();
+
+    // Clear temp buffer so it doesn't leak into next survey
+    window.currentNewSurveyPhotos = [];
+
     closeNewSurveyModal();
     showMessage(`New Survey '${name}' created and is now OPEN!`, 'success');
     render();
@@ -7315,43 +7339,52 @@ async function showEditSurveyModal() {
     form['surveyName'].value = openSurvey.name || '';
     form['surveyDescription'].value = openSurvey.description || '';
 
-    // Load photo from IndexedDB if needed
-    let displayPhotoUrl = openSurvey.surveyPhotoData || '';
-
-    if (openSurvey.surveyPhotoRef && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
-        try {
-            const photoUrl = await getPhotoUrlFromRef(openSurvey.surveyPhotoRef);
-            if (photoUrl) {
-                displayPhotoUrl = photoUrl;
+    // Prepare photos for editing (prefer new array)
+    try {
+        if (Array.isArray(openSurvey.photos) && openSurvey.photos.length > 0) {
+            const first = openSurvey.photos[0];
+            if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(first)) {
+                // IndexedDB refs -> preview URLs
+                if (typeof loadPhotoUrlsFromRefs === 'function') {
+                    window.currentEditSurveyPhotos = await loadPhotoUrlsFromRefs(openSurvey.photos);
+                } else {
+                    // Fallback (slower): resolve one-by-one
+                    const urls = [];
+                    for (const ref of openSurvey.photos) {
+                        try {
+                            const u = await getPhotoUrlFromRef(ref);
+                            if (u) urls.push(u);
+                        } catch (e) {}
+                    }
+                    window.currentEditSurveyPhotos = urls;
+                }
+            } else {
+                // Legacy: data URLs already
+                window.currentEditSurveyPhotos = openSurvey.photos.slice();
             }
-        } catch (e) {
-            console.error('Error loading survey photo for editing:', e);
+        } else if (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
+            // Old single-ref style
+            const u = await getPhotoUrlFromRef(openSurvey.surveyPhotoRef);
+            window.currentEditSurveyPhotos = u ? [u] : [];
+        } else if (openSurvey.surveyPhotoData) {
+            // Old single-data style
+            window.currentEditSurveyPhotos = [openSurvey.surveyPhotoData];
+        } else {
+            window.currentEditSurveyPhotos = [];
         }
+    } catch (e) {
+        console.error('Error preparing edit survey photos:', e);
+        window.currentEditSurveyPhotos = [];
     }
 
-    // Initialize photo UI (your existing helper)
-    initPhotoUI(
-        displayPhotoUrl,
-        {
-            statusId: 'edit-survey-photo-status',
-            wrapperId: 'edit-survey-photo-preview-wrapper',
-            imgId: 'edit-survey-photo-preview',
-            hiddenId: 'edit-survey-photo-data'
-        },
-        {
-            existing: 'Existing survey photo loaded. Tap "Take / Choose Photo" to replace.',
-            empty: 'No survey photo captured yet.'
-        }
-    );
+    // Update preview + hidden field
+    updateEditSurveyPhotoPreview();
 
-    // ✅ CRITICAL FIX: remove fixed-height behaviour for the edit preview image
-    // We do this AFTER initPhotoUI so it can't be overwritten by that helper.
-    const img = document.getElementById('edit-survey-photo-preview');
-    if (img) {
-        img.classList.remove('max-h-48', 'max-h-40', 'h-48', 'h-40', 'object-cover');
-        img.classList.add('w-full', 'h-auto');
-        // Optional: keep rounded/border if not already present
-        img.classList.add('rounded-lg', 'border', 'border-gray-200');
+    // Ensure file input is configured for multi-select + no forced camera
+    const input = document.getElementById('edit-survey-photo-input');
+    if (input) {
+        try { input.removeAttribute('capture'); } catch (e) {}
+        input.multiple = true;
     }
 
     // Safely attach submit handler
@@ -7363,7 +7396,6 @@ async function showEditSurveyModal() {
         function closeEditSurveyModal() {
     closeModal('edit-survey-modal');
 }
-
 async function handleEditSurveySubmit(event) {
     event.preventDefault();
     const form = event.target;
@@ -7385,35 +7417,61 @@ async function handleEditSurveySubmit(event) {
     }
 
     const description = form['surveyDescription'].value.trim() || 'No description provided.';
-    const photoDataUrl = form['surveyPhotoData']?.value || '';
 
-    // Convert to IndexedDB reference
-    let surveyPhotoRef = survey.surveyPhotoRef || ''; // Keep existing ref if no change
-    
-    if (photoDataUrl && photoDataUrl !== survey.surveyPhotoData) {
-        // New photo selected - save to IndexedDB
+    // --- Photos: parse JSON array (or single string) from hidden field ---
+    let photosDataUrls = [];
+    const rawPhotoField = form['surveyPhotoData']?.value;
+
+    if (rawPhotoField) {
         try {
-            const photoRefs = await saveDataUrlsAsPhotoRefs([photoDataUrl]);
-            surveyPhotoRef = photoRefs[0] || '';
+            const parsed = JSON.parse(rawPhotoField);
+            if (Array.isArray(parsed)) {
+                photosDataUrls = parsed.filter(p => typeof p === 'string' && p.length > 0);
+            } else if (typeof parsed === 'string' && parsed.length > 0) {
+                photosDataUrls = [parsed];
+            }
         } catch (e) {
-            console.error('Error saving edited survey photo to IndexedDB:', e);
+            // Not valid JSON? Treat as single URL (data: or blob:)
+            if (typeof rawPhotoField === 'string' && rawPhotoField.length > 0) {
+                photosDataUrls = [rawPhotoField];
+            }
         }
     }
 
+    // Save these URLs into IndexedDB and get back lightweight references
+    let photoRefs = [];
+    try {
+        photoRefs = await saveDataUrlsAsPhotoRefs(photosDataUrls);
+    } catch (e) {
+        console.error('Error saving edited survey photos to IndexedDB:', e);
+        photoRefs = [];
+    }
+
+    const primaryDataUrl = photosDataUrls[0] || '';
+    const primaryRef     = photoRefs[0] || '';
+
     survey.name = name;
     survey.description = description;
-    survey.surveyPhotoRef  = surveyPhotoRef;                       // NEW: IndexedDB reference
-    survey.surveyPhotoData = surveyPhotoRef ? '' : photoDataUrl;   // Keep base64 only if IDB failed
+
+    // NEW truth
+    survey.photos = photoRefs;
+
+    // Back-compat first photo
+    survey.surveyPhotoRef  = primaryRef;
+    survey.surveyPhotoData = photoRefs.length > 0 ? '' : primaryDataUrl;
+
     survey.dateLastChanged = Date.now();
 
     saveSurveysToLocalStorage();
     closeEditSurveyModal();
+
+    // Clear edit buffer (optional but tidy)
+    window.currentEditSurveyPhotos = [];
+
     showMessage('Open survey updated.', 'success');
     render();
 }
-        
-        /** Shows the New Target Modal. */
-/** Shows the New Target Modal. */
+
 /** Shows the New Target Modal. */
 function showNewTargetModal() {
 
@@ -7885,20 +7943,101 @@ async function handlePhotoSelected(event, {
 
 // --- EDIT SURVEY PHOTO HELPERS (match Edit Target behaviour) ---
 
+// ---------- EDIT SURVEY PHOTO HELPERS ----------
+
 function triggerEditSurveyPhotoInput() {
-    const fileInput = document.getElementById('edit-survey-photo-input');
-    if (!fileInput) return;
+    const input = document.getElementById('edit-survey-photo-input');
+    if (!input) return;
 
-    // Remove any forced camera behaviour
-    fileInput.removeAttribute('capture');
-
-    // Let browser decide: camera OR file picker
-    fileInput.setAttribute('accept', 'image/*;capture=camera');
-
-    // Edit Survey supports a single photo
-    fileInput.multiple = false;
+    // Let user choose camera OR files; allow multiple
+    try { input.removeAttribute('capture'); } catch (e) {}
+    input.multiple = true;
 
     triggerPhotoInput('edit-survey-photo-input');
+}
+
+function updateEditSurveyPhotoPreview() {
+    const statusSpan  = document.getElementById('edit-survey-photo-status');
+    const wrapper     = document.getElementById('edit-survey-photo-preview-wrapper');
+    const hiddenField = document.getElementById('edit-survey-photo-data');
+
+    if (!statusSpan || !wrapper || !hiddenField) return;
+
+    const photos = window.currentEditSurveyPhotos || [];
+
+    // Store JSON array in hidden field
+    hiddenField.value = JSON.stringify(photos);
+
+    if (!photos.length) {
+        statusSpan.textContent = 'No photo captured yet.';
+        wrapper.classList.add('hidden');
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    statusSpan.textContent = photos.length === 1
+        ? '1 photo selected.'
+        : `${photos.length} photos selected.`;
+
+    const thumbsHtml = photos.map((src, index) => `
+        <div class="relative mb-2 flex justify-center">
+            <img
+                src="${src}"
+                alt="Survey photo ${index + 1}"
+                class="w-11/12 max-h-64 object-cover rounded-lg border border-gray-300 cursor-pointer"
+                onclick="openEditSurveyPhotoGallery(${index})"
+            />
+            <button
+                type="button"
+                class="absolute top-2 right-6 bg-black bg-opacity-60 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
+                onclick="event.stopPropagation(); removeEditSurveyPhoto(${index});"
+                title="Delete photo"
+            >
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    `).join('');
+
+    wrapper.innerHTML = `<div class="flex flex-col items-center w-full">${thumbsHtml}</div>`;
+    wrapper.classList.remove('hidden');
+}
+
+
+async function handleEditSurveyPhotoSelected(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    // Allow selecting the same file again later
+    event.target.value = '';
+
+    try {
+        for (const file of files) {
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                window.currentEditSurveyPhotos.push(resized);
+            }
+        }
+    } catch (e) {
+        console.error('Error reading/resizing survey photo file:', e);
+        showMessage('One or more photos could not be processed.', 'error');
+    }
+
+    updateEditSurveyPhotoPreview();
+}
+
+        
+
+function openEditSurveyPhotoGallery(startIndex) {
+    const photos = window.currentEditSurveyPhotos || [];
+    if (!photos.length) return;
+    openPhotoGallery(photos, startIndex || 0);
+}
+
+
+function removeEditSurveyPhoto(index) {
+    if (!Array.isArray(window.currentEditSurveyPhotos)) return;
+    window.currentEditSurveyPhotos.splice(index, 1);
+    updateEditSurveyPhotoPreview();
 }
 
 function handleEditSurveyPhotoSelected(event) {
@@ -8173,32 +8312,111 @@ function updateEditFindPhotoPreview() {
 }
 
         // --- NEW SURVEY PHOTO HELPERS ---
+// ================================
+// SURVEY MULTI-PHOTO SUPPORT
+// (mirrors Targets/Finds approach)
+// ================================
 
-// --- NEW SURVEY PHOTO HELPERS (minimal, match Edit Target behaviour) ---
+// Ensure globals exist (avoid redeclare errors)
+window.currentNewSurveyPhotos  = window.currentNewSurveyPhotos  || []; // array of data URLs (in-memory)
+window.currentEditSurveyPhotos = window.currentEditSurveyPhotos || []; // array of URLs (blob: or data:) for preview/edit
+
+
+// ---------- NEW SURVEY PHOTO HELPERS ----------
 
 function triggerNewSurveyPhotoInput() {
-    const fileInput = document.getElementById('new-survey-photo-input');
-    if (!fileInput) return;
+    const input = document.getElementById('new-survey-photo-input');
+    if (!input) return;
 
-    // IMPORTANT: remove the hard camera-forcing attribute from the HTML behaviour
-    fileInput.removeAttribute('capture');
-
-    // Match your Edit Target pattern (lets browser offer camera OR picker)
-    fileInput.setAttribute('accept', 'image/*;capture=camera');
-
-    // Surveys currently store a single photo
-    fileInput.multiple = false;
+    // Let user choose camera OR files; allow multiple
+    try { input.removeAttribute('capture'); } catch (e) {}
+    input.multiple = true;
 
     triggerPhotoInput('new-survey-photo-input');
 }
 
-function handleNewSurveyPhotoSelected(event) {
-    handlePhotoSelected(event, {
-        statusId:  'new-survey-photo-status',
-        wrapperId: 'new-survey-photo-preview-wrapper',
-        imgId:     'new-survey-photo-preview',
-        hiddenId:  'new-survey-photo-data'
-    });
+    
+function removeNewSurveyPhoto(index) {
+    if (!Array.isArray(window.currentNewSurveyPhotos)) return;
+    window.currentNewSurveyPhotos.splice(index, 1);
+    updateNewSurveyPhotoPreview();
+}
+
+
+function openNewSurveyPhotoGallery(startIndex) {
+    const photos = window.currentNewSurveyPhotos || [];
+    if (!photos.length) return;
+    openPhotoGallery(photos, startIndex || 0);
+}
+
+function updateNewSurveyPhotoPreview() {
+    const statusSpan  = document.getElementById('new-survey-photo-status');
+    const wrapper     = document.getElementById('new-survey-photo-preview-wrapper');
+    const hiddenField = document.getElementById('new-survey-photo-data');
+
+    if (!statusSpan || !wrapper || !hiddenField) return;
+
+    const photos = window.currentNewSurveyPhotos || [];
+
+    // Store JSON array in hidden field (like targets/finds)
+    hiddenField.value = JSON.stringify(photos);
+
+    if (!photos.length) {
+        statusSpan.textContent = 'No photo captured yet.';
+        wrapper.classList.add('hidden');
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    statusSpan.textContent = photos.length === 1
+        ? '1 photo selected.'
+        : `${photos.length} photos selected.`;
+
+    const thumbsHtml = photos.map((src, index) => `
+        <div class="relative mb-2 flex justify-center">
+            <img
+                src="${src}"
+                alt="Survey photo ${index + 1}"
+                class="w-11/12 max-h-64 object-cover rounded-lg border border-gray-300 cursor-pointer"
+                onclick="openNewSurveyPhotoGallery(${index})"
+            />
+            <button
+                type="button"
+                class="absolute top-2 right-6 bg-black bg-opacity-60 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
+                onclick="event.stopPropagation(); removeNewSurveyPhoto(${index});"
+                title="Delete photo"
+            >
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    `).join('');
+
+    wrapper.innerHTML = `<div class="flex flex-col items-center w-full">${thumbsHtml}</div>`;
+    wrapper.classList.remove('hidden');
+}
+
+
+
+async function handleNewSurveyPhotoSelected(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    // Allow selecting the same file again later
+    event.target.value = '';
+
+    try {
+        for (const file of files) {
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                window.currentNewSurveyPhotos.push(resized);
+            }
+        }
+    } catch (e) {
+        console.error('Error reading/resizing survey photo file:', e);
+        showMessage('One or more photos could not be processed.', 'error');
+    }
+
+    updateNewSurveyPhotoPreview();
 }
 
 async function handleEditFindPhotoSelected(event) {
