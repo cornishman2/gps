@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4914,24 +4914,23 @@ async function handleSurveyWithPhotosImport(event) {
 
             const lower = file.name.toLowerCase();
 
-            // Legacy JSON import still supported
+            // JSON import retired (ZIP only)
             if (lower.endsWith('.json')) {
-                const text = await file.text();
-                log('JSON read successfully. Importing...');
-                await performSurveyImport(text, file.name, log);
+                showMessage('JSON survey import has been retired. Please import using the ZIP export.', 'error');
+                log('ERROR: JSON import retired. Please use a .zip survey export.');
                 return;
             }
 
             // ZIP import
             if (!lower.endsWith('.zip')) {
-                showMessage('Unsupported file type. Please select a .zip or .json export.', 'error');
+                showMessage('Unsupported file type. Please select a .zip survey export.', 'error');
                 log('ERROR: Unsupported file type.');
                 return;
             }
 
             if (typeof JSZip === 'undefined') {
                 showMessage('ZIP import needs JSZip. Add the JSZip <script> tag first.', 'error');
-                log('ERROR: JSZip missing.');
+                log('ERROR: JSZip not loaded.');
                 return;
             }
 
@@ -5040,42 +5039,50 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
         showProgressOverlay('Importing ZIP', 'Restoring survey + photos…');
         updateProgressOverlay(1, 'Preparing import…');
 
+        // Basic sanitisation
         if (!importedSurvey.id) importedSurvey.id = generateId();
-
-        // ---- Survey photo ----
-        updateProgressOverlay(5, 'Restoring survey photo…');
-        if (Array.isArray(importedSurvey.photoFiles) && importedSurvey.photoFiles.length) {
-            const path = importedSurvey.photoFiles[0];
-            const zf = zip.file(path);
-            if (zf) {
-                const blob = await zf.async('blob');
-                const id = await savePhotoBlob(blob);
-                importedSurvey.surveyPhotoRef = makePhotoRef(id);
-                importedSurvey.surveyPhotoData = '';
-                donePhotos++;
-                updateProgressOverlay(
-                    5 + (totalPhotos ? (donePhotos / totalPhotos) * 70 : 0),
-                    `Restoring photos ${donePhotos}/${totalPhotos}…`
-                );
-            }
-        }
-        delete importedSurvey.photoFiles;
-
-        // ---- Targets ----
         if (!Array.isArray(importedSurvey.targets)) importedSurvey.targets = [];
 
-        // Ensure tracks exist and are well-formed (backwards compatible)
-        if (!Array.isArray(importedSurvey.tracks)) importedSurvey.tracks = [];
-        for (const tr of importedSurvey.tracks) {
-            if (!tr) continue;
-            if (!tr.id) tr.id = generateId();
-            tr.name = String(tr.name || 'Track');
-            tr.description = String(tr.description || '');
-            if (tr.isVisible === undefined) tr.isVisible = true;
-            if (!tr.color) tr.color = pickTrackColor(0); // only if missing; won’t override existing colours
-            if (!Array.isArray(tr.points)) tr.points = [];
+        // Ensure targets have IDs early
+        for (const t of importedSurvey.targets) {
+            if (t && !t.id) t.id = generateId();
+        }
+        for (const f of importedFinds) {
+            if (f && !f.id) f.id = generateId();
         }
 
+        // ---- Survey photos (NOW supports multiple) ----
+        log('Restoring survey photos...');
+        updateProgressOverlay(5, 'Restoring survey photos…');
+
+        {
+            const files = Array.isArray(importedSurvey.photoFiles) ? importedSurvey.photoFiles : [];
+            const refs = [];
+
+            for (const path of files) {
+                const zf = zip.file(path);
+                if (!zf) continue;
+
+                const blob = await zf.async('blob');
+                const id = await savePhotoBlob(blob);
+                refs.push(makePhotoRef(id));
+
+                donePhotos++;
+                const pct = 5 + (totalPhotos ? (donePhotos / totalPhotos) * 70 : 0);
+                updateProgressOverlay(pct, `Restoring photos ${donePhotos}/${totalPhotos}…`);
+            }
+
+            // ✅ NEW truth
+            importedSurvey.photos = refs;
+
+            // ✅ Back-compat single fields
+            importedSurvey.surveyPhotoRef  = refs[0] || '';
+            importedSurvey.surveyPhotoData = '';
+
+            delete importedSurvey.photoFiles;
+        }
+
+        // ---- Targets ----
         log(`Restoring ${importedSurvey.targets.length} targets...`);
         updateProgressOverlay(10, `Restoring ${importedSurvey.targets.length} targets…`);
 
@@ -5102,6 +5109,7 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
             for (const path of files) {
                 const zf = zip.file(path);
                 if (!zf) continue;
+
                 const blob = await zf.async('blob');
                 const id = await savePhotoBlob(blob);
                 refs.push(makePhotoRef(id));
@@ -5141,6 +5149,7 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
             for (const path of files) {
                 const zf = zip.file(path);
                 if (!zf) continue;
+
                 const blob = await zf.async('blob');
                 const id = await savePhotoBlob(blob);
                 refs.push(makePhotoRef(id));
@@ -5173,22 +5182,20 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
         updateProgressOverlay(100, 'Done.');
         setTimeout(() => hideProgressOverlay(), 400);
 
-        const importedTargetsActual = Array.isArray(importedSurvey.targets) ? importedSurvey.targets.length : 0;
-        const importedFindsActual   = importedFindsAllowed.length;
-
-        log(`"${filename}" imported successfully.`);
+        log(`"${filename}" has been successfully imported.`);
         showMessage(
             `Imported survey "${importedSurvey.name || 'Unnamed survey'}" with ` +
-            `${importedTargetsActual} targets and ` +
-            `${importedFindsActual} finds.`,
+            `${Array.isArray(importedSurvey.targets) ? importedSurvey.targets.length : 0} targets and ` +
+            `${importedFindsAllowed.length} finds.`,
             'success'
         );
 
+        // Stay on Settings so the user can read the log.
+
     } catch (e) {
-        console.error('Error importing ZIP survey:', e);
+        console.error('Error importing survey :', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
-        hideProgressOverlay();
     }
 }
 
@@ -5930,160 +5937,70 @@ return `
     }
 }
 
-/** Renders the content for the new Export page. */
 function renderExportPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
 
-    // Show chosen folder name (if user already picked one this session)
+    // Import/Export folder pickers (if you have them)
     const chosenFolderName =
-        (typeof photoGalleryExportRootHandle !== 'undefined' && photoGalleryExportRootHandle && photoGalleryExportRootHandle.name)
-            ? photoGalleryExportRootHandle.name
+        (typeof galleryExportFolderName !== 'undefined' && galleryExportFolderName)
+            ? galleryExportFolderName
             : '';
 
     return `
-        <div class="p-4 space-y-6">
-            <h2 class="text-3xl font-bold text-primary mb-6">Data Export & Import</h2>
+    <div class="p-4 space-y-6">
 
-            <!-- EXPORT OPEN SURVEY ZIP/JSON -->
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey (ZIP)</h4>
+        <h2 class="text-2xl font-bold mb-2" style="color:${secondaryColor}">
+            Export / Import
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <!-- EXPORT OPEN SURVEY ZIP WITH PHOTOS -->
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-indigo-500">
+                <h4 class="text-lg font-semibold text-indigo-700 mb-2">Export Open Survey (ZIP + Photos)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    Export the currently open survey and its photos as a <strong>.zip</strong> file.
+                    Exports the currently <strong>Open</strong> survey as a ZIP, including photos.
                 </p>
-
                 <button id="export-open-survey-with-photos-btn"
-                        type="button"
-                        onclick="exportOpenSurveyWithPhotos()"
-                        class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition duration-150">
-                    <i class="fas fa-file-archive mr-1"></i> Export Open Survey as ZIP
+                        onclick="actuallyExportOpenSurvey()"
+                        class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                    <i class="fas fa-file-archive mr-1"></i> Export Open Survey ZIP
                 </button>
-
-                <textarea id="export-open-survey-log"
-                          rows="6"
-                          readonly
+                <textarea id="export-open-survey-log" rows="6" readonly
                           placeholder="Export log will appear here."
-                          class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-3"></textarea>
+                          class="w-full p-2 border border-indigo-500 rounded-md font-mono text-xs mt-2"></textarea>
             </div>
 
-<div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-amber-500">
-  <h4 class="text-lg font-semibold text-amber-700 mb-2">Export Photo Gallery (Download)</h4>
-  <p class="text-sm text-gray-600 mb-3">
-    Downloads gallery files to your device (no folder selection; works the same on laptop & phone).
-  </p>
-
-  <div class="mt-2 space-y-2 text-sm text-gray-700">
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-create-index" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>A)</strong> Create linking <code>index.html</code> (may overwrite)</span>
-    </label>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-export-open" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>B)</strong> Export Open Survey</span>
-    </label>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-export-other" type="checkbox" class="h-4 w-4">
-      <span><strong>C)</strong> Export all other surveys (Closed/Archived)</span>
-    </label>
-
-    <hr class="my-2">
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-include-targets" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>D)</strong> Export Targets (include in gallery)</span>
-    </label>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-include-finds" type="checkbox" class="h-4 w-4" checked>
-      <span><strong>E)</strong> Export Finds (include in gallery)</span>
-    </label>
-
-    <hr class="my-2">
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-write-target-jpgs" type="checkbox" class="h-4 w-4">
-      <span><strong>F)</strong> Export Target JPGs (download files)</span>
-    </label>
-
-    <label class="flex items-center gap-2">
-      <input id="gallery-dl-write-find-jpgs" type="checkbox" class="h-4 w-4">
-      <span><strong>G)</strong> Export Find JPGs (download files)</span>
-    </label>
-
-    <p class="text-xs text-gray-500 mt-1">
-      Note: Browsers download files individually. If you select JPG exports, you may get lots of downloads.
-      (We can switch to ZIP later if you want one single download.)
-    </p>
-  </div>
-
-  <button id="export-gallery-download-btn"
-          type="button"
-          onclick="exportPhotoGallery_Download()"
-          class="w-full mt-4 bg-amber-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-amber-700 transition duration-150">
-    <i class="fas fa-download mr-1"></i> Export Gallery to Downloads
-  </button>
-
-  <textarea id="export-photo-gallery-log"
-            rows="7"
-            readonly
-            placeholder="Export log will appear here."
-            class="w-full p-2 border border-amber-500 rounded-md font-mono text-xs mt-3"></textarea>
-</div>
-
-            <!-- Export Open Survey as GPX -->
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey as GPX</h4>
+            <!-- EXPORT PHOTO GALLERY -->
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-fuchsia-500">
+                <h4 class="text-lg font-semibold text-fuchsia-700 mb-2">Export Photo Gallery (Open Survey)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    This creates a <strong>.GPX file</strong> containing the currently open survey, all its targets, and any finds linked to that survey.
-                    This can be imported into many mapping apps.
+                    Exports a browsable HTML gallery plus images for the currently <strong>Open</strong> survey.
                 </p>
 
-                <div class="mt-3 space-y-2 text-sm">
-                    <label class="flex items-center gap-2">
-                        <input id="gpx-export-targets" type="checkbox" checked class="h-4 w-4">
-                        <span><strong>Export Targets</strong></span>
-                    </label>
-
-                    <label class="flex items-center gap-2">
-                        <input id="gpx-export-stakes" type="checkbox" checked class="h-4 w-4">
-                        <span><strong>Export Stakes</strong></span>
-                    </label>
-
-                    <label class="flex items-center gap-2">
-                        <input id="gpx-export-finds" type="checkbox" checked class="h-4 w-4">
-                        <span><strong>Export Finds</strong></span>
-                    </label>
-
-                    <label class="flex items-center gap-2">
-                        <input id="gpx-export-tracks" type="checkbox" checked class="h-4 w-4">
-                        <span><strong>Export Tracks</strong></span>
-                    </label>
+                <div class="space-y-2">
+                    <button id="export-open-survey-photo-gallery-btn"
+                            onclick="exportOpenSurveyPhotoGallery()"
+                            class="w-full bg-fuchsia-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-fuchsia-700 transition">
+                        <i class="fas fa-images mr-1"></i> Export Photo Gallery
+                    </button>
                 </div>
 
-                <button id="export-open-survey-gpx-btn"
-                        type="button"
-                        onclick="exportOpenSurveyAsGPX()"
-                        class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition duration-150 mt-3">
-                    <i class="fas fa-map-marked-alt mr-1"></i> Export Open Survey as GPX
-                </button>
-
-                <textarea id="export-open-survey-gpx-log"
-                          rows="6"
-                          readonly
-                          placeholder="GPX export log will appear here."
-                          class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-2"></textarea>
+                <textarea id="export-photo-gallery-log" rows="6" readonly
+                          placeholder="Gallery export log will appear here."
+                          class="w-full p-2 border border-fuchsia-500 rounded-md font-mono text-xs mt-2"></textarea>
             </div>
 
-            <!-- IMPORT SURVEY ZIP/JSON -->
+            <!-- IMPORT SURVEY ZIP -->
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
-                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey (ZIP or JSON)</h4>
+                <h4 class="text-lg font-semibold text-emerald-700 mb-2">Import Survey (ZIP)</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    Import a survey export file (<strong>.zip</strong> or <strong>.json</strong>).
+                    Import a survey export file (<strong>.zip</strong>).
                     The survey and its finds will be added to your existing local data.
                 </p>
                 <div class="mb-3">
-                    <input type="file" id="import-survey-with-photos-input" accept=".zip,.json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
+                    <input type="file" id="import-survey-with-photos-input" accept=".zip"
+                           class="hidden" onchange="handleSurveyWithPhotosImport(event)">
                     <button onclick="document.getElementById('import-survey-with-photos-input').click()"
                             class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition">
                         <i class="fas fa-upload mr-1"></i> Select File & Import
@@ -6097,53 +6014,26 @@ function renderExportPage() {
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-sky-500">
                 <h4 class="text-lg font-semibold text-sky-700 mb-2">Import GPX</h4>
                 <p class="text-sm text-gray-600 mb-3">
-                    Import a <strong>.gpx</strong> file containing waypoints and/or tracks.
+                    Import GPX tracks/waypoints into the currently <strong>Open</strong> survey.
                 </p>
 
-                <label class="flex items-center gap-2 text-sm text-gray-700 mb-3">
-                    <input id="import-gpx-create-new-cb" type="checkbox" class="h-4 w-4">
-                    <span>
-                        Close current Open survey and create a <strong>new</strong> survey from this GPX
-                    </span>
-                </label>
-
-                <input type="file"
-                       id="import-gpx-input"
-                       accept=".gpx,application/gpx+xml,application/xml,text/xml"
-                       class="hidden"
-                       onchange="handleGpxImport(event)">
-
-                <button type="button"
-                        onclick="(function(){ const i=document.getElementById('import-gpx-input'); if(i){ i.value=''; i.click(); } })()"
-                        class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition">
-                    <i class="fas fa-file-import mr-1"></i> Select GPX & Import
-                </button>
+                <div class="mb-3">
+                    <input type="file" id="import-gpx-input" accept=".gpx"
+                           class="hidden" onchange="handleGpxImport(event)">
+                    <button onclick="document.getElementById('import-gpx-input').click()"
+                            class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-sky-700 transition">
+                        <i class="fas fa-upload mr-1"></i> Select GPX & Import
+                    </button>
+                </div>
 
                 <textarea id="import-gpx-log" rows="6" readonly placeholder="GPX import log will appear here."
-                          class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-3"></textarea>
-            </div>
-
-            <!-- Import Target via QR Code -->
-            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mt-4">
-                <h3 class="text-xl font-bold text-primary mb-2">Import Target (QR Code)</h3>
-
-                <p class="text-sm text-gray-600 mb-3">
-                    Scan a QR code generated from a Target to import it into the currently open survey.
-                </p>
-
-                <button
-                    id="scan-target-qr-btn"
-                    class="px-4 py-2 rounded-lg text-white font-bold shadow hover:opacity-90"
-                    style="background-color: ${secondaryColor};"
-                    type="button">
-                    Scan Target QR
-                </button>
+                          class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-2"></textarea>
             </div>
 
         </div>
+    </div>
     `;
 }
-
         
         function promptEditTrackMeta(trackId) {
     // Backwards-compatible wrapper: old callers now open the modal
@@ -13112,9 +13002,13 @@ async function actuallyExportOpenSurvey() {
         // Compute total photo refs up front (for progress)
         const refsToExport = [];
 
-        // Survey photo
-        if (payload.survey && payload.survey.surveyPhotoRef) {
-            refsToExport.push({ kind: 'survey', owner: payload.survey, ref: payload.survey.surveyPhotoRef });
+        // Survey photos (supports multi-photo surveys)
+        const surveyRefs = (payload.survey && Array.isArray(payload.survey.photos) && payload.survey.photos.length)
+            ? payload.survey.photos
+            : (payload.survey && payload.survey.surveyPhotoRef ? [payload.survey.surveyPhotoRef] : []);
+
+        for (const ref of surveyRefs) {
+            if (ref) refsToExport.push({ kind: 'survey', owner: payload.survey, ref });
         }
 
         // Targets photos
@@ -13162,7 +13056,8 @@ async function actuallyExportOpenSurvey() {
             const ext = extFromMime(blob.type);
 
             if (item.kind === 'survey') {
-                const filename = `survey_photo.${ext}`;
+                const idx = (payload.survey.photoFiles.length + 1);
+                const filename = `survey_${String(idx).padStart(2, '0')}.${ext}`;
                 surveyFolder.file(filename, blob);
                 payload.survey.photoFiles.push(`photos/survey/${filename}`);
             }
@@ -13187,6 +13082,7 @@ async function actuallyExportOpenSurvey() {
         }
 
         // Strip photo refs from export objects (we recreate them on import)
+        delete payload.survey.photos;
         delete payload.survey.surveyPhotoRef;
         delete payload.survey.surveyPhotoData;
 
@@ -13213,8 +13109,6 @@ async function actuallyExportOpenSurvey() {
         const zipBlob = await zip.generateAsync(
             { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
             (meta) => {
-                // meta.percent goes 0..100 for compression stage
-                // map it into the last ~14% of the overlay
                 const p = 86 + (meta.percent * 0.14);
                 updateProgressOverlay(p, `Compressing… ${Math.round(meta.percent)}%`);
             }
@@ -13252,7 +13146,6 @@ async function actuallyExportOpenSurvey() {
         }
     }
 }
-
         
     /**
  * Internal worker to import a survey JSON string  and add it
