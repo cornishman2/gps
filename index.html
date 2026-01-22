@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V9
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1036,6 +1036,28 @@ let photoSettings = {
     maxWidth: 1000
 };
 
+function attachNavDelegationOnce() {
+    // Prevent double-binding if bootstrap runs more than once
+    if (window.__navDelegationAttached) return;
+    window.__navDelegationAttached = true;
+
+    document.addEventListener('click', (e) => {
+        // Find a clicked nav button (or a child inside it)
+        const btn = e.target.closest('.nav-btn');
+        if (!btn) return;
+
+        const targetPage = btn.dataset.page;
+        if (!targetPage) return;
+
+        // If already on that page, do nothing
+        if (targetPage === currentPage) return;
+
+        currentPage = targetPage;
+        render();
+    });
+}
+
+        
 // =======================================
 //  SAFE PHOTO-DELETION (IndexedDB) HELPERS
 // =======================================
