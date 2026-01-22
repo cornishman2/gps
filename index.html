@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V9
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8823,6 +8823,53 @@ async function handleEditTargetSubmit(event) {
 
 
 // --- SURVEY & TARGET LOGIC (Action Handlers) ---
+
+
+// ============================================================
+// SURVEY CARD BUTTON FIX
+// The survey cards currently call openSurvey(id) / closeSurvey(id) / editSurvey(id)
+// but those wrapper functions were missing in this build.
+// These wrappers delegate into handleSurveyAction() (your unified survey action handler).
+// ============================================================
+
+async function openSurvey(id) {
+    const survey = (Array.isArray(surveys) ? surveys : []).find(s => String(s.id) === String(id));
+    if (!survey) return;
+
+    // Delegate to the central handler
+    return await handleSurveyAction({
+        dataset: {
+            id: String(survey.id),
+            action: 'open',
+            name: survey.name || ''
+        }
+    });
+}
+
+async function closeSurvey(id) {
+    const survey = (Array.isArray(surveys) ? surveys : []).find(s => String(s.id) === String(id));
+    if (!survey) return;
+
+    return await handleSurveyAction({
+        dataset: {
+            id: String(survey.id),
+            action: 'close',
+            name: survey.name || ''
+        }
+    });
+}
+
+async function editSurvey(id) {
+    // Ensure the requested survey is open, then open the edit modal.
+    await openSurvey(id);
+
+    // After render() completes, open the edit modal (it edits the currently open survey)
+    setTimeout(() => {
+        if (typeof showEditSurveyModal === 'function') {
+            showEditSurveyModal();
+        }
+    }, 50);
+}
 
 async function handleSurveyAction(button) {
     const id = button.dataset.id;
