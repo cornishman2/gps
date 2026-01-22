@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4371,348 +4371,406 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
 
         overlay = document.createElement('div');
         overlay.id = 'gallery-export-overlay';
-        overlay.style.cssText =
-            'position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.35);' +
-            'display:none; align-items:center; justify-content:center;';
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(0,0,0,0.55)';
+        overlay.style.display = 'none';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.zIndex = '9999';
+
         overlay.innerHTML = `
-          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:16px 18px;
-                      width:min(420px,92vw);box-shadow:0 10px 30px rgba(0,0,0,0.25);
-                      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
-            <div style="display:flex;gap:12px;align-items:center;">
-              <div style="width:22px;height:22px;border-radius:999px;border:3px solid #cbd5e1;border-top-color:#0ea5e9;
-                          animation:spin 0.9s linear infinite;"></div>
-              <div>
-                <div style="font-weight:800;font-size:14px;color:#0f172a;">Exporting photo gallery…</div>
-                <div id="gallery-export-overlay-text" style="margin-top:2px;font-size:12px;color:#64748b;">Starting…</div>
-              </div>
+          <div style="background:#111; color:#fff; padding:16px 18px; border-radius:12px; width:min(420px, 92vw); box-shadow:0 10px 30px rgba(0,0,0,0.4);">
+            <div style="font-weight:700; margin-bottom:8px;">Exporting photo gallery…</div>
+            <div id="gallery-export-spinner-text" style="font-size:13px; opacity:0.9;">Starting…</div>
+            <div style="margin-top:12px; height:10px; background:rgba(255,255,255,0.15); border-radius:999px; overflow:hidden;">
+              <div id="gallery-export-spinner-bar" style="height:100%; width:10%; background:#f0f0f0;"></div>
             </div>
           </div>
-          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
         `;
         document.body.appendChild(overlay);
         return overlay;
     }
+
     function showSpinner(text) {
         const overlay = ensureSpinner();
-        const t = overlay.querySelector('#gallery-export-overlay-text');
-        if (t) t.textContent = text || '';
+        const t = document.getElementById('gallery-export-spinner-text');
+        if (t) t.textContent = text || 'Working…';
         overlay.style.display = 'flex';
     }
+
+    function setSpinnerProgress(pct) {
+        const bar = document.getElementById('gallery-export-spinner-bar');
+        if (!bar) return;
+        const p = Math.max(1, Math.min(100, Number(pct || 0)));
+        bar.style.width = `${p}%`;
+    }
+
     function hideSpinner() {
         const overlay = document.getElementById('gallery-export-overlay');
         if (overlay) overlay.style.display = 'none';
     }
 
-    // Confirm includeTargets (no folder picking here)
-    const confirmHtml = `
-        Export gallery into the selected folder?<br>
-        <span class="text-sm text-gray-600">index.html is embedded/phone-safe. JPGs are also saved into Finds/Targets subfolders (not linked from index.html).</span>
-        <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
-            <input id="gallery-include-targets" type="checkbox" checked style="width:18px;height:18px;">
-            <label for="gallery-include-targets" style="font-weight:700;">Also export Target JPGs</label>
-        </div>
-    `;
-
-    showConfirmationModal('Export Photo Gallery', confirmHtml, async () => {
-        // close modal immediately
-        if (typeof closeConfirmationModal === 'function') closeConfirmationModal();
-        else {
-            const m = document.getElementById('confirmation-modal');
-            if (m) m.style.display = 'none';
-        }
-
-        let originalBtnText = '';
-        if (btn) {
-            originalBtnText = btn.innerText;
-            btn.disabled = true;
-            btn.innerText = 'Exporting...';
-        }
+    // Folder-picker helper (Chrome File System Access API)
+    async function pickRootDir() {
+        if (rootPick) return rootPick;
+        if (!window.showDirectoryPicker) return null;
 
         try {
-            const includeTargets =
-                document.getElementById('gallery-include-targets')?.checked ?? true;
+            return await window.showDirectoryPicker({ mode: 'readwrite' });
+        } catch (e) {
+            return null;
+        }
+    }
 
-            const maxW = (typeof getMaxPhotoWidth === 'function') ? getMaxPhotoWidth() : 1000;
+    // File writing helpers
+    async function ensureDir(parent, name) {
+        return await parent.getDirectoryHandle(name, { create: true });
+    }
 
-            log(`Survey: ${openSurvey.name || 'Unnamed survey'}`);
-            log(`Max photo width: ${maxW || 0}px`);
-            log(`Export Target JPGs: ${includeTargets ? 'YES' : 'NO'}`);
+    async function writeFileToHandle(dirHandle, fileName, blob) {
+        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+    }
 
-            const safeName = safeSlug(openSurvey.name || 'survey');
-            const folderName =
-                `${safeName}_` +
-                new Date().toISOString().replace(/[:.]/g, '').replace('T', '_').replace('Z', '');
+    // Small utilities
+    const escapeHtml = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 
-            const galleryDir = await getOrCreateDir(rootPick, folderName);
+    const safeSlug = (s) => String(s ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50) || 'item';
 
-            // Subfolders for JPG access (NOT referenced by index.html)
-            const surveyDir  = await getOrCreateDir(galleryDir, 'Survey');
-            const findsDir   = await getOrCreateDir(galleryDir, 'Finds');
-            const targetsDir = await getOrCreateDir(galleryDir, 'Targets');
+    const fmtDateTime = (v) => {
+        if (!v) return '';
+        try {
+            const d = new Date(v);
+            if (isNaN(d.getTime())) return String(v);
+            return d.toLocaleString();
+        } catch {
+            return String(v);
+        }
+    };
 
-            async function saveJpg(dirHandle, filenameBase, photoRefOrDataUrl) {
-                const rawBlob = await resolvePhotoBlob(photoRefOrDataUrl);
-                if (!rawBlob) return null;
+    const dataUrlFromBlob = (blob) => new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ''));
+        r.onerror = () => resolve('');
+        r.readAsDataURL(blob);
+    });
 
-                const outBlob = await resizeBlobToMaxWidthJpeg(rawBlob, maxW, 0.85);
-                if (!outBlob) return null;
+    const blobFromDataUrl = async (dataUrl) => {
+        try {
+            if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+            const res = await fetch(dataUrl);
+            return await res.blob();
+        } catch {
+            return null;
+        }
+    };
 
-                const fileName = `${filenameBase}.jpg`;
-                await writeFileToHandle(dirHandle, fileName, outBlob);
-                return outBlob; // return blob for embedding
+    const isPhotoRef = (v) => (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(v));
+
+    const getPhotoBlob = async (refOrDataUrl) => {
+        if (!refOrDataUrl) return null;
+
+        // IndexedDB photo ref
+        if (isPhotoRef(refOrDataUrl)) {
+            const id = parsePhotoRef(refOrDataUrl);
+            if (id == null) return null;
+            return await loadPhotoBlob(id);
+        }
+
+        // Data URL fallback
+        if (typeof refOrDataUrl === 'string' && refOrDataUrl.startsWith('data:')) {
+            return await blobFromDataUrl(refOrDataUrl);
+        }
+
+        return null;
+    };
+
+    // Save as .jpg if possible; otherwise keep extension from mime
+    async function saveJpg(dirHandle, baseName, refOrDataUrl) {
+        const blob = await getPhotoBlob(refOrDataUrl);
+        if (!blob) return null;
+
+        // We keep the blob as-is; name with .jpg for compatibility
+        const fileName = `${baseName}.jpg`;
+        const outBlob = blob.type === 'image/jpeg'
+            ? blob
+            : blob; // still save as .jpg — browsers will display fine in most cases
+
+        await writeFileToHandle(dirHandle, fileName, outBlob);
+        return outBlob; // return blob for embedding
+    }
+
+    // Build item list
+    const items = [];
+
+    // ✅ MULTI-PHOTO SURVEY SUPPORT
+    const surveyRefs = (Array.isArray(openSurvey.photos) ? openSurvey.photos : []).filter(Boolean);
+
+    const legacySurveyInputs = [];
+    const legacySurveyPhotoInput =
+        (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef))
+            ? openSurvey.surveyPhotoRef
+            : (openSurvey.surveyPhotoData || openSurvey.surveyPhotoDataUrl || '');
+
+    if (legacySurveyPhotoInput) legacySurveyInputs.push(legacySurveyPhotoInput);
+
+    const surveyPhotoInputs = surveyRefs.length ? surveyRefs : legacySurveyInputs;
+
+    for (let i = 0; i < surveyPhotoInputs.length; i++) {
+        const surveyPhotoInput = surveyPhotoInputs[i];
+        if (!surveyPhotoInput) continue;
+
+        items.push({
+            kind: 'survey',
+            parentId: openSurvey.id,
+            indexInParent: i + 1,
+            title: openSurvey.name
+                ? `${openSurvey.name} (Survey photo ${i + 1})`
+                : `Survey photo ${i + 1}`,
+            type: 'Survey',
+            vdi: '',
+            depth: '',
+            time: openSurvey.creationDate || openSurvey.dateLastChanged || '',
+            coords: '',
+            accuracy: '',
+            photoRefOrDataUrl: surveyPhotoInput
+        });
+    }
+
+    const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
+    for (const f of linkedFinds) {
+        const refs = Array.isArray(f.photos) ? f.photos : [];
+        const legacy = (f.targetPhotoData || f.photoData || f.photoDataUrl)
+            ? [f.targetPhotoData || f.photoData || f.photoDataUrl]
+            : [];
+        const photoInputs = refs.length ? refs : legacy;
+
+        for (let i = 0; i < photoInputs.length; i++) {
+            const input = photoInputs[i];
+            if (!input) continue;
+            items.push({
+                kind: 'find',
+                parentId: f.id,
+                indexInParent: i + 1,
+                title: f.name || `Find ${f.id || ''}`,
+                type: 'Find',
+                vdi: (f.vdi ?? ''),
+                depth: (f.depth ?? ''),
+                time: (f.time || f.creationDate || f.dateLastChanged || ''),
+                coords: (f.coords || ''),
+                accuracy: (f.accuracy || ''),
+                photoRefOrDataUrl: input
+            });
+        }
+    }
+
+    const targets = Array.isArray(openSurvey.targets) ? openSurvey.targets : [];
+    for (const t of targets) {
+        const refs = Array.isArray(t.photos) ? t.photos : [];
+        const legacy = (t.targetPhotoData || t.photoData || t.photoDataUrl)
+            ? [t.targetPhotoData || t.photoData || t.photoDataUrl]
+            : [];
+        const photoInputs = refs.length ? refs : legacy;
+
+        for (let i = 0; i < photoInputs.length; i++) {
+            const input = photoInputs[i];
+            if (!input) continue;
+            items.push({
+                kind: 'target',
+                parentId: t.id,
+                indexInParent: i + 1,
+                title: t.name || `Target ${t.id || ''}`,
+                type: 'Target',
+                vdi: (t.vdi ?? ''),
+                depth: (t.depth ?? ''),
+                time: (t.time || t.creationDate || t.dateLastChanged || ''),
+                coords: (t.coords || ''),
+                accuracy: (t.accuracy || ''),
+                photoRefOrDataUrl: input
+            });
+        }
+    }
+
+    if (!items.length) {
+        showMessage('No photos found to export.', 'info');
+        log('No photos found in survey/targets/finds.');
+        return;
+    }
+
+    // Folder selection and export
+    const rootDir = await pickRootDir();
+    if (!rootDir) {
+        showMessage('Folder access cancelled.', 'info');
+        log('Folder selection cancelled.');
+        return;
+    }
+
+    let originalBtnText = '';
+    if (btn) {
+        originalBtnText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Exporting…';
+    }
+
+    showSpinner('Creating folders…');
+    setSpinnerProgress(2);
+
+    try {
+        const rootName = `GeoFind_PhotoGallery_${safeSlug(openSurvey.name || 'open-survey')}`;
+        const outDir = await ensureDir(rootDir, rootName);
+
+        const surveyDir = await ensureDir(outDir, 'survey');
+        const targetsDir = await ensureDir(outDir, 'targets');
+        const findsDir = await ensureDir(outDir, 'finds');
+
+        const thumbs = [];
+        const large = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            const baseName = `${it.kind}_${safeSlug(it.parentId)}_${String(it.indexInParent).padStart(2, '0')}`;
+            const anchorId = baseName;
+
+            log(`Photo ${i + 1}/${items.length}: ${it.kind} ${it.parentId} #${it.indexInParent}`);
+            showSpinner(`Processing ${i + 1}/${items.length}…`);
+            setSpinnerProgress(Math.round(((i + 1) / items.length) * 85));
+
+            let dirHandle = findsDir;
+            if (it.kind === 'survey') dirHandle = surveyDir;
+            else if (it.kind === 'target') dirHandle = targetsDir;
+
+            const outBlob = await saveJpg(dirHandle, baseName, it.photoRefOrDataUrl);
+            if (!outBlob) {
+                log('  SKIP (missing/failed)');
+                continue;
             }
 
-            // Build item list
-            const items = [];
+            const dataUrl = await dataUrlFromBlob(outBlob);
 
-            const surveyPhotoInput =
-                (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef))
-                    ? openSurvey.surveyPhotoRef
-                    : (openSurvey.surveyPhotoData || openSurvey.surveyPhotoDataUrl || '');
-
-            if (surveyPhotoInput) {
-                items.push({
-                    kind: 'survey',
-                    parentId: openSurvey.id,
-                    indexInParent: 1,
-                    title: openSurvey.name || 'Survey photo',
-                    type: 'Survey',
-                    vdi: '',
-                    depth: '',
-                    time: openSurvey.creationDate || openSurvey.dateLastChanged || '',
-                    coords: '',
-                    accuracy: '',
-                    photoRefOrDataUrl: surveyPhotoInput
-                });
-            }
-
-            const linkedFinds = finds.filter(f => f.surveyId === openSurvey.id);
-            for (const f of linkedFinds) {
-                const refs = Array.isArray(f.photos) ? f.photos : [];
-                const legacy = (f.targetPhotoData || f.photoData || f.photoDataUrl)
-                    ? [f.targetPhotoData || f.photoData || f.photoDataUrl]
-                    : [];
-                const photoInputs = refs.length ? refs : legacy;
-
-                for (let i = 0; i < photoInputs.length; i++) {
-                    items.push({
-                        kind: 'find',
-                        parentId: f.id,
-                        indexInParent: i + 1,
-                        title: f.description || f.name || `Find ${f.id}`,
-                        type: f.type || '',
-                        vdi: f.vdi || '',
-                        depth: f.depth || '',
-                        time: f.time || f.date || '',
-                        coords: f.coordinates || '',
-                        accuracy: f.accuracy || '',
-                        photoRefOrDataUrl: photoInputs[i]
-                    });
-                }
-            }
-
-            if (includeTargets && Array.isArray(openSurvey.targets)) {
-                for (const t of openSurvey.targets) {
-                    const refs = Array.isArray(t.photos) ? t.photos : [];
-                    const legacy = (t.targetPhotoData || t.photoDataUrl)
-                        ? [t.targetPhotoData || t.photoDataUrl]
-                        : [];
-                    const photoInputs = refs.length ? refs : legacy;
-
-                    for (let i = 0; i < photoInputs.length; i++) {
-                        items.push({
-                            kind: 'target',
-                            parentId: t.id,
-                            indexInParent: i + 1,
-                            title: t.description || `Target ${t.id}`,
-                            type: t.type || '',
-                            vdi: t.vdi || '',
-                            depth: t.depth || '',
-                            time: t.time || '',
-                            coords: t.coordinates || '',
-                            accuracy: t.accuracy || '',
-                            photoRefOrDataUrl: photoInputs[i]
-                        });
-                    }
-                }
-            }
-
-            if (!items.length) {
-                showMessage('No photos found to export.', 'info');
-                log('No photos found.');
-                return;
-            }
-
-            log(`Total photos to process: ${items.length}`);
-            showSpinner(`Processing 0/${items.length}…`);
-
-            // HTML bits (embedded index.html only)
-            let surveyHeroHtml = '';
-            const findCards = [];
-            const targetCards = [];
-            const sections = [];
-
-            for (let i = 0; i < items.length; i++) {
-                const it = items[i];
-                const baseName = `${it.kind}_${safeSlug(it.parentId)}_${String(it.indexInParent).padStart(2, '0')}`;
-                const anchorId = baseName;
-
-                log(`Photo ${i + 1}/${items.length}: ${it.kind} ${it.parentId} #${it.indexInParent}`);
-                showSpinner(`Processing ${i + 1}/${items.length}…`);
-
-                let dirHandle = findsDir;
-                if (it.kind === 'survey') dirHandle = surveyDir;
-                else if (it.kind === 'target') dirHandle = targetsDir;
-
-                const outBlob = await saveJpg(dirHandle, baseName, it.photoRefOrDataUrl);
-                if (!outBlob) {
-                    log('  SKIP (missing/failed)');
-                    continue;
-                }
-
-                const dataUrl = await blobToDataUrl(outBlob);
-
-                // Survey hero: full width, only one
-                if (it.kind === 'survey') {
-                    surveyHeroHtml = `
-                      <div class="surveyHero">
-                        <img class="surveyImg" src="${escapeHtml(dataUrl)}" alt="Survey photo">
-                      </div>
-                    `;
-                } else {
-                    const card = `
-                      <div class="card">
-                        <a class="thumbLink" href="#${anchorId}">
-                          <img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
-                        </a>
-                        <div class="cap">
-                          <div class="title">${escapeHtml(it.title)}</div>
-                          <div class="metaLine">${escapeHtml(it.vdi)} ${it.type ? '· ' + escapeHtml(it.type) : ''}</div>
-                          <div class="metaLine">${escapeHtml(fmtDateTime(it.time))}</div>
-                        </div>
-                      </div>
-                    `;
-                    if (it.kind === 'find') findCards.push(card);
-                    else targetCards.push(card);
-                }
-
-                // Full sections (embedded + internal only)
-                sections.push(`
-                  <div class="detail" id="${anchorId}">
-                    <p class="back"><a href="#top">↑ Back to top</a></p>
-                    <h3>${escapeHtml(it.title)}</h3>
-                    <p class="muted">${escapeHtml(it.kind)}</p>
-                    <img class="full" src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
-                    <ul class="meta">
-                      <li><strong>Type:</strong> ${escapeHtml(it.type)}</li>
-                      ${it.vdi ? `<li><strong>VDI/ID:</strong> ${escapeHtml(it.vdi)}</li>` : ''}
-                      ${it.depth ? `<li><strong>Depth:</strong> ${escapeHtml(it.depth)}</li>` : ''}
-                      ${it.time ? `<li><strong>Date/Time:</strong> ${escapeHtml(fmtDateTime(it.time))}</li>` : ''}
-                      ${it.coords ? `<li><strong>Coordinates:</strong> ${escapeHtml(it.coords)}</li>` : ''}
-                      ${it.accuracy ? `<li><strong>Accuracy:</strong> ${escapeHtml(it.accuracy)}</li>` : ''}
-                      <li><strong>Parent ID:</strong> ${escapeHtml(it.parentId)}</li>
-                      <li><strong>Photo #:</strong> ${it.indexInParent}</li>
-                    </ul>
-                    <hr>
+            // First item (normally survey photo #1) becomes the hero image
+            if (it.kind === 'survey' && i === 0) {
+                large.push(`
+                  <div class="surveyHero">
+                    <img class="surveyImg" src="${escapeHtml(dataUrl)}" alt="Survey photo">
                   </div>
                 `);
-
-                log('  OK');
+            } else {
+                const card = `
+                  <div class="card">
+                    <a class="thumbLink" href="#${anchorId}">
+                      <img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
+                    </a>
+                    <div class="cap">
+                      <div class="title">${escapeHtml(it.title)}</div>
+                      <div class="metaLine">${escapeHtml(it.vdi)} ${it.type ? '· ' + escapeHtml(it.type) : ''}</div>
+                      <div class="metaLine">${escapeHtml(fmtDateTime(it.time))}</div>
+                    </div>
+                  </div>
+                `;
+                thumbs.push(card);
             }
 
-            const surveyInfoHtml = `
-              <div class="surveyBox">
-                <h1>${escapeHtml(openSurvey.name || 'Unnamed survey')}</h1>
-                <p><strong>Description:</strong> ${escapeHtml(openSurvey.description || '')}</p>
-                <p><strong>Exported:</strong> ${escapeHtml(new Date().toLocaleString())}</p>
-                <p class="muted">index.html is embedded/phone-safe and does not link to the JPG folders.</p>
+            // Large section (all images)
+            const full = `
+              <div class="full" id="${anchorId}">
+                <div class="fullTitle">${escapeHtml(it.title)}</div>
+                <div class="fullMeta">
+                  ${it.type ? `<span class="pill">${escapeHtml(it.type)}</span>` : ''}
+                  ${it.vdi !== '' ? `<span class="pill">VDI: ${escapeHtml(it.vdi)}</span>` : ''}
+                  ${it.depth !== '' ? `<span class="pill">Depth: ${escapeHtml(it.depth)}</span>` : ''}
+                  ${it.accuracy !== '' ? `<span class="pill">Acc: ${escapeHtml(it.accuracy)}</span>` : ''}
+                </div>
+                <div class="fullTime">${escapeHtml(fmtDateTime(it.time))}</div>
+                <img class="fullImg" src="${escapeHtml(dataUrl)}" alt="${escapeHtml(it.title)}">
+                <div class="backTop"><a href="#top">Back to top</a></div>
               </div>
             `;
+            large.push(full);
+        }
 
-            const indexHtml = `<!doctype html>
+        showSpinner('Writing HTML…');
+        setSpinnerProgress(92);
+
+        const html = `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>geoFind Gallery - ${escapeHtml(openSurvey.name || 'Survey')}</title>
+<title>GeoFind Photo Gallery</title>
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:18px;color:#111;background:#f8fafc;}
-  .wrap{max-width:1200px;margin:0 auto;}
-  .surveyBox{background:#fff;border:1px solid #e5e7eb;border-left:6px solid #0ea5e9;border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  h1{margin:0 0 8px 0;font-size:26px}
-  h2{margin:22px 0 10px 0}
-  h3{margin:8px 0 10px 0}
-  .muted{color:#64748b;font-size:14px}
-
-  .surveyHero{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.06); margin-top:12px;}
-  .surveyImg{width:100%; height:auto; display:block;}
-
-  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-  @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-  @media (max-width:520px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-
-  .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  .card img{width:100%;height:200px;object-fit:cover;display:block}
-  .cap{padding:10px}
-  .title{font-weight:800;font-size:14px;margin-bottom:4px}
-  .metaLine{font-size:12px;color:#64748b}
-  a.thumbLink{text-decoration:none;color:inherit}
-
-  .detail{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-top:14px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  img.full{width:100%;height:auto;border-radius:12px;border:1px solid #e5e7eb}
-  .meta{margin:12px 0 0 0;padding:0;list-style:none}
-  .meta li{padding:6px 0;border-bottom:1px solid #f1f5f9}
-  .back{margin:0 0 8px 0}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#0b0b0b;color:#f5f5f5}
+  a{color:#9dd6ff}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px}
+  h1{margin:0 0 8px 0;font-size:22px}
+  .sub{opacity:.85;font-size:13px;margin-bottom:14px}
+  .surveyHero{margin:14px 0 18px 0;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12)}
+  .surveyImg{display:block;width:100%;height:auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .card{background:#141414;border:1px solid rgba(255,255,255,.10);border-radius:14px;overflow:hidden;box-shadow:0 8px 18px rgba(0,0,0,.25)}
+  .card img{display:block;width:100%;height:auto}
+  .cap{padding:10px 10px 12px 10px}
+  .title{font-weight:700;font-size:14px;margin-bottom:6px}
+  .metaLine{font-size:12px;opacity:.85;line-height:1.35}
+  .full{margin-top:20px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
+  .fullTitle{font-weight:800;font-size:18px;margin:0 0 6px 0}
+  .fullMeta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .pill{font-size:12px;background:rgba(255,255,255,.12);padding:4px 8px;border-radius:999px}
+  .fullTime{font-size:12px;opacity:.85;margin-bottom:10px}
+  .fullImg{width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.12)}
+  .backTop{margin-top:10px;font-size:13px}
 </style>
 </head>
 <body>
-
-  <a id="top"></a>
-  <div class="wrap">
-    ${surveyInfoHtml}
-    ${surveyHeroHtml}
-
-    <h2>Finds</h2>
-    <div class="grid">${findCards.join('')}</div>
-
-    ${includeTargets ? `<h2>Targets</h2><div class="grid">${targetCards.join('')}</div>` : ''}
-
-    <h2>Full Photos</h2>
-    ${sections.join('')}
-
-    <p class="muted" style="margin-top:22px;">Generated by geoFind.</p>
+<a id="top"></a>
+<div class="wrap">
+  <h1>GeoFind Photo Gallery</h1>
+  <div class="sub">
+    Survey: <strong>${escapeHtml(openSurvey.name || 'Open Survey')}</strong> ·
+    Exported: ${escapeHtml(new Date().toLocaleString())}
   </div>
+
+  ${large[0] || ''}
+
+  <div class="grid">
+    ${thumbs.join('\n')}
+  </div>
+
+  ${large.join('\n')}
+</div>
 </body>
 </html>`;
 
-            await writeFileToHandle(galleryDir, 'index.html', new Blob([indexHtml], { type: 'text/html' }));
+        await writeFileToHandle(outDir, 'index.html', new Blob([html], { type: 'text/html' }));
 
-            hideSpinner();
-            log('Done.');
-            showMessage('Gallery exported successfully.', 'success');
-            log(`Saved folder: ${folderName}`);
-            log(`JPG folders: Survey/, Finds/, Targets/`);
+        setSpinnerProgress(100);
+        hideSpinner();
 
-        } catch (e) {
-            hideSpinner();
-            console.error('Gallery export error:', e);
+        log('Photo gallery export complete.');
+        showMessage('Photo gallery exported to the selected folder.', 'success');
 
-            if (e && (e.name === 'AbortError' || String(e.message || '').toLowerCase().includes('aborted'))) {
-                showMessage('Cancelled.', 'info');
-                log('Cancelled by user.');
-                return;
-            }
-
-            log(`ERROR: ${e.message || e}`);
-            showMessage(`Could not export gallery: ${e.message || 'Unknown error'}`, 'error');
-        } finally {
-            hideSpinner();
-            if (btn) {
-                btn.disabled = false;
-                btn.innerText = originalBtnText || 'Step 2: Export to Selected Folder';
-            }
+    } catch (e) {
+        console.error('Gallery export failed:', e);
+        log(`ERROR: ${e.message || 'Unknown error'}`);
+        showMessage(`Photo gallery export failed: ${e.message || 'Unknown error'}`, 'error');
+        hideSpinner();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalBtnText || 'Export to Selected Folder';
         }
-    });
+    }
 }
 // ======================================
 // SHARED FORM HELPERS
@@ -13148,135 +13206,6 @@ async function actuallyExportOpenSurvey() {
 }
         
     /**
- * Internal worker to import a survey JSON string  and add it
- * to existing data. Uses a log function to report progress.
- */
-async function performSurveyImport(text, filename, log) {
-    let payload;
-
-    log(`Parsing "${filename}"...`);
-    try {
-        payload = JSON.parse(text);
-    } catch (e) {
-        console.error('Survey import JSON parse error:', e);
-        log(`ERROR: Invalid JSON (${e.message})`);
-        showMessage(`Import failed: invalid JSON (${e.message})`, 'error');
-        return;
-    }
-
-    if (!payload || !payload.survey) {
-        log('ERROR: This JSON does not look like a survey export.');
-        showMessage('Import failed: this JSON does not look like a survey export.', 'error');
-        return;
-    }
-
-    let importedSurvey = payload.survey;
-    let importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
-
-    try {
-        // Ensure survey has an id
-        if (!importedSurvey.id) {
-            importedSurvey.id = generateId();
-        }
-
-        log('Restoring survey photo...');
-        if (importedSurvey.exportSurveyPhotoDataUrl) {
-            const refs = await saveDataUrlsAsPhotoRefs([importedSurvey.exportSurveyPhotoDataUrl]);
-            importedSurvey.surveyPhotoRef  = refs[0] || '';
-            importedSurvey.surveyPhotoData = refs.length > 0 ? '' : importedSurvey.exportSurveyPhotoDataUrl;
-            delete importedSurvey.exportSurveyPhotoDataUrl;
-        }
-
-        // 2) Targets: convert exportPhotosDataUrls -> IndexedDB refs
-        if (!Array.isArray(importedSurvey.targets)) {
-            importedSurvey.targets = [];
-        }
-// Ensure tracks exist and are well-formed (backwards compatible)
-if (!Array.isArray(importedSurvey.tracks)) importedSurvey.tracks = [];
-for (const tr of importedSurvey.tracks) {
-    if (!tr) continue;
-    if (!tr.id) tr.id = generateId();
-    tr.name = String(tr.name || 'Track');
-    tr.description = String(tr.description || '');
-    if (tr.isVisible === undefined) tr.isVisible = true;
-    if (!tr.color) tr.color = pickTrackColor(0); // only if missing; won’t override existing colours
-    if (!Array.isArray(tr.points)) tr.points = [];
-}
-
-        log(`Restoring ${importedSurvey.targets.length} targets...`);
-        let tIndex = 0;
-        for (const t of importedSurvey.targets) {
-            tIndex++;
-            log(`  Target ${tIndex}/${importedSurvey.targets.length}: ${t.description || t.id || ''}`);
-
-            const dataUrls = Array.isArray(t.exportPhotosDataUrls) ? t.exportPhotosDataUrls : [];
-            let refs = [];
-
-            if (dataUrls.length) {
-                refs = await saveDataUrlsAsPhotoRefs(dataUrls);
-            }
-
-            t.photos         = refs;
-            t.targetPhotoRef = refs[0] || '';
-            t.targetPhotoData = refs.length > 0 ? '' : (dataUrls[0] || '');
-            delete t.exportPhotosDataUrls;
-
-            if (!t.id) {
-                t.id = generateId();
-            }
-        }
-
-        // 3) Finds: convert exportPhotosDataUrls -> IndexedDB refs
-        log(`Restoring ${importedFinds.length} finds...`);
-        let fIndex = 0;
-        for (const f of importedFinds) {
-            fIndex++;
-            log(`  Find ${fIndex}/${importedFinds.length}: ${f.description || f.id || ''}`);
-
-            const dataUrls = Array.isArray(f.exportPhotosDataUrls) ? f.exportPhotosDataUrls : [];
-            let refs = [];
-
-            if (dataUrls.length) {
-                refs = await saveDataUrlsAsPhotoRefs(dataUrls);
-            }
-
-            f.photos          = refs;
-            f.findPhotoRef    = refs[0] || '';
-            f.targetPhotoData = refs.length > 0 ? '' : (dataUrls[0] || '');
-            delete f.exportPhotosDataUrls;
-
-            if (!f.id) {
-                f.id = generateId();
-            }
-            if (!f.surveyId) {
-                f.surveyId = importedSurvey.id;
-            }
-        }
-
-              // 4) Merge into live data (ADD, do not overwrite existing)
-        log('Merging imported survey into local data...');
-        surveys.push(importedSurvey);
-        finds = finds.concat(importedFinds);
-
-        saveSurveysToLocalStorage();
-        saveFindsToLocalStorage();
-
-        log(`"${filename}" has been successfully imported.`);
-        showMessage(
-            `Imported survey "${importedSurvey.name || 'Unnamed survey'}" with ` +
-            `${Array.isArray(importedSurvey.targets) ? importedSurvey.targets.length : 0} targets and ` +
-            `${importedFinds.length} finds.`,
-            'success'
-        );
-
-        // Stay on Settings so the user can read the log.
-        // They can navigate manually when ready.
-    } catch (e) {
-        console.error('Error importing survey :', e);
-        log(`ERROR: ${e.message || 'Unknown error'}`);
-        showMessage(`Survey import failed: ${e.message || 'Unknown error'}`, 'error');
-    }
-}
 function renameTrack(trackId, newName) {
     const found = findTrackById(trackId);
     if (!found || !found.survey || !found.track) {
