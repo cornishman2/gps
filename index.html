@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -10488,7 +10488,7 @@ function zoomMapOut(event) {
 }
 
 function resetMapView(event) {
-    if (event) event.preventDefault();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
 
     // Reset zoom + pan
     mapZoom = 1;
@@ -13632,7 +13632,22 @@ if (privacyBtn) {
             });
         });
     }
-    // --- Track Start/Stop buttons (Compass/Map page) ---
+    
+
+// 2c. Track Visibility Toggle Checkboxes
+const trackVisibilityToggles = document.querySelectorAll('.track-visibility-toggle');
+if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
+    trackVisibilityToggles.forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const trackId = cb.getAttribute('data-track-id');
+            toggleTrackVisibility(trackId, cb.checked);
+        });
+    });
+}
+
+// --- Track Start/Stop buttons (Compass/Map page) ---
     const startTrackBtn = document.getElementById('start-track-btn');
     if (startTrackBtn) {
         startTrackBtn.addEventListener('click', handleStartTrackClick);
