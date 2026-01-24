@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V9
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -10613,6 +10613,8 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
             lon: parts[1],
             description: t.description,
             type: t.type,
+            findType: t.findType,
+            findCategory: t.findCategory,
             vdi: t.vdi,
             status: t.status,
             accuracy: parseFloat(t.accuracy) || 0,
@@ -10810,8 +10812,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
                             z-index: 12;
                         "
                     >${(t.isFind
-    ?
-                        String(t.findType || t.type || t.category || t.findCategory || 'Find')
+    ? String(t.findType || t.findCategory || t.type || 'Find')
     : String(
                             (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
                                 ? t.vdi
@@ -10990,7 +10991,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
 }
         
     /** Toggles the map state and re-renders immediately. *${(t.isFind
-                        ? String(t.type || t.findType || t.findCategory || 'Find')
+                        ? String(t.findType || t.findCategory || t.type || 'Find')
                         : String(
                             (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
                                 ? t.vdi
@@ -12080,6 +12081,7 @@ function renderCompassPage(isAutoRefresh = false) {
             id: f.id,
             description: f.description || 'Find',
             type: 'Find',
+            findType: f.type || 'Unknown',
             vdi: f.vdi || '',
             status: 'find',
             accuracy: f.accuracy || '',
