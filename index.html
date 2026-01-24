@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8253,8 +8253,8 @@ function openPhotoGallery(photos, startIndex) {
     ensureGallerySwipeHandlers();
 
     
-    // Ensure long-press handler is attached (set cover photo)
-    ensureGalleryLongPressHandlers();
+    // Double-tap on the large image sets it as the cover photo (keeps browser long-press menu for Google Lens etc.)
+    attachDoubleTapToSetCover(img, () => currentGalleryIndex);
 // Update the displayed image
     img.src = currentGalleryPhotos[currentGalleryIndex];
     caption.textContent = `${currentGalleryIndex + 1} of ${currentGalleryPhotos.length}`;
@@ -8318,13 +8318,36 @@ function ensureGalleryLongPressHandlers() {
     img.addEventListener('mouseleave', cancel);
 }
 
-function setCoverPhotoFromGallery() {
+
+function attachDoubleTapToSetCover(el, getIndex, maxDelayMs = 300) {
+    if (!el) return;
+    let lastTapTime = 0;
+
+    el.addEventListener('pointerup', (e) => {
+        // Only primary interaction
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+        const now = Date.now();
+        const dt = now - lastTapTime;
+
+        if (dt > 0 && dt < maxDelayMs) {
+            const idx = (typeof getIndex === 'function') ? getIndex() : 0;
+            // Do NOT preventDefault here: we want to keep the browser long-press menu (Google Lens etc.)
+            setCoverPhotoFromGallery(idx);
+            lastTapTime = 0;
+        } else {
+            lastTapTime = now;
+        }
+    });
+}
+
+function setCoverPhotoFromGallery(forcedIdx = null) {
     if (!currentGalleryContext) {
         showMessage('No item context for cover photo.', 'error');
         return;
     }
 
-    const idx = currentGalleryIndex || 0;
+    const idx = (forcedIdx !== null) ? forcedIdx : (typeof currentGalleryIndex === 'number' ? currentGalleryIndex : 0);
 
     // Helper to move item at idx to front
     const moveToFront = (arr, i) => {
