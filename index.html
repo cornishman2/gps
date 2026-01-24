@@ -954,6 +954,13 @@ let currentPage = 'Home';
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
+
+// Map layer toggles (UI checkboxes on Compass/Map page)
+// These affect what is DRAWN, but NOT the bounds/auto-zoom calculation.
+let showMapTargets = true;
+let showMapFinds   = true;
+let showMapTracks  = true;
+
 let showUserPosition = true; // default: show user location on the map
 
 let targetSortMode = 'date'; // 'date' | 'id'
@@ -10488,7 +10495,7 @@ function zoomMapOut(event) {
 }
 
 function resetMapView(event) {
-    if (event) event.preventDefault();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
 
     // Reset zoom + pan
     mapZoom = 1;
@@ -10606,6 +10613,8 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
             lon: parts[1],
             description: t.description,
             type: t.type,
+            findType: t.findType,
+            findCategory: t.findCategory,
             vdi: t.vdi,
             status: t.status,
             accuracy: parseFloat(t.accuracy) || 0,
@@ -10675,6 +10684,11 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         `;
     }
 
+
+// Apply user toggle for drawing tracks only (bounds still calculated from visibleTracks)
+const drawTracks = showMapTracks ? visibleTracks : [];
+
+
     // 2. Convert lat/lon to metres for local mapping
     const centerLat = allCoords.reduce((sum, c) => sum + c.lat, 0) / allCoords.length;
     const mPerDegLon = M_PER_DEG_LON_AT_EQUATOR * Math.cos(centerLat * Math.PI / 180);
@@ -10721,7 +10735,14 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
 
     // 4. Build pin HTML (targets + finds)
     const pinsHtml = coordsMeters
-        .filter(t => !t.isUser && t.type !== 'Track') // only pins here
+        .filter(t => {
+    if (!t) return false;
+    if (t.isUser) return false;
+    if (t.type === 'Track') return false;
+    // draw-only toggles (bounds still includes all coords)
+    if (t.isFind) return !!showMapFinds;
+    return !!showMapTargets;
+}) // only pins here
         .map(t => {
             const { xPct, yPct } = toPercent(t.x, t.y);
 
@@ -10790,7 +10811,14 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
                             transform-origin: left center;
                             z-index: 12;
                         "
-                    >${(t.description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+                    >${(t.isFind
+    ? String(t.findType || t.findCategory || t.type || 'Find')
+    : String(
+                            (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
+                                ? t.vdi
+                                : (t.targetVdi || t.targetVDI || '')
+                        )
+).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
                 </div>
             `;
         })
@@ -10818,8 +10846,8 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
 
     // 6. Track SVG (if any)
     let trackSvgHtml = '';
-    if (visibleTracks.length) {
-        const polylines = visibleTracks.map(track => {
+    if (drawTracks.length) {
+        const polylines = drawTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
                 .map(p => {
@@ -10934,8 +10962,210 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
                     class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
                     onclick="resetMapView(event)"
                 >Reset</button>
-            </div>
+</div>
         </div>
+
+            
+
+<!-- Map layer toggles (draw only; bounds still include all) -->
+<div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+    <div class="text-sm font-semibold text-gray-700 mb-2">Map layers</div>
+    <div class="flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
+            <span>Show Targets</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
+            <span>Show Finds</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
+            <span>Show Tracks</span>
+        </label>
+    </div>
+</div>
+
+
+    `;
+}
+        
+    /** Toggles the map state and re-renders immediately. *${(t.isFind
+                        ? String(t.findType || t.findCategory || t.type || 'Find')
+                        : String(
+                            (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
+                                ? t.vdi
+                                : (t.targetVdi || t.targetVDI || '')
+                        )
+                    ).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+                </div>
+            `;
+        })
+        .join('');
+
+    // 5. User marker
+    let userHtml = '';
+    if (userCoord) {
+        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
+        const { xPct, yPct } = toPercent(userMeters.x, userMeters.y);
+
+        userHtml = `
+            <div
+                class="absolute"
+                style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
+                title="You"
+            >
+                <div
+                    class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"
+                    style="transform: scale(${invZoom}); transform-origin: center;"
+                ></div>
+            </div>
+        `;
+    }
+
+    // 6. Track SVG (if any)
+    let trackSvgHtml = '';
+    if (drawTracks.length) {
+        const polylines = drawTracks.map(track => {
+            const pts = track.points
+                .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
+                .map(p => {
+                    const meters = { x: p.lon * mPerDegLon, y: p.lat * M_PER_DEG_LAT };
+                    const pct = toPercent(meters.x, meters.y);
+                    return `${pct.xPct.toFixed(3)},${pct.yPct.toFixed(3)}`;
+                })
+                .join(' ');
+
+            const stroke = track.color || '#2563eb';
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />`;
+        }).join('');
+
+        trackSvgHtml = `
+            <svg
+                class="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style="z-index: 6;"
+            >
+                ${polylines}
+            </svg>
+        `;
+    }
+
+    // 7. Navigation line (ONLY if userCoord exists!)
+    let navLineHtml = '';
+
+    // Need nav target percentages if nav target exists
+    let navTargetXPercent = null;
+    let navTargetYPercent = null;
+    let navTargetLat = null;
+    let navTargetLon = null;
+    let navTargetAccuracy = null;
+
+    if (navigationTargetId) {
+        const navTarget = parsedCoords.find(t => t.id === navigationTargetId);
+        if (navTarget) {
+            navTargetLat = navTarget.lat;
+            navTargetLon = navTarget.lon;
+            navTargetAccuracy = navTarget.accuracy;
+
+            const navMeters = { x: navTargetLon * mPerDegLon, y: navTargetLat * M_PER_DEG_LAT };
+            const navPct = toPercent(navMeters.x, navMeters.y);
+            navTargetXPercent = navPct.xPct;
+            navTargetYPercent = navPct.yPct;
+        }
+    }
+
+    if (
+        navigationTargetId &&
+        userCoord &&
+        navTargetXPercent !== null &&
+        navTargetYPercent !== null
+    ) {
+        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
+        const userPct = toPercent(userMeters.x, userMeters.y);
+
+        navLineHtml = `
+            <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 15;">
+                <line
+                    x1="${userPct.xPct.toFixed(2)}%"
+                    y1="${userPct.yPct.toFixed(2)}%"
+                    x2="${navTargetXPercent.toFixed(2)}%"
+                    y2="${navTargetYPercent.toFixed(2)}%"
+                    stroke="rgba(239, 68, 68, 0.9)"
+                    stroke-width="2"
+                />
+            </svg>
+        `;
+    }
+
+    // 8. Map HTML
+    const transformStyle = `
+        transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
+        transform-origin: center center;
+    `;
+
+    const heightStyle = isMapFullscreen ? 'calc(100vh - 140px)' : '320px';
+
+    return `
+        <div class="relative w-full bg-gray-50 rounded-xl border border-gray-200 overflow-hidden"
+             style="height: ${heightStyle};"
+             onclick="toggleMapFullscreen(event)"
+             id="target-map-container"
+             onmousedown="startMapDrag(event)"
+             ontouchstart="startMapDrag(event)"
+        >
+            <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
+                ${trackSvgHtml}
+                ${navLineHtml}
+                ${pinsHtml}
+                ${userHtml}
+            </div>
+
+            <!-- Zoom controls -->
+            <div class="map-zoom-controls absolute right-2 bottom-2 w-14 space-y-2" style="z-index: 30;">
+                <button
+                    type="button"
+                    class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
+                    onclick="zoomMapIn(event)"
+                >+</button>
+
+                <button
+                    type="button"
+                    class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-xl shadow"
+                    onclick="zoomMapOut(event)"
+                >−</button>
+
+                <button
+                    type="button"
+                    class="w-full py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
+                    onclick="resetMapView(event)"
+                >Reset</button>
+</div>
+        </div>
+
+            
+
+<!-- Map layer toggles (draw only; bounds still include all) -->
+<div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+    <div class="text-sm font-semibold text-gray-700 mb-2">Map layers</div>
+    <div class="flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
+            <span>Show Targets</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
+            <span>Show Finds</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
+            <span>Show Tracks</span>
+        </label>
+    </div>
+</div>
+
+
     `;
 }
         
@@ -11851,6 +12081,7 @@ function renderCompassPage(isAutoRefresh = false) {
             id: f.id,
             description: f.description || 'Find',
             type: 'Find',
+            findType: f.type || 'Unknown',
             vdi: f.vdi || '',
             status: 'find',
             accuracy: f.accuracy || '',
@@ -13632,7 +13863,55 @@ if (privacyBtn) {
             });
         });
     }
-    // --- Track Start/Stop buttons (Compass/Map page) ---
+    
+
+// 2c. Track Visibility Toggle Checkboxes
+const trackVisibilityToggles = document.querySelectorAll('.track-visibility-toggle');
+if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
+    trackVisibilityToggles.forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const trackId = cb.getAttribute('data-track-id');
+            toggleTrackVisibility(trackId, cb.checked);
+        });
+    });
+}
+
+
+// --- Map layer toggles (Compass/Map page) ---
+const mapTargetsCb = document.getElementById('map-show-targets-cb');
+if (mapTargetsCb) {
+    mapTargetsCb.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMapTargets = !!mapTargetsCb.checked;
+        if (currentPage === 'Compass') render();
+    });
+}
+
+const mapFindsCb = document.getElementById('map-show-finds-cb');
+if (mapFindsCb) {
+    mapFindsCb.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMapFinds = !!mapFindsCb.checked;
+        if (currentPage === 'Compass') render();
+    });
+}
+
+const mapTracksCb = document.getElementById('map-show-tracks-cb');
+if (mapTracksCb) {
+    mapTracksCb.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMapTracks = !!mapTracksCb.checked;
+        if (currentPage === 'Compass') render();
+    });
+}
+
+
+// --- Track Start/Stop buttons (Compass/Map page) ---
     const startTrackBtn = document.getElementById('start-track-btn');
     if (startTrackBtn) {
         startTrackBtn.addEventListener('click', handleStartTrackClick);
