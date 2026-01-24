@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -9977,8 +9977,33 @@ function handleTargetAction(element) {
             }
 
             case 'navigate': {
+                // Navigation requires valid target GPS coords
+                const coordsStr = (target && target.coordinates) ? String(target.coordinates) : '';
+                const parseLatLonSafe = (s) => {
+                    if (!s || typeof s !== 'string') return null;
+                    if (s === 'No GPS logged') return null;
+                    const parts = s.split(',').map(x => Number(String(x).trim()));
+                    if (parts.length < 2) return null;
+                    const lat = parts[0], lon = parts[1];
+                    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+                    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+                    return { lat, lon };
+                };
+
+                const parsed = parseLatLonSafe(coordsStr);
+                if (!parsed) {
+                    navigationTargetId = null;
+                    showMessage('Cannot navigate: this target has no valid GPS coordinates.', 'error');
+                    break;
+                }
+
                 navigationTargetId = targetId;
                 showMessage(`Navigation target set: "${target.description}".`, 'success');
+
+                // Auto-center the map on the navigation target (even if "Hide My Position" is enabled)
+                mapAutoCenterMode = true;
+                mapAutoCenterTargetId = targetId;
+
                 currentPage = 'Compass';
                 break;
             }
@@ -10011,6 +10036,9 @@ function handleTargetAction(element) {
                 });
 
                 showMessage('Centre on map updated for this target.', 'success');
+                mapAutoCenterMode = true;
+                mapAutoCenterTargetId = targetId;
+                currentPage = 'Compass';
                 // (Optional) You can jump straight to the map:
                 // currentPage = 'Compass';
                 break;
@@ -11026,6 +11054,9 @@ let mapZoom = 1;
 let mapOffsetX = 0; // in %
 let mapOffsetY = 0; // in %
 
+let mapAutoCenterMode = false;
+let mapAutoCenterTargetId = null;
+
 const MAP_ZOOM_MIN = 0.5;
 const MAP_ZOOM_MAX = 6;
 const MAP_ZOOM_STEP = 0.25;
@@ -11300,6 +11331,32 @@ const drawTracks = showMapTracks ? visibleTracks : [];
         const xPct = ((x - minX) / mapWidthMeters) * 100;
         const yPct = (1 - ((y - minY) / mapHeightMeters)) * 100; // invert Y
         return { xPct, yPct };
+
+    // Auto-center the map ONCE when requested (Centre Map / Navigate)
+    try {
+        if (mapAutoCenterMode && mapAutoCenterTargetId) {
+            const c = (allCoords || []).find(x => String(x.id) === String(mapAutoCenterTargetId));
+            if (c) {
+                const meters = { x: c.lon * mPerDegLon, y: c.lat * M_PER_DEG_LAT };
+                const pct = toPercent(meters.x, meters.y);
+
+                // Shift so target appears roughly in the middle of the container
+                mapOffsetX = 50 - pct.xPct;
+                mapOffsetY = 50 - pct.yPct;
+
+                // Clamp to keep things sane
+                mapOffsetX = Math.max(-200, Math.min(200, mapOffsetX));
+                mapOffsetY = Math.max(-200, Math.min(200, mapOffsetY));
+            }
+            mapAutoCenterMode = false;
+            mapAutoCenterTargetId = null;
+        }
+    } catch (e) {
+        console.warn('Auto-center error:', e);
+        mapAutoCenterMode = false;
+        mapAutoCenterTargetId = null;
+    }
+
     };
 
     // 4. Build pin HTML (targets + finds)
