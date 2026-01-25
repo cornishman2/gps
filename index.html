@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V16
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -898,75 +898,30 @@
         </div>
     </div>
     
-<div id="edit-profile-modal" class="modal">
-    <div class="modal-content bg-white p-6 shadow-2xl">
-        <h3 class="text-xl font-bold text-primary mb-4">
-            Edit Detectorist Profile
-        </h3>
-
-        <form id="edit-profile-form">
-
-            <!-- Detectorist name -->
-            <div class="mb-4">
-                <label for="profile-name" class="block text-sm font-medium text-gray-700">
-                    Detectorist Name *
-                </label>
-                <input
-                    type="text"
-                    id="profile-name"
-                    name="profileName"
-                    required
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
-                >
-            </div>
-
-            <!-- NCMD membership number (NEW, optional) -->
-            <div class="mb-4">
-                <label for="profile-ncmd-number" class="block text-sm font-medium text-gray-700">
-                    NCMD Membership Number <span class="text-gray-400">(optional)</span>
-                </label>
-                <input
-                    type="text"
-                    id="profile-ncmd-number"
-                    name="profileNcmdNumber"
-                    placeholder="e.g. 123456"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
-                >
-            </div>
-
-            <!-- Detector -->
-            <div class="mb-4">
-                <label for="profile-detector" class="block text-sm font-medium text-gray-700">
-                    Detector Used
-                </label>
-                <input
-                    type="text"
-                    id="profile-detector"
-                    name="profileDetector"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
-                >
-            </div>
-
-            <div class="flex justify-end space-x-3 mt-6">
-                <button
-                    type="button"
-                    onclick="closeEditProfileModal()"
-                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
-                    style="background-color: rgb(var(--color-secondary));"
-                >
-                    Save Changes
-                </button>
-            </div>
-
-        </form>
+    <div id="edit-profile-modal" class="modal">
+        <div class="modal-content bg-white p-6 shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Edit Detectorist Profile</h3>
+            <form id="edit-profile-form">
+                <div class="mb-4">
+                    <label for="profile-name" class="block text-sm font-medium text-gray-700">Detectorist Name *</label>
+                    <input type="text" id="profile-name" name="profileName" required 
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="mb-4">
+                    <label for="profile-detector" class="block text-sm font-medium text-gray-700">Detector Used</label>
+                    <input type="text" id="profile-detector" name="profileDetector" required
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
 
 
     <script>
@@ -1053,11 +1008,11 @@ let suppressCompassAutoRefresh = false;
 
 
      
-let userProfile = {
-    name: "New User",
-    detector: "Default Machine",
-    ncmdNumber: ""   // optional
-};
+        // Profile initialized with default data
+        let userProfile = {
+            name: "New User",
+            detector: "Default Machine"
+        };
         let userId;
 
       // --- NEW REAL-TIME LOCATION STATE ---
@@ -5541,23 +5496,23 @@ function saveSurveysToLocalStorage() {
         
 /** Loads data from Local Storage. Initializes if no data found. */
  /** Loads data from Local Storage. Initializes if no data found. */
-/** Loads data from Local Storage. Initializes if no data found. */
 function loadDataFromLocalStorage() {
     try {
         const storedSurveys = localStorage.getItem('geoFindSurveys');
-        const storedFinds   = localStorage.getItem('geoFindFinds');
+        const storedFinds   = localStorage.getItem('geoFindFinds');   // <--- NEW
         const storedProfile = localStorage.getItem('geoFindProfile');
         const storedUserId  = localStorage.getItem('geoFindUserId');
-
         loadPhotoSettingsFromLocalStorage();
         loadNavOverlaySettingsFromLocalStorage();
 
         if (storedSurveys) {
             surveys = JSON.parse(storedSurveys);
         } else {
+            // ✅ After a reset (or first run), start truly empty (no sample survey)
             surveys = [];
         }
 
+        // Load Finds (can be empty even if surveys exist)
         if (storedFinds) {
             finds = JSON.parse(storedFinds);
         } else {
@@ -5565,23 +5520,14 @@ function loadDataFromLocalStorage() {
         }
 
         if (storedProfile) {
+            // Update userProfile only if storedProfile exists and is valid
             const tempProfile = JSON.parse(storedProfile);
-
-            // Accept profile if it has the required fields
             if (tempProfile && tempProfile.name && tempProfile.detector) {
                 userProfile = tempProfile;
             }
         } else {
             // Re-initialize sample profile if needed
-            userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox", ncmdNumber: "" };
-        }
-
-        // ✅ Ensure NCMD exists for older saved profiles
-        if (!userProfile || typeof userProfile !== 'object') {
-            userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox", ncmdNumber: "" };
-        }
-        if (userProfile.ncmdNumber === undefined || userProfile.ncmdNumber === null) {
-            userProfile.ncmdNumber = "";
+            userProfile = { name: "Sample Dectorist", detector: "Minelab Equinox" };
         }
 
         if (storedUserId) {
@@ -5598,6 +5544,7 @@ function loadDataFromLocalStorage() {
         showMessage("Error loading data. Data may be reset.", 'error');
     }
 }
+
         /** Renders the current page content into the main container. */
         function render() {
             const appContent = document.getElementById('app-content');
@@ -8901,8 +8848,6 @@ async function handleEditTargetSubmit(event) {
             // Pre-fill the form with current profile data
             document.getElementById('profile-name').value = userProfile.name;
             document.getElementById('profile-detector').value = userProfile.detector;
-            document.getElementById('profile-ncmd-number').value = userProfile.ncmdNumber || '';
-
             modal.style.display = 'block';
 
             // Attach the submit listener
@@ -8917,50 +8862,44 @@ async function handleEditTargetSubmit(event) {
             document.getElementById('edit-profile-modal').style.display = 'none';
         }
 
-/** Handles the submission of the Edit Profile form. */
-function handleEditProfileSubmit(event) {
-    event.preventDefault();
+        /** Handles the submission of the Edit Profile form. */
+        function handleEditProfileSubmit(event) {
+            event.preventDefault();
 
-    const form = event.target;
+            const form = event.target;
+            const newName = form['profileName'].value.trim();
+            const newDetector = form['profileDetector'].value.trim();
 
-    const newName     = form['profileName'].value.trim();
-    const newDetector = form['profileDetector'].value.trim();
-    const newNcmd     = (form['profileNcmdNumber']?.value ?? '').trim();
-
-    if (!newName || !newDetector) {
-        showMessage('Both Name and Detector are required.', 'error');
-        return;
-    }
-
-    // Store old values so we can update existing targets correctly
-    const oldName = userProfile.name;
-    const oldDetector = userProfile.detector;
-
-    // Update global state
-    userProfile.name = newName;
-    userProfile.detector = newDetector;
-    userProfile.ncmdNumber = newNcmd; // ✅ NEW: save NCMD
-
-    // Update user/detector in existing targets
-    surveys.forEach(survey => {
-        (survey.targets || []).forEach(target => {
-            if (target.user === oldName) {
-                target.user = newName;
+            if (!newName || !newDetector) {
+                showMessage('Both Name and Detector are required.', 'error');
+                return;
             }
-            if (target.detector === oldDetector) {
-                target.detector = newDetector;
-            }
-        });
-    });
 
-    // Save and re-render
-    saveSurveysToLocalStorage();
-    closeEditProfileModal();
-    showMessage(`Profile updated successfully!`, 'success');
+            // Update global state
+            userProfile.name = newName;
+            userProfile.detector = newDetector;
 
-    // Re-render the current page (Settings) to reflect the new profile data
-    render();
-}
+            // Update user/detector in existing targets 
+            surveys.forEach(survey => {
+                survey.targets.forEach(target => {
+                    if (target.user === userProfile.name) {
+                        target.user = newName;
+                    }
+                    if (target.detector === userProfile.detector) {
+                        target.detector = newDetector;
+                    }
+                });
+            });
+
+
+            // Save and re-render
+            saveSurveysToLocalStorage();
+            closeEditProfileModal();
+            showMessage(`Profile updated to "${newName}" using "${newDetector}" successfully!`, 'success');
+            // Re-render the current page (Settings) to reflect the new profile data
+            render();
+        }
+
         // --- SURVEY & TARGET LOGIC (Action Handlers) ---
 
 
@@ -12436,10 +12375,12 @@ ${(() => {
     `;
 }
         
+/** Renders the content for the Settings page. */
 function renderSettingsPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
 
     // Limits (Tester build) - display only
+    // Assumes you have loadAppLimits() + isExpired(); falls back to your defaults if not present yet.
     const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {
         maxSurveys: 3,
         maxTargets: 50,
@@ -12450,14 +12391,11 @@ function renderSettingsPage() {
     const valOrBlank = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
     const expired = (typeof isExpired === 'function') ? isExpired(limits) : false;
 
+    // Display strings (blank means unlimited / no expiry)
     const displayMaxSurveys = valOrBlank(limits.maxSurveys);
     const displayMaxTargets = valOrBlank(limits.maxTargets);
     const displayMaxFinds   = valOrBlank(limits.maxFinds);
     const displayExpiryDate = valOrBlank(limits.expiryDate);
-
-    const ncmdDisplay = (userProfile && userProfile.ncmdNumber && String(userProfile.ncmdNumber).trim())
-        ? String(userProfile.ncmdNumber).trim()
-        : '—';
 
     return `
         <div class="p-4">
@@ -12465,10 +12403,8 @@ function renderSettingsPage() {
 
             <div class="bg-white p-4 rounded-xl shadow-lg mb-8 border border-gray-100">
                 <h3 class="text-xl font-semibold text-gray-700 mb-3">Your Profile</h3>
-                
                 <p class="text-md text-gray-800 mb-1"><strong>Name:</strong> ${userProfile.name}</p>
-                <p class="text-md text-gray-800 mb-1"><strong>Detector:</strong> ${userProfile.detector}</p>
-                <p class="text-md text-gray-800 mb-4"><strong>NCMD:</strong> ${ncmdDisplay}</p>
+                <p class="text-md text-gray-800 mb-4"><strong>Detector:</strong> ${userProfile.detector}</p>
                 
                 <div class="mt-4 pt-3 border-t border-gray-100">
                     <button onclick="showEditProfileModal()" 
@@ -12482,143 +12418,159 @@ function renderSettingsPage() {
             <!-- PHOTO SETTINGS -->
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-sky-500">
   <h4 class="text-lg font-semibold text-sky-700 mb-2">Photo Settings</h4>
-  <p class="text-sm text-gray-700 mb-3">
-    Choose a maximum width (in pixels) for photos when saving. Use <strong>0</strong> to disable resizing.
+  <p class="text-sm text-gray-600 mb-3">
+    Photos will be resized when selected (before saving). This reduces storage and makes export/import faster.
+    Set to <strong>0</strong> to disable resizing.
   </p>
 
-  <label class="block text-sm font-semibold text-gray-700 mb-1">Max Photo Width (px)</label>
-  <input type="number" id="photo-max-width-input"
-         class="w-full p-2 border border-gray-300 rounded-lg mb-3"
-         placeholder="e.g., 1280" />
+  <label class="block text-sm font-medium text-gray-700 mb-1" for="max-photo-width-input">
+    Max Photo Width (px)
+  </label>
 
   <div class="flex gap-2">
+    <input id="max-photo-width-input"
+           type="number"
+           inputmode="numeric"
+           min="0"
+           step="50"
+           class="w-full border border-gray-300 rounded-lg p-2"
+           placeholder="1000" />
     <button id="save-photo-settings-btn"
-            class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150"
-            style="background-color: ${secondaryColor};">
-      <i class="fas fa-save mr-1"></i> Save Photo Settings
+            type="button"
+            class="px-4 py-2 rounded-lg bg-sky-600 text-white font-bold shadow hover:bg-sky-700">
+      Save
     </button>
+  </div>
+</div>
+<!-- Privacy and legal -->
 
-    <button id="reset-photo-settings-btn"
-            class="px-3 py-2 bg-gray-200 text-gray-800 font-bold rounded-md text-sm hover:bg-gray-300 transition duration-150">
-      <i class="fas fa-undo mr-1"></i> Reset
+<!-- ABOUT / VERSION -->
+<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
+  <h4 class="text-lg font-semibold text-indigo-700 mb-2">About</h4>
+
+  <p class="text-sm text-gray-700">
+    <strong>${APP_NAME}</strong>
+  </p>
+
+  <div class="mt-2 text-sm text-gray-700 space-y-1">
+    <p><strong>Version:</strong> ${APP_VERSION}</p>
+    <p><strong>Build:</strong> ${APP_BUILD}</p>
+  </div>
+
+  <div class="mt-4 pt-3 border-t border-gray-100 flex flex-col gap-2">
+    <button
+      id="open-privacy-btn"
+      type="button"
+      class="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-800 font-semibold hover:bg-gray-200"
+    >
+      <i class="fas fa-shield-alt mr-2"></i> Privacy & Legal
     </button>
+    <p class="text-xs text-gray-500 mt-2">
+      Privacy policy, disclaimer, and copyright information.
+    </p>
   </div>
 
   <p class="text-xs text-gray-500 mt-2">
-    Resizing helps reduce storage and speeds up export/import.
+    Detekta stores your data locally on your device. No analytics. No tracking.
   </p>
 </div>
 
-            <!-- APP LIMITS DISPLAY (READ ONLY) -->
-            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
-                <h4 class="text-lg font-semibold text-indigo-700 mb-2">App Limits (Read Only)</h4>
+<!-- APP LIMITS (TESTER BUILD) - READ ONLY -->
+<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits (Tester Build)</h4>
+      <p class="text-sm text-gray-600">
+        These limits are set by the build. Blank means <strong>unlimited</strong>.
+      </p>
+    </div>
+    ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
+  </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div class="text-sm text-gray-500">Max Surveys</div>
-                        <div class="text-lg font-bold text-gray-800">${displayMaxSurveys || '—'}</div>
-                    </div>
+  <div class="mt-4 space-y-3">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-surveys">
+        Max number of surveys
+      </label>
+      <input id="limits-max-surveys"
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayMaxSurveys}"
+             placeholder="Unlimited" />
+    </div>
 
-                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div class="text-sm text-gray-500">Max Targets</div>
-                        <div class="text-lg font-bold text-gray-800">${displayMaxTargets || '—'}</div>
-                    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-targets">
+        Max number of targets
+      </label>
+      <input id="limits-max-targets"
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayMaxTargets}"
+             placeholder="Unlimited" />
+    </div>
 
-                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div class="text-sm text-gray-500">Max Finds</div>
-                        <div class="text-lg font-bold text-gray-800">${displayMaxFinds || '—'}</div>
-                    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-finds">
+        Max number of finds
+      </label>
+      <input id="limits-max-finds"
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayMaxFinds}"
+             placeholder="Unlimited" />
+    </div>
 
-                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <div class="text-sm text-gray-500">Expiry Date</div>
-                        <div class="text-lg font-bold ${expired ? 'text-red-700' : 'text-gray-800'}">
-                            ${displayExpiryDate || '—'}
-                        </div>
-                        ${expired ? `<div class="text-xs text-red-600 mt-1 font-semibold">Expired</div>` : ``}
-                    </div>
-                </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-expiry-date">
+        Expiration date
+      </label>
+      <input id="limits-expiry-date"
+             type="text"
+             readonly
+             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
+             value="${displayExpiryDate}"
+             placeholder="No expiry" />
+      <p class="text-xs text-gray-500 mt-1">
+        If expired, no new surveys, targets, or finds can be created.
+      </p>
+    </div>
+  </div>
+</div>
 
-                <p class="text-xs text-gray-500 mt-3">
-                    These values are set by the build/version and cannot be edited by the user.
-                </p>
-            </div>
-
-            <!-- NAV OVERLAY SETTINGS -->
-            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-amber-500">
-                <h4 class="text-lg font-semibold text-amber-700 mb-2">Navigation Overlay</h4>
-                <p class="text-sm text-gray-700 mb-3">
-                    Control the on-screen navigation overlay appearance.
-                </p>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Overlay Opacity (0–1)</label>
-                        <input type="number" step="0.05" min="0" max="1" id="nav-overlay-opacity-input"
-                               class="w-full p-2 border border-gray-300 rounded-lg"
-                               placeholder="e.g., 0.85" />
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Overlay Size (px)</label>
-                        <input type="number" min="10" max="200" id="nav-overlay-size-input"
-                               class="w-full p-2 border border-gray-300 rounded-lg"
-                               placeholder="e.g., 44" />
-                    </div>
-                </div>
-
-                <div class="flex gap-2 mt-3">
-                    <button id="save-nav-overlay-settings-btn"
-                            class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150"
-                            style="background-color: ${secondaryColor};">
-                        <i class="fas fa-save mr-1"></i> Save Overlay Settings
-                    </button>
-
-                    <button id="reset-nav-overlay-settings-btn"
-                            class="px-3 py-2 bg-gray-200 text-gray-800 font-bold rounded-md text-sm hover:bg-gray-300 transition duration-150">
-                        <i class="fas fa-undo mr-1"></i> Reset
-                    </button>
-                </div>
-
+            <!-- Danger Zone: Reset All Data -->
+            <div class="mt-8 border-t border-gray-300 pt-6">
+                <h3 class="text-lg font-semibold text-red-600 mb-3">Danger Zone</h3>
+                <button id="reset-all-data-btn"
+                        class="w-full bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-800 transition duration-150">
+                    <i class="fas fa-trash-alt mr-1"></i> Reset ALL Local Data on This Device
+                </button>
                 <p class="text-xs text-gray-500 mt-2">
-                    These settings affect the Compass / Map navigation overlay controls.
+                    This will delete all saved surveys, targets, finds and photos stored locally on this device.
+                    Use this only after exporting anything important.
                 </p>
+                <p></p>
+                  <p class="text-sm text-gray-600 mb-3">
+                    Maintenance tools for cleaning local data. Use carefully.
+                    </p>
+
+                      <button id="maintenance-btn"
+                      type="button"
+                      class="w-full bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-800 transition">
+                        <i class="fas fa-broom mr-1"></i> Maintenance: Clean Local Data
+                      </button>
+
+                      <p class="text-xs text-gray-500 mt-2">
+                        Removes any leftover “deleted” items and tidies storage.
+                      </p>
+
             </div>
-
-            <!-- LOCAL DATA -->
-            <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border border-gray-100">
-                <h3 class="text-xl font-semibold text-gray-700 mb-3">Local Data</h3>
-                <p class="text-sm text-gray-600 mb-4">Your data is stored only on this device (localStorage).</p>
-
-                <div class="flex flex-wrap gap-2">
-                    <button id="export-surveys-btn" 
-                            class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150" 
-                            style="background-color: ${secondaryColor};">
-                        <i class="fas fa-file-export mr-1"></i> Export Surveys (JSON)
-                    </button>
-
-                    <button id="import-surveys-btn" 
-                            class="px-3 py-2 bg-gray-200 text-gray-800 font-bold rounded-md text-sm hover:bg-gray-300 transition duration-150">
-                        <i class="fas fa-file-import mr-1"></i> Import Surveys (JSON)
-                    </button>
-
-                    <button id="export-jpgs-btn" 
-                            class="px-3 py-2 bg-gray-200 text-gray-800 font-bold rounded-md text-sm hover:bg-gray-300 transition duration-150">
-                        <i class="fas fa-images mr-1"></i> Export JPGs
-                    </button>
-
-                    <button id="reset-all-data-btn" 
-                            class="px-3 py-2 bg-red-600 text-white font-bold rounded-md text-sm hover:bg-red-700 transition duration-150">
-                        <i class="fas fa-trash mr-1"></i> Reset all data on this device
-                    </button>
-                </div>
-
-                <input type="file" id="import-file-input" accept=".json" class="hidden" />
-            </div>
-
         </div>
     `;
 }
-
 /**
  * Convert a Blob to a data URL (base64).
  * Used when exporting photos so they can travel inside JSON.
