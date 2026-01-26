@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5557,7 +5557,55 @@ function loadDataFromLocalStorage() {
             surveys = [];
         }
 
-        // Load Finds (can be empty even if surveys exist)
+        
+        // --- Survey metadata normalization (optional fields: Permission/Area/Soil/Conditions/Intent/Access/Outcome) ---
+        const ensureSurveyMetaDefaults = (survey) => {
+            if (!survey) return;
+
+            const setIfUndef = (key, defaultValue) => {
+                if (survey[key] === undefined || survey[key] === null) survey[key] = defaultValue;
+            };
+
+            // 1) Permission & Legality
+            setIfUndef('permissionFrom', '');
+            setIfUndef('permissionType', '');
+            setIfUndef('permissionDateGranted', '');
+            setIfUndef('permissionExpiry', '');
+            setIfUndef('permissionNotes', '');
+
+            // 2) Area / Site Type
+            setIfUndef('areaType', '');
+            setIfUndef('landUseCurrent', '');
+
+            // 3) Soil & Ground
+            setIfUndef('soilType', '');
+            setIfUndef('groundCondition', '');
+            setIfUndef('mineralisationLevel', '');
+
+            // 4) Environment
+            setIfUndef('weather', '');
+            setIfUndef('recentRain', '');
+            setIfUndef('temperature', '');
+
+            // 5) Intent & Context
+            if (!Array.isArray(survey.purpose)) survey.purpose = [];
+            setIfUndef('expectedPeriod', '');
+
+            // 6) Access & Practical
+            setIfUndef('accessNotes', '');
+            if (!Array.isArray(survey.hazards)) survey.hazards = [];
+
+            // 7) Outcome Summary
+            setIfUndef('overallProductivity', '');
+            setIfUndef('wouldDetectAgain', '');
+            setIfUndef('surveyObservations', '');
+        };
+
+        if (Array.isArray(surveys)) {
+            surveys.forEach(ensureSurveyMetaDefaults);
+        }
+
+// Load Finds (can be empty even if surveys exist)
         if (storedFinds) {
             finds = JSON.parse(storedFinds);
         } else {
