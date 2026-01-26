@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -7985,6 +7985,35 @@ async function handleNewSurveySubmit(event) {
     });
 
     // 2. Create the new survey object
+    
+    // NEW: optional survey metadata fields (Sections 1–7)
+    const permissionFrom = (document.getElementById('survey-permission-from')?.value || '').trim();
+    const permissionType = (document.getElementById('survey-permission-type')?.value || '').trim();
+    const permissionDateGranted = (document.getElementById('survey-permission-date-granted')?.value || '').trim();
+    const permissionExpiry = (document.getElementById('survey-permission-expiry')?.value || '').trim();
+    const permissionNotes = (document.getElementById('survey-permission-notes')?.value || '').trim();
+
+    const areaType = (document.getElementById('survey-area-type')?.value || '').trim();
+    const landUseCurrent = (document.getElementById('survey-land-use-current')?.value || '').trim();
+
+    const soilType = (document.getElementById('survey-soil-type')?.value || '').trim();
+    const groundCondition = (document.getElementById('survey-ground-condition')?.value || '').trim();
+    const mineralisationLevel = (document.getElementById('survey-mineralisation-level')?.value || '').trim();
+
+    const weather = (document.getElementById('survey-weather')?.value || '').trim();
+    const recentRain = (document.getElementById('survey-recent-rain')?.value || '').trim();
+    const temperature = (document.getElementById('survey-temperature')?.value || '').trim();
+
+    const purpose = Array.from(form.querySelectorAll('input[name="purpose"]:checked')).map(i => i.value);
+    const expectedPeriod = (document.getElementById('survey-expected-period')?.value || '').trim();
+
+    const accessNotes = (document.getElementById('survey-access-notes')?.value || '').trim();
+    const hazards = Array.from(form.querySelectorAll('input[name="hazards"]:checked')).map(i => i.value);
+
+    const overallProductivity = (document.getElementById('survey-overall-productivity')?.value || '').trim();
+    const wouldDetectAgain = (document.getElementById('survey-would-detect-again')?.value || '').trim();
+    const surveyObservations = (document.getElementById('survey-observations')?.value || '').trim();
+
     const newSurvey = {
         id: generateId(),
         name: name,
@@ -7999,38 +8028,38 @@ async function handleNewSurveySubmit(event) {
         // -----------------------------
 
         // 1) Permission & Legality
-        permissionFrom: '',
-        permissionType: '',           // Written | Verbal | Club/Rally | Open access
-        permissionDateGranted: '',    // YYYY-MM-DD
-        permissionExpiry: '',         // YYYY-MM-DD
-        permissionNotes: '',
+        permissionFrom: permissionFrom,
+        permissionType: permissionType,           // Written | Verbal | Club/Rally | Open access
+        permissionDateGranted: permissionDateGranted,    // YYYY-MM-DD
+        permissionExpiry: permissionExpiry,         // YYYY-MM-DD
+        permissionNotes: permissionNotes,
 
         // 2) Area / Site Type
-        areaType: '',                 // Field (Pasture) | Field (Ploughed) | Beach (Dry) | Beach (Wet/Tidal) | Woods | Park | Moor/Heath | Riverbank/Foreshore | Other
-        landUseCurrent: '',           // Agricultural | Recreational | Woodland | Coastal | Urban fringe
+        areaType: areaType,                 // Field (Pasture) | Field (Ploughed) | Beach (Dry) | Beach (Wet/Tidal) | Woods | Park | Moor/Heath | Riverbank/Foreshore | Other
+        landUseCurrent: landUseCurrent,           // Agricultural | Recreational | Woodland | Coastal | Urban fringe
 
         // 3) Soil & Ground
-        soilType: '',                 // Clay | Loam | Sand | Chalk | Peat | Mixed/Unknown
-        groundCondition: '',          // Dry | Damp | Wet | Waterlogged | Frozen
-        mineralisationLevel: '',      // Low | Medium | High | Unknown
+        soilType: soilType,                 // Clay | Loam | Sand | Chalk | Peat | Mixed/Unknown
+        groundCondition: groundCondition,          // Dry | Damp | Wet | Waterlogged | Frozen
+        mineralisationLevel: mineralisationLevel,      // Low | Medium | High | Unknown
 
         // 4) Environment
-        weather: '',                  // Sunny | Overcast | Rain | Windy | Mixed
-        recentRain: '',               // None | Light | Heavy (24–48h)
-        temperature: '',              // free text / optional (e.g., "8C")
+        weather: weather,                  // Sunny | Overcast | Rain | Windy | Mixed
+        recentRain: recentRain,               // None | Light | Heavy (24–48h)
+        temperature: temperature,              // free text / optional (e.g., "8C")
 
         // 5) Intent & Context
-        purpose: [],                  // multi-select (strings)
-        expectedPeriod: '',           // Roman | Medieval | Post-Medieval | Modern | Unknown/Mixed
+        purpose: purpose,                  // multi-select (strings)
+        expectedPeriod: expectedPeriod,           // Roman | Medieval | Post-Medieval | Modern | Unknown/Mixed
 
         // 6) Access & Practical Notes
-        accessNotes: '',
-        hazards: [],                  // multi-select (strings)
+        accessNotes: accessNotes,
+        hazards: hazards,                  // multi-select (strings)
 
         // 7) Outcome Summary
-        overallProductivity: '',      // Poor | Fair | Good | Excellent
-        wouldDetectAgain: '',         // Yes | No | Maybe
-        surveyObservations: '',
+        overallProductivity: overallProductivity,      // Poor | Fair | Good | Excellent
+        wouldDetectAgain: wouldDetectAgain,         // Yes | No | Maybe
+        surveyObservations: surveyObservations,
 
         targets: [],
         finds: [],
@@ -8166,6 +8195,34 @@ async function handleEditSurveySubmit(event) {
 
     const description = form['surveyDescription'].value.trim() || 'No description provided.';
 
+
+    // NEW: optional survey metadata fields (Sections 1–7)
+    const permissionFrom = (document.getElementById('edit-survey-permission-from')?.value || '').trim();
+    const permissionType = (document.getElementById('edit-survey-permission-type')?.value || '').trim();
+    const permissionDateGranted = (document.getElementById('edit-survey-permission-date-granted')?.value || '').trim();
+    const permissionExpiry = (document.getElementById('edit-survey-permission-expiry')?.value || '').trim();
+    const permissionNotes = (document.getElementById('edit-survey-permission-notes')?.value || '').trim();
+
+    const areaType = (document.getElementById('edit-survey-area-type')?.value || '').trim();
+    const landUseCurrent = (document.getElementById('edit-survey-land-use-current')?.value || '').trim();
+
+    const soilType = (document.getElementById('edit-survey-soil-type')?.value || '').trim();
+    const groundCondition = (document.getElementById('edit-survey-ground-condition')?.value || '').trim();
+    const mineralisationLevel = (document.getElementById('edit-survey-mineralisation-level')?.value || '').trim();
+
+    const weather = (document.getElementById('edit-survey-weather')?.value || '').trim();
+    const recentRain = (document.getElementById('edit-survey-recent-rain')?.value || '').trim();
+    const temperature = (document.getElementById('edit-survey-temperature')?.value || '').trim();
+
+    const purpose = Array.from(form.querySelectorAll('input[name="purpose"]:checked')).map(i => i.value);
+    const expectedPeriod = (document.getElementById('edit-survey-expected-period')?.value || '').trim();
+
+    const accessNotes = (document.getElementById('edit-survey-access-notes')?.value || '').trim();
+    const hazards = Array.from(form.querySelectorAll('input[name="hazards"]:checked')).map(i => i.value);
+
+    const overallProductivity = (document.getElementById('edit-survey-overall-productivity')?.value || '').trim();
+    const wouldDetectAgain = (document.getElementById('edit-survey-would-detect-again')?.value || '').trim();
+    const surveyObservations = (document.getElementById('edit-survey-observations')?.value || '').trim();
     // Make sure arrays exist
     const photos = Array.isArray(window.currentEditSurveyPhotos) ? window.currentEditSurveyPhotos : [];
     const refsByIndex = Array.isArray(window.currentEditSurveyPhotoRefs) ? window.currentEditSurveyPhotoRefs : [];
@@ -8208,6 +8265,34 @@ async function handleEditSurveySubmit(event) {
 
     survey.name = name;
     survey.description = description;
+
+    // NEW: optional survey metadata fields (Sections 1–7)
+    survey.permissionFrom = permissionFrom;
+    survey.permissionType = permissionType;
+    survey.permissionDateGranted = permissionDateGranted;
+    survey.permissionExpiry = permissionExpiry;
+    survey.permissionNotes = permissionNotes;
+
+    survey.areaType = areaType;
+    survey.landUseCurrent = landUseCurrent;
+
+    survey.soilType = soilType;
+    survey.groundCondition = groundCondition;
+    survey.mineralisationLevel = mineralisationLevel;
+
+    survey.weather = weather;
+    survey.recentRain = recentRain;
+    survey.temperature = temperature;
+
+    survey.purpose = Array.isArray(purpose) ? purpose : [];
+    survey.expectedPeriod = expectedPeriod;
+
+    survey.accessNotes = accessNotes;
+    survey.hazards = Array.isArray(hazards) ? hazards : [];
+
+    survey.overallProductivity = overallProductivity;
+    survey.wouldDetectAgain = wouldDetectAgain;
+    survey.surveyObservations = surveyObservations;
 
     // ✅ NEW truth
     survey.photos = finalRefs;
