@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V9
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -10436,7 +10436,75 @@ function renderSurveyCard(survey, isOpen = false) {
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const yy = String(d.getFullYear()).slice(-2);
-        return `${dd}/${mm}/${yy}`;
+        
+    // --- Survey extra details summary (optional fields, shown only when populated) ---
+    const details = [];
+    const addDetail = (label, value) => {
+        if (value === undefined || value === null) return;
+        if (Array.isArray(value)) {
+            const joined = value.filter(v => v !== undefined && v !== null && String(v).trim() !== '').map(v => String(v).trim()).join(', ');
+            if (!joined) return;
+            details.push({ label, value: joined });
+            return;
+        }
+        const s = String(value).trim();
+        if (!s) return;
+        details.push({ label, value: s });
+    };
+
+    // Section 1: Permission & Legality
+    addDetail('Permission from', survey.permissionFrom);
+    addDetail('Permission type', survey.permissionType);
+    const permGranted = formatDateDMY(survey.permissionDateGranted);
+    if (permGranted) details.push({ label: 'Permission granted', value: permGranted });
+    const permExpiry = formatDateDMY(survey.permissionExpiry);
+    if (permExpiry) details.push({ label: 'Permission expiry', value: permExpiry });
+    addDetail('Permission notes', survey.permissionNotes);
+
+    // Section 2: Area / Site
+    addDetail('Area type', survey.areaType);
+    addDetail('Land use', survey.landUseCurrent);
+
+    // Section 3: Soil & Ground
+    addDetail('Soil type', survey.soilType);
+    addDetail('Ground condition', survey.groundCondition);
+    addDetail('Mineralisation', survey.mineralisationLevel);
+
+    // Section 4: Environment
+    addDetail('Weather', survey.weather);
+    addDetail('Recent rain', survey.recentRain);
+    addDetail('Temperature', survey.temperature);
+
+    // Section 5: Intent & Context
+    addDetail('Purpose', survey.purpose);
+    addDetail('Expected period', survey.expectedPeriod);
+
+    // Section 6: Access & Practical
+    addDetail('Access notes', survey.accessNotes);
+    addDetail('Hazards', survey.hazards);
+
+    // Section 7: Outcome Summary
+    addDetail('Productivity', survey.overallProductivity);
+    addDetail('Would detect again', survey.wouldDetectAgain);
+    addDetail('Observations', survey.surveyObservations);
+
+    const detailsHtml = details.length
+        ? `
+            <div class="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <h5 class="text-sm font-bold text-gray-700 mb-2">Survey details</h5>
+                <div class="space-y-1">
+                    ${details.map(d => `
+                        <div class="text-sm">
+                            <span class="text-gray-500 font-semibold">${d.label}:</span>
+                            <span class="text-gray-800"> ${d.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+          `
+        : '';
+
+return `${dd}/${mm}/${yy}`;
     };
 
     // Status badge
@@ -10583,6 +10651,8 @@ function renderSurveyCard(survey, isOpen = false) {
             </div>
 
             <p class="text-sm text-gray-600 mb-2">${survey.description}</p>
+
+            ${detailsHtml}
 
             ${photoHtml}
 
