@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V12
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -672,13 +672,13 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label for="edit-survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Permission Date Granted</label>
-                        <input type="date" id="edit-survey-permission-date-granted" name="permissionDateGranted"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" />
+                        <input type="text" id="edit-survey-permission-date-granted" name="permissionDateGranted"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" / placeholder="dd/mm/yy">
                     </div>
                     <div>
                         <label for="edit-survey-permission-expiry" class="block text-sm font-medium text-gray-700">Permission Expiry / Review Date</label>
-                        <input type="date" id="edit-survey-permission-expiry" name="permissionExpiry"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" />
+                        <input type="text" id="edit-survey-permission-expiry" name="permissionExpiry"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" / placeholder="dd/mm/yy">
                     </div>
                 </div>
 
@@ -8110,8 +8110,8 @@ async function showEditSurveyModal() {
 
     setVal('edit-survey-permission-from', openSurvey.permissionFrom || '');
     setVal('edit-survey-permission-type', openSurvey.permissionType || '');
-    setVal('edit-survey-permission-date-granted', openSurvey.permissionDateGranted || '');
-    setVal('edit-survey-permission-expiry', openSurvey.permissionExpiry || '');
+    setVal('edit-survey-permission-date-granted', formatDate(openSurvey.permissionDateGranted));
+    setVal('edit-survey-permission-expiry', formatDate(openSurvey.permissionExpiry));
     setVal('edit-survey-permission-notes', openSurvey.permissionNotes || '');
 
     setVal('edit-survey-area-type', openSurvey.areaType || '');
@@ -10460,16 +10460,9 @@ function renderSurveyCard(survey, isOpen = false) {
     // Section 1: Permission & Legality
     addDetail('Permission from', survey.permissionFrom);
     addDetail('Permission type', survey.permissionType);
-    addDetail(
-    'Permission granted',
-    formatDateDMY(survey.permissionDateGranted)
-    );
-
-    addDetail(
-    'Permission expiry',
-    formatDateDMY(survey.permissionExpiry)
-    );
-   addDetail('Permission notes', survey.permissionNotes);
+    addDetail('Permission granted', survey.permissionDateGranted);
+    addDetail('Permission expiry', survey.permissionExpiry);
+    addDetail('Permission notes', survey.permissionNotes);
 
     // Section 2: Area / Site Type
     addDetail('Area type', survey.areaType);
