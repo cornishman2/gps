@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V12
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V13
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -673,12 +673,12 @@
                     <div>
                         <label for="edit-survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Permission Date Granted</label>
                         <input type="text" id="edit-survey-permission-date-granted" name="permissionDateGranted"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" / placeholder="dd/mm/yy">
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" placeholder="dd/mm/yy">
                     </div>
                     <div>
                         <label for="edit-survey-permission-expiry" class="block text-sm font-medium text-gray-700">Permission Expiry / Review Date</label>
                         <input type="text" id="edit-survey-permission-expiry" name="permissionExpiry"
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" / placeholder="dd/mm/yy">
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" placeholder="dd/mm/yy">
                     </div>
                 </div>
 
@@ -5896,6 +5896,51 @@ function formatDate(timestamp) {
 
     return `${dd}/${mm}/${yy}`;
 }
+
+/**
+ * Normalizes survey permission dates into DD/MM/YY.
+ * Accepts:
+ *  - '' (returns '')
+ *  - timestamp number (ms since epoch)
+ *  - 'YYYY-MM-DD' (from <input type="date">)
+ *  - 'DD/MM/YY' or 'D/M/YYYY' (normalizes + pads, trims to 2-digit year)
+ */
+function formatSurveyPermissionDate(value) {
+    if (value === null || value === undefined) return '';
+    const v = String(value).trim();
+    if (!v) return '';
+
+    // If it's already DD/MM/YY (or DD/MM/YYYY), normalize it.
+    const m1 = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m1) {
+        const dd = String(parseInt(m1[1], 10)).padStart(2, '0');
+        const mm = String(parseInt(m1[2], 10)).padStart(2, '0');
+        const yy = String(m1[3]).slice(-2);
+        return `${dd}/${mm}/${yy}`;
+    }
+
+    // If it's YYYY-MM-DD, convert.
+    const m2 = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m2) {
+        const yy = String(m2[1]).slice(-2);
+        const mm = m2[2];
+        const dd = m2[3];
+        return `${dd}/${mm}/${yy}`;
+    }
+
+    // If it's a number (timestamp), use the existing formatter.
+    if (/^\d+$/.test(v)) {
+        const n = Number(v);
+        if (!Number.isNaN(n)) return formatDate(n);
+    }
+
+    // Last resort: try Date parsing (covers ISO strings etc.)
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) return formatDate(d.getTime());
+
+    return '';
+}
+
 /**
  * Takes a target + its parent survey and snapshots it into the permanent Finds library.
  * The Find is independent: if the survey/target are later deleted, this record remains.
@@ -7989,9 +8034,13 @@ async function handleNewSurveySubmit(event) {
     // NEW: optional survey metadata fields (Sections 1–7)
     const permissionFrom = (document.getElementById('survey-permission-from')?.value || '').trim();
     const permissionType = (document.getElementById('survey-permission-type')?.value || '').trim();
-    const permissionDateGranted = (document.getElementById('survey-permission-date-granted')?.value || '').trim();
-    const permissionExpiry = (document.getElementById('survey-permission-expiry')?.value || '').trim();
-    const permissionNotes = (document.getElementById('survey-permission-notes')?.value || '').trim();
+    let permissionDateGranted = (document.getElementById('survey-permission-date-granted')?.value || '').trim();
+    let permissionExpiry = (document.getElementById('survey-permission-expiry')?.value || '').trim();
+
+    // Normalize permission dates to DD/MM/YY for storage
+    permissionDateGranted = formatSurveyPermissionDate(permissionDateGranted);
+    permissionExpiry      = formatSurveyPermissionDate(permissionExpiry);
+const permissionNotes = (document.getElementById('survey-permission-notes')?.value || '').trim();
 
     const areaType = (document.getElementById('survey-area-type')?.value || '').trim();
     const landUseCurrent = (document.getElementById('survey-land-use-current')?.value || '').trim();
@@ -8110,8 +8159,8 @@ async function showEditSurveyModal() {
 
     setVal('edit-survey-permission-from', openSurvey.permissionFrom || '');
     setVal('edit-survey-permission-type', openSurvey.permissionType || '');
-    setVal('edit-survey-permission-date-granted', formatDate(openSurvey.permissionDateGranted));
-    setVal('edit-survey-permission-expiry', formatDate(openSurvey.permissionExpiry));
+    setVal('edit-survey-permission-date-granted', formatSurveyPermissionDate(openSurvey.permissionDateGranted));
+    setVal('edit-survey-permission-expiry', formatSurveyPermissionDate(openSurvey.permissionExpiry));
     setVal('edit-survey-permission-notes', openSurvey.permissionNotes || '');
 
     setVal('edit-survey-area-type', openSurvey.areaType || '');
@@ -8240,9 +8289,13 @@ async function handleEditSurveySubmit(event) {
     // NEW: optional survey metadata fields (Sections 1–7)
     const permissionFrom = (document.getElementById('edit-survey-permission-from')?.value || '').trim();
     const permissionType = (document.getElementById('edit-survey-permission-type')?.value || '').trim();
-    const permissionDateGranted = (document.getElementById('edit-survey-permission-date-granted')?.value || '').trim();
-    const permissionExpiry = (document.getElementById('edit-survey-permission-expiry')?.value || '').trim();
-    const permissionNotes = (document.getElementById('edit-survey-permission-notes')?.value || '').trim();
+    let permissionDateGranted = (document.getElementById('edit-survey-permission-date-granted')?.value || '').trim();
+    let permissionExpiry = (document.getElementById('edit-survey-permission-expiry')?.value || '').trim();
+
+    // Normalize permission dates to DD/MM/YY for storage
+    permissionDateGranted = formatSurveyPermissionDate(permissionDateGranted);
+    permissionExpiry      = formatSurveyPermissionDate(permissionExpiry);
+const permissionNotes = (document.getElementById('edit-survey-permission-notes')?.value || '').trim();
 
     const areaType = (document.getElementById('edit-survey-area-type')?.value || '').trim();
     const landUseCurrent = (document.getElementById('edit-survey-land-use-current')?.value || '').trim();
