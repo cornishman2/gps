@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8101,6 +8101,47 @@ async function showEditSurveyModal() {
     form['surveyId'].value = openSurvey.id;
     form['surveyName'].value = openSurvey.name || '';
     form['surveyDescription'].value = openSurvey.description || '';
+
+    // Populate NEW optional survey metadata fields (Sections 1–7)
+    const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.value = (v ?? '');
+    };
+
+    setVal('edit-survey-permission-from', openSurvey.permissionFrom || '');
+    setVal('edit-survey-permission-type', openSurvey.permissionType || '');
+    setVal('edit-survey-permission-date-granted', openSurvey.permissionDateGranted || '');
+    setVal('edit-survey-permission-expiry', openSurvey.permissionExpiry || '');
+    setVal('edit-survey-permission-notes', openSurvey.permissionNotes || '');
+
+    setVal('edit-survey-area-type', openSurvey.areaType || '');
+    setVal('edit-survey-land-use-current', openSurvey.landUseCurrent || '');
+
+    setVal('edit-survey-soil-type', openSurvey.soilType || '');
+    setVal('edit-survey-ground-condition', openSurvey.groundCondition || '');
+    setVal('edit-survey-mineralisation-level', openSurvey.mineralisationLevel || '');
+
+    setVal('edit-survey-weather', openSurvey.weather || '');
+    setVal('edit-survey-recent-rain', openSurvey.recentRain || '');
+    setVal('edit-survey-temperature', openSurvey.temperature || '');
+
+    setVal('edit-survey-expected-period', openSurvey.expectedPeriod || '');
+    setVal('edit-survey-access-notes', openSurvey.accessNotes || '');
+    setVal('edit-survey-overall-productivity', openSurvey.overallProductivity || '');
+    setVal('edit-survey-would-detect-again', openSurvey.wouldDetectAgain || '');
+    setVal('edit-survey-observations', openSurvey.surveyObservations || '');
+
+    // Purpose multi-select (checkboxes)
+    const purposes = Array.isArray(openSurvey.purpose) ? openSurvey.purpose : [];
+    form.querySelectorAll('input[name="purpose"]').forEach(cb => {
+        cb.checked = purposes.includes(cb.value);
+    });
+
+    // Hazards multi-select (checkboxes)
+    const hazardsArr = Array.isArray(openSurvey.hazards) ? openSurvey.hazards : [];
+    form.querySelectorAll('input[name="hazards"]').forEach(cb => {
+        cb.checked = hazardsArr.includes(cb.value);
+    });
 
     // --- IMPORTANT: keep refs alongside preview URLs ---
     window.currentEditSurveyPhotos = [];
