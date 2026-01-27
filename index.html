@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V12
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2274,6 +2274,44 @@ function getAppTotals() {
 
     return { totalSurveys, totalTargets, totalStakes, totalFinds };
 }
+
+
+/** Home dashboard: update storage figures (browser-managed) */
+async function updateHomeStorageStats() {
+    const usedEl = document.getElementById('home-storage-used');
+    const freeEl = document.getElementById('home-storage-free');
+    if (!usedEl || !freeEl) return;
+
+    // Default placeholders
+    usedEl.textContent = '—';
+    freeEl.textContent = '—';
+
+    try {
+        if (!navigator.storage || !navigator.storage.estimate) return;
+
+        const est = await navigator.storage.estimate();
+        const usage = est && typeof est.usage === 'number' ? est.usage : null;
+        const quota = est && typeof est.quota === 'number' ? est.quota : null;
+        if (usage == null || quota == null || quota <= 0) return;
+
+        const bytesToNice = (bytes) => {
+            if (!Number.isFinite(bytes) || bytes < 0) return '—';
+            const kb = 1024;
+            const mb = kb * 1024;
+            const gb = mb * 1024;
+            if (bytes >= gb) return (bytes / gb).toFixed(2) + ' GB';
+            if (bytes >= mb) return (bytes / mb).toFixed(0) + ' MB';
+            return (bytes / kb).toFixed(0) + ' KB';
+        };
+
+        usedEl.textContent = bytesToNice(usage);
+        freeEl.textContent = bytesToNice(Math.max(0, quota - usage));
+    } catch (e) {
+        // Leave placeholders
+    }
+}
+
+
 
 
     function updateActiveNavButtons() {
@@ -6206,6 +6244,8 @@ switch (currentPage) {
             appContent.innerHTML = contentHtml;
             // Re-attach event listeners specific to the rendered page
             attachPageEventListeners();
+            // Update Home storage figures after DOM is in place
+            if (currentPage === 'Home') { setTimeout(() => { updateHomeStorageStats(); }, 0); }
             updateActiveNavButtons();
 
        
@@ -10477,34 +10517,6 @@ function renderHomePage() {
             <!-- Spacer to keep the 3-column grid aligned -->
             <div class="p-3 rounded-lg bg-transparent border border-transparent text-center"></div>
         </div>
-
-        <script>
-        (function(){
-            try {
-                if (!navigator.storage || !navigator.storage.estimate) return;
-
-                function bytesToNice(bytes){
-                    if (!Number.isFinite(bytes) || bytes < 0) return '—';
-                    var mb = bytes / 1024 / 1024;
-                    if (mb < 1024) return Math.round(mb) + ' MB';
-                    var gb = mb / 1024;
-                    return (Math.round(gb * 10) / 10) + ' GB';
-                }
-
-                navigator.storage.estimate().then(function(est){
-                    if (!est) return;
-                    var usage = Number(est.usage);
-                    var quota = Number(est.quota);
-                    if (!Number.isFinite(usage) || !Number.isFinite(quota) || quota <= 0) return;
-
-                    var usedEl = document.getElementById('home-storage-used');
-                    var freeEl = document.getElementById('home-storage-free');
-                    if (usedEl) usedEl.textContent = bytesToNice(usage);
-                    if (freeEl) freeEl.textContent = bytesToNice(quota - usage);
-                }).catch(function(){});
-            } catch(e) {}
-        })();
-        </script>
     </div>
 
     <!-- Open Survey (rendered like any other card, just highlighted) -->
