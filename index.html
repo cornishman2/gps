@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6326,234 +6326,6 @@ function exportOpenSurveyAsGPX() {
     );
 }
 
-
-/* =========================
-   Survey Report (PDF via Print)
-   ========================= */
-async function exportSurveyReportPdf() {
-    const logEl = document.getElementById('export-survey-report-log');
-    const log = (msg) => {
-        if (logEl) {
-            logEl.value += (logEl.value ? '\n' : '') + msg;
-            logEl.scrollTop = logEl.scrollHeight;
-        }
-    };
-
-    try {
-        if (logEl) logEl.value = '';
-        const openSurvey = surveys.find(s => s.status === 'Open');
-        if (!openSurvey) {
-            showMessage('No open survey to report.', 'error');
-            log('No open survey found.');
-            return;
-        }
-
-        log('Preparing report...');
-        const detectoristName = (userProfile?.name || '').trim() || '—';
-        const appVer = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? String(APP_VERSION) : '';
-
-        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-        const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(blob);
-        });
-
-        const photoRefToDataUrl = async (ref) => {
-            if (!ref) return null;
-            if (typeof ref === 'string' && ref.startsWith('data:')) return ref;
-            const id = (typeof parsePhotoRef === 'function') ? parsePhotoRef(ref) : null;
-            if (id !== null && id !== undefined) {
-                const blob = (typeof loadPhotoBlob === 'function') ? await loadPhotoBlob(id) : null;
-                if (!blob) return null;
-                return await blobToDataUrl(blob);
-            }
-            return null;
-        };
-
-        // Counts (consistent with your existing helpers)
-        const targets = (typeof getSurveyTargetsOnly === 'function') ? getSurveyTargetsOnly(openSurvey) : (Array.isArray(openSurvey.targets) ? openSurvey.targets : []);
-        const stakes  = (typeof getSurveyStakesOnly === 'function') ? getSurveyStakesOnly(openSurvey) : [];
-        const findsList = (Array.isArray(finds) && openSurvey?.id)
-            ? finds.filter(f => f && !f.deleted && f.surveyId === openSurvey.id)
-            : (Array.isArray(openSurvey?.finds) ? openSurvey.finds.filter(f => f && !f.deleted) : []);
-
-        const countPhotos = () => {
-            let n = 0;
-
-            // Survey photos
-            if (Array.isArray(openSurvey?.photos)) n += openSurvey.photos.filter(Boolean).length;
-            else if (openSurvey?.surveyPhotoRef || openSurvey?.surveyPhotoDataUrl || openSurvey?.surveyPhotoData) n += 1;
-
-            // Target photos (legacy + multi)
-            for (const t of (Array.isArray(openSurvey?.targets) ? openSurvey.targets : [])) {
-                if (!t || t.deleted) continue;
-                if (Array.isArray(t.photoRefs)) n += t.photoRefs.filter(Boolean).length;
-                else if (t.photoRef || t.targetPhotoRef || t.targetPhotoDataUrl || t.targetPhotoData) n += 1;
-            }
-
-            // Find photos (if stored on find objects)
-            for (const f of findsList) {
-                if (!f || f.deleted) continue;
-                if (Array.isArray(f.photoRefs)) n += f.photoRefs.filter(Boolean).length;
-                else if (f.photoRef || f.findPhotoRef || f.findPhotoDataUrl || f.findPhotoData) n += 1;
-            }
-
-            return n;
-        };
-
-        const totalPhotos = countPhotos();
-
-        // Build survey photo gallery (v1: survey photos only)
-        const surveyPhotoRefs = [];
-        if (Array.isArray(openSurvey?.photos)) surveyPhotoRefs.push(...openSurvey.photos);
-        else if (openSurvey?.surveyPhotoRef) surveyPhotoRefs.push(openSurvey.surveyPhotoRef);
-        else if (openSurvey?.surveyPhotoDataUrl) surveyPhotoRefs.push(openSurvey.surveyPhotoDataUrl);
-        else if (openSurvey?.surveyPhotoData) surveyPhotoRefs.push(openSurvey.surveyPhotoData);
-
-        const surveyPhotoDataUrls = [];
-        for (const ref of surveyPhotoRefs.filter(Boolean)) {
-            const url = await photoRefToDataUrl(ref);
-            if (url) surveyPhotoDataUrls.push(url);
-        }
-
-        log(`Collected ${surveyPhotoDataUrls.length} survey photo(s).`);
-
-        const permFrom   = openSurvey?.permissionFrom || '—';
-        const permStart  = formatSurveyPermissionDate(openSurvey?.permissionDateGranted || '');
-        const permExpiry = formatSurveyPermissionDate(openSurvey?.permissionExpiry || '');
-        const siteType   = openSurvey?.siteType || '—';
-        const soilCond   = openSurvey?.soilCondition || '—';
-        const detUsed    = (userProfile?.detector || '').trim() || (openSurvey?.detectorUsed || '—');
-        const ncmd       = (userProfile?.ncmdNumber || '').trim() || '—';
-        const notes      = openSurvey?.description || openSurvey?.location || openSurvey?.notes || '';
-
-        const findRows = findsList.length
-            ? findsList.map(f => {
-                const type = f?.findType || f?.type || 'Find';
-                const vdi  = (f?.vdi ?? f?.targetId ?? f?.targetID ?? '');
-                const desc = f?.description || f?.notes || '';
-                return `<tr>
-                    <td>${esc(type)}</td>
-                    <td>${esc(vdi)}</td>
-                    <td>${esc(desc)}</td>
-                </tr>`;
-            }).join('')
-            : `<tr><td colspan="3" class="muted">No finds recorded.</td></tr>`;
-
-        const photoGrid = surveyPhotoDataUrls.length
-            ? surveyPhotoDataUrls.map(u => `<div class="photo"><img src="${u}" alt="Survey photo"></div>`).join('')
-            : `<div class="muted">No survey photos.</div>`;
-
-        const title = `Survey Report — ${openSurvey?.name || openSurvey?.surveyName || 'Untitled Survey'}`;
-
-        const reportHtml = `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>${esc(title)}</title>
-<style>
-    @page { size: A4; margin: 16mm; }
-    body { font-family: Arial, sans-serif; color: #111; }
-    h2 { font-size: 12pt; margin: 16pt 0 6pt 0; border-bottom: 1px solid #ddd; padding-bottom: 4pt; }
-    .meta { display: flex; justify-content: space-between; font-size: 9pt; color: #444; margin-bottom: 10pt; }
-    .detectorist { font-size: 11pt; font-weight: 700; margin: 10pt 0 2pt; }
-    .surveyName { font-size: 14pt; font-weight: 700; margin: 0 0 10pt; }
-    table { width: 100%; border-collapse: collapse; margin-top: 6pt; }
-    th, td { border: 1px solid #e5e7eb; padding: 6pt; font-size: 9.5pt; vertical-align: top; }
-    th { background: #f3f4f6; text-align: left; }
-    .summary td, .summary th { text-align: center; }
-    .muted { color: #666; font-style: italic; font-size: 9.5pt; }
-    .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; margin-top: 8pt; }
-    .photo img { width: 100%; height: auto; border: 1px solid #ddd; border-radius: 6pt; }
-    .footer { margin-top: 18pt; font-size: 8.5pt; color: #666; }
-</style>
-</head>
-<body>
-    <div class="meta">
-        <div><strong>Detekta – Metal Detecting App</strong><br>Survey Report</div>
-        <div style="text-align:right;">
-            Generated: ${esc(new Date().toLocaleDateString('en-GB'))}<br>
-            ${appVer ? `App version: ${esc(appVer)}` : ``}
-        </div>
-    </div>
-
-    <div class="detectorist">Detectorist: ${esc(detectoristName)}</div>
-    <div class="surveyName">Survey: ${esc(openSurvey?.name || openSurvey?.surveyName || 'Untitled Survey')}</div>
-
-    <h2>Survey Details</h2>
-    <table>
-        <tr><th style="width:32%;">Field</th><th>Value</th></tr>
-        <tr><td>Location / notes</td><td>${esc(openSurvey?.description || openSurvey?.location || '') || '—'}</td></tr>
-        <tr><td>Permission from</td><td>${esc(permFrom)}</td></tr>
-        <tr><td>Permission granted</td><td>${esc(permStart || '—')}</td></tr>
-        <tr><td>Permission expires</td><td>${esc(permExpiry || '—')}</td></tr>
-        <tr><td>Site type</td><td>${esc(siteType)}</td></tr>
-        <tr><td>Soil condition</td><td>${esc(soilCond)}</td></tr>
-        <tr><td>Detector used</td><td>${esc(detUsed)}</td></tr>
-        <tr><td>NCMD number</td><td>${esc(ncmd)}</td></tr>
-    </table>
-
-    <h2>Survey Summary</h2>
-    <table class="summary">
-        <tr>
-            <th>Targets</th><th>Finds</th><th>Stakes</th><th>Photos</th>
-        </tr>
-        <tr>
-            <td>${targets.length}</td>
-            <td>${findsList.length}</td>
-            <td>${stakes.length}</td>
-            <td>${totalPhotos}</td>
-        </tr>
-    </table>
-
-    <h2>Finds Recorded</h2>
-    <table>
-        <tr><th style="width:24%;">Type</th><th style="width:14%;">VDI</th><th>Description</th></tr>
-        ${findRows}
-    </table>
-
-    <h2>Survey Photos</h2>
-    <div class="photos">
-        ${photoGrid}
-    </div>
-
-    <h2>Additional Notes</h2>
-    <div style="white-space: pre-wrap; font-size: 9.5pt;">${esc(notes || '') || '—'}</div>
-
-    <div class="footer">
-        Generated by Detekta – Metal Detecting App${appVer ? ` (v${esc(appVer)})` : ''}.
-    </div>
-
-    <script>
-        window.addEventListener('load', () => { setTimeout(() => { window.print(); }, 300); });
-    </script>
-</body>
-</html>`;
-
-        const w = window.open('', '_blank');
-        if (!w) {
-            showMessage('Popup blocked. Please allow popups to create the PDF report.', 'error');
-            log('Popup blocked by browser.');
-            return;
-        }
-        w.document.open();
-        w.document.write(reportHtml);
-        w.document.close();
-
-        showMessage('Report opened in a new tab. Use Print → Save as PDF.', 'success');
-        log('Report opened. Use Print → Save as PDF.');
-    } catch (err) {
-        console.error(err);
-        showMessage('Failed to create report.', 'error');
-        const el = document.getElementById('export-survey-report-log');
-        if (el) el.value += (el.value ? '\n' : '') + (err?.message || String(err));
-    }
-}
-
-
 function actuallyExportOpenSurveyAsGPX() {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
@@ -6860,6 +6632,27 @@ function renderExportPage() {
         <div class="p-4 space-y-6">
             <h2 class="text-3xl font-bold text-primary mb-6">Data Export & Import</h2>
 
+            <!-- SURVEY REPORT (PDF) -->
+            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-blue-500">
+                <h4 class="text-lg font-semibold text-blue-700 mb-2">Survey Report (PDF)</h4>
+                <p class="text-sm text-gray-600 mb-3">
+                    Create a printable report for the currently open survey. Use your browser's Print dialog to save as <strong>PDF</strong>.
+                </p>
+
+                <button id="export-survey-report-pdf-btn"
+                        type="button"
+                        onclick="exportSurveyReportPdf()"
+                        class="w-full bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md hover:bg-blue-700 transition duration-150">
+                    <i class="fas fa-file-pdf mr-1"></i> Export Survey Report (PDF)
+                </button>
+
+                <textarea id="export-survey-report-log"
+                          rows="6"
+                          readonly
+                          class="w-full mt-3 p-2 border rounded bg-gray-50 text-xs"></textarea>
+            </div>
+
+
             <!-- EXPORT OPEN SURVEY ZIP/JSON -->
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
                 <h4 class="text-lg font-semibold text-emerald-700 mb-2">Export Open Survey (ZIP)</h4>
@@ -6990,29 +6783,6 @@ function renderExportPage() {
                           placeholder="GPX export log will appear here."
                           class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-2"></textarea>
             </div>
-
-            <!-- SURVEY REPORT PDF -->
-            <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-indigo-500">
-                <h4 class="text-lg font-semibold text-indigo-700 mb-2">Survey Report (PDF)</h4>
-                <p class="text-sm text-gray-600 mb-3">
-                    Generates a printable survey report for the currently open survey.
-                    A new tab will open; use your browser&#39;s <strong>Print</strong> dialog to <strong>Save as PDF</strong>.
-                </p>
-
-                <button id="export-survey-report-pdf-btn"
-                        type="button"
-                        onclick="exportSurveyReportPdf()"
-                        class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">
-                    <i class="fas fa-file-pdf mr-1"></i> Create Survey Report (PDF)
-                </button>
-
-                <textarea id="export-survey-report-log"
-                          rows="4"
-                          readonly
-                          placeholder="Report log will appear here."
-                          class="w-full p-2 border border-indigo-500 rounded-md font-mono text-xs mt-3"></textarea>
-            </div>
-
 
             <!-- IMPORT SURVEY ZIP/JSON -->
             <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-emerald-500">
@@ -14584,6 +14354,289 @@ function showImportConfirmModal(filename, onConfirmCallback) {
         onConfirmCallback
     );
 }
+
+
+/* ============================
+   Survey Report (PDF) export
+   ============================ */
+
+/** Convert a Blob to a data: URL (safe for printing). */
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        try {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(reader.error || new Error('Failed to read blob.'));
+            reader.readAsDataURL(blob);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+/** Get open survey (returns null if none). */
+function getOpenSurveyOrNull() {
+    const all = Array.isArray(surveys) ? surveys : [];
+    return all.find(s => s && s.status === 'Open') || null;
+}
+
+/** Permission dates are stored as dd/mm/yy strings; show them as-is if already in that format. */
+function safePermissionDateDisplay(v) {
+    if (!v) return '';
+    // If app already has a formatter for permission dates, prefer it.
+    if (typeof formatSurveyPermissionDate === 'function') {
+        try { return formatSurveyPermissionDate(v); } catch (_) { /* fall through */ }
+    }
+    return String(v);
+}
+
+/** Returns an array of survey photo refs in display order. Supports both multi-photo surveys and legacy single photo. */
+function getSurveyPhotoRefs(survey) {
+    const refs = [];
+    if (survey) {
+        if (Array.isArray(survey.photos)) {
+            for (const r of survey.photos) if (r) refs.push(r);
+        }
+        // Legacy fallback
+        if (refs.length === 0 && survey.surveyPhotoRef) refs.push(survey.surveyPhotoRef);
+        if (refs.length === 0 && survey.photoRef) refs.push(survey.photoRef);
+    }
+    return refs;
+}
+
+/** Build the report HTML string (images are injected separately once available). */
+function buildSurveyReportHtml({ detectoristName, surveyName, generatedStr, appVersionStr, detailsRowsHtml, summaryRowHtml, findsRowsHtml, photosHtml, notesText }) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Survey Report - ${surveyName ? surveyName.replace(/</g,'&lt;') : ''}</title>
+<style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 28px; color: #111; }
+    h1,h2,h3 { margin: 0; }
+    .muted { color: #555; font-size: 12px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .brand { font-size: 18px; font-weight: 700; }
+    .report-title { font-size: 20px; font-weight: 700; margin-top: 2px; }
+    .title-block { margin-top: 14px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+    .detectorist { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .survey-title { font-size: 18px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+    th { background: #f5f5f5; text-align: left; }
+    .section { margin-top: 18px; page-break-inside: avoid; }
+    .section-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .summary-table th, .summary-table td { text-align: center; }
+    .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .photo { border: 1px solid #ddd; padding: 6px; }
+    .photo img { width: 100%; height: auto; display: block; }
+    .notes { white-space: pre-wrap; border: 1px solid #ddd; padding: 10px; }
+    .footer { margin-top: 22px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 11px; color: #555; }
+    @media print { body { margin: 16mm; } }
+</style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <div class="brand">DETETKA – Metal Detecting App</div>
+            <div class="report-title">Survey Report</div>
+        </div>
+        <div class="muted" style="text-align:right">
+            <div>Generated: ${generatedStr}</div>
+            <div>App version: ${appVersionStr}</div>
+        </div>
+    </div>
+
+    <div class="title-block">
+        <div class="detectorist">Detectorist: ${detectoristName ? detectoristName.replace(/</g,'&lt;') : ''}</div>
+        <div class="survey-title">Survey: ${surveyName ? surveyName.replace(/</g,'&lt;') : ''}</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Survey Details</div>
+        <table>
+            <tbody>
+                ${detailsRowsHtml}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Survey Summary</div>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Targets</th><th>Finds</th><th>Stakes</th><th>Tracks</th><th>Photos</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${summaryRowHtml}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Finds Recorded</div>
+        <table>
+            <thead>
+                <tr><th style="width:25%">Type</th><th style="width:15%">VDI</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+                ${findsRowsHtml}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Survey Photos</div>
+        ${photosHtml}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Additional Notes</div>
+        <div class="notes">${(notesText || '').replace(/</g,'&lt;')}</div>
+    </div>
+
+    <div class="footer">
+        Generated by Detekta – Metal Detecting App
+    </div>
+</body>
+</html>`;
+}
+
+/** Export a printable Survey Report using the browser's Print dialog (Save as PDF). */
+async function exportSurveyReportPdf() {
+    const logEl = document.getElementById('export-survey-report-log');
+    const log = (msg) => { if (logEl) { logEl.value += msg + "\\n"; logEl.scrollTop = logEl.scrollHeight; } };
+
+    try {
+        if (logEl) logEl.value = '';
+        log('Preparing report...');
+
+        const survey = getOpenSurveyOrNull();
+        if (!survey) {
+            log('No open survey found. Open a survey first.');
+            showMessage('No open survey is open.', 'warning');
+            return;
+        }
+
+        const detectoristName = (userProfile && userProfile.name) ? String(userProfile.name) : '';
+        const appVersionStr = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? String(APP_VERSION) : (typeof appVersion !== 'undefined' && appVersion ? String(appVersion) : '');
+        const now = new Date();
+        const generatedStr = (typeof formatDate === 'function') ? formatDate(now) : now.toLocaleDateString();
+
+        // Survey details (v1 layout)
+        const detailPairs = [];
+        detailPairs.push(['Survey name', survey.name || '']);
+        detailPairs.push(['Location / notes', survey.description || survey.location || '']);
+        detailPairs.push(['Permission from', survey.permissionFrom || '']);
+        detailPairs.push(['Permission granted', safePermissionDateDisplay(survey.permissionDate || survey.permissionGranted || '')]);
+        detailPairs.push(['Permission expires', safePermissionDateDisplay(survey.permissionExpiry || survey.permissionReview || '')]);
+        detailPairs.push(['Site type', survey.siteType || '']);
+        detailPairs.push(['Soil condition', survey.soilCondition || '']);
+        detailPairs.push(['Detector(s) used', survey.detector || '']);
+        detailPairs.push(['NCMD number', (userProfile && userProfile.ncmdNumber) ? String(userProfile.ncmdNumber) : '']);
+
+        const detailsRowsHtml = detailPairs
+            .filter(([_, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+            .map(([k, v]) => `<tr><th>${String(k).replace(/</g,'&lt;')}</th><td>${String(v).replace(/</g,'&lt;')}</td></tr>`)
+            .join('');
+
+        // Summary counts
+        const targetsCount = (typeof getSurveyTargetsOnly === 'function') ? getSurveyTargetsOnly(survey).length : (Array.isArray(survey.targets) ? survey.targets.length : 0);
+        const stakesCount  = (typeof getSurveyStakesOnly === 'function') ? getSurveyStakesOnly(survey).length : (Array.isArray(survey.stakes) ? survey.stakes.length : 0);
+        const surveyFinds  = Array.isArray(finds) ? finds.filter(f => f && !f.deleted && f.surveyId === survey.id) : [];
+        const findsCount   = surveyFinds.length;
+        const tracksCount  = Array.isArray(survey.tracks) ? survey.tracks.length : 0;
+
+        const photoRefs = getSurveyPhotoRefs(survey);
+        const photosCount = photoRefs.length;
+
+        const summaryRowHtml = `<tr><td>${targetsCount}</td><td>${findsCount}</td><td>${stakesCount}</td><td>${tracksCount}</td><td>${photosCount}</td></tr>`;
+
+        // Finds rows
+        const findsRowsHtml = (surveyFinds.length === 0)
+            ? `<tr><td colspan="3" class="muted">No finds recorded.</td></tr>`
+            : surveyFinds.map(f => {
+                const type = f.findType || f.type || f.category || 'Find';
+                const vdi  = (f.vdi !== undefined && f.vdi !== null && String(f.vdi).trim() !== '') ? String(f.vdi) : (f.targetId || '');
+                const desc = f.notes || f.description || '';
+                return `<tr><td>${String(type).replace(/</g,'&lt;')}</td><td>${String(vdi).replace(/</g,'&lt;')}</td><td>${String(desc).replace(/</g,'&lt;')}</td></tr>`;
+            }).join('');
+
+        // Photos: load and embed as data URLs (safer for printing)
+        let photosHtml = '<div class="muted">No survey photos.</div>';
+        if (photoRefs.length > 0 && typeof loadPhotoBlob === 'function' && typeof parsePhotoRef === 'function') {
+            log(`Loading ${photoRefs.length} survey photo(s)...`);
+            const dataUrls = [];
+            for (const ref of photoRefs) {
+                try {
+                    const parsed = parsePhotoRef(ref);
+                    const blob = await loadPhotoBlob(parsed);
+                    if (blob) {
+                        const dataUrl = await blobToDataUrl(blob);
+                        if (dataUrl) dataUrls.push(dataUrl);
+                    }
+                } catch (e) {
+                    // continue; log minimal
+                    log('A photo could not be loaded (skipped).');
+                }
+            }
+            if (dataUrls.length > 0) {
+                photosHtml = `<div class="photos">` + dataUrls.map(u => `<div class="photo"><img src="${u}"></div>`).join('') + `</div>`;
+            } else {
+                photosHtml = '<div class="muted">No survey photos could be loaded.</div>';
+            }
+        }
+
+        const notesText = survey.description || survey.location || '';
+
+        const reportHtml = buildSurveyReportHtml({
+            detectoristName,
+            surveyName: survey.name || '',
+            generatedStr,
+            appVersionStr,
+            detailsRowsHtml,
+            summaryRowHtml,
+            findsRowsHtml,
+            photosHtml,
+            notesText
+        });
+
+        log('Opening report...');
+        const w = window.open('', '_blank');
+        if (!w) {
+            log('Popup blocked. Please allow popups for this site and try again.');
+            showMessage('Popup blocked. Allow popups then try again.', 'warning');
+            return;
+        }
+
+        w.document.open();
+        w.document.write(reportHtml);
+        w.document.close();
+
+        // Wait a moment for images to render, then print
+        w.onload = () => {
+            try {
+                w.focus();
+                w.print();
+                log('Print dialog opened (choose “Save as PDF”).');
+            } catch (e) {
+                log('Could not open print dialog.');
+            }
+        };
+
+        showMessage('Survey report opened. Use Print → Save as PDF.', 'success');
+    } catch (err) {
+        console.error(err);
+        if (document.getElementById('export-survey-report-log')) {
+            document.getElementById('export-survey-report-log').value += `ERROR: ${err && err.message ? err.message : err}\\n`;
+        }
+        showMessage('Survey report export failed. See log.', 'error');
+    }
+}
+
 
 function exportOpenSurveyWithPhotos() {
     const openSurvey = surveys.find(s => s.status === 'Open');
