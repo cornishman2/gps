@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3903,7 +3903,7 @@ async function exportPhotoGalleries_MasterFolder(rootHandle, opts) {
   @media (max-width:520px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
   .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  .card img{width:100%;height:auto;object-fit:cover;display:block}
+  .card img{width:100%;height:200px;object-fit:cover;display:block}
   .cap{padding:10px}
   .title{font-weight:800;font-size:14px;margin-bottom:4px}
   .metaLine{font-size:12px;color:#64748b}
@@ -5230,7 +5230,7 @@ if (surveyRefs.length) {
   @media (max-width:520px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
   .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  .card img{width:100%;height:auto;object-fit:cover;display:block}
+  .card img{width:100%;height:200px;object-fit:cover;display:block}
   .cap{padding:10px}
   .title{font-weight:800;font-size:14px;margin-bottom:4px}
   .metaLine{font-size:12px;color:#64748b}
@@ -10462,7 +10462,49 @@ function renderHomePage() {
                 <div class="text-xs uppercase tracking-wide text-gray-500">Photos</div>
                 <div class="text-2xl font-bold text-gray-800">${totalPhotos}</div>
             </div>
+
+            <!-- Row 3: Storage (browser-managed) -->
+            <div class="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Storage Used</div>
+                <div id="home-storage-used" class="text-2xl font-bold text-gray-800">—</div>
+            </div>
+
+            <div class="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Storage Free</div>
+                <div id="home-storage-free" class="text-2xl font-bold text-gray-800">—</div>
+            </div>
+
+            <!-- Spacer to keep the 3-column grid aligned -->
+            <div class="p-3 rounded-lg bg-transparent border border-transparent text-center"></div>
         </div>
+
+        <script>
+        (function(){
+            try {
+                if (!navigator.storage || !navigator.storage.estimate) return;
+
+                function bytesToNice(bytes){
+                    if (!Number.isFinite(bytes) || bytes < 0) return '—';
+                    var mb = bytes / 1024 / 1024;
+                    if (mb < 1024) return Math.round(mb) + ' MB';
+                    var gb = mb / 1024;
+                    return (Math.round(gb * 10) / 10) + ' GB';
+                }
+
+                navigator.storage.estimate().then(function(est){
+                    if (!est) return;
+                    var usage = Number(est.usage);
+                    var quota = Number(est.quota);
+                    if (!Number.isFinite(usage) || !Number.isFinite(quota) || quota <= 0) return;
+
+                    var usedEl = document.getElementById('home-storage-used');
+                    var freeEl = document.getElementById('home-storage-free');
+                    if (usedEl) usedEl.textContent = bytesToNice(usage);
+                    if (freeEl) freeEl.textContent = bytesToNice(quota - usage);
+                }).catch(function(){});
+            } catch(e) {}
+        })();
+        </script>
     </div>
 
     <!-- Open Survey (rendered like any other card, just highlighted) -->
@@ -13870,7 +13912,7 @@ async function exportAllSurveysPhotoGalleries_ToFolder(rootPick) {
   @media (max-width:520px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
   .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden}
-  .card img{width:100%;height:auto;object-fit:cover;display:block}
+  .card img{width:100%;height:200px;object-fit:cover;display:block}
   .noimg{height:120px;display:flex;align-items:center;justify-content:center;color:#666;background:#f1f5f9;font-size:12px}
   .cap{padding:10px}
   .metaLine{font-size:12px;color:#333}
@@ -14607,39 +14649,12 @@ async function exportSurveyReportPdf() {
 
         // Finds photos (optional)
         let findsPhotosHtml = '<div class="muted">No finds photos.</div>';
-
-        // Each FIND starts on a new printed page.
-        // Find info is shown ONCE at the top of that page; photos are then shown 2 per row, large.
-        const esc = (v) => String(v ?? '').replace(/</g, '&lt;');
-        const fmtWhen = (v) => {
-            if (!v) return '';
-            // accept epoch ms, ISO, or plain string
-            try {
-                if (typeof v === 'number') {
-                    const d = new Date(v);
-                    if (!isNaN(d.getTime())) return d.toLocaleString();
-                }
-                if (typeof v === 'string') {
-                    const s = v.trim();
-                    if (!s) return '';
-                    // numeric string as ms?
-                    if (/^\d{11,}$/.test(s)) {
-                        const d = new Date(Number(s));
-                        if (!isNaN(d.getTime())) return d.toLocaleString();
-                    }
-                    const d = new Date(s);
-                    if (!isNaN(d.getTime())) return d.toLocaleString();
-                    return s;
-                }
-            } catch (e) {}
-            return String(v);
-        };
-
-        // Helper: best-effort photo-ref collection for a Find object
+        const findsPhotoItems = [];
         const collectPhotoRefs = (obj) => {
             const out = [];
             if (!obj || typeof obj !== 'object') return out;
 
+            // Common known fields
             const candidates = [
                 obj.photos, obj.findPhotos, obj.findPhotoRefs, obj.photoRefs, obj.images, obj.imageRefs,
                 obj.findPhotoRef, obj.photoRef, obj.photo, obj.image
@@ -14648,7 +14663,26 @@ async function exportSurveyReportPdf() {
             for (const c of candidates) {
                 if (!c) continue;
                 if (Array.isArray(c)) {
-                    for (const it of c) {
+                    for (const v of c) if (typeof v === 'string' && v.trim()) out.push(v.trim());
+                } else if (typeof c === 'string' && c.trim()) {
+                    out.push(c.trim());
+                }
+            }
+
+            // Heuristic: scan all keys for strings/arrays that look like photo refs
+            for (const [k, v] of Object.entries(obj)) {
+                if (!v) continue;
+                if (typeof v === 'string') {
+                    const s = v.trim();
+                    if (!s) continue;
+                    // Try parsePhotoRef if available; otherwise accept likely refs
+                    if (typeof parsePhotoRef === 'function') {
+                        try { parsePhotoRef(s); out.push(s); } catch(e) {}
+                    } else if (s.includes('|') || s.includes(':')) {
+                        out.push(s);
+                    }
+                } else if (Array.isArray(v)) {
+                    for (const it of v) {
                         if (typeof it !== 'string') continue;
                         const s = it.trim();
                         if (!s) continue;
@@ -14658,120 +14692,52 @@ async function exportSurveyReportPdf() {
                             out.push(s);
                         }
                     }
-                } else if (typeof c === 'string') {
-                    const s = c.trim();
-                    if (!s) continue;
-                    if (typeof parsePhotoRef === 'function') {
-                        try { parsePhotoRef(s); out.push(s); } catch(e) {}
-                    } else if (s.includes('|') || s.includes(':')) {
-                        out.push(s);
-                    }
-                } else if (typeof c === 'object') {
-                    // sometimes nested structures e.g. {refs:[...]} or {photos:[...]}
-                    for (const k of ['refs','photos','images']) {
-                        const v = c[k];
-                        if (!v) continue;
-                        if (typeof v === 'string') {
-                            const s = v.trim();
-                            if (!s) continue;
-                            if (typeof parsePhotoRef === 'function') {
-                                try { parsePhotoRef(s); out.push(s); } catch(e) {}
-                            } else if (s.includes('|') || s.includes(':')) {
-                                out.push(s);
-                            }
-                        } else if (Array.isArray(v)) {
-                            for (const it of v) {
-                                if (typeof it !== 'string') continue;
-                                const s = it.trim();
-                                if (!s) continue;
-                                if (typeof parsePhotoRef === 'function') {
-                                    try { parsePhotoRef(s); out.push(s); } catch(e) {}
-                                } else if (s.includes('|') || s.includes(':')) {
-                                    out.push(s);
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
+            // Deduplicate
             return Array.from(new Set(out));
         };
 
-        if (Array.isArray(surveyFinds) && surveyFinds.length > 0 && typeof loadPhotoBlob === 'function' && typeof parsePhotoRef === 'function') {
-            const blocks = [];
+        for (const f of surveyFinds) {
+            const refs = collectPhotoRefs(f);
+            if (!refs || refs.length === 0) continue;
 
-            log(`Preparing find pages...`);
-            for (let fi = 0; fi < surveyFinds.length; fi++) {
-                const f = surveyFinds[fi];
-                if (!f) continue;
+            const type = f.findType || f.type || f.category || 'Find';
+            const vdi  = (f.vdi !== undefined && f.vdi !== null && String(f.vdi).trim() !== '') ? String(f.vdi) : (f.targetId || '');
+            const caption = `${String(type).replace(/</g,'&lt;')}${vdi ? ' (' + String(vdi).replace(/</g,'&lt;') + ')' : ''}`;
 
-                const refs = collectPhotoRefs(f);
-                if (!refs || refs.length === 0) continue;
+            for (const r of refs) {
+                if (r) findsPhotoItems.push({ ref: r, caption });
+            }
+        }
 
-                const desc = f.description || f.name || `Find ${f.id || (fi + 1)}`;
-                const type = f.findType || f.type || f.category || 'Find';
-                const vdi  = (f.vdi !== undefined && f.vdi !== null && String(f.vdi).trim() !== '') ? String(f.vdi) : (f.targetId || '');
-                const depth = (f.depth !== undefined && f.depth !== null && String(f.depth).trim() !== '') ? String(f.depth) : '';
-                const when  = fmtWhen(f.time || f.date || f.createdAt || f.updatedAt || '');
-                const coords = f.coordinates || f.coords || '';
-                const acc = f.accuracy || '';
-                const notes = f.notes || f.note || f.comments || '';
+        if (findsPhotoItems.length > 0 && typeof loadPhotoBlob === 'function' && typeof parsePhotoRef === 'function') {
+            log(`Loading ${findsPhotoItems.length} find photo(s)...`);
+            const figures = [];
+            for (const item of findsPhotoItems) {
+                try {
+                    const parsed = parsePhotoRef(item.ref);
+                    const blob = await loadPhotoBlob(parsed);
+                    if (!blob) continue;
 
-                // Load all photos for this find (skipping any failures)
-                const imgs = [];
-                for (let pi = 0; pi < refs.length; pi++) {
-                    const ref = refs[pi];
-                    try {
-                        const id = parsePhotoRef(ref);
-                        const blob = await loadPhotoBlob(id);
-                        if (!blob) continue;
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
 
-                        const dataUrl = await new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = () => resolve(reader.result);
-                            reader.onerror = reject;
-                            reader.readAsDataURL(blob);
-                        });
+                    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) continue;
 
-                        if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) continue;
-
-                        imgs.push(`<div style="break-inside:avoid; border:1px solid #ddd; border-radius:10px; overflow:hidden; background:#fff;">
-  <img src="${dataUrl}" alt="" style="width:100%; height:auto; display:block;">
-</div>`);
-                    } catch (e) {
-                        // skip
-                    }
+                    figures.push(`<figure class="photo"><img src="${dataUrl}" alt=""><figcaption>${item.caption}</figcaption></figure>`);
+                } catch (e) {
+                    log('A find photo could not be loaded (skipped).');
                 }
-
-                if (!imgs.length) continue;
-
-                const metaLines = [];
-                metaLines.push(`<div><strong>Type:</strong> ${esc(type)}</div>`);
-                if (vdi)   metaLines.push(`<div><strong>VDI:</strong> ${esc(vdi)}</div>`);
-                if (depth) metaLines.push(`<div><strong>Depth:</strong> ${esc(depth)}</div>`);
-                if (when)  metaLines.push(`<div><strong>Date/Time:</strong> ${esc(when)}</div>`);
-                if (coords) metaLines.push(`<div><strong>Coords:</strong> ${esc(coords)}</div>`);
-                if (acc) metaLines.push(`<div><strong>Accuracy:</strong> ${esc(acc)}</div>`);
-                if (notes) metaLines.push(`<div><strong>Notes:</strong> ${esc(notes)}</div>`);
-
-                const pageBreak = 'page-break-before:always; break-before:page;';
-                const blockHtml = `
-<section style="${pageBreak} padding-top:10px;">
-  <div style="font-size:18px; font-weight:800; margin:0 0 6px 0;">${esc(desc)}</div>
-  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12.5px; margin-bottom:10px;">
-    ${metaLines.join('')}
-  </div>
-  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-    ${imgs.join('')}
-  </div>
-</section>`.trim();
-
-                blocks.push(blockHtml);
             }
 
-            if (blocks.length) {
-                findsPhotosHtml = blocks.join('\n');
+            if (figures.length > 0) {
+                findsPhotosHtml = `<div class="photos">` + figures.join('') + `</div>`;
             } else {
                 findsPhotosHtml = '<div class="muted">No finds photos could be loaded.</div>';
             }
