@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V12
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V13
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1471,8 +1471,23 @@ let compassQuickTargetIdDraft = '';
 // Map layer toggles (UI checkboxes on Compass/Map page)
 // These affect what is DRAWN, but NOT the bounds/auto-zoom calculation.
 let showMapTargets = true;
+let showMapStakes  = true; // Stakes are targets with VDI -100
 let showMapFinds   = true;
 let showMapTracks  = true;
+
+// A "Stake" is a target pin whose VDI is -100 (used as a ground marker).
+function isStakeTarget(t) {
+    if (!t || t.isFind) return false;
+    const raw = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
+        ? t.vdi
+        : (t.targetVdi !== undefined && t.targetVdi !== null && String(t.targetVdi).trim() !== '')
+            ? t.targetVdi
+            : (t.targetVDI !== undefined && t.targetVDI !== null && String(t.targetVDI).trim() !== '')
+                ? t.targetVDI
+                : '';
+    const v = Number(raw);
+    return Number.isFinite(v) && v === -100;
+}
 
 let showUserPosition = true; // default: show user location on the map
 
@@ -11710,6 +11725,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
     if (t.type === 'Track') return false;
     // draw-only toggles (bounds still includes all coords)
     if (t.isFind) return !!showMapFinds;
+    if (isStakeTarget(t)) return !!showMapStakes;
     return !!showMapTargets;
 }) // only pins here
         .map(t => {
@@ -11945,6 +11961,10 @@ const drawTracks = showMapTracks ? visibleTracks : [];
             <span>Show Targets</span>
         </label>
         <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
+            <span>Show Stakes</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
             <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
             <span>Show Finds</span>
         </label>
@@ -12122,6 +12142,10 @@ const drawTracks = showMapTracks ? visibleTracks : [];
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
             <span>Show Targets</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
+            <span>Show Stakes</span>
         </label>
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
@@ -15339,6 +15363,16 @@ if (mapTargetsCb) {
         e.preventDefault();
         e.stopPropagation();
         showMapTargets = !!mapTargetsCb.checked;
+        if (currentPage === 'Compass') render();
+    });
+}
+
+const mapStakesCb = document.getElementById('map-show-stakes-cb');
+if (mapStakesCb) {
+    mapStakesCb.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMapStakes = !!mapStakesCb.checked;
         if (currentPage === 'Compass') render();
     });
 }
