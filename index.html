@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -14405,7 +14405,7 @@ function getSurveyPhotoRefs(survey) {
 }
 
 /** Build the report HTML string (images are injected separately once available). */
-function buildSurveyReportHtml({ detectoristName, surveyName, generatedStr, appVersionStr, detailsRowsHtml, summaryRowHtml, findsRowsHtml, photosHtml, notesText }) {
+function buildSurveyReportHtml({detectoristName, surveyName, generatedStr, appVersionStr, detailsRowsHtml, summaryRowHtml, findsRowsHtml, surveyPhotosHtml, findsPhotosHtml, notesText }) {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14431,6 +14431,7 @@ function buildSurveyReportHtml({ detectoristName, surveyName, generatedStr, appV
     .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
     .photo { border: 1px solid #ddd; padding: 6px; }
     .photo img { width: 100%; height: auto; display: block; }
+    .photo figcaption { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.2; }
     .notes { white-space: pre-wrap; border: 1px solid #ddd; padding: 10px; }
     .footer { margin-top: 22px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 11px; color: #555; }
     @media print { body { margin: 16mm; } }
@@ -14490,7 +14491,12 @@ function buildSurveyReportHtml({ detectoristName, surveyName, generatedStr, appV
 
     <div class="section">
         <div class="section-title">Survey Photos</div>
-        ${photosHtml}
+        ${surveyPhotosHtml}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Finds Photos</div>
+        ${findsPhotosHtml}
     </div>
 
     <div class="section">
@@ -14566,7 +14572,7 @@ async function exportSurveyReportPdf() {
             }).join('');
 
         // Photos: load and embed as data URLs (safer for printing)
-        let photosHtml = '<div class="muted">No survey photos.</div>';
+        let surveyPhotosHtml = '<div class="muted">No survey photos.</div>';
         if (photoRefs.length > 0 && typeof loadPhotoBlob === 'function' && typeof parsePhotoRef === 'function') {
             log(`Loading ${photoRefs.length} survey photo(s)...`);
             const dataUrls = [];
@@ -14574,19 +14580,124 @@ async function exportSurveyReportPdf() {
                 try {
                     const parsed = parsePhotoRef(ref);
                     const blob = await loadPhotoBlob(parsed);
-                    if (blob) {
-                        const dataUrl = await blobToDataUrl(blob);
-                        if (dataUrl) dataUrls.push(dataUrl);
+                    if (!blob) continue;
+
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+
+                    if (typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+                        dataUrls.push(dataUrl);
                     }
                 } catch (e) {
-                    // continue; log minimal
-                    log('A photo could not be loaded (skipped).');
+                    log('A survey photo could not be loaded (skipped).');
                 }
             }
             if (dataUrls.length > 0) {
-                photosHtml = `<div class="photos">` + dataUrls.map(u => `<div class="photo"><img src="${u}"></div>`).join('') + `</div>`;
+                surveyPhotosHtml = `<div class="photos">` +
+                    dataUrls.map(u => `<div class="photo"><img src="${u}" alt=""></div>`).join('') +
+                    `</div>`;
             } else {
-                photosHtml = '<div class="muted">No survey photos could be loaded.</div>';
+                surveyPhotosHtml = '<div class="muted">No survey photos could be loaded.</div>';
+            }
+        }
+
+        // Finds photos (optional)
+        let findsPhotosHtml = '<div class="muted">No finds photos.</div>';
+        const findsPhotoItems = [];
+        const collectPhotoRefs = (obj) => {
+            const out = [];
+            if (!obj || typeof obj !== 'object') return out;
+
+            // Common known fields
+            const candidates = [
+                obj.photos, obj.findPhotos, obj.findPhotoRefs, obj.photoRefs, obj.images, obj.imageRefs,
+                obj.findPhotoRef, obj.photoRef, obj.photo, obj.image
+            ];
+
+            for (const c of candidates) {
+                if (!c) continue;
+                if (Array.isArray(c)) {
+                    for (const v of c) if (typeof v === 'string' && v.trim()) out.push(v.trim());
+                } else if (typeof c === 'string' && c.trim()) {
+                    out.push(c.trim());
+                }
+            }
+
+            // Heuristic: scan all keys for strings/arrays that look like photo refs
+            for (const [k, v] of Object.entries(obj)) {
+                if (!v) continue;
+                if (typeof v === 'string') {
+                    const s = v.trim();
+                    if (!s) continue;
+                    // Try parsePhotoRef if available; otherwise accept likely refs
+                    if (typeof parsePhotoRef === 'function') {
+                        try { parsePhotoRef(s); out.push(s); } catch(e) {}
+                    } else if (s.includes('|') || s.includes(':')) {
+                        out.push(s);
+                    }
+                } else if (Array.isArray(v)) {
+                    for (const it of v) {
+                        if (typeof it !== 'string') continue;
+                        const s = it.trim();
+                        if (!s) continue;
+                        if (typeof parsePhotoRef === 'function') {
+                            try { parsePhotoRef(s); out.push(s); } catch(e) {}
+                        } else if (s.includes('|') || s.includes(':')) {
+                            out.push(s);
+                        }
+                    }
+                }
+            }
+
+            // Deduplicate
+            return Array.from(new Set(out));
+        };
+
+        for (const f of surveyFinds) {
+            const refs = collectPhotoRefs(f);
+            if (!refs || refs.length === 0) continue;
+
+            const type = f.findType || f.type || f.category || 'Find';
+            const vdi  = (f.vdi !== undefined && f.vdi !== null && String(f.vdi).trim() !== '') ? String(f.vdi) : (f.targetId || '');
+            const caption = `${String(type).replace(/</g,'&lt;')}${vdi ? ' (' + String(vdi).replace(/</g,'&lt;') + ')' : ''}`;
+
+            for (const r of refs) {
+                if (r) findsPhotoItems.push({ ref: r, caption });
+            }
+        }
+
+        if (findsPhotoItems.length > 0 && typeof loadPhotoBlob === 'function' && typeof parsePhotoRef === 'function') {
+            log(`Loading ${findsPhotoItems.length} find photo(s)...`);
+            const figures = [];
+            for (const item of findsPhotoItems) {
+                try {
+                    const parsed = parsePhotoRef(item.ref);
+                    const blob = await loadPhotoBlob(parsed);
+                    if (!blob) continue;
+
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+
+                    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) continue;
+
+                    figures.push(`<figure class="photo"><img src="${dataUrl}" alt=""><figcaption>${item.caption}</figcaption></figure>`);
+                } catch (e) {
+                    log('A find photo could not be loaded (skipped).');
+                }
+            }
+
+            if (figures.length > 0) {
+                findsPhotosHtml = `<div class="photos">` + figures.join('') + `</div>`;
+            } else {
+                findsPhotosHtml = '<div class="muted">No finds photos could be loaded.</div>';
             }
         }
 
@@ -14600,7 +14711,8 @@ async function exportSurveyReportPdf() {
             detailsRowsHtml,
             summaryRowHtml,
             findsRowsHtml,
-            photosHtml,
+            surveyPhotosHtml,
+            findsPhotosHtml,
             notesText
         });
 
