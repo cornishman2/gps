@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V14
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V15
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -993,6 +993,122 @@
           <option value="Relic">Relic</option>
           <option value="Something else">Something else</option>
         </select>
+      </div>
+
+      <!-- Identification -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-identification">
+          Identification
+        </label>
+        <input
+          type="text"
+          id="edit-find-identification"
+          name="findIdentification"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+          placeholder="e.g. George III halfpenny">
+      </div>
+
+      <!-- Material + Condition -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-material">Material</label>
+          <select
+            id="edit-find-material"
+            name="findMaterial"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+            <option value="">(blank)</option>
+            <option value="Copper alloy">Copper alloy</option>
+            <option value="Silver">Silver</option>
+            <option value="Gold">Gold</option>
+            <option value="Lead">Lead</option>
+            <option value="Iron">Iron</option>
+            <option value="Aluminium">Aluminium</option>
+            <option value="Mixed">Mixed</option>
+            <option value="Unknown">Unknown</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-condition">Condition</label>
+          <select
+            id="edit-find-condition"
+            name="findCondition"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+            <option value="">(blank)</option>
+            <option value="Poor">Poor</option>
+            <option value="Fair">Fair</option>
+            <option value="Good">Good</option>
+            <option value="Excellent">Excellent</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Period/Date -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-period">
+          Period / Date
+        </label>
+        <input
+          type="text"
+          id="edit-find-period"
+          name="findPeriod"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+          placeholder="e.g. Roman / Medieval / Victorian">
+      </div>
+
+      <!-- Weight + Dimensions -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-weight">Weight (g)</label>
+          <input
+            type="number"
+            step="0.1"
+            inputmode="decimal"
+            id="edit-find-weight"
+            name="findWeightG"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+            placeholder="optional">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-dimensions">Dimensions (mm)</label>
+          <input
+            type="text"
+            id="edit-find-dimensions"
+            name="findDimensionsMm"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+            placeholder="e.g. Ø 18 mm or 22×19 mm">
+        </div>
+      </div>
+
+      <!-- Where kept + Disposition -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-where-kept">Where kept</label>
+          <input
+            type="text"
+            id="edit-find-where-kept"
+            name="findWhereKept"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+            placeholder="Finds box / coin tray / returned...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1" for="edit-find-disposition">Disposition</label>
+          <select
+            id="edit-find-disposition"
+            name="findDisposition"
+            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary">
+            <option value="">(blank)</option>
+            <option value="Kept">Kept</option>
+            <option value="Returned">Returned</option>
+            <option value="Reported">Reported</option>
+            <option value="Discarded">Discarded</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Possible treasure -->
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="edit-find-possible-treasure" name="findPossibleTreasure" class="h-4 w-4">
+        <label class="text-sm text-gray-700 select-none" for="edit-find-possible-treasure">Possible treasure</label>
       </div>
 
       <!-- VDI + Depth -->
@@ -5382,6 +5498,17 @@ async function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
+
+    // New optional fields (Find data model v1)
+    if (form['findIdentification'])  form['findIdentification'].value = find.identification || '';
+    if (form['findMaterial'])        form['findMaterial'].value = find.material || '';
+    if (form['findCondition'])       form['findCondition'].value = find.condition || '';
+    if (form['findPeriod'])          form['findPeriod'].value = find.period || '';
+    if (form['findWeightG'])         form['findWeightG'].value = (find.weightG ?? '') === 0 ? '0' : (find.weightG || '');
+    if (form['findDimensionsMm'])    form['findDimensionsMm'].value = find.dimensionsMm || '';
+    if (form['findWhereKept'])       form['findWhereKept'].value = find.whereKept || '';
+    if (form['findDisposition'])     form['findDisposition'].value = find.disposition || '';
+    if (form['findPossibleTreasure']) form['findPossibleTreasure'].checked = !!find.possibleTreasure;
     // Photos for editing: resolve IndexedDB refs -> object URLs, or use existing data URLs
     try {
         if (Array.isArray(find.photos) && find.photos.length > 0) {
@@ -5865,6 +5992,17 @@ importedSurvey.surveyPhotoData = '';
     find.coordinates = form['findCoords'].value.trim();
     find.accuracy    = form['findAccuracy'].value.trim();
 
+
+    // New optional fields (Find data model v1)
+    if (form['findIdentification'])   find.identification = (form['findIdentification'].value || '').trim();
+    if (form['findMaterial'])         find.material = (form['findMaterial'].value || '').trim();
+    if (form['findCondition'])        find.condition = (form['findCondition'].value || '').trim();
+    if (form['findPeriod'])           find.period = (form['findPeriod'].value || '').trim();
+    if (form['findWeightG'])          find.weightG = (form['findWeightG'].value || '').trim();
+    if (form['findDimensionsMm'])     find.dimensionsMm = (form['findDimensionsMm'].value || '').trim();
+    if (form['findWhereKept'])        find.whereKept = (form['findWhereKept'].value || '').trim();
+    if (form['findDisposition'])      find.disposition = (form['findDisposition'].value || '').trim();
+    if (form['findPossibleTreasure']) find.possibleTreasure = !!form['findPossibleTreasure'].checked;
     // --- Photos: read JSON array from hidden field, then save into IndexedDB ---
     let photosDataUrls = [];
     if (form['findPhotoData']) {
