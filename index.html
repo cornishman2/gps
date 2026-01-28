@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V18
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V19
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11737,6 +11737,26 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Current zoom (global), and inverse zoom for "keep-size-constant" overlays
     const invZoom = 1 / (mapZoom || 1);
 
+    // Label rules for map pins:
+    // - Finds: show Find Type
+    // - Targets: if description is 'STAKE' => no label; else if description present => use description; else fallback to VDI
+    const getMapPinLabelText = (t) => {
+        const isFind = (t && (t.isFind || String(t.type || '').toLowerCase() === 'find'));
+        if (isFind) {
+            return String(t.findType || t.findCategory || t.type || 'Find');
+        }
+
+        const desc = String(t.description || '').trim();
+        if (desc && desc.toUpperCase() === 'STAKE') return '';
+        if (desc) return desc;
+
+        const v = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
+            ? t.vdi
+            : (t.targetVdi || t.targetVDI || '');
+        return String(v || '');
+    };
+
+
     // ✅ CRITICAL FIX:
     // This function MUST respect the caller's intent.
     // If "Hide My Position" is active, the caller should pass null, and we must not use any global GPS coords.
@@ -11954,6 +11974,11 @@ const drawTracks = showMapTracks ? visibleTracks : [];
                     </div>
 
                     <!-- Label: counter-scale so it stays the same size while zooming -->
+                    ${(() => {
+                        const lbl = getMapPinLabelText(t);
+                        if (!lbl) return '';
+                        const safe = String(lbl).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        return `
                     <span
                         class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
                         style="
@@ -11963,14 +11988,8 @@ const drawTracks = showMapTracks ? visibleTracks : [];
                             transform-origin: left center;
                             z-index: 12;
                         "
-                    >${(t.isFind
-    ? String(t.findType || t.findCategory || t.type || 'Find')
-    : String(
-                            (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
-                                ? t.vdi
-                                : (t.targetVdi || t.targetVDI || '')
-                        )
-).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+                    >${safe}</span>`;
+                    })()}
                 </div>
             `;
         })
@@ -14765,7 +14784,7 @@ function buildSurveyReportHtml({detectoristName, surveyName, generatedStr, appVe
 }
 
 /** Export a printable Survey Report using the browser's Print dialog (Save as PDF). */
-    async function exportSurveyReportPdf() {
+async async function exportSurveyReportPdf() {
     const logEl = document.getElementById('export-survey-report-log');
     const log = (msg) => { if (logEl) { logEl.value += msg + "\\n"; logEl.scrollTop = logEl.scrollHeight; } };
 
