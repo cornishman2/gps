@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5747,6 +5747,48 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
     const importedSurvey = payload.survey;
     const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
+
+    // Backwards/forwards compatibility: ensure newly added Survey fields exist (blank if missing)
+    const _surveyFieldDefaults = {
+        permissionFrom: '',
+        permissionType: '',
+        permissionDateGranted: '',
+        permissionExpiry: '',
+        permissionNotes: '',
+        areaType: '',
+        landUseCurrent: '',
+        soilType: '',
+        groundCondition: '',
+        recentRain: '',
+        weather: '',
+        mineralisationLevel: ''
+    };
+    for (const [k, v] of Object.entries(_surveyFieldDefaults)) {
+        if (importedSurvey[k] === undefined) importedSurvey[k] = v;
+    }
+
+    // Backwards/forwards compatibility: ensure newly added Find fields exist (blank/default if missing)
+    const _findFieldDefaults = {
+        identification: '',
+        material: '',
+        condition: '',
+        period: '',
+        weightG: '',
+        dimensionsMm: '',
+        whereKept: '',
+        possibleTreasure: false,
+        disposition: ''
+    };
+    for (const f of importedFinds) {
+        if (!f || typeof f !== 'object') continue;
+        for (const [k, v] of Object.entries(_findFieldDefaults)) {
+            if (f[k] === undefined) f[k] = v;
+        }
+        // Coerce boolean if older exports stored strings
+        if (typeof f.possibleTreasure !== 'boolean') {
+            f.possibleTreasure = String(f.possibleTreasure).toLowerCase() === 'true';
+        }
+    }
     // LIMITS: importing a ZIP creates a NEW survey, so enforce survey limit / expiry
     const rs = canCreate('surveys');
     if (!rs.ok) {
@@ -15152,6 +15194,68 @@ async function actuallyExportOpenSurvey() {
         const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === openSurvey.id);
         const findsCopy   = linkedFinds.map(f => JSON.parse(JSON.stringify(f)));
 
+        // Ensure newly added Survey + Find fields exist in the exported JSON (even if blank),
+        // so older data exports still round-trip cleanly when importing later.
+        const ensureKey = (obj, key, defaultValue) => {
+            if (!obj || typeof obj !== 'object') return;
+            if (!(key in obj)) obj[key] = defaultValue;
+        };
+
+        const normalizeSurveyForExport = (s) => {
+            if (!s || typeof s !== 'object') return s;
+
+            // Survey Details fields (optional) - keep as blank/defaults if missing
+            ensureKey(s, 'permissionFrom', '');
+            ensureKey(s, 'permissionType', '');
+            ensureKey(s, 'permissionDateGranted', '');
+            ensureKey(s, 'permissionExpiry', '');
+            ensureKey(s, 'permissionNotes', '');
+
+            ensureKey(s, 'areaType', '');
+            ensureKey(s, 'landUseCurrent', '');
+
+            ensureKey(s, 'soilType', '');
+            ensureKey(s, 'groundCondition', '');
+            ensureKey(s, 'mineralisationLevel', '');
+
+            ensureKey(s, 'weather', '');
+            ensureKey(s, 'recentRain', '');
+            ensureKey(s, 'temperature', '');
+
+            ensureKey(s, 'purpose', []);              // multi-select array
+            ensureKey(s, 'expectedPeriod', '');
+
+            ensureKey(s, 'accessNotes', '');
+            ensureKey(s, 'hazards', []);              // multi-select array
+
+            ensureKey(s, 'overallProductivity', '');
+            ensureKey(s, 'wouldDetectAgain', '');
+            ensureKey(s, 'surveyObservations', '');
+
+            return s;
+        };
+
+        const normalizeFindForExport = (f) => {
+            if (!f || typeof f !== 'object') return f;
+
+            // New Find fields (object-focused)
+            ensureKey(f, 'identification', '');
+            ensureKey(f, 'material', '');
+            ensureKey(f, 'condition', '');
+            ensureKey(f, 'period', '');
+            ensureKey(f, 'weightG', '');
+            ensureKey(f, 'dimensionsMm', '');
+            ensureKey(f, 'whereKept', '');
+            ensureKey(f, 'possibleTreasure', false);
+            ensureKey(f, 'disposition', '');
+
+            return f;
+        };
+
+        normalizeSurveyForExport(surveyCopy);
+        findsCopy.forEach(normalizeFindForExport);
+
+
         const cleanEntityForExport = (obj) => {
             if (!obj || typeof obj !== 'object') return obj;
             const o = JSON.parse(JSON.stringify(obj));
@@ -15164,7 +15268,7 @@ async function actuallyExportOpenSurvey() {
         };
 
         const payload = {
-            version: 'geoFind-survey-zip-v1',
+            version: 'geoFind-survey-zip-v2',
             exportedAt: new Date().toISOString(),
             profile: userProfile,
             survey: cleanEntityForExport(surveyCopy),
@@ -15356,6 +15460,48 @@ async function performSurveyImport(text, filename, log) {
     let importedSurvey = payload.survey;
     let importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
+
+    // Backwards/forwards compatibility: ensure newly added Survey fields exist (blank if missing)
+    const _surveyFieldDefaults = {
+        permissionFrom: '',
+        permissionType: '',
+        permissionDateGranted: '',
+        permissionExpiry: '',
+        permissionNotes: '',
+        areaType: '',
+        landUseCurrent: '',
+        soilType: '',
+        groundCondition: '',
+        recentRain: '',
+        weather: '',
+        mineralisationLevel: ''
+    };
+    for (const [k, v] of Object.entries(_surveyFieldDefaults)) {
+        if (importedSurvey[k] === undefined) importedSurvey[k] = v;
+    }
+
+    // Backwards/forwards compatibility: ensure newly added Find fields exist (blank/default if missing)
+    const _findFieldDefaults = {
+        identification: '',
+        material: '',
+        condition: '',
+        period: '',
+        weightG: '',
+        dimensionsMm: '',
+        whereKept: '',
+        possibleTreasure: false,
+        disposition: ''
+    };
+    for (const f of importedFinds) {
+        if (!f || typeof f !== 'object') continue;
+        for (const [k, v] of Object.entries(_findFieldDefaults)) {
+            if (f[k] === undefined) f[k] = v;
+        }
+        // Coerce boolean if older exports stored strings
+        if (typeof f.possibleTreasure !== 'boolean') {
+            f.possibleTreasure = String(f.possibleTreasure).toLowerCase() === 'true';
+        }
+    }
     try {
         // Ensure survey has an id
         if (!importedSurvey.id) {
