@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1590,8 +1590,6 @@ let showMapTargets = true;
 let showMapStakes  = true; // Stakes are targets with VDI -100
 let showMapFinds   = true;
 let showMapTracks  = true;
-
-let showMapCoverage = false;
 
 // A "Stake" is a target pin whose VDI is -100 (used as a ground marker).
 function isStakeTarget(t) {
@@ -12107,120 +12105,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
                 ${polylines}
             </svg>
         `;
-    
-    // 6b. Coverage overlay (approx sweep coverage)
-    let coverageSvgHtml = '';
-    if (showMapCoverage && visibleTracks.length && mapWidthMeters > 0 && mapHeightMeters > 0) {
-        const COIL_SWEEP_WIDTH_M = 1.2;              // default; can be made a user setting later
-        const radiusM = COIL_SWEEP_WIDTH_M / 2;
-
-        // Choose an adaptive grid size to keep rendering fast
-        const maxSpan = Math.max(mapWidthMeters, mapHeightMeters);
-        let cellM = Math.max(0.5, Math.min(5.0, maxSpan / 120));  // target ~<= 120 cells across
-        let nx = Math.ceil(mapWidthMeters / cellM);
-        let ny = Math.ceil(mapHeightMeters / cellM);
-        const targetCells = 16000; // safety cap
-        if (nx * ny > targetCells) {
-            const scaleUp = Math.sqrt((nx * ny) / targetCells);
-            cellM *= scaleUp;
-            nx = Math.ceil(mapWidthMeters / cellM);
-            ny = Math.ceil(mapHeightMeters / cellM);
-        }
-
-        const rCells = Math.max(1, Math.ceil(radiusM / cellM));
-        const covered = new Set();
-
-        // Project track points into the same metre-space as the map bounds
-        const centerLatForProj = centerLat;
-        const mPerDegLonForProj = mPerDegLon;
-
-        const addPoint = (lat, lon) => {
-            const x = lon * mPerDegLonForProj;
-            const y = lat * M_PER_DEG_LAT;
-            const ix = Math.floor((x - minX) / cellM);
-            const iy = Math.floor((y - minY) / cellM);
-            if (ix < 0 || iy < 0 || ix >= nx || iy >= ny) return;
-
-            for (let dx = -rCells; dx <= rCells; dx++) {
-                const cx = ix + dx;
-                if (cx < 0 || cx >= nx) continue;
-                for (let dy = -rCells; dy <= rCells; dy++) {
-                    const cy = iy + dy;
-                    if (cy < 0 || cy >= ny) continue;
-
-                    // Check distance from point to cell center (fast enough, good approximation)
-                    const cellCenterX = (minX + (cx + 0.5) * cellM);
-                    const cellCenterY = (minY + (cy + 0.5) * cellM);
-                    const dX = cellCenterX - x;
-                    const dY = cellCenterY - y;
-                    if ((dX * dX + dY * dY) <= (radiusM * radiusM)) {
-                        covered.add(cx + ',' + cy);
-                    }
-                }
-            }
-        };
-
-        // Sample points to avoid overwork when GPS is very chatty
-        const minStepM = cellM / 2;
-        visibleTracks.forEach(tr => {
-            let lastX = null, lastY = null;
-            tr.points.forEach(p => {
-                if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') return;
-
-                const x = p.lon * mPerDegLonForProj;
-                const y = p.lat * M_PER_DEG_LAT;
-
-                if (lastX === null) {
-                    addPoint(p.lat, p.lon);
-                    lastX = x; lastY = y;
-                    return;
-                }
-
-                const dX = x - lastX;
-                const dY = y - lastY;
-                if ((dX * dX + dY * dY) >= (minStepM * minStepM)) {
-                    addPoint(p.lat, p.lon);
-                    lastX = x; lastY = y;
-                }
-            });
-        });
-
-        // Build coverage rects in SVG percent space
-        const rects = [];
-        const wPct = (cellM / mapWidthMeters) * 100;
-        const hPct = (cellM / mapHeightMeters) * 100;
-
-        covered.forEach(key => {
-            const [cxStr, cyStr] = key.split(',');
-            const cx = parseInt(cxStr, 10);
-            const cy = parseInt(cyStr, 10);
-
-            const cellMinX = minX + cx * cellM;
-            const cellMinY = minY + cy * cellM;
-
-            const xPct = ((cellMinX - minX) / mapWidthMeters) * 100;
-            // y percent is top-down: top of this cell is at (cellMinY + cellM)
-            const yPct = ((maxY - (cellMinY + cellM)) / mapHeightMeters) * 100;
-
-            rects.push(`<rect x="${xPct.toFixed(3)}" y="${yPct.toFixed(3)}" width="${wPct.toFixed(3)}" height="${hPct.toFixed(3)}" />`);
-        });
-
-        if (rects.length) {
-            coverageSvgHtml = `
-                <svg
-                    class="absolute inset-0 w-full h-full pointer-events-none"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                    style="z-index: 5;"
-                >
-                    <g fill="rgba(16, 185, 129, 0.18)">
-                        ${rects.join('')}
-                    </g>
-                </svg>
-            `;
-        }
     }
-}
 
     // 7. Navigation line (ONLY if userCoord exists!)
     let navLineHtml = '';
@@ -12286,7 +12171,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
              ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
-                ${coverageSvgHtml}${trackSvgHtml}
+                ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
                 ${userHtml}
@@ -12345,12 +12230,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
             <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
             <span>Show Tracks</span>
         </label>
-    
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-coverage-cb" type="checkbox" class="h-4 w-4" ${showMapCoverage ? 'checked' : ''}>
-            <span>Show Coverage</span>
-        </label>
-</div>
+    </div>
 </div>
 
 
@@ -12483,7 +12363,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
              ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
-                ${coverageSvgHtml}${trackSvgHtml}
+                ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
                 ${userHtml}
@@ -15922,18 +15802,6 @@ if (mapTracksCb) {
     });
 }
 
-
-
-
-const mapCoverageCb = document.getElementById('map-show-coverage-cb');
-if (mapCoverageCb) {
-    mapCoverageCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapCoverage = !!mapCoverageCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
 
 // --- Track Start/Stop buttons (Compass/Map page) ---
     const startTrackBtn = document.getElementById('start-track-btn');
