@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2456,6 +2456,15 @@ async function updateHomeStorageStats() {
         
 // -------------------- App Limits / Expiry (Tester build controls) --------------------
 // -------------------- App Limits / Expiry (Tester build controls) --------------------
+
+function isUnlimitedUser() {
+    // Special unlimited mode for the named tester account (case-sensitive match).
+    try {
+        return (userProfile && userProfile.name === 'Laurence Wright');
+    } catch (e) {
+        return false;
+    }
+}
 window.APP_LIMITS_STORAGE_KEY ??= 'detekta_app_limits_v1';
 window.APP_RUNS_STORAGE_KEY   ??= 'detekta_app_runs_v1';
 
@@ -2524,6 +2533,7 @@ function incrementAppRunCount() {
 }
 
 function isExpired(limits = loadAppLimits()) {
+    if (typeof isUnlimitedUser === 'function' && isUnlimitedUser()) return false;
     if (!limits.expiryDate) return false;
     const today = new Date();
     const exp = new Date(limits.expiryDate + 'T00:00:00');
@@ -2535,6 +2545,11 @@ function isExpired(limits = loadAppLimits()) {
  * Returns { ok, reason, type } where type: 'surveys'|'targets'|'finds'|'expired'
  */
 function canCreate(type, openSurvey = null) {
+    // Unlimited mode bypasses all limits/expiry for the special tester account.
+    if (typeof isUnlimitedUser === 'function' && isUnlimitedUser()) {
+        return { ok: true, reason: '', type: type };
+    }
+
     const limits = loadAppLimits();
 
     if (isExpired(limits)) {
