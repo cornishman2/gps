@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V12
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V13
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -10558,6 +10558,7 @@ function handleTargetAction(element) {
                 (survey.targets || []).forEach(t => {
                     t.centerOnMap = (t.id === targetId);
                 });
+                currentPage = 'Compass';
                 showMessage('Centre on map updated for this target.', 'success');
                 break;
             }
@@ -11968,6 +11969,24 @@ const drawTracks = showMapTracks ? visibleTracks : [];
         const yPct = (1 - ((y - minY) / mapHeightMeters)) * 100; // invert Y
         return { xPct, yPct };
     };
+    // Auto-centre map on a target flagged "centre on map" (works even when user position is hidden)
+    try {
+        const centerTarget = (targets || []).find(t => t && t.centerOnMap === true && t.deleted !== true);
+        if (centerTarget) {
+            const focus = coordsMeters.find(c => c && c.id === centerTarget.id);
+            if (focus) {
+                const p = toPercent(focus.x, focus.y);
+                // Reset zoom/pan to a sensible centred view
+                mapZoom = 1;
+                mapOffsetX = (50 - p.xPct);
+                mapOffsetY = (50 - p.yPct);
+            }
+        }
+    } catch (e) {
+        console.warn('Centre-on-map: unable to compute focus point', e);
+    }
+
+
 
     // 4. Build pin HTML (targets + finds)
     const pinsHtml = coordsMeters
