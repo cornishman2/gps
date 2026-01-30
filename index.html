@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5741,6 +5741,47 @@ async function handleSurveyWithPhotosImport(event) {
     });
 }
         
+
+function closeOpenSurveyBeforeImport(log) {
+    try {
+        const now = Date.now();
+        let closedAny = false;
+
+        if (!Array.isArray(surveys)) return false;
+
+        for (const s of surveys) {
+            if (s && s.status === 'Open') {
+                s.status = 'Active';
+                s.dateLastChanged = now;
+                closedAny = true;
+            }
+        }
+
+        if (closedAny) {
+            // Stop any tracking/recording tied to the previously open survey (safety)
+            if (typeof resetLiveTrackingAndRecordingState === 'function') {
+                try { resetLiveTrackingAndRecordingState(); } catch (_) {}
+            }
+
+            if (typeof saveSurveysToLocalStorage === 'function') {
+                saveSurveysToLocalStorage();
+            } else if (typeof saveDataToLocalStorage === 'function') {
+                saveDataToLocalStorage();
+            }
+
+            if (typeof showMessage === 'function') {
+                showMessage('Open survey was closed before import.', 'info');
+            }
+            if (typeof log === 'function') log('NOTICE: Closed currently open survey before import.');
+        }
+
+        return closedAny;
+    } catch (e) {
+        console.error('closeOpenSurveyBeforeImport error:', e);
+        return false;
+    }
+}
+
 async function performSurveyZipImport(zip, jsonText, filename, log) {
     let payload;
 
@@ -5759,8 +5800,16 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
         return;
     }
 
-    const importedSurvey = payload.survey;
-    const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
+    
+    // IMPORTANT: importing while a survey is Open can confuse the Home page state.
+    // Close any currently open survey BEFORE applying imported data.
+    closeOpenSurveyBeforeImport(log);
+const importedSurvey = payload.survey;
+    
+
+    // Safety: Never allow an imported survey to arrive in Open state
+    if (importedSurvey && importedSurvey.status === 'Open') importedSurvey.status = 'Active';
+const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
 
     // Backwards/forwards compatibility: ensure newly added Survey fields exist (blank if missing)
@@ -15472,8 +15521,16 @@ async function performSurveyImport(text, filename, log) {
         return;
     }
 
-    let importedSurvey = payload.survey;
-    let importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
+    
+    // IMPORTANT: importing while a survey is Open can confuse the Home page state.
+    // Close any currently open survey BEFORE applying imported data.
+    closeOpenSurveyBeforeImport(log);
+let importedSurvey = payload.survey;
+    
+
+    // Safety: Never allow an imported survey to arrive in Open state
+    if (importedSurvey && importedSurvey.status === 'Open') importedSurvey.status = 'Active';
+let importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
 
     // Backwards/forwards compatibility: ensure newly added Survey fields exist (blank if missing)
