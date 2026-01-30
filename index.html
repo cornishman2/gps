@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5849,8 +5849,6 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
 
     if (Array.isArray(importedSurvey.targets)) {
         for (const t of importedSurvey.targets) {
-            // Normalize stakes: Target ID / VDI -100
-            try { if (t && typeof isStakeTarget === 'function' && isStakeTarget(t)) t.type = 'Stake'; } catch (_) {}
             if (Array.isArray(t.photoFiles)) allPhotoPaths.push(...t.photoFiles);
         }
     }
@@ -5922,24 +5920,6 @@ importedSurvey.surveyPhotoData = '';
         let importedTargetsThisZip = 0;
 
         for (const t of importedSurvey.targets) {
-            // Normalize stakes: Target ID / VDI -100
-            try { if (t && typeof isStakeTarget === 'function' && isStakeTarget(t)) t.type = 'Stake'; } catch (_) {}
-            // Coerce older exports that stored booleans as strings (e.g. deleted: "false")
-            if (t && typeof t === 'object') {
-                if (typeof t.deleted === 'string') t.deleted = (t.deleted.toLowerCase() === 'true');
-                if (typeof t.isFind === 'string') t.isFind = (t.isFind.toLowerCase() === 'true');
-                if (typeof t.isVisible === 'string') t.isVisible = (t.isVisible.toLowerCase() === 'true');
-                // Some older targets used "targetId" or "targetID" as strings
-                if (t.targetId !== undefined && typeof t.targetId === 'string' && t.targetId.trim() !== '' && !isNaN(Number(t.targetId))) {
-                    t.targetId = Number(t.targetId);
-                }
-                if (t.targetID !== undefined && typeof t.targetID === 'string' && t.targetID.trim() !== '' && !isNaN(Number(t.targetID))) {
-                    t.targetID = Number(t.targetID);
-                }
-                if (t.vdi !== undefined && typeof t.vdi === 'string' && t.vdi.trim() !== '' && !isNaN(Number(t.vdi))) {
-                    t.vdi = Number(t.vdi);
-                }
-            }
             // LIMITS: stop importing targets once we hit remaining slots
             if (importedTargetsThisZip >= remainingTargets) {
                 log(`LIMIT: Max targets reached (${limits?.maxTargets}). Stopping target import.`);
@@ -11024,10 +11004,8 @@ function renderSurveyCard(survey, isOpen = false) {
     const changedStr = formatDateDMY(survey.dateLastChanged);
 
     // Counts (safe)
-    /* counts computed below */
-    const allTargetsArr = Array.isArray(survey.targets) ? survey.targets : [];
-    const stakesCount  = allTargetsArr.filter(t => t && (t.type === 'Stake' || isStakeTarget(t))).length;
-    const targetsCount = allTargetsArr.filter(t => t && !(t.type === 'Stake' || isStakeTarget(t))).length;
+    const targetsCount = Array.isArray(survey.targets) ? survey.targets.length : 0;
+    const stakesCount  = Array.isArray(survey.targets) ? survey.targets.filter(t => t && t.type === 'Stake').length : 0;
     const findsCount   = Array.isArray(finds) ? finds.filter(f => f && f.surveyId === survey.id).length : 0;
 
     return `
@@ -15228,6 +15206,11 @@ async function actuallyExportOpenSurvey() {
 
         // Deep copy (no mutation of live data)
         const surveyCopy = JSON.parse(JSON.stringify(openSurvey));
+        // IMPORTANT: Do not export deleted targets/stakes.
+        // Deleted entries can still have photos attached (useful for audit), but they should not be part of a survey backup/share ZIP.
+        if (surveyCopy && Array.isArray(surveyCopy.targets)) {
+            surveyCopy.targets = surveyCopy.targets.filter(t => !(t && t.deleted === true));
+        }
         const linkedFinds = (Array.isArray(finds) ? finds : []).filter(f => f && f.surveyId === openSurvey.id);
         const findsCopy   = linkedFinds.map(f => JSON.parse(JSON.stringify(f)));
 
