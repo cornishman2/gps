@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V9
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5849,6 +5849,8 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
 
     if (Array.isArray(importedSurvey.targets)) {
         for (const t of importedSurvey.targets) {
+            // Normalize stakes: Target ID / VDI -100
+            try { if (t && typeof isStakeTarget === 'function' && isStakeTarget(t)) t.type = 'Stake'; } catch (_) {}
             if (Array.isArray(t.photoFiles)) allPhotoPaths.push(...t.photoFiles);
         }
     }
@@ -5919,38 +5921,35 @@ importedSurvey.surveyPhotoData = '';
         let tIndex = 0;
         let importedTargetsThisZip = 0;
 
-        const _isStakeImport = (t) => {
-            if (!t || typeof t !== 'object') return false;
-            if (t.type === 'Stake') return true;
-            const v = (t.vdi ?? t.targetId ?? t.targetID ?? t.target_id);
-            const n = Number(String(v).trim());
-            return Number.isFinite(n) && n === -100;
-        };
-
-        const _newTargets = [];
-        let _limitWarned = false;
-
         for (const t of importedSurvey.targets) {
-            tIndex++;
-
-            const isStake = _isStakeImport(t);
-            if (isStake) {
-                // Normalise stakes so they’re treated consistently across the app
-                t.type = 'Stake';
-                t.vdi = -100;
-            }
-
-            // LIMITS: stakes do NOT count towards max targets
-            if (!isStake) {
-                if (importedTargetsThisZip >= remainingTargets) {
-                    if (!_limitWarned) {
-                        log(`LIMIT: Max targets reached (${limits?.maxTargets}). Skipping additional targets (stakes will still import).`);
-                        _limitWarned = true;
-                    }
-                    continue; // skip this non-stake target
+            // Normalize stakes: Target ID / VDI -100
+            try { if (t && typeof isStakeTarget === 'function' && isStakeTarget(t)) t.type = 'Stake'; } catch (_) {}
+            // Coerce older exports that stored booleans as strings (e.g. deleted: "false")
+            if (t && typeof t === 'object') {
+                if (typeof t.deleted === 'string') t.deleted = (t.deleted.toLowerCase() === 'true');
+                if (typeof t.isFind === 'string') t.isFind = (t.isFind.toLowerCase() === 'true');
+                if (typeof t.isVisible === 'string') t.isVisible = (t.isVisible.toLowerCase() === 'true');
+                // Some older targets used "targetId" or "targetID" as strings
+                if (t.targetId !== undefined && typeof t.targetId === 'string' && t.targetId.trim() !== '' && !isNaN(Number(t.targetId))) {
+                    t.targetId = Number(t.targetId);
                 }
-                importedTargetsThisZip++;
+                if (t.targetID !== undefined && typeof t.targetID === 'string' && t.targetID.trim() !== '' && !isNaN(Number(t.targetID))) {
+                    t.targetID = Number(t.targetID);
+                }
+                if (t.vdi !== undefined && typeof t.vdi === 'string' && t.vdi.trim() !== '' && !isNaN(Number(t.vdi))) {
+                    t.vdi = Number(t.vdi);
+                }
             }
+            // LIMITS: stop importing targets once we hit remaining slots
+            if (importedTargetsThisZip >= remainingTargets) {
+                log(`LIMIT: Max targets reached (${limits?.maxTargets}). Stopping target import.`);
+                // Keep only targets already processed
+                importedSurvey.targets = importedSurvey.targets.slice(0, tIndex);
+                break;
+            }
+
+            tIndex++;
+            importedTargetsThisZip++;
 
             if (!t.id) t.id = generateId();
 
@@ -5974,14 +5973,8 @@ importedSurvey.surveyPhotoData = '';
             t.targetPhotoData = '';
             delete t.photoFiles;
 
-            _newTargets.push(t);
-
             if (tIndex % 10 === 0) log(`  Targets processed: ${tIndex}/${importedSurvey.targets.length}`);
         }
-
-        importedSurvey.targets = _newTargets;
-
-
 
         // ---- Finds ----
         log(`Restoring ${importedFinds.length} finds...`);
@@ -11031,16 +11024,10 @@ function renderSurveyCard(survey, isOpen = false) {
     const changedStr = formatDateDMY(survey.dateLastChanged);
 
     // Counts (safe)
-    const _isStakeTarget = (t) => {
-        if (!t || typeof t !== 'object') return false;
-        if (t.type === 'Stake') return true;
-        const v = (t.vdi ?? t.targetId ?? t.targetID ?? t.target_id);
-        const n = Number(String(v).trim());
-        return Number.isFinite(n) && n === -100;
-    };
-    const _allTargets = Array.isArray(survey.targets) ? survey.targets : [];
-    const stakesCount  = _allTargets.filter(_isStakeTarget).length;
-    const targetsCount = _allTargets.length - stakesCount;
+    /* counts computed below */
+    const allTargetsArr = Array.isArray(survey.targets) ? survey.targets : [];
+    const stakesCount  = allTargetsArr.filter(t => t && (t.type === 'Stake' || isStakeTarget(t))).length;
+    const targetsCount = allTargetsArr.filter(t => t && !(t.type === 'Stake' || isStakeTarget(t))).length;
     const findsCount   = Array.isArray(finds) ? finds.filter(f => f && f.surveyId === survey.id).length : 0;
 
     return `
