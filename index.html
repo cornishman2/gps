@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5741,47 +5741,6 @@ async function handleSurveyWithPhotosImport(event) {
     });
 }
         
-
-function closeOpenSurveyBeforeImport(log) {
-    try {
-        const now = Date.now();
-        let closedAny = false;
-
-        if (!Array.isArray(surveys)) return false;
-
-        for (const s of surveys) {
-            if (s && s.status === 'Open') {
-                s.status = 'Active';
-                s.dateLastChanged = now;
-                closedAny = true;
-            }
-        }
-
-        if (closedAny) {
-            // Stop any tracking/recording tied to the previously open survey (safety)
-            if (typeof resetLiveTrackingAndRecordingState === 'function') {
-                try { resetLiveTrackingAndRecordingState(); } catch (_) {}
-            }
-
-            if (typeof saveSurveysToLocalStorage === 'function') {
-                saveSurveysToLocalStorage();
-            } else if (typeof saveDataToLocalStorage === 'function') {
-                saveDataToLocalStorage();
-            }
-
-            if (typeof showMessage === 'function') {
-                showMessage('Open survey was closed before import.', 'info');
-            }
-            if (typeof log === 'function') log('NOTICE: Closed currently open survey before import.');
-        }
-
-        return closedAny;
-    } catch (e) {
-        console.error('closeOpenSurveyBeforeImport error:', e);
-        return false;
-    }
-}
-
 async function performSurveyZipImport(zip, jsonText, filename, log) {
     let payload;
 
@@ -5800,16 +5759,8 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
         return;
     }
 
-    
-    // IMPORTANT: importing while a survey is Open can confuse the Home page state.
-    // Close any currently open survey BEFORE applying imported data.
-    closeOpenSurveyBeforeImport(log);
-const importedSurvey = payload.survey;
-    
-
-    // Safety: Never allow an imported survey to arrive in Open state
-    if (importedSurvey && importedSurvey.status === 'Open') importedSurvey.status = 'Active';
-const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
+    const importedSurvey = payload.survey;
+    const importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
 
     // Backwards/forwards compatibility: ensure newly added Survey fields exist (blank if missing)
@@ -5968,17 +5919,38 @@ importedSurvey.surveyPhotoData = '';
         let tIndex = 0;
         let importedTargetsThisZip = 0;
 
+        const _isStakeImport = (t) => {
+            if (!t || typeof t !== 'object') return false;
+            if (t.type === 'Stake') return true;
+            const v = (t.vdi ?? t.targetId ?? t.targetID ?? t.target_id);
+            const n = Number(String(v).trim());
+            return Number.isFinite(n) && n === -100;
+        };
+
+        const _newTargets = [];
+        let _limitWarned = false;
+
         for (const t of importedSurvey.targets) {
-            // LIMITS: stop importing targets once we hit remaining slots
-            if (importedTargetsThisZip >= remainingTargets) {
-                log(`LIMIT: Max targets reached (${limits?.maxTargets}). Stopping target import.`);
-                // Keep only targets already processed
-                importedSurvey.targets = importedSurvey.targets.slice(0, tIndex);
-                break;
+            tIndex++;
+
+            const isStake = _isStakeImport(t);
+            if (isStake) {
+                // Normalise stakes so they’re treated consistently across the app
+                t.type = 'Stake';
+                t.vdi = -100;
             }
 
-            tIndex++;
-            importedTargetsThisZip++;
+            // LIMITS: stakes do NOT count towards max targets
+            if (!isStake) {
+                if (importedTargetsThisZip >= remainingTargets) {
+                    if (!_limitWarned) {
+                        log(`LIMIT: Max targets reached (${limits?.maxTargets}). Skipping additional targets (stakes will still import).`);
+                        _limitWarned = true;
+                    }
+                    continue; // skip this non-stake target
+                }
+                importedTargetsThisZip++;
+            }
 
             if (!t.id) t.id = generateId();
 
@@ -6002,8 +5974,14 @@ importedSurvey.surveyPhotoData = '';
             t.targetPhotoData = '';
             delete t.photoFiles;
 
+            _newTargets.push(t);
+
             if (tIndex % 10 === 0) log(`  Targets processed: ${tIndex}/${importedSurvey.targets.length}`);
         }
+
+        importedSurvey.targets = _newTargets;
+
+
 
         // ---- Finds ----
         log(`Restoring ${importedFinds.length} finds...`);
@@ -11053,8 +11031,16 @@ function renderSurveyCard(survey, isOpen = false) {
     const changedStr = formatDateDMY(survey.dateLastChanged);
 
     // Counts (safe)
-    const targetsCount = Array.isArray(survey.targets) ? survey.targets.length : 0;
-    const stakesCount  = Array.isArray(survey.targets) ? survey.targets.filter(t => t && t.type === 'Stake').length : 0;
+    const _isStakeTarget = (t) => {
+        if (!t || typeof t !== 'object') return false;
+        if (t.type === 'Stake') return true;
+        const v = (t.vdi ?? t.targetId ?? t.targetID ?? t.target_id);
+        const n = Number(String(v).trim());
+        return Number.isFinite(n) && n === -100;
+    };
+    const _allTargets = Array.isArray(survey.targets) ? survey.targets : [];
+    const stakesCount  = _allTargets.filter(_isStakeTarget).length;
+    const targetsCount = _allTargets.length - stakesCount;
     const findsCount   = Array.isArray(finds) ? finds.filter(f => f && f.surveyId === survey.id).length : 0;
 
     return `
@@ -15521,16 +15507,8 @@ async function performSurveyImport(text, filename, log) {
         return;
     }
 
-    
-    // IMPORTANT: importing while a survey is Open can confuse the Home page state.
-    // Close any currently open survey BEFORE applying imported data.
-    closeOpenSurveyBeforeImport(log);
-let importedSurvey = payload.survey;
-    
-
-    // Safety: Never allow an imported survey to arrive in Open state
-    if (importedSurvey && importedSurvey.status === 'Open') importedSurvey.status = 'Active';
-let importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
+    let importedSurvey = payload.survey;
+    let importedFinds  = Array.isArray(payload.finds) ? payload.finds : [];
 
 
     // Backwards/forwards compatibility: ensure newly added Survey fields exist (blank if missing)
