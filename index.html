@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V12
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11004,8 +11004,10 @@ function renderSurveyCard(survey, isOpen = false) {
     const changedStr = formatDateDMY(survey.dateLastChanged);
 
     // Counts (safe)
-    const targetsCount = Array.isArray(survey.targets) ? survey.targets.length : 0;
-    const stakesCount  = Array.isArray(survey.targets) ? survey.targets.filter(t => t && t.type === 'Stake').length : 0;
+    const allPins = Array.isArray(survey.targets) ? survey.targets.filter(t => t && !t.deleted) : [];
+    const isStake = (t) => !!(t && (t.type === 'Stake' || (typeof isStakeTarget === 'function' && isStakeTarget(t))));
+    const stakesCount  = allPins.filter(isStake).length;
+    const targetsCount = allPins.filter(t => !isStake(t)).length;
     const findsCount   = Array.isArray(finds) ? finds.filter(f => f && f.surveyId === survey.id).length : 0;
 
     return `
