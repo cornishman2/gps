@@ -73,35 +73,14 @@
             border-radius: 12px;
             max-width: 500px;
         }
-    
-/* --- HARD MAP SIZE (self-healing) --- */
-.detekta-map-wrap{
-  height:42vh;
-  max-height:520px;
-  min-height:260px;
-  width:100%;
-  flex:0 0 auto;
-  position:relative;
-  overflow:hidden;
-}
-/* Apply to the main compass map container (renderTargetPlot uses this id) */
-#target-map-container{
-  height:42vh;
-  max-height:520px;
-  min-height:260px;
-  width:100%;
-  flex:0 0 auto;
-  position:relative;
-  overflow:hidden;
-}
-</style>
+    </style>
 </head>
 <body class="min-h-screen">
 
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V16
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V17
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6496,7 +6475,6 @@ switch (currentPage) {
             appContent.innerHTML = contentHtml;
             // Re-attach event listeners specific to the rendered page
             attachPageEventListeners();
-            try { if (currentPage === 'Compass' && typeof normalizeMainMapSize === 'function') normalizeMainMapSize(); } catch(e) {}
             // Update Home storage figures after DOM is in place
             if (currentPage === 'Home') { setTimeout(() => { updateHomeStorageStats(); }, 0); }
             updateActiveNavButtons();
@@ -7447,8 +7425,7 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
     if (appContent) {
         appContent.innerHTML = renderCompassPage(true);
         attachPageEventListeners();
-            try { if (typeof normalizeMainMapSize === 'function') normalizeMainMapSize(); } catch(e) {}
-}
+    }
 }
 
 
@@ -8123,7 +8100,6 @@ function updateMapWithUserLocationAndRender() {
 
     appContent.innerHTML = renderCompassPage(true);
     attachPageEventListeners();
-        try { if (typeof normalizeMainMapSize === 'function') normalizeMainMapSize(); } catch(e) {}
 }
     /** Shows a temporary, highly visible notification toast (top-centre). */
 function showMessage(message, type = 'info') {
@@ -10177,8 +10153,7 @@ case 'edit': {
         if (appContent) {
             appContent.innerHTML = renderCompassPage(true);
             attachPageEventListeners();
-                try { if (typeof normalizeMainMapSize === 'function') normalizeMainMapSize(); } catch(e) {}
-}
+        }
     }
 }
 // ------------------------------------------------------
@@ -11724,42 +11699,14 @@ function rerenderCompassIfActive() {
     }
 }
 
-
-/**
- * HARD reset the compass map container size.
- * This protects against rare layout states where the map grows vertically until app reset.
- * Called after every Compass render (and after some Compass re-renders).
- */
-function normalizeMainMapSize() {
-    const el = document.getElementById('target-map-container') || document.querySelector('.detekta-map-wrap');
-    if (!el) return;
-
-    // Clear any sticky inline sizing / flex from prior renders or accidental toggles
-    el.style.height = '';
-    el.style.minHeight = '';
-    el.style.maxHeight = '';
-    el.style.flex = '';
-    el.style.alignSelf = '';
-    el.style.top = '';
-    el.style.bottom = '';
-
-    // Re-assert the known-good sizing
-    el.classList.add('detekta-map-wrap');
-
-    // One more frame later (helps when fonts/images cause layout shifts)
-    requestAnimationFrame(() => {
-        el.classList.add('detekta-map-wrap');
-    });
-}
-
 function zoomMapIn(event) {
-    if (event) event.stopPropagation();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     mapZoom = Math.min(MAP_ZOOM_MAX, mapZoom + MAP_ZOOM_STEP);
     rerenderCompassIfActive();
 }
 
 function zoomMapOut(event) {
-    if (event) event.stopPropagation();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     mapZoom = Math.max(MAP_ZOOM_MIN, mapZoom - MAP_ZOOM_STEP);
     rerenderCompassIfActive();
 }
@@ -11772,6 +11719,11 @@ function resetMapView(event) {
     mapOffsetX = 0;
     mapOffsetY = 0;
 
+
+    // Also ensure fullscreen is exited (prevents 'stuck tall map')
+    if (typeof isMapFullscreen !== 'undefined') {
+        isMapFullscreen = false;
+    }
     // Clear any "centre on map" target flag (open survey only)
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (openSurvey && Array.isArray(openSurvey.targets)) {
@@ -12485,14 +12437,17 @@ const drawTracks = showMapTracks ? visibleTracks : [];
 }
         
     /** Toggles the map state and re-renders immediately. */
-function toggleMapFullscreen() {
-    // Toggle the state variable
+function toggleMapFullscreen(event) {
+    // Prevent accidental fullscreen toggles when clicking UI controls/pins
+    if (event && event.target && event.target.closest) {
+        if (event.target.closest('.map-zoom-controls') || event.target.closest('.map-pin') || event.target.closest('button')) {
+            return;
+        }
+    }
+
     isMapFullscreen = !isMapFullscreen;
-    
-    // Re-render the page immediately so the new class is applied
-    // This also resets the auto-refresh timer, which is fine.
-    render(); 
-}  
+    render();
+}
 
 function renderNavigationMiniMapSimple({
     targetLat, targetLon,
@@ -15790,8 +15745,7 @@ if (gpsBtn) {
             if (appContent) {
                 appContent.innerHTML = renderCompassPage(true);
                 attachPageEventListeners();
-                    try { if (typeof normalizeMainMapSize === 'function') normalizeMainMapSize(); } catch(e) {}
-}
+            }
         }
     });
 }
