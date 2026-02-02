@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V18
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V15
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -149,9 +149,6 @@
                         class="max-h-screen w-auto rounded-lg border border-gray-700"
                     >
                 </div>
-
-
-    <div id="edit-find-createdat" class="text-xs text-gray-500 mb-4"></div>
 
             <!-- “1 of N” text -->
             <p id="photo-gallery-caption" class="mt-3 text-center text-sm text-gray-300"></p>
@@ -5523,14 +5520,6 @@ async function openEditFindModal(findId) {
     form['findCoords'].value       = find.coordinates || '';
     form['findAccuracy'].value     = find.accuracy || '';
 
-    // Logged date/time (read-only)
-    const createdEl = document.getElementById('edit-find-createdat');
-    if (createdEl) {
-        const dt = find.createdAt ? formatDateTime(find.createdAt) : '';
-        createdEl.textContent = dt ? `Logged: ${dt}` : '';
-    }
-
-
 
     // New optional fields (Find data model v1)
     if (form['findIdentification'])  form['findIdentification'].value = find.identification || '';
@@ -6163,22 +6152,18 @@ function formatDate(timestamp) {
     return `${dd}/${mm}/${yy}`;
 }
 
-function formatDateTime(timestamp) {
+/** Formats a timestamp as DD/MM/YY HH:MM (24h). */
+function formatDateTimeShort(timestamp) {
     if (timestamp === null || timestamp === undefined || timestamp === '') return '';
-
     const d = new Date(timestamp);
     if (Number.isNaN(d.getTime())) return '';
-
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yy = String(d.getFullYear()).slice(-2);
-
     const hh = String(d.getHours()).padStart(2, '0');
     const mi = String(d.getMinutes()).padStart(2, '0');
-
     return `${dd}/${mm}/${yy} ${hh}:${mi}`;
 }
-
 
 /**
  * Normalizes survey permission dates into DD/MM/YY.
@@ -11162,24 +11147,6 @@ function renderFindsPage() {
     });
     const typeOptions = Array.from(typeSet).sort();
 
-    // Build distinct Date options (dd/mm/yy) based on createdAt
-    const dateMap = new Map();
-    finds.forEach(f => {
-        if (!f || !f.createdAt) return;
-        const d = new Date(f.createdAt);
-        if (Number.isNaN(d.getTime())) return;
-        // key shown to user
-        const key = formatDate(d);
-        if (!key) return;
-        // normalize to midnight for stable sorting
-        const dayTs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-        if (!dateMap.has(key)) dateMap.set(key, dayTs);
-    });
-    const dateOptions = Array.from(dateMap.entries())
-        .sort((a,b) => b[1] - a[1])
-        .map(([k]) => ({ key: k }));
-
-
     // Build distinct Survey options (by ID)
     const surveyMap = new Map();
     finds.forEach(f => {
@@ -11192,6 +11159,22 @@ function renderFindsPage() {
     const surveyOptions = Array.from(surveyMap.entries())
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Build distinct Date options (DD/MM/YY from createdAt)
+    const dateTsMap = new Map(); // label -> max timestamp for sorting
+    finds.forEach(f => {
+        if (!f || !f.createdAt) return;
+        const label = formatDate(f.createdAt);
+        if (!label) return;
+        const ts = new Date(f.createdAt).getTime();
+        const prev = dateTsMap.get(label);
+        if (!prev || ts > prev) dateTsMap.set(label, ts);
+    });
+    const dateOptions = Array.from(dateTsMap.entries())
+        .map(([label, ts]) => ({ label, ts }))
+        .sort((a, b) => b.ts - a.ts)  // newest first
+        .map(x => x.label);
+
 
     // Apply filters
     const filteredFinds = finds.filter(f => {
@@ -11219,10 +11202,10 @@ function renderFindsPage() {
             if (t !== findsFilter.type) return false;
         }
 
-        // Date filter
+        // Date filter (matches logged date)
         if (findsFilter.date !== 'All') {
-            const dKey = f.createdAt ? formatDate(f.createdAt) : '';
-            if (dKey !== findsFilter.date) return false;
+            const dLabel = f.createdAt ? formatDate(f.createdAt) : '';
+            if (dLabel !== findsFilter.date) return false;
         }
 
         // Survey filter
@@ -11238,7 +11221,7 @@ function renderFindsPage() {
     const filteredCount = filteredFinds.length;
 
     const cardsHtml = filteredFinds.map(find => {
-        const dateText  = find.createdAt ? formatDateTime(find.createdAt) : '';
+        const dateText  = find.createdAt ? formatDateTimeShort(find.createdAt) : '';
         const typeLabel = find.type || 'Unknown';
 
         // --- Thumbnail + photo count (IndexedDB-aware, like Targets) ---
@@ -11307,7 +11290,7 @@ function renderFindsPage() {
                         </p>
                         ${
                             dateText
-                                ? `<p class="text-xs text-gray-400 mt-1">Logged: ${dateText}</p>`
+                                ? `<p class="text-xs text-gray-400 mt-1">Saved: ${dateText}</p>`
                                 : ''
                         }
                     </div>
@@ -11371,7 +11354,7 @@ function renderFindsPage() {
     const dateOptionsHtml = [
         '<option value="All">All Dates</option>',
         ...dateOptions.map(d =>
-            `<option value="${d.key}" ${findsFilter.date === d.key ? 'selected' : ''}>${d.key}</option>`
+            `<option value="${d}" ${findsFilter.date === d ? 'selected' : ''}>${d}</option>`
         )
     ].join('');
 
@@ -11771,13 +11754,13 @@ function rerenderCompassIfActive() {
 }
 
 function zoomMapIn(event) {
-    if (event) event.stopPropagation();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     mapZoom = Math.min(MAP_ZOOM_MAX, mapZoom + MAP_ZOOM_STEP);
     rerenderCompassIfActive();
 }
 
 function zoomMapOut(event) {
-    if (event) event.stopPropagation();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     mapZoom = Math.max(MAP_ZOOM_MIN, mapZoom - MAP_ZOOM_STEP);
     rerenderCompassIfActive();
 }
@@ -11790,6 +11773,11 @@ function resetMapView(event) {
     mapOffsetX = 0;
     mapOffsetY = 0;
 
+
+    // Also ensure fullscreen is exited (prevents 'stuck tall map')
+    if (typeof isMapFullscreen !== 'undefined') {
+        isMapFullscreen = false;
+    }
     // Clear any "centre on map" target flag (open survey only)
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (openSurvey && Array.isArray(openSurvey.targets)) {
@@ -12503,14 +12491,17 @@ const drawTracks = showMapTracks ? visibleTracks : [];
 }
         
     /** Toggles the map state and re-renders immediately. */
-function toggleMapFullscreen() {
-    // Toggle the state variable
+function toggleMapFullscreen(event) {
+    // Prevent accidental fullscreen toggles when clicking UI controls/pins
+    if (event && event.target && event.target.closest) {
+        if (event.target.closest('.map-zoom-controls') || event.target.closest('.map-pin') || event.target.closest('button')) {
+            return;
+        }
+    }
+
     isMapFullscreen = !isMapFullscreen;
-    
-    // Re-render the page immediately so the new class is applied
-    // This also resets the auto-refresh timer, which is fine.
-    render(); 
-}  
+    render();
+}
 
 function renderNavigationMiniMapSimple({
     targetLat, targetLon,
@@ -16030,7 +16021,8 @@ if (stakeBtn) {
         
     // 5. Finds Page Filter Listeners
     const findsSearchInput = document.getElementById('finds-search-input');
-    const findsTypeSelect = document.getElementById('finds-type-select');
+        const findsTypeSelect = document.getElementById('finds-type-select');
+    const findsDateSelect = document.getElementById('finds-date-select');
     const findsSurveySelect = document.getElementById('finds-survey-select');
     const clearFindsBtn = document.getElementById('clear-finds-filters-btn');
 
@@ -16046,6 +16038,12 @@ if (stakeBtn) {
             render();
         });
     }
+    if (findsDateSelect) {
+        findsDateSelect.addEventListener('change', (e) => {
+            findsFilter.date = e.target.value || 'All';
+            render();
+        });
+    }
     if (findsSurveySelect) {
         findsSurveySelect.addEventListener('change', (e) => {
             findsFilter.surveyId = e.target.value || 'All';
@@ -16054,7 +16052,7 @@ if (stakeBtn) {
     }
     if (clearFindsBtn) {
         clearFindsBtn.addEventListener('click', () => {
-            findsFilter = { query: '', type: 'All', surveyId: 'All' };
+            findsFilter = { query: '', type: 'All', date: 'All', surveyId: 'All' };
             render();
         });
     }
