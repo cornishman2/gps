@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V15
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V16
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6286,6 +6286,9 @@ function createFindFromTarget(target, survey) {
         photos: photoRefs,              // IndexedDB references (idb:...)
         findPhotoRef: primaryRef,       // first ref for convenience
 
+        // Logged date/time
+        dateCreated: Date.now(),
+
         // Metadata
         statusAtSave: target.status || '',
         user: target.user || userProfile.name || '',
@@ -11185,7 +11188,24 @@ function renderFindsPage() {
     const filteredCount = filteredFinds.length;
 
     const cardsHtml = filteredFinds.map(find => {
-        const dateText  = find.createdAt ? formatDate(find.createdAt) : '';
+        const tsRaw = (find.dateCreated ?? find.createdAt ?? find.time ?? find.dateLastChanged ?? null);
+        let ts = null;
+        if (typeof tsRaw === 'number') {
+            ts = tsRaw;
+        } else if (typeof tsRaw === 'string' && tsRaw.trim()) {
+            const parsed = Date.parse(tsRaw);
+            if (!Number.isNaN(parsed)) ts = parsed;
+        }
+
+        const dateText = ts
+            ? new Date(ts).toLocaleString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            : '';
         const typeLabel = find.type || 'Unknown';
 
         // --- Thumbnail + photo count (IndexedDB-aware, like Targets) ---
@@ -11254,7 +11274,7 @@ function renderFindsPage() {
                         </p>
                         ${
                             dateText
-                                ? `<p class="text-xs text-gray-400 mt-1">Saved: ${dateText}</p>`
+                                ? `<p class="text-xs text-gray-400 mt-1">Logged: ${dateText}</p>`
                                 : ''
                         }
                     </div>
@@ -15912,7 +15932,7 @@ if (trackEditButtons && trackEditButtons.length > 0) {
             }
             photoSettings.maxWidth = Math.round(val);
             savePhotoSettingsToLocalStorage();
-            showMessage(val === 0 ? 'Resizing disabled.' : `Saved: ${photoSettings.maxWidth}px.`, 'success');
+            showMessage(val === 0 ? 'Resizing disabled.' : `Logged: ${photoSettings.maxWidth}px.`, 'success');
         });
     }
 
