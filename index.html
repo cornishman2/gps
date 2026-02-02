@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V19
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V15
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1630,7 +1630,6 @@ let lastGpsUiRefreshMs = 0;
 let findsFilter = {
     query: '',
     type: 'All',
-    date: 'All',
     surveyId: 'All'
 };
 
@@ -6150,19 +6149,6 @@ function formatDate(timestamp) {
     const yy = String(d.getFullYear()).slice(-2);
 
     return `${dd}/${mm}/${yy}`;
-}
-
-/** Formats a timestamp as DD/MM/YY HH:MM (24h). */
-function formatDateTimeShort(timestamp) {
-    if (timestamp === null || timestamp === undefined || timestamp === '') return '';
-    const d = new Date(timestamp);
-    if (Number.isNaN(d.getTime())) return '';
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yy = String(d.getFullYear()).slice(-2);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mi = String(d.getMinutes()).padStart(2, '0');
-    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
 }
 
 /**
@@ -11160,22 +11146,6 @@ function renderFindsPage() {
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
-    // Build distinct Date options (DD/MM/YY from createdAt)
-    const dateTsMap = new Map(); // label -> max timestamp for sorting
-    finds.forEach(f => {
-        if (!f || !f.createdAt) return;
-        const label = formatDate(f.createdAt);
-        if (!label) return;
-        const ts = new Date(f.createdAt).getTime();
-        const prev = dateTsMap.get(label);
-        if (!prev || ts > prev) dateTsMap.set(label, ts);
-    });
-    const dateOptions = Array.from(dateTsMap.entries())
-        .map(([label, ts]) => ({ label, ts }))
-        .sort((a, b) => b.ts - a.ts)  // newest first
-        .map(x => x.label);
-
-
     // Apply filters
     const filteredFinds = finds.filter(f => {
         // Text search (in several fields)
@@ -11202,12 +11172,6 @@ function renderFindsPage() {
             if (t !== findsFilter.type) return false;
         }
 
-        // Date filter (matches logged date)
-        if (findsFilter.date !== 'All') {
-            const dLabel = f.createdAt ? formatDate(f.createdAt) : '';
-            if (dLabel !== findsFilter.date) return false;
-        }
-
         // Survey filter
         if (findsFilter.surveyId !== 'All') {
             const id = f.surveyId || 'unknown';
@@ -11221,7 +11185,7 @@ function renderFindsPage() {
     const filteredCount = filteredFinds.length;
 
     const cardsHtml = filteredFinds.map(find => {
-        const dateText  = find.createdAt ? formatDateTimeShort(find.createdAt) : '';
+        const dateText  = find.createdAt ? formatDate(find.createdAt) : '';
         const typeLabel = find.type || 'Unknown';
 
         // --- Thumbnail + photo count (IndexedDB-aware, like Targets) ---
@@ -11351,13 +11315,6 @@ function renderFindsPage() {
         )
     ].join('');
 
-    const dateOptionsHtml = [
-        '<option value="All">All Dates</option>',
-        ...dateOptions.map(d =>
-            `<option value="${d}" ${findsFilter.date === d ? 'selected' : ''}>${d}</option>`
-        )
-    ].join('');
-
     const surveyOptionsHtml = [
         '<option value="All">All Surveys</option>',
         ...surveyOptions.map(({ id, name }) =>
@@ -11400,17 +11357,6 @@ function renderFindsPage() {
                             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         >
                             ${typesOptionsHtml}
-                        </select>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-semibold text-gray-600 mb-1" for="finds-date-select">
-                            Filter by date
-                        </label>
-                        <select
-                            id="finds-date-select"
-                            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                        >
-                            ${dateOptionsHtml}
                         </select>
                     </div>
                     <div class="flex-1">
@@ -16021,8 +15967,7 @@ if (stakeBtn) {
         
     // 5. Finds Page Filter Listeners
     const findsSearchInput = document.getElementById('finds-search-input');
-        const findsTypeSelect = document.getElementById('finds-type-select');
-    const findsDateSelect = document.getElementById('finds-date-select');
+    const findsTypeSelect = document.getElementById('finds-type-select');
     const findsSurveySelect = document.getElementById('finds-survey-select');
     const clearFindsBtn = document.getElementById('clear-finds-filters-btn');
 
@@ -16038,12 +15983,6 @@ if (stakeBtn) {
             render();
         });
     }
-    if (findsDateSelect) {
-        findsDateSelect.addEventListener('change', (e) => {
-            findsFilter.date = e.target.value || 'All';
-            render();
-        });
-    }
     if (findsSurveySelect) {
         findsSurveySelect.addEventListener('change', (e) => {
             findsFilter.surveyId = e.target.value || 'All';
@@ -16052,7 +15991,7 @@ if (stakeBtn) {
     }
     if (clearFindsBtn) {
         clearFindsBtn.addEventListener('click', () => {
-            findsFilter = { query: '', type: 'All', date: 'All', surveyId: 'All' };
+            findsFilter = { query: '', type: 'All', surveyId: 'All' };
             render();
         });
     }
