@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V9
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -14906,28 +14906,45 @@ function formatReportDateTime(ts) {
 }
 
 /** Get a formatted Logged Date/Time string for a target or find (for the PDF Survey Report). */
+
 function formatReportLoggedDateTime(item, kind) {
-    if (!item) return '';
+    if (!item) return 'Not recorded';
     let ts = null;
+
     if (kind === 'target') {
         ts = item.time ?? item.dateCreated ?? item.creationDate ?? item.dateLastChanged ?? null;
     } else { // find
         ts = item.dateCreated ?? item.createdAt ?? item.time ?? item.dateLastChanged ?? null;
     }
-    let out = '';
 
-    // If ISO string stored
+    // ISO string
     if (typeof ts === 'string') {
         const s = ts.trim();
-        if (s) out = formatReportDateTime(s);
-    } else if (typeof ts === 'number' && isFinite(ts) && ts > 0) {
-        out = formatReportDateTime(ts);
-    } else {
-        out = '';
+        if (s) {
+            const d = new Date(s);
+            if (isFinite(d)) {
+                return d.toLocaleString('en-GB', {
+                    day: '2-digit', month: '2-digit', year: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+        }
     }
 
-    return out || '';
+    // Numeric timestamp (ms)
+    if (typeof ts === 'number' && isFinite(ts) && ts > 0) {
+        const d = new Date(ts);
+        if (isFinite(d)) {
+            return d.toLocaleString('en-GB', {
+                day: '2-digit', month: '2-digit', year: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+    }
+
+    return 'Not recorded';
 }
+
 
 
 /** Returns an array of survey photo refs in display order. Supports both multi-photo surveys and legacy single photo. */
@@ -15132,7 +15149,7 @@ async function exportSurveyReportPdf() {
             : surveyTargets.map(t => {
                 const type = t.type || 'Target';
                 const vdi  = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '') ? String(t.vdi) : '';
-                const logged = formatReportLoggedDateTime(t, 'target') || '';
+                const logged = formatReportLoggedDateTime(t, 'target');
                 const desc = (t.description || t.notes || '').trim();
 
                 const parts = [];
@@ -15166,7 +15183,7 @@ async function exportSurveyReportPdf() {
 
                 const descHtml = parts.map(p => String(p).replace(/</g,'&lt;')).join('<br>');
 
-                const logged = formatReportLoggedDateTime(f, 'find') || '';
+                const logged = formatReportLoggedDateTime(f, 'find');
 
                 return `<tr><td>${String(type).replace(/</g,'&lt;')}</td><td>${String(vdi).replace(/</g,'&lt;')}</td><td>${String(logged).replace(/</g,'&lt;')}</td><td>${descHtml}</td></tr>`;
             }).join('');
@@ -15280,7 +15297,7 @@ async function exportSurveyReportPdf() {
 
                 addLine('Type', type);
                 addLine('VDI', vdi);
-                addLine('Logged', formatReportLoggedDateTime(f, 'find') || '');
+                addLine('Logged', formatReportLoggedDateTime(f, 'find'));
 
                 // New fields (object-focused)
                 addLine('Identification', f.identification);
