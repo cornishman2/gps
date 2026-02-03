@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1381,6 +1381,9 @@
     <div id="edit-target-modal" class="modal">
         <div class="modal-content bg-white p-6 shadow-2xl">
             <h3 class="text-xl font-bold text-primary mb-4">Edit Target Details</h3>
+            <p id="edit-target-logged-datetime" class="text-xs text-gray-500 -mt-3 mb-4">
+                Logged: <span class="font-semibold text-gray-700" id="edit-target-logged-datetime-value">Not recorded</span>
+            </p>
             <form id="edit-target-form">
                 <input type="hidden" id="edit-target-id" name="targetId">
                 <input type="hidden" id="edit-survey-id" name="surveyId">
@@ -8910,7 +8913,13 @@ async function openTargetPhotoGallery(targetId, surveyId) {
         return;
     }
 
-    let photos = [];
+    
+    // Populate read-only Logged Date/Time (after target exists)
+    try {
+        const el = document.getElementById("edit-target-logged-datetime-value");
+        if (el) el.textContent = formatTargetLoggedDateTime(target);
+    } catch (e) {}
+let photos = [];
 
     if (Array.isArray(target.photos) && target.photos.length) {
         const first = target.photos[0];
@@ -9711,12 +9720,6 @@ async function showEditTargetModal(targetId, surveyId) {
     }
 
     const target = survey.targets.find(t => t.id === targetId);
-    
-    // Populate read-only Logged Date/Time
-    try {
-        const el = document.getElementById("edit-target-logged-datetime-value");
-        if (el) el.textContent = formatTargetLoggedDateTime(target);
-    } catch (e) {}
 if (!target) {
         showMessage('Error: Target not found.', 'error');
         return;
