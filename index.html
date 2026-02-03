@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -9729,6 +9729,19 @@ if (!target) {
     document.getElementById('edit-target-id').value = target.id;
     document.getElementById('edit-survey-id').value = survey.id;
     document.getElementById('current-edit-survey-name').textContent = survey.name;
+
+    // Populate read-only Logged Date/Time (robust: after modal is visible)
+    const setLogged = () => {
+        try {
+            const el = document.getElementById("edit-target-logged-datetime-value");
+            if (el) el.textContent = formatTargetLoggedDateTime(target);
+        } catch (e) {}
+    };
+    setLogged();
+    // In some builds the modal content mounts a moment later, so retry on next tick.
+    setTimeout(setLogged, 0);
+    setTimeout(setLogged, 50);
+
 
     document.getElementById('edit-target-description').value =
         typeof target.description === 'string' ? target.description : '';
