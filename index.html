@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11492,34 +11492,53 @@ function renderFindsPage() {
  * Format a target's logged timestamp as "dd/mm/yy, hh:mm" (UK).
  * Uses time, dateCreated, creationDate, or dateLastChanged (in that order).
  */
+
 function formatTargetLoggedDateTime(target) {
     if (!target) return 'Not recorded';
+
+    // Prefer explicit timestamp fields
     let ts = target.time ?? target.dateCreated ?? target.creationDate ?? target.dateLastChanged ?? null;
 
-    // ISO string
+    // ISO string timestamp
     if (typeof ts === 'string') {
         const s = ts.trim();
-        if (!s) return 'Not recorded';
-        const d = new Date(s);
-        if (!isFinite(d)) return 'Not recorded';
-        return d.toLocaleString('en-GB', {
-            day: '2-digit', month: '2-digit', year: '2-digit',
-            hour: '2-digit', minute: '2-digit'
-        });
+        if (s) {
+            const d = new Date(s);
+            if (isFinite(d)) {
+                return d.toLocaleString('en-GB', {
+                    day: '2-digit', month: '2-digit', year: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            }
+        }
+        ts = null;
     }
 
-    // epoch ms number
+    // Numeric timestamp (ms)
     if (typeof ts === 'number' && isFinite(ts) && ts > 0) {
         const d = new Date(ts);
-        if (!isFinite(d)) return 'Not recorded';
-        return d.toLocaleString('en-GB', {
-            day: '2-digit', month: '2-digit', year: '2-digit',
-            hour: '2-digit', minute: '2-digit'
-        });
+        if (isFinite(d)) {
+            return d.toLocaleString('en-GB', {
+                day: '2-digit', month: '2-digit', year: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+        ts = null;
     }
+
+    // Fallback: many targets default their description to "Logged <locale date/time>"
+    // If that pattern is present, display the part after "Logged " as-is.
+    try {
+        const desc = (typeof target.description === 'string') ? target.description.trim() : '';
+        if (desc.toLowerCase().startsWith('logged ')) {
+            const rest = desc.slice(7).trim();
+            if (rest) return rest;
+        }
+    } catch (e) {}
 
     return 'Not recorded';
 }
+
 
 function renderTargetCard(target, surveyId) {
     // Logged date/time (read-only display on card)
