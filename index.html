@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V11
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13940,7 +13940,48 @@ function renderSettingsPage() {
              placeholder="Unlimited" />
     </div>
 
-    <div>
+    
+        <!-- QUICK TARGET RANGE SETTINGS -->
+        <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-indigo-500 mt-4">
+            <h4 class="text-lg font-bold text-gray-800 mb-2">Quick Target Buttons</h4>
+            <p class="text-sm text-gray-600 mb-3">
+                Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour.
+            </p>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="text-left p-2 border-b">Colour</th>
+                            <th class="text-left p-2 border-b">Min ID</th>
+                            <th class="text-left p-2 border-b">Max ID</th>
+                            <th class="text-left p-2 border-b">Saved Target ID</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quick-target-ranges-tbody">
+                        <!-- rows injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mt-3">
+                <button id="quick-target-ranges-save-btn"
+                        type="button"
+                        class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-indigo-700 transition">
+                    Save Quick Target Settings
+                </button>
+                <button id="quick-target-ranges-reset-btn"
+                        type="button"
+                        class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow hover:bg-gray-300 transition">
+                    Reset to Defaults
+                </button>
+            </div>
+
+            <p class="text-xs text-gray-500 mt-2">
+                Note: Step 1 only — these values are saved now. In Step 2 we’ll make the Map page buttons use them.
+            </p>
+        </div>
+<div>
       <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-expiry-date">
         Expiration date
       </label>
@@ -16499,7 +16540,166 @@ async function importSurveyWithPhotosFromFile() {
     loadDataFromLocalStorage();
     attachNavDelegationOnce();   // your delegated nav handler
 
-    const APP_LIMITS_STORAGE_KEY = 'detekta_app_limits_v1';
+    
+// ===============================
+// Quick Target Range Settings
+// ===============================
+const QUICK_TARGET_RANGES_STORAGE_KEY = 'detekta_quick_target_ranges_v1';
+
+function getDefaultQuickTargetRanges() {
+    // Match the current compass-page rainbow button ranges (blue→sky→emerald→amber→red)
+    const defaults = [
+        { color: 'BLUE',   min: -7, max:  3, targetId: -2 },
+        { color: 'SKY',    min:  4, max: 11, targetId:  7 },
+        { color: 'GREEN',  min: 12, max: 18, targetId: 15 },
+        { color: 'AMBER',  min: 19, max: 26, targetId: 22 },
+        { color: 'RED',    min: 27, max: 40, targetId: 33 }
+    ];
+    // Ensure each targetId is within range (midpoint fallback if not)
+    for (const r of defaults) {
+        if (typeof r.targetId !== 'number' || r.targetId < r.min || r.targetId > r.max) {
+            r.targetId = Math.round((r.min + r.max) / 2);
+        }
+    }
+    return defaults;
+}
+    // --- Quick Target Range Settings (Settings page) ---
+    try {
+        const tbody = document.getElementById('quick-target-ranges-tbody');
+        const saveBtn = document.getElementById('quick-target-ranges-save-btn');
+        const resetBtn = document.getElementById('quick-target-ranges-reset-btn');
+
+        const colorClassMap = {
+            BLUE: 'text-blue-700',
+            SKY: 'text-sky-600',
+            GREEN: 'text-emerald-700',
+            AMBER: 'text-amber-700',
+            RED: 'text-red-700'
+        };
+
+        const renderQuickTargetRows = () => {
+            if (!tbody) return;
+            const ranges = loadQuickTargetRanges();
+            tbody.innerHTML = ranges.map((r, idx) => {
+                const cClass = colorClassMap[r.color] || 'text-gray-700';
+                return `
+                    <tr class="border-b last:border-b-0">
+                        <td class="p-2 font-extrabold ${cClass}">${r.color}</td>
+                        <td class="p-2">
+                            <input type="number" class="quick-target-min w-24 px-2 py-1 border rounded"
+                                   data-idx="${idx}" value="${r.min}">
+                        </td>
+                        <td class="p-2">
+                            <input type="number" class="quick-target-max w-24 px-2 py-1 border rounded"
+                                   data-idx="${idx}" value="${r.max}">
+                        </td>
+                        <td class="p-2">
+                            <input type="number" class="quick-target-id w-28 px-2 py-1 border rounded"
+                                   data-idx="${idx}" value="${r.targetId}">
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        };
+
+        const readQuickTargetRows = () => {
+            const ranges = loadQuickTargetRanges();
+            if (!tbody) return ranges;
+
+            const mins = Array.from(tbody.querySelectorAll('.quick-target-min'));
+            const maxs = Array.from(tbody.querySelectorAll('.quick-target-max'));
+            const ids  = Array.from(tbody.querySelectorAll('.quick-target-id'));
+
+            for (let i = 0; i < ranges.length; i++) {
+                const min = Number(mins[i]?.value);
+                const max = Number(maxs[i]?.value);
+                const tid = Number(ids[i]?.value);
+
+                if (!isFinite(min) || !isFinite(max) || min > max) {
+                    throw new Error(`Row ${i + 1}: Min must be <= Max.`);
+                }
+                if (!isFinite(tid)) {
+                    throw new Error(`Row ${i + 1}: Saved Target ID must be a number.`);
+                }
+                if (tid < min || tid > max) {
+                    throw new Error(`Row ${i + 1}: Saved Target ID must be within the range.`);
+                }
+
+                ranges[i] = { color: ranges[i].color, min, max, targetId: tid };
+            }
+            return ranges;
+        };
+
+        // Initial render (only if the table exists on this page)
+        renderQuickTargetRows();
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                try {
+                    const ranges = readQuickTargetRows();
+                    saveQuickTargetRanges(ranges);
+                    showMessage('Quick Target settings saved.', 'success');
+                } catch (e) {
+                    console.error('Quick Target settings save failed:', e);
+                    showMessage(e.message || 'Could not save Quick Target settings.', 'error');
+                }
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                try {
+                    saveQuickTargetRanges(getDefaultQuickTargetRanges());
+                    renderQuickTargetRows();
+                    showMessage('Quick Target settings reset to defaults.', 'success');
+                } catch (e) {
+                    console.error('Quick Target reset failed:', e);
+                    showMessage('Could not reset Quick Target settings.', 'error');
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Quick Target settings UI init skipped:', e);
+    }
+
+
+
+function loadQuickTargetRanges() {
+    try {
+        const raw = localStorage.getItem(QUICK_TARGET_RANGES_STORAGE_KEY);
+        if (!raw) return getDefaultQuickTargetRanges();
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr) || arr.length !== 5) return getDefaultQuickTargetRanges();
+        // Coerce + sanitize
+        const out = arr.map((r, i) => {
+            const d = getDefaultQuickTargetRanges()[i];
+            const color = (r && typeof r.color === 'string') ? r.color : d.color;
+            const min = Number(r?.min);
+            const max = Number(r?.max);
+            const targetId = Number(r?.targetId);
+            const saneMin = isFinite(min) ? min : d.min;
+            const saneMax = isFinite(max) ? max : d.max;
+            let saneTarget = isFinite(targetId) ? targetId : d.targetId;
+            if (saneMin > saneMax) {
+                return { color, min: d.min, max: d.max, targetId: d.targetId };
+            }
+            if (saneTarget < saneMin || saneTarget > saneMax) {
+                saneTarget = Math.round((saneMin + saneMax) / 2);
+            }
+            return { color, min: saneMin, max: saneMax, targetId: saneTarget };
+        });
+        return out;
+    } catch (e) {
+        console.warn('loadQuickTargetRanges failed:', e);
+        return getDefaultQuickTargetRanges();
+    }
+}
+
+function saveQuickTargetRanges(ranges) {
+    localStorage.setItem(QUICK_TARGET_RANGES_STORAGE_KEY, JSON.stringify(ranges));
+}
+
+const APP_LIMITS_STORAGE_KEY = 'detekta_app_limits_v1';
 
 function bootstrapAppLimitsIfMissing() {
     if (localStorage.getItem(APP_LIMITS_STORAGE_KEY)) return;
