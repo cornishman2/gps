@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4469,7 +4469,11 @@ async function fileToResizedDataUrl(file) {
 // --- TRACK RECORDING STATE ---
         let activeTrackSurveyId = null;
         let activeTrackId = null;
-        const TRACK_POINT_MIN_DISTANCE_METERS = 3; // only log a point if you've moved at least this far
+        const TRACK_POINT_MIN_DISTANCE_METERS = 0.8; // detector-style slow movement (metres)
+const TRACK_POINT_MIN_DIST_FOR_HEADING_METERS = 0.5; // record corners even with small steps
+const TRACK_POINT_HEADING_CHANGE_DEG = 35; // degrees
+const TRACK_POINT_FORCE_TIME_MS = 5000; // always record at least every N ms while recording
+const TRACK_POINT_MAX_JUMP_METERS = 25; // reject obvious GPS teleports
 
 function isAnyTrackRecording() {
     return Boolean(activeTrackId && activeTrackSurveyId);
@@ -7466,9 +7470,10 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
 
 
 
-            // NEW: if we’re recording a track, log a point using the smoothed location
-            if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
-                logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
+            // If we’re recording a track, log a point using the RAW GPS reading.
+            // (We still smooth the on-map user marker, but tracks should preserve corners in small grids.)
+            if (currentUserCoords && activeTrackId && activeTrackSurveyId) {
+                logPointToActiveTrack(currentUserCoords.lat, currentUserCoords.lon, accuracy);
             }
 
             // Track best accuracy (for logging/info)
@@ -13335,19 +13340,55 @@ function logPointToActiveTrack(lat, lon, accuracy) {
     const now = Date.now();
     const last = track.points[track.points.length - 1];
 
-    if (last) {
-        const dist = distanceMeters(last.lat, last.lon, lat, lon);
-        if (dist < TRACK_POINT_MIN_DISTANCE_METERS) {
-            // Too small a move – don’t clutter the track
+    // First point always logs
+    if (!last) {
+        track.points.push({
+            time: now,
+            lat,
+            lon,
+            accuracy: typeof accuracy === 'number' ? accuracy : null
+        });
+        saveSurveysToLocalStorage();
+        return;
+    }
+
+    const dist = distanceMeters(last.lat, last.lon, lat, lon);
+    const lastTime = typeof last.time === 'number' ? last.time : (now - 999999);
+    const dt = now - lastTime;
+
+    // Reject obvious GPS teleports (especially when accuracy is poor or time gap is small)
+    const acc = (typeof accuracy === 'number') ? accuracy : null;
+    if (dist > TRACK_POINT_MAX_JUMP_METERS) {
+        const poorAcc = (acc !== null && acc > 20);
+        const shortGap = dt < 8000;
+        if (poorAcc || shortGap) {
             return;
         }
+    }
+
+    // Preserve corners: if heading changes sharply, keep the point even if movement is small.
+    let headingChangeAbs = 0;
+    const prev = track.points.length >= 2 ? track.points[track.points.length - 2] : null;
+    if (prev && typeof calculateBearingDegrees === 'function' && typeof _angleDiffSigned === 'function') {
+        const b1 = calculateBearingDegrees(prev.lat, prev.lon, last.lat, last.lon);
+        const b2 = calculateBearingDegrees(last.lat, last.lon, lat, lon);
+        headingChangeAbs = Math.abs(_angleDiffSigned(b2, b1));
+    }
+
+    const shouldRecord =
+        (dist >= TRACK_POINT_MIN_DISTANCE_METERS) ||
+        (dt >= TRACK_POINT_FORCE_TIME_MS) ||
+        (headingChangeAbs >= TRACK_POINT_HEADING_CHANGE_DEG && dist >= TRACK_POINT_MIN_DIST_FOR_HEADING_METERS);
+
+    if (!shouldRecord) {
+        return;
     }
 
     track.points.push({
         time: now,
         lat,
         lon,
-        accuracy: typeof accuracy === 'number' ? accuracy : null
+        accuracy: acc
     });
 
     saveSurveysToLocalStorage();
