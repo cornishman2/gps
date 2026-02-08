@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2021,126 +2021,6 @@ function drawTileGrid() {
     ctx.stroke();
 }
 
-function closeTileGridModal() {
-    const modal = document.getElementById('tile-grid-modal');
-    if (modal) modal.style.display = 'none';
-    tileGridModalIsOpen = false;
-    if (tileGridDrawTimer) {
-        clearInterval(tileGridDrawTimer);
-        tileGridDrawTimer = null;
-    }
-}
-
-// Close if user taps outside modal content
-window.addEventListener('click', (e) => {
-    const modal = document.getElementById('tile-grid-modal');
-    if (modal && e.target === modal) closeTileGridModal();
-});
-
-function drawTileGrid() {
-    const canvas = document.getElementById('tile-grid-canvas');
-    if (!canvas) return;
-
-    const survey = getCompassOpenSurvey();
-    if (!survey) return;
-    ensureSurveyGridTileDefaults(survey);
-    const tile = survey.gridTile;
-
-    const sizeM = Number(tile.sizeM) || 30;
-    const cells = Math.round(sizeM); // 30
-    const cssMax = Math.min(window.innerWidth - 48, 520); // keep comfortable on phone
-    const px = Math.max(240, cssMax);
-
-    // Use devicePixelRatio for crisp lines
-    const dpr = window.devicePixelRatio || 1;
-    canvas.style.width = px + 'px';
-    canvas.style.height = px + 'px';
-    canvas.width = Math.floor(px * dpr);
-    canvas.height = Math.floor(px * dpr);
-
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, px, px);
-
-    const cellPx = px / cells;
-
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, px, px);
-
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= cells; i++) {
-        const x = i * cellPx;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, px); ctx.stroke();
-        const y = i * cellPx;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
-    }
-
-    // Outer border (tile boundary)
-    ctx.strokeStyle = 'rgba(239,68,68,0.95)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, px - 2, px - 2);
-
-    // Labels (N/E/S/W markers - subtle)
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('N', px / 2, 14);
-    ctx.fillText('S', px / 2, px - 6);
-    ctx.textAlign = 'left';
-    ctx.fillText('W', 6, px / 2);
-    ctx.textAlign = 'right';
-    ctx.fillText('E', px - 6, px / 2);
-
-    // Update info text
-    const centreEl = document.getElementById('tile-grid-centre-text');
-    if (centreEl) {
-        centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
-    }
-
-    // Plot user dot (if GPS)
-    const user = getBestLiveGpsCoordsOrNull();
-    const userEl = document.getElementById('tile-grid-user-text');
-    if (userEl) {
-        if (!user) userEl.textContent = 'No GPS fix';
-        else userEl.textContent = `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}`;
-    }
-
-    if (!user) return;
-
-    // Convert user to local metres relative to tile centre
-    const lat0 = Number(tile.centerLat);
-    const lon0 = Number(tile.centerLon);
-    if (!isFinite(lat0) || !isFinite(lon0)) return;
-
-    const M_PER_DEG_LAT = 110574;
-    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
-
-    const dx = (user.lon - lon0) * mPerDegLon; // +east
-    const dy = (user.lat - lat0) * M_PER_DEG_LAT; // +north
-
-    // Local in-tile coordinates (0..size)
-    const localX = dx + (sizeM / 2);
-    const localY = (sizeM / 2) - dy;
-
-    // Only draw dot if within tile bounds (with a small margin)
-    if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
-
-    const pxX = (localX / sizeM) * px;
-    const pxY = (localY / sizeM) * px;
-
-    // Dot
-    ctx.beginPath();
-    ctx.fillStyle = 'rgba(29,78,216,0.95)'; // primary-ish
-    ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.stroke();
-}
 
 
 
