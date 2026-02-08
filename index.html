@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2062,11 +2062,46 @@ function drawTileGrid() {
         const col = Math.floor((localX / sizeM) * cells);
         const row = Math.floor((localY / sizeM) * cells);
 
-        setTileCellVisited(tile, col, row, cells);
+        // Paint a continuous stroke between the last cell and the current cell
+        const lastCol = Number.isFinite(tile.paintLastCol) ? tile.paintLastCol : null;
+        const lastRow = Number.isFinite(tile.paintLastRow) ? tile.paintLastRow : null;
+
+        if (lastCol === null || lastRow === null) {
+            setTileCellVisited(tile, col, row, cells);
+        } else {
+            // Bresenham line between (lastCol,lastRow) and (col,row)
+            let x0 = lastCol, y0 = lastRow, x1 = col, y1 = row;
+            const dxl = Math.abs(x1 - x0);
+            const dyl = Math.abs(y1 - y0);
+            const sx = (x0 < x1) ? 1 : -1;
+            const sy = (y0 < y1) ? 1 : -1;
+            let err = dxl - dyl;
+
+            // Guard: avoid pathological loops if something goes wrong
+            let steps = 0;
+            const maxSteps = cells * cells;
+
+            while (true) {
+                setTileCellVisited(tile, x0, y0, cells);
+                if (x0 === x1 && y0 === y1) break;
+                const e2 = 2 * err;
+                if (e2 > -dyl) { err -= dyl; x0 += sx; }
+                if (e2 < dxl)  { err += dxl; y0 += sy; }
+                steps++;
+                if (steps > maxSteps) break;
+            }
+        }
+
+        tile.paintLastCol = col;
+        tile.paintLastRow = row;
 
         tile.coverageLastPainted = Date.now();
         survey.dateLastChanged = Date.now();
         saveSurveysToLocalStorage();
+    } else {
+        // If not painting (or out of bounds), don't keep an old anchor point
+        tile.paintLastCol = null;
+        tile.paintLastRow = null;
     }
 
     if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
