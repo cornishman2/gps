@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V15
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V16
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1577,23 +1577,42 @@
       <canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none;"></canvas>
     </div>
 
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-      <div class="text-xs text-gray-600">
-        <span class="font-semibold">Tile centre:</span>
-        <span id="tile-grid-centre-text">Not set</span>
-      </div>
-      <div class="text-xs text-gray-600">
-        <span class="font-semibold">You:</span>
-        <span id="tile-grid-user-text">No GPS fix</span>
-      </div>
-    </div>
+    
+<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+  <div class="text-xs text-gray-600">
+    <span class="font-semibold">Tile centre:</span>
+    <span id="tile-grid-centre-text">Not set</span>
+  </div>
+  <div class="text-xs text-gray-600">
+    <span class="font-semibold">You:</span>
+    <span id="tile-grid-user-text">No GPS fix</span>
+  </div>
+  <div class="text-xs text-gray-600">
+    <span class="font-semibold">Coverage:</span>
+    <span id="tile-grid-coverage-text">0%</span>
+  </div>
+</div>
 
-    <div class="mt-3 flex justify-end gap-2">
-      <button type="button"
-        class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
-        onclick="closeTileGridModal()"
-      >Close</button>
-    </div>
+<div class="mt-3 grid grid-cols-2 gap-2">
+  <button id="tile-grid-paint-toggle-btn" type="button"
+    class="px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm"
+    style="background-color: rgb(var(--color-secondary));">
+    Start Painting
+  </button>
+
+  <button id="tile-grid-clear-btn" type="button"
+    class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow">
+    Clear Coverage
+  </button>
+</div>
+
+<div class="mt-3 flex justify-end gap-2">
+  <button type="button"
+    class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
+    onclick="closeTileGridModal()"
+  >Close</button>
+</div>
+
   </div>
 </div>
 
@@ -1760,10 +1779,37 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 }
 
 // ------------------------------------------------------
-//  TILE GRID VIEW (Step 2: 30×30 grid, show position dot)
+//  TILE GRID VIEW (Step 2/3: 30×30 grid, show dot, paint coverage)
 // ------------------------------------------------------
 let tileGridModalIsOpen = false;
 let tileGridDrawTimer = null;
+
+function ensureTileCoverageStorage(tile) {
+    if (!tile) return;
+    const cells = Math.round(Number(tile.sizeM) || 30);
+    const total = cells * cells;
+
+    if (typeof tile.coverageBits !== 'string' || tile.coverageBits.length !== total) {
+        tile.coverageBits = '0'.repeat(total);
+    }
+    if (typeof tile.paintingEnabled !== 'boolean') {
+        tile.paintingEnabled = false;
+    }
+}
+
+function getCoveragePercent(tile) {
+    if (!tile || typeof tile.coverageBits !== 'string' || !tile.coverageBits.length) return 0;
+    const ones = (tile.coverageBits.match(/1/g) || []).length;
+    return (ones / tile.coverageBits.length) * 100;
+}
+
+function setTileCellVisited(tile, col, row, cells) {
+    if (!tile || typeof tile.coverageBits !== 'string') return;
+    if (col < 0 || row < 0 || col >= cells || row >= cells) return;
+    const idx = row * cells + col;
+    if (tile.coverageBits[idx] === '1') return;
+    tile.coverageBits = tile.coverageBits.substring(0, idx) + '1' + tile.coverageBits.substring(idx + 1);
+}
 
 function openTileGridModal() {
     const survey = getCompassOpenSurvey();
@@ -1778,18 +1824,201 @@ function openTileGridModal() {
         return;
     }
 
+    ensureTileCoverageStorage(survey.gridTile);
+
     const modal = document.getElementById('tile-grid-modal');
     if (!modal) return;
 
     modal.style.display = 'block';
     tileGridModalIsOpen = true;
 
-    // Draw immediately and then refresh regularly
+    syncTileGridButtons();
     drawTileGrid();
+
     if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
     tileGridDrawTimer = setInterval(() => {
         if (tileGridModalIsOpen) drawTileGrid();
     }, 600);
+}
+
+function closeTileGridModal() {
+    const modal = document.getElementById('tile-grid-modal');
+    if (modal) modal.style.display = 'none';
+    tileGridModalIsOpen = false;
+    if (tileGridDrawTimer) {
+        clearInterval(tileGridDrawTimer);
+        tileGridDrawTimer = null;
+    }
+}
+
+window.addEventListener('click', (e) => {
+    const modal = document.getElementById('tile-grid-modal');
+    if (modal && e.target === modal) closeTileGridModal();
+});
+
+function syncTileGridButtons() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+    ensureTileCoverageStorage(survey.gridTile);
+
+    const paintBtn = document.getElementById('tile-grid-paint-toggle-btn');
+    if (paintBtn) paintBtn.textContent = survey.gridTile.paintingEnabled ? 'Stop Painting' : 'Start Painting';
+}
+
+function toggleTilePainting() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+    ensureTileCoverageStorage(survey.gridTile);
+
+    survey.gridTile.paintingEnabled = !survey.gridTile.paintingEnabled;
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    syncTileGridButtons();
+    showMessage(survey.gridTile.paintingEnabled ? 'Painting enabled.' : 'Painting stopped.', 'info');
+}
+
+function clearTileCoverage() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+    ensureTileCoverageStorage(survey.gridTile);
+
+    confirmAction(
+        'Clear coverage?',
+        'This will clear all painted 1m squares for this tile. This cannot be undone.',
+        () => {
+            const cells = Math.round(Number(survey.gridTile.sizeM) || 30);
+            survey.gridTile.coverageBits = '0'.repeat(cells * cells);
+            survey.gridTile.paintingEnabled = false;
+            survey.dateLastChanged = Date.now();
+            saveSurveysToLocalStorage();
+            syncTileGridButtons();
+            drawTileGrid();
+            showMessage('Coverage cleared.', 'success');
+        }
+    );
+}
+
+function drawTileGrid() {
+    const canvas = document.getElementById('tile-grid-canvas');
+    if (!canvas) return;
+
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+    ensureSurveyGridTileDefaults(survey);
+    const tile = survey.gridTile;
+    ensureTileCoverageStorage(tile);
+
+    const sizeM = Number(tile.sizeM) || 30;
+    const cells = Math.round(sizeM);
+    const total = cells * cells;
+
+    const cssMax = Math.min(window.innerWidth - 48, 520);
+    const px = Math.max(240, cssMax);
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = px + 'px';
+    canvas.style.height = px + 'px';
+    canvas.width = Math.floor(px * dpr);
+    canvas.height = Math.floor(px * dpr);
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, px, px);
+
+    const cellPx = px / cells;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, px, px);
+
+    // Painted cells
+    if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
+        ctx.fillStyle = 'rgba(34,197,94,0.18)';
+        for (let i = 0; i < total; i++) {
+            if (tile.coverageBits[i] !== '1') continue;
+            const r = Math.floor(i / cells);
+            const c = i - r * cells;
+            ctx.fillRect(c * cellPx, r * cellPx, cellPx, cellPx);
+        }
+    }
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= cells; i++) {
+        const x = i * cellPx;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, px); ctx.stroke();
+        const y = i * cellPx;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(239,68,68,0.95)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, px - 2, px - 2);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', px / 2, 14);
+    ctx.fillText('S', px / 2, px - 6);
+    ctx.textAlign = 'left';
+    ctx.fillText('W', 6, px / 2);
+    ctx.textAlign = 'right';
+    ctx.fillText('E', px - 6, px / 2);
+
+    const centreEl = document.getElementById('tile-grid-centre-text');
+    if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
+
+    const user = getBestLiveGpsCoordsOrNull();
+    const userEl = document.getElementById('tile-grid-user-text');
+    if (userEl) userEl.textContent = user ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
+
+    const covEl = document.getElementById('tile-grid-coverage-text');
+    if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
+
+    if (!user) return;
+
+    const lat0 = Number(tile.centerLat);
+    const lon0 = Number(tile.centerLon);
+    if (!isFinite(lat0) || !isFinite(lon0)) return;
+
+    const M_PER_DEG_LAT = 110574;
+    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    const dx = (user.lon - lon0) * mPerDegLon;
+    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+
+    const localX = dx + (sizeM / 2);
+    const localY = (sizeM / 2) - dy;
+
+    if (tile.paintingEnabled && localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
+        const col = Math.floor((localX / sizeM) * cells);
+        const row = Math.floor((localY / sizeM) * cells);
+
+        for (let rr = row - 1; rr <= row + 1; rr++) {
+            for (let cc = col - 1; cc <= col + 1; cc++) {
+                setTileCellVisited(tile, cc, rr, cells);
+            }
+        }
+
+        tile.coverageLastPainted = Date.now();
+        survey.dateLastChanged = Date.now();
+        saveSurveysToLocalStorage();
+    }
+
+    if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
+
+    const pxX = (localX / sizeM) * px;
+    const pxY = (localY / sizeM) * px;
+
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(29,78,216,0.95)';
+    ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.stroke();
 }
 
 function closeTileGridModal() {
@@ -16575,6 +16804,22 @@ if (gpsBtn) {
     if (openTileGridBtn) {
         openTileGridBtn.addEventListener('click', () => {
             try { openTileGridModal(); } catch (e) { console.error(e); }
+
+    const tilePaintBtn = document.getElementById('tile-grid-paint-toggle-btn');
+    if (tilePaintBtn) {
+        tilePaintBtn.addEventListener('click', () => {
+            try { toggleTilePainting(); } catch (e) { console.error(e); }
+        });
+    }
+
+    const tileClearBtn = document.getElementById('tile-grid-clear-btn');
+    if (tileClearBtn) {
+        tileClearBtn.addEventListener('click', () => {
+            try { clearTileCoverage(); } catch (e) { console.error(e); }
+        });
+    }
+
+
         });
     }
 
