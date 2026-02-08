@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V7
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V8
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12307,6 +12307,52 @@ const drawTracks = showMapTracks ? visibleTracks : [];
 
     // 6. Track SVG (if any)
     let trackSvgHtml = '';
+
+    // 6b. Grid Tile overlay (Step 1: 30m square)
+    let gridTileHtml = '';
+    try {
+        const survey = getCompassOpenSurvey ? getCompassOpenSurvey() : (surveys.find(s => s.status === 'Open') || null);
+        const tile = survey && survey.gridTile ? survey.gridTile : null;
+        if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
+            const sizeM = Number(tile.sizeM) || 30;
+            const half = sizeM / 2;
+
+            // Convert tile center to metres in the same local projection used for the map
+            const cx = Number(tile.centerLon) * mPerDegLon;
+            const cy = Number(tile.centerLat) * M_PER_DEG_LAT;
+
+            const minTx = cx - half, maxTx = cx + half;
+            const minTy = cy - half, maxTy = cy + half;
+
+            const pTL = toPercent(minTx, maxTy); // top-left
+            const pBR = toPercent(maxTx, minTy); // bottom-right
+
+            const left = pTL.xPct;
+            const top = pTL.yPct;
+            const width = (pBR.xPct - pTL.xPct);
+            const height = (pBR.yPct - pTL.yPct);
+
+            gridTileHtml = `
+                <div class="absolute pointer-events-none"
+                     style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
+                            border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); border-radius: 6px; z-index: 8;">
+                    <div class="absolute"
+                         style="left:50%; top:-10px; transform:translateX(-50%);
+                                font-size:${(10 * invZoom).toFixed(2)}px;
+                                padding:2px 6px; border-radius:999px;
+                                background: rgba(255,255,255,0.92);
+                                border: 1px solid rgba(239,68,68,0.35);
+                                color: rgba(127,29,29,0.95);">
+                        ${Math.round(sizeM)}m tile
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        console.warn('Grid tile render error:', e);
+    }
+
+
     if (drawTracks.length) {
         const polylines = drawTracks.map(track => {
             const pts = track.points
