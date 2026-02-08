@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1782,7 +1782,43 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 //  TILE GRID VIEW (Step 2/3: 30×30 grid, show dot, paint coverage)
 // ------------------------------------------------------
 let tileGridModalIsOpen = false;
+
+    stopTileGridLocationWatch();
 let tileGridDrawTimer = null;
+let tileGridWatchId = null;
+let tileGridLastCoords = null;
+
+function startTileGridLocationWatch() {
+    if (tileGridWatchId || !navigator.geolocation) return;
+
+    tileGridWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            tileGridLastCoords = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude
+            };
+
+            // If modal is open, repaint promptly (painting happens inside drawTileGrid)
+            if (tileGridModalIsOpen) {
+                drawTileGrid();
+            }
+        },
+        (error) => {
+            console.warn('Tile Grid GPS Watch Error:', error);
+            tileGridLastCoords = null;
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+    );
+}
+
+function stopTileGridLocationWatch() {
+    if (tileGridWatchId && navigator.geolocation) {
+        navigator.geolocation.clearWatch(tileGridWatchId);
+    }
+    tileGridWatchId = null;
+    tileGridLastCoords = null;
+}
+
 
 function ensureTileCoverageStorage(tile) {
     if (!tile) return;
@@ -1832,7 +1868,9 @@ function openTileGridModal() {
     modal.style.display = 'block';
     tileGridModalIsOpen = true;
 
-    syncTileGridButtons();
+    
+    startTileGridLocationWatch();
+syncTileGridButtons();
     drawTileGrid();
 
     if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
@@ -1969,7 +2007,7 @@ function drawTileGrid() {
     const centreEl = document.getElementById('tile-grid-centre-text');
     if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
 
-    const user = getBestLiveGpsCoordsOrNull();
+    const user = tileGridLastCoords || getBestLiveGpsCoordsOrNull();
     const userEl = document.getElementById('tile-grid-user-text');
     if (userEl) userEl.textContent = user ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
 
