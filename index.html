@@ -1609,119 +1609,6 @@ function isStakeTarget(t) {
 
 let showUserPosition = true; // default: show user location on the map
 
-let compassSurveyIdForMap = null; // which survey the Compass/Map is currently showing (set in renderCompassPage)
-
-// ------------------------------------------------------
-//  GRID TILE (Step 1: show current GPS + simple 30m tile)
-// ------------------------------------------------------
-function getCompassOpenSurvey() {
-    if (!compassSurveyIdForMap) return surveys.find(s => s.status === 'Open') || null;
-    return surveys.find(s => s.id === compassSurveyIdForMap) || surveys.find(s => s.status === 'Open') || null;
-}
-
-function ensureSurveyGridTileDefaults(survey) {
-    if (!survey) return;
-    if (!survey.gridTile || typeof survey.gridTile !== 'object') {
-        survey.gridTile = { enabled: false, sizeM: 30, centerLat: null, centerLon: null };
-    }
-    if (typeof survey.gridTile.sizeM !== 'number' || !isFinite(survey.gridTile.sizeM) || survey.gridTile.sizeM <= 0) {
-        survey.gridTile.sizeM = 30;
-    }
-    if (typeof survey.gridTile.enabled !== 'boolean') {
-        survey.gridTile.enabled = !!survey.gridTile.enabled;
-    }
-    if (survey.gridTile.centerLat !== null && !isFinite(Number(survey.gridTile.centerLat))) survey.gridTile.centerLat = null;
-    if (survey.gridTile.centerLon !== null && !isFinite(Number(survey.gridTile.centerLon))) survey.gridTile.centerLon = null;
-}
-
-function getBestLiveGpsCoordsOrNull() {
-    const c = smoothedUserCoords || currentUserCoords || null;
-    if (!c) return null;
-    const lat = Number(c.lat);
-    const lon = Number(c.lon);
-    if (!isFinite(lat) || !isFinite(lon)) return null;
-    return { lat, lon };
-}
-
-function setGridTileToCurrentGps() {
-    const survey = getCompassOpenSurvey();
-    if (!survey) {
-        showMessage('No open survey.', 'error');
-        return;
-    }
-    const c = getBestLiveGpsCoordsOrNull();
-    if (!c) {
-        showMessage('No GPS fix yet. Turn GPS on and wait for a lock.', 'error');
-        return;
-    }
-
-    ensureSurveyGridTileDefaults(survey);
-    survey.gridTile.centerLat = c.lat;
-    survey.gridTile.centerLon = c.lon;
-    survey.gridTile.enabled = true;
-    survey.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-
-    showMessage('Grid tile set to current GPS position.', 'success');
-    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-    else render();
-}
-
-function toggleGridTileEnabled() {
-    const survey = getCompassOpenSurvey();
-    if (!survey) return;
-
-    ensureSurveyGridTileDefaults(survey);
-
-    // If turning on but we don't have a center yet, try to set from GPS
-    if (!survey.gridTile.enabled && (survey.gridTile.centerLat == null || survey.gridTile.centerLon == null)) {
-        const c = getBestLiveGpsCoordsOrNull();
-        if (c) {
-            survey.gridTile.centerLat = c.lat;
-            survey.gridTile.centerLon = c.lon;
-        }
-    }
-
-    survey.gridTile.enabled = !survey.gridTile.enabled;
-    survey.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-
-    showMessage(survey.gridTile.enabled ? 'Grid tile shown.' : 'Grid tile hidden.', 'info');
-    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-    else render();
-}
-
-function moveGridTileByMeters(dxMeters, dyMeters) {
-    const survey = getCompassOpenSurvey();
-    if (!survey) return;
-    ensureSurveyGridTileDefaults(survey);
-
-    if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Grid tile is not set yet. Tap "Set Tile to GPS" first.', 'warning');
-        return;
-    }
-
-    const lat = Number(survey.gridTile.centerLat);
-    const lon = Number(survey.gridTile.centerLon);
-    if (!isFinite(lat) || !isFinite(lon)) return;
-
-    // Convert meters -> degrees (local approximation)
-    const M_PER_DEG_LAT = 110574;
-    const mPerDegLon = 111320 * Math.cos(lat * Math.PI / 180);
-
-    const dLat = dyMeters / M_PER_DEG_LAT;
-    const dLon = (mPerDegLon ? (dxMeters / mPerDegLon) : 0);
-
-    survey.gridTile.centerLat = lat + dLat;
-    survey.gridTile.centerLon = lon + dLon;
-    survey.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-
-    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-    else render();
-}
-
-
 let targetSortMode = 'date'; // 'date' | 'id'
 
 let hasRenderedFirstGpsFix = false;
@@ -12305,59 +12192,6 @@ const drawTracks = showMapTracks ? visibleTracks : [];
         console.warn('Centre-on-map: unable to compute focus point', e);
     }
 
-    // 3b. Optional: Grid Tile overlay (30m square) for systematic surveying
-    let gridTileHtml = '';
-    try {
-        const survey = getCompassOpenSurvey();
-        const tile = survey && survey.gridTile ? survey.gridTile : null;
-        if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
-            const sizeM = Number(tile.sizeM) || 30;
-            const half = sizeM / 2;
-
-            // Convert tile center to metres in the same local projection
-            const cx = Number(tile.centerLon) * mPerDegLon;
-            const cy = Number(tile.centerLat) * M_PER_DEG_LAT;
-
-            // Compute bounds in metres
-            const minTx = cx - half, maxTx = cx + half;
-            const minTy = cy - half, maxTy = cy + half;
-
-            const pTL = toPercent(minTx, maxTy); // top-left
-            const pBR = toPercent(maxTx, minTy); // bottom-right
-
-            const left = pTL.xPct;
-            const top = pTL.yPct;
-            const width = (pBR.xPct - pTL.xPct);
-            const height = (pBR.yPct - pTL.yPct);
-
-            // Keep within bounds to avoid weird negatives when far outside map
-            const safeLeft = clamp(left, -50, 150);
-            const safeTop = clamp(top, -50, 150);
-            const safeW = clamp(width, 0, 200);
-            const safeH = clamp(height, 0, 200);
-
-            gridTileHtml = `
-                <div class="absolute pointer-events-none"
-                     style="left:${safeLeft.toFixed(2)}%; top:${safeTop.toFixed(2)}%; width:${safeW.toFixed(2)}%; height:${safeH.toFixed(2)}%;
-                            border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); border-radius: 6px; z-index: 2;">
-                    <div class="absolute"
-                         style="left:50%; top:-10px; transform:translateX(-50%);
-                                font-size:${(10 * invZoom).toFixed(2)}px;
-                                padding:2px 6px; border-radius:999px;
-                                background: rgba(255,255,255,0.9);
-                                border: 1px solid rgba(239,68,68,0.35);
-                                color: rgba(127,29,29,0.95);
-                                z-index: 3;">
-                        ${Math.round(sizeM)}m tile
-                    </div>
-                </div>
-            `;
-        }
-    } catch (e) {
-        console.warn('Grid tile render error:', e);
-    }
-
-
 
 
     // 4. Build pin HTML (targets + finds)
@@ -12564,6 +12398,7 @@ const drawTracks = showMapTracks ? visibleTracks : [];
              ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
+                ${gridTileHtml}
                 ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
@@ -12601,75 +12436,9 @@ const drawTracks = showMapTracks ? visibleTracks : [];
                     class="px-5 py-2 rounded-xl font-bold text-white shadow hover:opacity-90 text-base"
                     style="background-color: rgb(var(--color-secondary));"
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
-
 </div>
-
-<!-- Current GPS (readout only) -->
-<div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-        <div class="text-sm">
-            <div class="font-semibold text-gray-700">Current GPS</div>
-            <div class="text-xs text-gray-600">
-                ${(() => {
-                    const c = getBestLiveGpsCoordsOrNull();
-                    const acc = (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy : 0;
-                    if (!c) return 'No GPS fix yet';
-                    return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} (±${acc.toFixed(1)}m)`;
-                })()}
-            </div>
-        </div>
-
-        <div class="flex gap-2">
-            <button id="gridtile-set-gps-btn"
-                type="button"
-                class="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm"
-            >Set Tile to GPS</button>
-
-            <button id="gridtile-toggle-btn"
-                type="button"
-                class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm"
-            >${(() => {
-                const s = getCompassOpenSurvey();
-                const t = s && s.gridTile ? s.gridTile : null;
-                return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
-            })()}</button>
-        </div>
-    </div>
-
-    <div class="mt-3 text-xs text-gray-600">Move tile (buttons):</div>
-    <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
-        <div></div>
-        <button data-gridtile-move="N" data-gridtile-step="1"
-            class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">N</button>
-        <div></div>
-
-        <button data-gridtile-move="W" data-gridtile-step="1"
-            class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">W</button>
-        <button data-gridtile-move="C" data-gridtile-step="0"
-            class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">+5m</button>
-        <button data-gridtile-move="E" data-gridtile-step="1"
-            class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">E</button>
-
-        <div></div>
-        <button data-gridtile-move="S" data-gridtile-step="1"
-            class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">S</button>
-        <div></div>
-    </div>
-
-    <div class="mt-2 flex justify-center gap-2">
-        <button data-gridtile-move="N" data-gridtile-step="5"
-            class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">N 5m</button>
-        <button data-gridtile-move="W" data-gridtile-step="5"
-            class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">W 5m</button>
-        <button data-gridtile-move="E" data-gridtile-step="5"
-            class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">E 5m</button>
-        <button data-gridtile-move="S" data-gridtile-step="5"
-            class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">S 5m</button>
-    </div>
-</div>
-
+        
 <!-- Map layer toggles (draw only; bounds still include all) -->
- (draw only; bounds still include all) -->
 <div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
     <div class="text-sm font-semibold text-gray-700 mb-2">Map layers</div>
     <div class="flex flex-wrap gap-4 text-sm">
@@ -13787,11 +13556,7 @@ function renderTracksPanel(openSurvey) {
 function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
-        // Track which survey the Compass/Map is currently displaying
-    compassSurveyIdForMap = openSurvey ? openSurvey.id : null;
-    if (openSurvey) { try { ensureSurveyGridTileDefaults(openSurvey); } catch(e){} }
-
-if (!openSurvey) {
+    if (!openSurvey) {
         return `
             <div class="p-4">
                 <h2 class="text-3xl font-bold text-primary mb-6">Targets Plot View</h2>
@@ -16351,40 +16116,7 @@ if (gpsBtn) {
     });
 }
 
-    
-    // Grid Tile controls (Compass/Map)
-    const gridSetBtn = document.getElementById('gridtile-set-gps-btn');
-    if (gridSetBtn) {
-        gridSetBtn.addEventListener('click', () => {
-            try { setGridTileToCurrentGps(); } catch (e) { console.error(e); }
-        });
-    }
-
-    const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
-    if (gridToggleBtn) {
-        gridToggleBtn.addEventListener('click', () => {
-            try { toggleGridTileEnabled(); } catch (e) { console.error(e); }
-        });
-    }
-
-    document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const dir = btn.getAttribute('data-gridtile-move') || '';
-            const step = Number(btn.getAttribute('data-gridtile-step') || '1');
-            if (!isFinite(step)) return;
-
-            // Special "C" button in the 3x3 grid is just a label for the +5m row; ignore
-            if (dir === 'C') return;
-
-            const d = step;
-            if (dir === 'N') moveGridTileByMeters(0, d);
-            if (dir === 'S') moveGridTileByMeters(0, -d);
-            if (dir === 'E') moveGridTileByMeters(d, 0);
-            if (dir === 'W') moveGridTileByMeters(-d, 0);
-        });
-    });
-
-const navClearBtn = document.getElementById('nav-clear-btn');
+    const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
     navClearBtn.addEventListener('click', () => {
         clearNavigationTarget();
