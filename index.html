@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V6
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1786,6 +1786,7 @@ let tileGridModalIsOpen = false;
 let tileGridDrawTimer = null;
 let tileGridWatchId = null;
 let tileGridLastCoords = null;
+let tileGridLastFixTs = 0;
 
 function startTileGridLocationWatch() {
     if (tileGridWatchId || !navigator.geolocation) return;
@@ -1796,6 +1797,7 @@ function startTileGridLocationWatch() {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude
             };
+            tileGridLastFixTs = Date.now();
 
             // If modal is open, repaint promptly (painting happens inside drawTileGrid)
             if (tileGridModalIsOpen) {
@@ -1805,6 +1807,7 @@ function startTileGridLocationWatch() {
         (error) => {
             console.warn('Tile Grid GPS Watch Error:', error);
             tileGridLastCoords = null;
+            tileGridLastFixTs = 0;
         },
         { enableHighAccuracy: true, maximumAge: 0 }
     );
@@ -1816,6 +1819,7 @@ function stopTileGridLocationWatch() {
     }
     tileGridWatchId = null;
     tileGridLastCoords = null;
+    tileGridLastFixTs = 0;
 }
 
 
@@ -1874,7 +1878,29 @@ syncTileGridButtons();
 
     if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
     tileGridDrawTimer = setInterval(() => {
-        if (tileGridModalIsOpen) drawTileGrid();
+        if (!tileGridModalIsOpen) return;
+
+        // Always redraw (shows dot and coverage)
+        drawTileGrid();
+
+        // Some browsers can throttle watchPosition updates. If painting is enabled and we haven't
+        // had a fresh fix recently, force a one-off position refresh to keep painting continuous.
+        const surveyNow = getCompassOpenSurvey();
+        const tileNow = surveyNow && surveyNow.gridTile ? surveyNow.gridTile : null;
+        if (tileNow && tileNow.paintingEnabled) {
+            const age = Date.now() - (tileGridLastFixTs || 0);
+            if (age > 1500 && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        tileGridLastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                        tileGridLastFixTs = Date.now();
+                        drawTileGrid();
+                    },
+                    () => { /* ignore */ },
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 2000 }
+                );
+            }
+        }
     }, 600);
 }
 
@@ -1882,6 +1908,7 @@ function closeTileGridModal() {
     const modal = document.getElementById('tile-grid-modal');
     if (modal) modal.style.display = 'none';
     tileGridModalIsOpen = false;
+    stopTileGridLocationWatch();
     if (tileGridDrawTimer) {
         clearInterval(tileGridDrawTimer);
         tileGridDrawTimer = null;
