@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V16
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V17
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2140,7 +2140,17 @@ if (tile.paintingEnabled && inSoftBounds) {
             }
         }
     } else {
-        // Bresenham line between (lastCol,lastRow) and (col,row)
+        // If GPS jumps a long way (accuracy wobble), don't try to draw a huge line:
+        // just paint a small block at the new location and reset the anchor.
+        const jump = Math.abs(col - lastCol) + Math.abs(row - lastRow);
+        if (jump > Math.max(8, Math.floor(cells / 2))) {
+            for (let rr = row - 1; rr <= row + 1; rr++) {
+                for (let cc = col - 1; cc <= col + 1; cc++) {
+                    paintedAny = setTileCellVisited(tile, cc, rr, cells) || paintedAny;
+                }
+            }
+        } else {
+            // Bresenham line between (lastCol,lastRow) and (col,row)
         let x0 = lastCol, y0 = lastRow, x1 = col, y1 = row;
         const dxl = Math.abs(x1 - x0);
         const dyl = Math.abs(y1 - y0);
