@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1593,6 +1593,16 @@
   </div>
 </div>
 
+
+<div class="mt-3">
+  <div class="grid grid-cols-5 gap-2" id="tile-grid-rainbow-buttons">
+    <button type="button" class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+  </div>
+</div>
 <div class="mt-3 flex gap-2">
   <button id="tile-grid-complete-btn" type="button"
     class="flex-1 px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm"
@@ -1838,6 +1848,9 @@ function ensureTileCoverageStorage(tile) {
     }    if (typeof tile.completed !== 'boolean') {
         tile.completed = false;
     }
+    if (!tile.coverageColors || typeof tile.coverageColors !== 'object') {
+        tile.coverageColors = {};
+    }
 }
 
 
@@ -1874,7 +1887,8 @@ function openTileGridModal() {
     // NEW: Reset the grid every time it is opened (start unpainted)
     const __cells = Math.round(Number(survey.gridTile.sizeM) || 30);
     survey.gridTile.coverageBits = '0'.repeat(__cells * __cells);
-    survey.gridTile.paintingEnabled = true;
+        survey.gridTile.coverageColors = {};
+survey.gridTile.paintingEnabled = true;
     survey.gridTile.completed = false;
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
@@ -1886,7 +1900,13 @@ function openTileGridModal() {
     tileGridModalIsOpen = true;
 
     
-    startTileGridLocationWatch();
+    
+    // Ensure the rainbow buttons in the Tile Grid reflect current Settings
+    try { applyQuickTargetRangesToCompassButtons(getQuickTargetRangesEffective()); } catch (e) {}
+
+    // Attach Tile Grid rainbow button handlers (log target + colour the current cell)
+    try { attachTileGridRainbowButtonsOnce(); } catch (e) { console.error(e); }
+startTileGridLocationWatch();
 syncTileGridButtons();
     drawTileGrid();
 
@@ -1982,7 +2002,8 @@ function clearTileCoverage() {
     ensureTileCoverageStorage(survey.gridTile);
     const cells = Math.round(Number(survey.gridTile.sizeM) || 30);
     survey.gridTile.coverageBits = '0'.repeat(cells * cells);
-    survey.gridTile.paintingEnabled = true;
+        survey.gridTile.coverageColors = {};
+survey.gridTile.paintingEnabled = true;
     survey.gridTile.completed = false;
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
@@ -1992,6 +2013,105 @@ function clearTileCoverage() {
     showMessage('Coverage cleared.', 'success');
 }
 
+
+
+let tileGridRainbowButtonsAttached = false;
+
+function colourNameToTileFill(colourName) {
+    const c = String(colourName || '').toUpperCase();
+    const map = {
+        BLUE:  'rgba(37,99,235,0.28)',
+        SKY:   'rgba(14,165,233,0.28)',
+        GREEN: 'rgba(34,197,94,0.28)',
+        AMBER: 'rgba(245,158,11,0.28)',
+        RED:   'rgba(239,68,68,0.28)'
+    };
+    return map[c] || 'rgba(34,197,94,0.18)';
+}
+
+function paintTileCellUnderUserWithColour(colourName) {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return false;
+    ensureSurveyGridTileDefaults(survey);
+    const tile = survey.gridTile;
+    ensureTileCoverageStorage(tile);
+
+    const user = getBestLiveGpsCoordsOrNull();
+    if (!user) return false;
+
+    const lat0 = Number(tile.centerLat);
+    const lon0 = Number(tile.centerLon);
+    if (!isFinite(lat0) || !isFinite(lon0)) return false;
+
+    const sizeM = Number(tile.sizeM) || 30;
+    const cells = Math.round(sizeM);
+
+    const M_PER_DEG_LAT = 111320;
+    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    const dx = (user.lon - lon0) * mPerDegLon;
+    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+
+    const localX = dx + (sizeM / 2);
+    const localY = (sizeM / 2) - dy;
+
+    const clampedX = Math.min(Math.max(localX, 0), sizeM);
+    const clampedY = Math.min(Math.max(localY, 0), sizeM);
+
+    const col = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
+    const row = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
+
+    const did = setTileCellVisited(tile, col, row, cells);
+    const key = `${row},${col}`;
+    tile.coverageColors[key] = colourNameToTileFill(colourName);
+
+    if (did) {
+        tile.coverageLastPainted = Date.now();
+        survey.dateLastChanged = Date.now();
+        saveSurveysToLocalStorage();
+    } else {
+        // Even if already visited, ensure colour persists
+        survey.dateLastChanged = Date.now();
+        saveSurveysToLocalStorage();
+    }
+    return true;
+}
+
+function attachTileGridRainbowButtonsOnce() {
+    if (tileGridRainbowButtonsAttached) return;
+    const btns = Array.from(document.querySelectorAll('.tile-grid-range-btn'));
+    if (!btns.length) return;
+
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const min = Number(btn.getAttribute('data-min'));
+            const max = Number(btn.getAttribute('data-max'));
+            const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+            const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+            const colour = (btn.getAttribute('data-color') || '').toString().trim();
+
+            ensureTrackingThen(() => {
+                let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+
+                // Safety: clamp
+                if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+                    if (vdi < min) vdi = min;
+                    if (vdi > max) vdi = max;
+                }
+
+                quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
+
+                // Paint the current cell with the same rainbow colour
+                paintTileCellUnderUserWithColour(colour);
+
+                // Redraw immediately
+                try { drawTileGrid(); } catch (e) {}
+            });
+        });
+    });
+
+    tileGridRainbowButtonsAttached = true;
+}
 function markTileGridComplete() {
     const survey = getCompassOpenSurvey();
     if (!survey || !survey.gridTile) return;
@@ -2075,11 +2195,13 @@ function drawTileGrid() {
 
     // Painted cells
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
-        ctx.fillStyle = 'rgba(34,197,94,0.18)';
         for (let i = 0; i < total; i++) {
             if (tile.coverageBits[i] !== '1') continue;
             const r = Math.floor(i / cells);
             const c = i - r * cells;
+            const key = `${r},${c}`;
+            const fill = (tile.coverageColors && tile.coverageColors[key]) ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
+            ctx.fillStyle = fill;
             ctx.fillRect(c * cellPx, r * cellPx, cellPx, cellPx);
         }
     }
@@ -2158,7 +2280,9 @@ function drawTileGrid() {
                     paintedAny = true;
 
                     // Paint immediately so it is visible right away
-                    ctx.fillStyle = 'rgba(34,197,94,0.18)';
+                    const __k = `${row},${col}`;
+                    const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
+                    ctx.fillStyle = __fill;
                     ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
 
                     // Re-draw the cell border so the grid stays visible
@@ -17246,6 +17370,7 @@ if (stakeBtn) {
 
 // 7. Compass Page Range Buttons
 document.querySelectorAll('.compass-range-btn').forEach(btn => {
+    if (btn.classList.contains('tile-grid-range-btn')) return;
     btn.addEventListener('click', () => {
         const min = Number(btn.getAttribute('data-min'));
         const max = Number(btn.getAttribute('data-max'));
@@ -17578,7 +17703,8 @@ function applyQuickTargetRangesToCompassButtons(ranges) {
         btns[i].setAttribute('data-min', String(min));
         btns[i].setAttribute('data-max', String(max));
         btns[i].setAttribute('data-targetid', String(tid));
-        btns[i].textContent = (min !== '' && max !== '') ? `${min}→${max}` : '—';
+                btns[i].setAttribute('data-color', color);
+btns[i].textContent = (min !== '' && max !== '') ? `${min}→${max}` : '—';
 
         // Update colour classes
         removable.forEach(c => btns[i].classList.remove(c));
