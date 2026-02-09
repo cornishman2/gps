@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2000,6 +2000,14 @@ function markTileGridComplete() {
     ensureTileCoverageStorage(survey.gridTile);
     const tile = survey.gridTile;
 
+    // Only record a completed area if there is actually some painted coverage.
+    const hasCoverage = typeof tile.coverageBits === 'string' && tile.coverageBits.indexOf('1') !== -1;
+    if (!hasCoverage) {
+        if (typeof closeTileGridModal === 'function') closeTileGridModal();
+        showMessage('No painted coverage to complete.', 'info');
+        return;
+    }
+
     // Record a fixed snapshot of the current tile location/size so it stays on the map even if the active tile is moved.
     const sizeM = Number(tile.sizeM) || 30;
 
@@ -2029,7 +2037,8 @@ function markTileGridComplete() {
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else if (typeof render === 'function' && currentPage === 'Compass') render();
 
-    showMessage('Tile recorded as complete. Move the tile and start the next one.', 'success');
+    if (typeof closeTileGridModal === 'function') closeTileGridModal();
+    showMessage('Tile recorded as complete.', 'success');
 }
 
 function drawTileGrid() {
