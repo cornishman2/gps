@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1694,6 +1694,10 @@ function ensureSurveyGridTileDefaults(survey) {
     if (!survey.gridTile || typeof survey.gridTile !== 'object') {
         survey.gridTile = { enabled: false, sizeM: 30, centerLat: null, centerLon: null };
     }
+    // Completed tile history: fixed areas that stay on the map even when you move the active tile
+    if (!Array.isArray(survey.gridTileCompletedAreas)) {
+        survey.gridTileCompletedAreas = [];
+    }
     if (typeof survey.gridTile.sizeM !== 'number' || !isFinite(survey.gridTile.sizeM) || survey.gridTile.sizeM <= 0) {
         survey.gridTile.sizeM = 30;
     }
@@ -2006,25 +2010,46 @@ function clearTileCoverage() {
 function markTileGridComplete() {
     const survey = getCompassOpenSurvey();
     if (!survey || !survey.gridTile) return;
+
+    ensureSurveyGridTileDefaults(survey);
     ensureTileCoverageStorage(survey.gridTile);
 
-    if (!confirm('Mark this grid as complete?\n\nThis will fill the entire tile coverage and mark the tile as complete on the main map.')) {
+    if (!confirm('Mark this grid as complete?\n\nThis will record this tile area on the main map as covered, then reset the active tile so you can move to the next area.')) {
         return;
     }
 
-    const cells = Math.round(Number(survey.gridTile.sizeM) || 30);
-    survey.gridTile.coverageBits = '1'.repeat(cells * cells);
-    survey.gridTile.completed = true;
-    survey.gridTile.paintingEnabled = false;
+    const tile = survey.gridTile;
+
+    // Record a fixed snapshot of the current tile location/size so it stays on the map even if the active tile is moved.
+    const sizeM = Number(tile.sizeM) || 30;
+
+    if (isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
+        survey.gridTileCompletedAreas.unshift({
+            id: (typeof generateId === 'function') ? generateId() : String(Date.now()),
+            centerLat: Number(tile.centerLat),
+            centerLon: Number(tile.centerLon),
+            sizeM: sizeM,
+            completedAt: Date.now()
+        });
+    }
+
+    // Reset the active tile coverage so the next area starts blank (the completed snapshot remains).
+    const cells = Math.round(Number(sizeM) || 30);
+    tile.coverageBits = '0'.repeat(cells * cells);
+    tile.paintingEnabled = false;
+    tile.completed = false;
+
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     syncTileGridButtons();
     drawTileGrid();
-    showMessage('Grid marked as complete.', 'success');
 
+    // Refresh the main map so the completed area appears immediately
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-    else render();
+    else if (typeof render === 'function' && currentPage === 'Compass') render();
+
+    showMessage('Tile recorded as complete. Move the tile and start the next one.', 'success');
 }
 
 function drawTileGrid() {
@@ -12879,23 +12904,19 @@ const drawTracks = showMapTracks ? visibleTracks : [];
     // 6. Track SVG (if any)
     let trackSvgHtml = '';
 
-    // Grid Tile overlay (Step 1: 30m square)
+    // Grid Tile overlay (Active tile + completed history)
     let gridTileHtml = '';
     try {
         const survey = getCompassOpenSurvey ? getCompassOpenSurvey() : (surveys.find(s => s.status === 'Open') || null);
-        const tile = survey && survey.gridTile ? survey.gridTile : null;
-        if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
-            const sizeM = Number(tile.sizeM) || 30;
-            const half = sizeM / 2;
+        if (survey) { try { ensureSurveyGridTileDefaults(survey); } catch (_) {} }
 
-            const isComplete = !!tile.completed;
-            const borderCol = isComplete ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
-            const fillCol   = isComplete ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.06)';
-            const badgeBorder = isComplete ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)';
-            const badgeText = isComplete ? 'rgba(20,83,45,0.95)' : 'rgba(127,29,29,0.95)';
-                        const badgeLabelText = isComplete ? `${Math.round(sizeM)}m tile ✓` : `${Math.round(sizeM)}m tile`;
-            const cx = Number(tile.centerLon) * mPerDegLon;
-            const cy = Number(tile.centerLat) * M_PER_DEG_LAT;
+        const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
+        const tile = survey && survey.gridTile ? survey.gridTile : null;
+
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText) => {
+            const half = sizeM / 2;
+            const cx = Number(centerLon) * mPerDegLon;
+            const cy = Number(centerLat) * M_PER_DEG_LAT;
 
             const minTx = cx - half, maxTx = cx + half;
             const minTy = cy - half, maxTy = cy + half;
@@ -12908,22 +12929,51 @@ const drawTracks = showMapTracks ? visibleTracks : [];
             const width = (pBR.xPct - pTL.xPct);
             const height = (pBR.yPct - pTL.yPct);
 
-            gridTileHtml = `
+            const fontPx = (10 * invZoom);
+
+            return `
                 <div class="absolute pointer-events-none"
                      style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
-                            border: 2px solid ${borderCol}; background: ${fillCol}; border-radius: 6px; z-index: 8;">
+                            ${style}; border-radius: 6px;">
+                    ${labelText ? `
                     <div class="absolute"
                          style="left:50%; top:-10px; transform:translateX(-50%);
-                                font-size:${(10 * invZoom).toFixed(2)}px;
+                                font-size:${fontPx.toFixed(2)}px;
                                 padding:2px 6px; border-radius:999px;
                                 background: rgba(255,255,255,0.92);
-                                border: 1px solid ${badgeBorder};
-                                color: ${badgeText};">
-                        ${badgeLabelText}
-                    </div>
+                                border: 1px solid rgba(34,197,94,0.35);
+                                color: rgba(20,83,45,0.95);">
+                        ${labelText}
+                    </div>` : ''}
                 </div>
             `;
+        };
+
+        // 1) Completed tiles (fixed in place)
+        let completedHtml = '';
+        if (completed.length) {
+            completedHtml = completed
+                .filter(a => a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)) && isFinite(Number(a.sizeM)))
+                .map(a => {
+                    const sizeM = Number(a.sizeM) || 30;
+                    const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
+                    const label = `${Math.round(sizeM)}m ✓`;
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
+                })
+                .join('');
         }
+
+        // 2) Active tile (movable) — always red outline so you can position the next square
+        let activeHtml = '';
+        if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
+            const sizeM = Number(tile.sizeM) || 30;
+            const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
+            const label = `${Math.round(sizeM)}m tile`;
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
+        }
+
+        gridTileHtml = completedHtml + activeHtml;
+
     } catch (e) {
         console.warn('Grid tile render error:', e);
     }
