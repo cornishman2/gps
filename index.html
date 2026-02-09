@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12455,6 +12455,41 @@ const MAP_ZOOM_MIN = 0.5;
 const MAP_ZOOM_MAX = 6;
 const MAP_ZOOM_STEP = 0.25;
 
+let mapAspectRatio = 1; // width/height of the map container (measured from DOM)
+
+/** Measure the map container and update aspect ratio (used to keep x/y scale identical). */
+function updateMapAspectRatioFromDom() {
+    const el = document.getElementById('target-map-container');
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (!r || !isFinite(r.width) || !isFinite(r.height) || r.width <= 0 || r.height <= 0) return false;
+
+    const ar = r.width / r.height;
+    if (!isFinite(ar) || ar <= 0) return false;
+
+    const changed = Math.abs(ar - mapAspectRatio) > 0.01;
+    mapAspectRatio = ar;
+    return changed;
+}
+
+// Prevent infinite re-render loops when measuring aspect ratio triggers a rerender.
+let _mapAspectRerenderPending = false;
+
+try {
+    if (!window.__detektaMapAspectResizeHooked) {
+        window.__detektaMapAspectResizeHooked = true;
+        window.addEventListener('resize', () => {
+            try {
+                const changed = updateMapAspectRatioFromDom();
+                if (changed && typeof rerenderCompassIfActive === 'function' && !_mapAspectRerenderPending) {
+                    _mapAspectRerenderPending = true;
+                    setTimeout(() => { _mapAspectRerenderPending = false; rerenderCompassIfActive(); }, 0);
+                }
+            } catch (_) {}
+        });
+    }
+} catch (_) {}
+
 let isMapDragging = false;
 let mapDragStartX = 0;
 let mapDragStartY = 0;
@@ -12755,11 +12790,40 @@ const drawTracks = showMapTracks ? visibleTracks : [];
     mapHeightMeters = maxY - minY;
 
     // Helper: map metres -> percent
-    const toPercent = (x, y) => {
-        const xPct = ((x - minX) / mapWidthMeters) * 100;
-        const yPct = (1 - ((y - minY) / mapHeightMeters)) * 100; // invert Y
-        return { xPct, yPct };
-    };
+// Helper: map metres -> percent (aspect-correct: x/y scale is the same)
+// We draw into the full rectangular map box, but preserve real-world proportions by letterboxing
+// (i.e. adding margins on the longer axis) based on the map container aspect ratio.
+const aspect = (typeof mapAspectRatio === 'number' && isFinite(mapAspectRatio) && mapAspectRatio > 0)
+    ? mapAspectRatio
+    : 1;
+
+// Use a "pseudo" pixel space where height = 1 and width = aspect.
+const pseudoW = aspect;
+const pseudoH = 1;
+
+// Uniform pixels-per-metre scale that fits BOTH axes.
+const uniformScale = Math.min(pseudoW / mapWidthMeters, pseudoH / mapHeightMeters);
+
+const usedW = uniformScale * mapWidthMeters;
+const usedH = uniformScale * mapHeightMeters;
+
+const marginX = (pseudoW - usedW) / 2;
+const marginY = (pseudoH - usedH) / 2;
+
+const marginXPct = (marginX / pseudoW) * 100;
+const marginYPct = (marginY / pseudoH) * 100;
+
+const usableXPct = 100 - (2 * marginXPct);
+const usableYPct = 100 - (2 * marginYPct);
+
+const toPercent = (x, y) => {
+    const xNorm = (x - minX) / mapWidthMeters;   // 0..1
+    const yNorm = (y - minY) / mapHeightMeters;  // 0..1
+
+    const xPct = marginXPct + (xNorm * usableXPct);
+    const yPct = marginYPct + ((1 - yNorm) * usableYPct); // invert Y
+    return { xPct, yPct };
+};
     // Auto-centre map on a target flagged "centre on map" (works even when user position is hidden)
     try {
         const centerTarget = (targets || []).find(t => t && t.centerOnMap === true && t.deleted !== true);
@@ -16838,6 +16902,23 @@ function formatFindLoggedDateTime(find) {
 }
 
 function attachPageEventListeners() {
+
+    // After each Compass/Map render, measure the map container aspect ratio so we can keep x/y scale identical.
+    // We only re-render if the aspect has actually changed (e.g. first render or after resize).
+    try {
+        if (typeof currentPage !== 'undefined' && currentPage === 'Compass') {
+            setTimeout(() => {
+                try {
+                    const changed = updateMapAspectRatioFromDom();
+                    if (changed && typeof rerenderCompassIfActive === 'function' && !_mapAspectRerenderPending) {
+                        _mapAspectRerenderPending = true;
+                        setTimeout(() => { _mapAspectRerenderPending = false; rerenderCompassIfActive(); }, 0);
+                    }
+                } catch (_) {}
+            }, 50);
+        }
+    } catch (_) {}
+
 
     const gpsBtn = document.getElementById('toggle-gps-btn');
 if (gpsBtn) {
