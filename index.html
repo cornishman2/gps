@@ -80,7 +80,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1662,6 +1662,10 @@ let showMapTargets = true;
 let showMapStakes  = true; // Stakes are targets with VDI -100
 let showMapFinds   = true;
 let showMapTracks  = true;
+
+// Map label toggles (Compass/Map page)
+let showMapTargetLabels = true;
+let showMapFindLabels   = true;
 
 // A "Stake" is a target pin whose VDI is -100 (used as a ground marker).
 function isStakeTarget(t) {
@@ -12747,6 +12751,9 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     // - Targets: if description is 'STAKE' => no label; else if description present => use description; else fallback to VDI
  const getMapPinLabelText = (t) => {
     const isFind = (t && (t.isFind || String(t.type || '').toLowerCase() === 'find'));
+    // Label toggles
+    if (isFind && !showMapFindLabels) return '';
+    if (!isFind && !showMapTargetLabels) return '';
     if (isFind) {
         return String(t.findType || t.findCategory || t.type || 'Find');
     }
@@ -13391,6 +13398,14 @@ const toPercent = (x, y) => {
             <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
             <span>Show Tracks</span>
         </label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
+    <span>Show Target Labels</span>
+</label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
+    <span>Show Find Labels</span>
+</label>
     </div>
 </div>
 
@@ -13553,6 +13568,14 @@ const toPercent = (x, y) => {
             <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
             <span>Show Tracks</span>
         </label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
+    <span>Show Target Labels</span>
+</label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
+    <span>Show Find Labels</span>
+</label>
     </div>
 </div>
 
@@ -17202,6 +17225,28 @@ if (mapTracksCb) {
         if (currentPage === 'Compass') render();
     });
 }
+
+const mapTargetLabelsCb = document.getElementById('map-show-target-labels-cb');
+if (mapTargetLabelsCb) {
+    mapTargetLabelsCb.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMapTargetLabels = !!mapTargetLabelsCb.checked;
+        if (currentPage === 'Compass') render();
+    });
+}
+
+const mapFindLabelsCb = document.getElementById('map-show-find-labels-cb');
+if (mapFindLabelsCb) {
+    mapFindLabelsCb.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMapFindLabels = !!mapFindLabelsCb.checked;
+        if (currentPage === 'Compass') render();
+    });
+}
+
+
 
 
 // --- Track Start/Stop buttons (Compass/Map page) ---
