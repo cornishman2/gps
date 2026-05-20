@@ -1595,7 +1595,7 @@ summary {
     </p>
 
     <div class="w-full flex justify-center">
-      <canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none;"></canvas>
+      <!-- canvas moved to inline tile grid on Compass page -->
     </div>
 
     
@@ -1983,6 +1983,66 @@ window.addEventListener('click', (e) => {
     const modal = document.getElementById('tile-grid-modal');
     if (modal && e.target === modal) closeTileGridModal();
 });
+
+/**
+ * Initialise the permanently-embedded tile grid on the Compass page.
+ * Called from attachPageEventListeners() whenever tile-grid-canvas exists in the DOM.
+ */
+function initInlineTileGrid() {
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+
+    ensureSurveyGridTileDefaults(survey);
+    ensureTileCoverageStorage(survey.gridTile);
+
+    // If tile is already set but painting not yet enabled, enable it
+    if (survey.gridTile.enabled && !survey.gridTile.completed) {
+        survey.gridTile.paintingEnabled = true;
+    }
+
+    // Mark the inline grid as "open" so the GPS watch knows to repaint
+    tileGridModalIsOpen = true;
+
+    // Sync quick-target range buttons inside the inline grid
+    try { applyQuickTargetRangesToCompassButtons(getQuickTargetRangesEffective()); } catch (e) {}
+    try { attachTileGridRainbowButtonsOnce(); } catch (e) { console.error(e); }
+
+    syncTileGridButtons();
+    startTileGridLocationWatch();
+    drawTileGrid();
+
+    // Periodic redraw (same as modal version)
+    if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
+    tileGridDrawTimer = setInterval(() => {
+        // Stop if we navigated away from Compass page
+        if (currentPage !== 'Compass') {
+            clearInterval(tileGridDrawTimer);
+            tileGridDrawTimer = null;
+            tileGridModalIsOpen = false;
+            stopTileGridLocationWatch();
+            return;
+        }
+        drawTileGrid();
+
+        // Fallback GPS poll when watchPosition is slow
+        const surveyNow = getCompassOpenSurvey();
+        const tileNow = surveyNow && surveyNow.gridTile ? surveyNow.gridTile : null;
+        if (tileNow && tileNow.paintingEnabled) {
+            const age = Date.now() - (tileGridLastFixTs || 0);
+            if (age > 1500 && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        tileGridLastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                        tileGridLastFixTs = Date.now();
+                        drawTileGrid();
+                    },
+                    () => {},
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 2000 }
+                );
+            }
+        }
+    }, 600);
+}
 
 function syncTileGridButtons() {
     const survey = getCompassOpenSurvey();
@@ -13440,13 +13500,6 @@ const toPercent = (x, y) => {
 
 
 
-  <div class="mt-3 flex justify-center">
-    <button id="open-tile-grid-btn" type="button"
-      class="w-full px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm" style="background-color: rgb(var(--color-secondary));">
-      Open Tile Grid (30×30)
-    </button>
-  </div>
-
       </div>
     </details>
 </div>
@@ -14741,6 +14794,77 @@ ${(() => {
                 </h3>
                 ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
             </div>
+
+            <!-- Inline Tile Grid (permanently embedded) -->
+            ${(() => {
+                const _survey = openSurvey;
+                ensureSurveyGridTileDefaults(_survey);
+                const _tile = _survey.gridTile;
+                const _tileEnabled = _tile && _tile.enabled && _tile.centerLat != null && _tile.centerLon != null;
+                const _coveragePct = _tileEnabled ? getCoveragePercent(_tile).toFixed(1) : '0.0';
+                const _ranges = (typeof getQuickTargetRangesEffective === 'function') ? getQuickTargetRangesEffective() : [];
+
+                const _colorCls = {
+                    BLUE:  'bg-blue-600 hover:bg-blue-700',
+                    SKY:   'bg-sky-500 hover:bg-sky-600',
+                    GREEN: 'bg-emerald-600 hover:bg-emerald-700',
+                    AMBER: 'bg-amber-500 hover:bg-amber-600',
+                    RED:   'bg-red-600 hover:bg-red-700'
+                };
+                const _rainbowButtons = _ranges.map(function(r) {
+                    const color = String(r && r.color || '').toUpperCase();
+                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+                    const rangeLabel = (min !== '' && max !== '') ? (min + '&rarr;' + max) : '&mdash;';
+                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
+                    return '<button type="button"'
+                        + ' class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow ' + cls + '"'
+                        + ' data-min="' + min + '"'
+                        + ' data-max="' + max + '"'
+                        + ' data-targetid="' + tid + '"'
+                        + ' data-color="' + color + '"'
+                        + '>' + rangeLabel + '</button>';
+                }).join('');
+
+                const _centreTxt = _tileEnabled
+                    ? (Number(_tile.centerLat).toFixed(6) + ', ' + Number(_tile.centerLon).toFixed(6))
+                    : 'Not set';
+
+                const _rainbowHtml = _rainbowButtons
+                    ? '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
+                    : '<div id="tile-grid-rainbow-buttons"></div>';
+
+                return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
+                    + '<details id="tile-grid-inline-details" ' + (tileGridExpanded ? 'open' : '') + '>'
+                    + '<summary class="cursor-pointer select-none flex items-center gap-2 justify-start">'
+                    + '<span class="caret text-lg">&#9658;</span>'
+                    + '<span class="text-xl font-semibold text-gray-700 flex items-center gap-2">'
+                    + '<i class="fas fa-th text-primary"></i> Tile Grid (30&times;30)'
+                    + '</span></summary>'
+                    + '<div class="mt-3">'
+                    + '<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 mb-2">'
+                    + '<div><span class="font-semibold">Tile centre:</span> <span id="tile-grid-centre-text">' + _centreTxt + '</span></div>'
+                    + '<div><span class="font-semibold">You:</span> <span id="tile-grid-user-text">No GPS fix</span></div>'
+                    + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
+                    + '</div>'
+                    + '<div class="w-full flex justify-center mb-3">'
+                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none; max-width: 100%;"></canvas>'
+                    + '</div>'
+                    + _rainbowHtml
+                    + '<div class="flex gap-2">'
+                    + '<button id="tile-grid-complete-btn" type="button"'
+                    + ' class="flex-1 px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm"'
+                    + ' style="background-color: rgb(var(--color-primary));"'
+                    + ' onclick="markTileGridComplete()">Complete</button>'
+                    + '<button id="tile-grid-clear-btn" type="button"'
+                    + ' class="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"'
+                    + ' onclick="clearTileCoverage()">Clear</button>'
+                    + '</div>'
+                    + '</div>'
+                    + '</details>'
+                    + '</div>';
+            })()}
 
             <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
@@ -17155,11 +17279,10 @@ if (gpsBtn) {
     }
 
     
-    const openTileGridBtn = document.getElementById('open-tile-grid-btn');
-    if (openTileGridBtn) {
-        openTileGridBtn.addEventListener('click', () => {
-            try { openTileGridModal(); } catch (e) { console.error(e); }
-});
+    // Inline tile grid: initialise whenever the canvas is present in the DOM (Compass page)
+    const inlineTileCanvas = document.getElementById('tile-grid-canvas');
+    if (inlineTileCanvas) {
+        try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
 document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
@@ -17314,6 +17437,14 @@ if (tileGridDetails) {
     tileGridDetails.open = !!tileGridExpanded;
     tileGridDetails.addEventListener('toggle', () => {
         tileGridExpanded = tileGridDetails.open;
+    });
+}
+
+// --- Inline Tile Grid panel expand/collapse ---
+const tileGridInlineDetails = document.getElementById('tile-grid-inline-details');
+if (tileGridInlineDetails) {
+    tileGridInlineDetails.addEventListener('toggle', () => {
+        tileGridExpanded = tileGridInlineDetails.open;
     });
 }
 
