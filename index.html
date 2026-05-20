@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12761,6 +12761,9 @@ function resetMapView(event) {
 
 /** Start dragging the map to pan it. */
 function startMapDrag(event) {
+    // Clear any stuck drag state from a previously cancelled gesture
+    endMapDrag();
+
     // Only handle touches/clicks that originate inside the map container itself
     const container = document.getElementById('target-map-container');
     if (!container || !container.contains(event.target)) return;
@@ -12784,6 +12787,7 @@ function startMapDrag(event) {
     document.addEventListener('mouseup', endMapDrag);
     document.addEventListener('touchmove', onMapDrag, { passive: false });
     document.addEventListener('touchend', endMapDrag);
+    document.addEventListener('touchcancel', endMapDrag);
 }
 
 function onMapDrag(event) {
@@ -12819,13 +12823,13 @@ function onMapDrag(event) {
 }
 
 function endMapDrag() {
-    if (!isMapDragging) return;
     isMapDragging = false;
 
     document.removeEventListener('mousemove', onMapDrag);
     document.removeEventListener('mouseup', endMapDrag);
     document.removeEventListener('touchmove', onMapDrag);
     document.removeEventListener('touchend', endMapDrag);
+    document.removeEventListener('touchcancel', endMapDrag);
 }
         
 function renderTargetPlot(targets, userCoordsOrNull = null) {
