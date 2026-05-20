@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1546,15 +1546,22 @@ summary {
                 <label for="profile-detector" class="block text-sm font-medium text-gray-700">
                     Detector Used
                 </label>
-                <input
-                    type="text"
-                    id="profile-detector"
-                    name="profileDetector"
-                    list="detector-list"
-                    autocomplete="off"
-                    placeholder="Select or type your detector…"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
-                >
+                <div class="relative mt-1" id="detector-combo-wrapper">
+                    <input
+                        type="text"
+                        id="profile-detector"
+                        name="profileDetector"
+                        autocomplete="off"
+                        placeholder="Type or select your detector…"
+                        class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                        oninput="filterDetectorList(this.value)"
+                        onfocus="showDetectorDropdown()"
+                    >
+                    <div id="detector-dropdown"
+                         class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-56 overflow-y-auto"
+                         style="display:none;">
+                    </div>
+                </div>
             </div>
 
             <div class="flex justify-end space-x-3 mt-6">
@@ -18323,6 +18330,87 @@ try {
   // Mobile bottom nav is added after the main script,
   // so run highlighting once the bottom nav exists in the DOM.
   try { if (typeof updateActiveNavButtons === 'function') updateActiveNavButtons(); } catch (e) {}
+</script>
+
+<!-- Detector combo box logic -->
+<script>
+const DETECTOR_LIST = [
+    'Bounty Hunter Land Ranger Pro',
+    'Bounty Hunter Time Ranger Pro',
+    'Fisher F22',
+    'Fisher F44',
+    'Fisher F75',
+    'Garrett Ace 400',
+    'Garrett Ace Apex',
+    'Garrett AT Gold',
+    'Garrett AT Max',
+    'Garrett AT Pro',
+    'Minelab CTX 3030',
+    'Minelab Equinox 600',
+    'Minelab Equinox 800',
+    'Minelab Equinox 900',
+    'Minelab Manticore',
+    'Minelab Safari',
+    'Minelab Vanquish 340',
+    'Minelab Vanquish 340 Pro',
+    'Minelab Vanquish 440',
+    'Minelab Vanquish 540',
+    'Minelab Vanquish 540 Pro',
+    'Minelab X-Terra Pro',
+    'Nokta Anfibio Multi',
+    'Nokta Kruzer',
+    'Nokta Legend',
+    'Nokta Pulse Dive',
+    'Nokta Simplex Ultra',
+    'Nokta Simplex+',
+    'Rutus Alter 71',
+    'Rutus Argo',
+    'Teknetics Eurotek Pro',
+    'Teknetics T2',
+    "White's MXT Pro",
+    "White's Spectra V3i",
+    'XP Deus II',
+    'XP ORX'
+];
+
+function renderDetectorDropdown(items) {
+    const dd = document.getElementById('detector-dropdown');
+    if (!dd) return;
+    if (!items.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = items.map(d =>
+        `<div class="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
+              onmousedown="selectDetector('${d.replace(/'/g, "\\'")}')">${d}</div>`
+    ).join('');
+    dd.style.display = 'block';
+}
+
+function showDetectorDropdown() {
+    const input = document.getElementById('profile-detector');
+    const val = input ? input.value : '';
+    filterDetectorList(val);
+}
+
+function filterDetectorList(val) {
+    const q = (val || '').toLowerCase().trim();
+    const filtered = q ? DETECTOR_LIST.filter(d => d.toLowerCase().includes(q)) : DETECTOR_LIST;
+    renderDetectorDropdown(filtered);
+}
+
+function selectDetector(val) {
+    const input = document.getElementById('profile-detector');
+    if (input) input.value = val;
+    const dd = document.getElementById('detector-dropdown');
+    if (dd) dd.style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('detector-combo-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        const dd = document.getElementById('detector-dropdown');
+        if (dd) dd.style.display = 'none';
+    }
+});
 </script>
 
 <!-- Detector datalist: must be at top level so it works when modal is hidden -->
