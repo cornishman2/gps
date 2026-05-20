@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12704,8 +12704,7 @@ try {
     }
 } catch (_) {}
 
-let isMapDragging = false;
-let mapDragStartX = 0;
+let mapDragStartX = 0; // kept for legacy safety — no longer used by drag
 let mapDragStartY = 0;
 let mapDragStartOffsetX = 0;
 let mapDragStartOffsetY = 0;
@@ -12759,72 +12758,48 @@ function resetMapView(event) {
     showMessage('Map view reset (centre target cleared).', 'success');
 }
 
-/** Start dragging the map to pan it. */
-function startMapDrag(event) {
-    // Clear any stuck drag state from a previously cancelled gesture
-    isMapDragging = false;
+// ─── Map pan (directional buttons) ───────────────────────────────────────────
+// Step size as % of map container — feels right at normal zoom; shrinks when
+// zoomed in so fine-positioning remains possible.
+const MAP_PAN_STEP_BASE = 8; // percent per tap / per repeat tick
+let _mapPanTimer = null;     // hold-to-repeat interval
 
-    // Only handle touches/clicks that originate inside the map container itself
+function panMap(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const step = MAP_PAN_STEP_BASE / (mapZoom || 1);
+    if (dir === 'up')    mapOffsetY += step;
+    if (dir === 'down')  mapOffsetY -= step;
+    if (dir === 'left')  mapOffsetX += step;
+    if (dir === 'right') mapOffsetX -= step;
+
+    // Live-update transform without a full re-render (same technique as old drag)
     const container = document.getElementById('target-map-container');
-    if (!container || !container.contains(event.target)) return;
-
-    // Don't start a drag when touching zoom controls or a pin dot (tappable)
-    if (event.target.closest) {
-        if (event.target.closest('.map-zoom-controls')) return;
-        if (event.target.closest('.map-pin')) return;
-    }
-
-    const e = event.touches ? event.touches[0] : event;
-    event.preventDefault();
-
-    isMapDragging = true;
-    mapDragStartX = e.clientX;
-    mapDragStartY = e.clientY;
-    mapDragStartOffsetX = mapOffsetX;
-    mapDragStartOffsetY = mapOffsetY;
-}
-
-function onMapDrag(event) {
-    if (!isMapDragging) return;
-
-    // Ignore moves that originate outside the map container (e.g. scrolling elsewhere on page)
-    const container = document.getElementById('target-map-container');
-    if (!container) { endMapDrag(); return; }
-
-    const e = event.touches ? event.touches[0] : event;
-
-    const rect = container.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-
-    event.preventDefault();
-
-    const dx = e.clientX - mapDragStartX;
-    const dy = e.clientY - mapDragStartY;
-
-    const dxPercent = (dx / rect.width) * 100;
-    const dyPercent = (dy / rect.height) * 100;
-
-    mapOffsetX = mapDragStartOffsetX + dxPercent;
-    mapOffsetY = mapDragStartOffsetY + dyPercent;
-
-    // Update transform live without a full re-render
-    const inner = container.querySelector('.map-inner-layer');
-    if (inner) {
-        inner.style.transform =
+    if (container) {
+        const inner = container.querySelector('.map-inner-layer');
+        if (inner) inner.style.transform =
             `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
     }
 }
 
-function endMapDrag() {
-    isMapDragging = false;
+function startMapPan(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    stopMapPan();            // clear any previous hold
+    panMap(dir);             // immediate first step
+    // After a short delay, repeat rapidly while held
+    _mapPanTimer = setTimeout(() => {
+        _mapPanTimer = setInterval(() => panMap(dir), 80);
+    }, 350);
 }
 
-// Persistent document-level listeners — registered once, always active, gated by isMapDragging
-document.addEventListener('mousemove', onMapDrag, { passive: false });
-document.addEventListener('mouseup', endMapDrag);
-document.addEventListener('touchmove', onMapDrag, { passive: false });
-document.addEventListener('touchend', endMapDrag);
-document.addEventListener('touchcancel', endMapDrag);
+function stopMapPan() {
+    if (_mapPanTimer !== null) {
+        clearTimeout(_mapPanTimer);
+        clearInterval(_mapPanTimer);
+        _mapPanTimer = null;
+    }
+}
+
+// ─── Drag (removed — replaced by directional buttons) ────────────────────────
         
 function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Haversine approximation constants
@@ -13337,8 +13312,6 @@ const toPercent = (x, y) => {
              style="height: ${heightStyle};"
              onclick="toggleMapFullscreen(event)"
              id="target-map-container"
-             onmousedown="startMapDrag(event)"
-             ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
                 ${gridTileHtml}
@@ -13353,8 +13326,38 @@ const toPercent = (x, y) => {
 
 
 
+            <!-- Directional pan buttons -->
+            <div class="map-zoom-controls mt-2 mb-1 flex flex-col items-center gap-1">
+                <div class="flex justify-center">
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▲</button>
+                </div>
+                <div class="flex justify-center gap-10">
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >◀</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▶</button>
+                </div>
+                <div class="flex justify-center">
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▼</button>
+                </div>
+            </div>
+
             <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-2 mb-2 flex gap-2 justify-center">
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
                 <button
                     type="button"
                     class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
@@ -13633,8 +13636,6 @@ const toPercent = (x, y) => {
              style="height: ${heightStyle};"
              onclick="toggleMapFullscreen(event)"
              id="target-map-container"
-             onmousedown="startMapDrag(event)"
-             ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
                 ${trackSvgHtml}
