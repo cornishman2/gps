@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1589,7 +1589,7 @@ summary {
       <i class="fas fa-times text-sm"></i>
     </button>
 
-    <h3 class="text-lg font-bold text-primary mb-1">Tile Grid (30 × 30)</h3>
+    <h3 class="text-lg font-bold text-primary mb-1">Tile Grid (15 × 15)</h3>
     <p id="tile-grid-subtitle" class="text-xs text-gray-600 mb-3">
       1m squares. Your position is shown as a dot. (Coverage marking is ON in Step 3.) • Step 3c build 2026-02-08
     </p>
@@ -1722,14 +1722,14 @@ function getCompassOpenSurvey() {
 function ensureSurveyGridTileDefaults(survey) {
     if (!survey) return;
     if (!survey.gridTile || typeof survey.gridTile !== 'object') {
-        survey.gridTile = { enabled: false, sizeM: 30, centerLat: null, centerLon: null };
+        survey.gridTile = { enabled: false, sizeM: 15, centerLat: null, centerLon: null };
     }
     // Completed tile history: fixed areas that stay on the map even when you move the active tile
     if (!Array.isArray(survey.gridTileCompletedAreas)) {
         survey.gridTileCompletedAreas = [];
     }
     if (typeof survey.gridTile.sizeM !== 'number' || !isFinite(survey.gridTile.sizeM) || survey.gridTile.sizeM <= 0) {
-        survey.gridTile.sizeM = 30;
+        survey.gridTile.sizeM = 15;
     }
     if (typeof survey.gridTile.enabled !== 'boolean') {
         survey.gridTile.enabled = !!survey.gridTile.enabled;
@@ -1821,7 +1821,7 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 }
 
 // ------------------------------------------------------
-//  TILE GRID VIEW (Step 2/3: 30×30 grid, show dot, paint coverage)
+//  TILE GRID VIEW (Step 2/3: 15×15 grid, show dot, paint coverage)
 // ------------------------------------------------------
 let tileGridModalIsOpen = false;
 
@@ -1867,7 +1867,7 @@ function stopTileGridLocationWatch() {
 
 function ensureTileCoverageStorage(tile) {
     if (!tile) return;
-    const cells = Math.round(Number(tile.sizeM) || 30);
+    const cells = Math.round(Number(tile.sizeM) || 15);
     const total = cells * cells;
 
     if (typeof tile.coverageBits !== 'string' || tile.coverageBits.length !== total) {
@@ -1915,7 +1915,7 @@ function openTileGridModal() {
     ensureTileCoverageStorage(survey.gridTile);
 
     // NEW: Reset the grid every time it is opened (start unpainted)
-    const __cells = Math.round(Number(survey.gridTile.sizeM) || 30);
+    const __cells = Math.round(Number(survey.gridTile.sizeM) || 15);
     survey.gridTile.coverageBits = '0'.repeat(__cells * __cells);
         survey.gridTile.coverageColors = {};
 survey.gridTile.paintingEnabled = true;
@@ -2090,7 +2090,7 @@ function clearTileCoverage() {
     const survey = getCompassOpenSurvey();
     if (!survey || !survey.gridTile) return;
     ensureTileCoverageStorage(survey.gridTile);
-    const cells = Math.round(Number(survey.gridTile.sizeM) || 30);
+    const cells = Math.round(Number(survey.gridTile.sizeM) || 15);
     survey.gridTile.coverageBits = '0'.repeat(cells * cells);
         survey.gridTile.coverageColors = {};
 survey.gridTile.paintingEnabled = true;
@@ -2133,7 +2133,7 @@ function paintTileCellUnderUserWithColour(colourName) {
     const lon0 = Number(tile.centerLon);
     if (!isFinite(lat0) || !isFinite(lon0)) return false;
 
-    const sizeM = Number(tile.sizeM) || 30;
+    const sizeM = Number(tile.sizeM) || 15;
     const cells = Math.round(sizeM);
 
     const M_PER_DEG_LAT = 111320;
@@ -2219,7 +2219,7 @@ function markTileGridComplete() {
     }
 
     // Record a fixed snapshot of the current tile location/size so it stays on the map even if the active tile is moved.
-    const sizeM = Number(tile.sizeM) || 30;
+    const sizeM = Number(tile.sizeM) || 15;
 
     if (isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
         survey.gridTileCompletedAreas.unshift({
@@ -2232,7 +2232,7 @@ function markTileGridComplete() {
     }
 
     // Reset the active tile coverage so the next area starts blank (the completed snapshot remains).
-    const cells = Math.round(Number(sizeM) || 30);
+    const cells = Math.round(Number(sizeM) || 15);
     tile.coverageBits = '0'.repeat(cells * cells);
     tile.paintingEnabled = false;
     tile.completed = false;
@@ -2261,7 +2261,7 @@ function drawTileGrid() {
     const tile = survey.gridTile;
     ensureTileCoverageStorage(tile);
 
-    const sizeM = Number(tile.sizeM) || 30;
+    const sizeM = Number(tile.sizeM) || 15;
     const cells = Math.round(sizeM);
     const total = cells * cells;
 
@@ -13225,7 +13225,7 @@ const toPercent = (x, y) => {
             completedHtml = completed
                 .filter(a => a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)) && isFinite(Number(a.sizeM)))
                 .map(a => {
-                    const sizeM = Number(a.sizeM) || 30;
+                    const sizeM = Number(a.sizeM) || 15;
                     const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
                     const label = '';
                     return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
@@ -13236,7 +13236,7 @@ const toPercent = (x, y) => {
         // 2) Active tile (movable) — always red outline so you can position the next square
         let activeHtml = '';
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
-            const sizeM = Number(tile.sizeM) || 30;
+            const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
@@ -14840,7 +14840,7 @@ ${(() => {
                     + '<summary class="cursor-pointer select-none flex items-center gap-2 justify-start">'
                     + '<span class="caret text-lg">&#9658;</span>'
                     + '<span class="text-xl font-semibold text-gray-700 flex items-center gap-2">'
-                    + '<i class="fas fa-th text-primary"></i> Tile Grid (30&times;30)'
+                    + '<i class="fas fa-th text-primary"></i> Tile Grid (15&times;15)'
                     + '</span></summary>'
                     + '<div class="mt-3">'
                     + '<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 mb-2">'
