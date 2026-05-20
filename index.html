@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -10808,6 +10808,7 @@ function handleEditProfileSubmit(event) {
 
     // Capture old values BEFORE changing anything (used only for updating target.user)
     const oldName = userProfile.name;
+    const oldDetector = userProfile.detector;
 
     // All fields are OPTIONAL
     const newName = (form['profileName']?.value || '').trim();
@@ -10829,6 +10830,18 @@ function handleEditProfileSubmit(event) {
                 }
             });
         });
+    }
+
+    // If detector changed and a preset exists for the new one, apply it automatically
+    if (newDetector && newDetector !== oldDetector) {
+        const applied = applyDetectorPreset(newDetector, true);
+        if (applied) {
+            const key = getPresetKeyForDetector(newDetector);
+            const label = key === 'minelab' ? 'Minelab (-10→40)' :
+                          key === 'legend'  ? 'Nokta Legend (0→60)' :
+                                             'Standard (0→99)';
+            showMessage(`Profile saved. VDI preset applied for ${newDetector}: ${label}. Check Quick Target Buttons in Settings.`, 'success');
+        }
     }
 
     // Save and re-render
@@ -15097,7 +15110,7 @@ return `
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
   <h4 class="text-lg font-bold text-gray-800 mb-2">Quick Target Buttons</h4>
   <p class="text-sm text-gray-600 mb-3">
-    Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour.
+    Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour. Use <b>Apply preset for my detector</b> to load ranges scaled to your machine's VDI scale.
   </p>
 
   <div class="overflow-x-auto">
@@ -15127,6 +15140,12 @@ return `
             id="quick-target-reset-btn" onclick="resetQuickTargetSettingsToDefaults()"
             class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow hover:bg-gray-300 transition">
       Reset
+    </button>
+
+    <button type="button"
+            id="quick-target-preset-btn" onclick="applyDetectorPreset(userProfile && userProfile.detector)"
+            class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-teal-700 transition">
+      Apply preset for my detector
     </button>
   </div>
 
@@ -17889,6 +17908,78 @@ function loadQuickTargetRanges() {
 
 function saveQuickTargetRanges(ranges) {
     localStorage.setItem(QUICK_TARGET_RANGES_STORAGE_KEY, JSON.stringify(ranges));
+}
+
+// ─── Detector VDI presets ─────────────────────────────────────────────────────
+// Three scale families, five bands each (Blue → Sky → Green → Amber → Red)
+const DETECTOR_VDI_PRESETS = {
+    // Minelab: -10 to +40
+    minelab: [
+        { color: 'BLUE',  min: -10, max:   3, targetId:  -2 },
+        { color: 'SKY',   min:   4, max:  11, targetId:   7 },
+        { color: 'GREEN', min:  12, max:  18, targetId:  15 },
+        { color: 'AMBER', min:  19, max:  26, targetId:  22 },
+        { color: 'RED',   min:  27, max:  40, targetId:  33 },
+    ],
+    // Standard 0-99: Garrett, Fisher, Nokta (non-Legend), Teknetics,
+    //                Bounty Hunter, White's, Rutus, XP
+    standard99: [
+        { color: 'BLUE',  min:  0, max: 19, targetId:  9 },
+        { color: 'SKY',   min: 20, max: 39, targetId: 29 },
+        { color: 'GREEN', min: 40, max: 59, targetId: 49 },
+        { color: 'AMBER', min: 60, max: 79, targetId: 69 },
+        { color: 'RED',   min: 80, max: 99, targetId: 89 },
+    ],
+    // Nokta Legend: 0-60
+    legend: [
+        { color: 'BLUE',  min:  0, max: 11, targetId:  5 },
+        { color: 'SKY',   min: 12, max: 23, targetId: 17 },
+        { color: 'GREEN', min: 24, max: 35, targetId: 29 },
+        { color: 'AMBER', min: 36, max: 47, targetId: 41 },
+        { color: 'RED',   min: 48, max: 60, targetId: 54 },
+    ],
+};
+
+// Map detector name keywords → preset key
+function getPresetKeyForDetector(detectorName) {
+    const d = (detectorName || '').toLowerCase();
+    if (d.includes('minelab'))                          return 'minelab';
+    if (d.includes('nokta legend') || d === 'legend')  return 'legend';
+    if (d.includes('garrett') || d.includes('fisher') ||
+        d.includes('nokta')   || d.includes('teknetics') ||
+        d.includes('bounty hunter') || d.includes("white's") ||
+        d.includes('whites')  || d.includes('rutus') ||
+        d.includes('xp'))                              return 'standard99';
+    return null;
+}
+
+function getPresetRangesForDetector(detectorName) {
+    const key = getPresetKeyForDetector(detectorName);
+    return key ? DETECTOR_VDI_PRESETS[key] : null;
+}
+
+function applyDetectorPreset(detectorName, silent) {
+    const ranges = getPresetRangesForDetector(detectorName);
+    if (!ranges) {
+        if (!silent) showMessage('No VDI preset found for this detector — ranges unchanged.', 'info');
+        return false;
+    }
+    saveQuickTargetRanges(ranges);
+    quickTargetRangesDraft = null;
+    try { applyQuickTargetRangesToCompassButtons(ranges); } catch (e) {}
+    // Refresh the settings table if it's visible
+    try {
+        const tbody = document.getElementById('quick-target-ranges-tbody');
+        if (tbody) {
+            const key = getPresetKeyForDetector(detectorName);
+            const label = key === 'minelab' ? 'Minelab (-10→40)' :
+                          key === 'legend'  ? 'Nokta Legend (0→60)' :
+                                             'Standard (0→99)';
+            if (!silent) showMessage(`VDI preset applied: ${label}. Tap Save to keep it.`, 'success');
+            render();
+        }
+    } catch (e) {}
+    return true;
 }
 
 // =====================================
