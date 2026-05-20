@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V4
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12761,13 +12761,14 @@ function resetMapView(event) {
 
 /** Start dragging the map to pan it. */
 function startMapDrag(event) {
-    // Don't start a drag when touching zoom controls, a pin, or any child with its own click handler
+    // Only handle touches/clicks that originate inside the map container itself
+    const container = document.getElementById('target-map-container');
+    if (!container || !container.contains(event.target)) return;
+
+    // Don't start a drag when touching zoom controls or a pin dot (tappable)
     if (event.target.closest) {
         if (event.target.closest('.map-zoom-controls')) return;
         if (event.target.closest('.map-pin')) return;
-        // Any element with its own onclick that isn't the map container itself
-        const t = event.target;
-        if (t !== event.currentTarget && t.onclick) return;
     }
 
     const e = event.touches ? event.touches[0] : event;
@@ -12788,14 +12789,17 @@ function startMapDrag(event) {
 function onMapDrag(event) {
     if (!isMapDragging) return;
 
-    const e = event.touches ? event.touches[0] : event;
-    event.preventDefault();
-
+    // Ignore moves that originate outside the map container (e.g. scrolling elsewhere on page)
     const container = document.getElementById('target-map-container');
-    if (!container) return;
+    if (!container) { endMapDrag(); return; }
 
+    const e = event.touches ? event.touches[0] : event;
+
+    // If touch has moved outside the container, end drag rather than dragging from offscreen
     const rect = container.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
+
+    event.preventDefault();
 
     const dx = e.clientX - mapDragStartX;
     const dy = e.clientY - mapDragStartY;
@@ -13136,7 +13140,7 @@ const toPercent = (x, y) => {
                         const safe = String(lbl).replace(/</g,'&lt;').replace(/>/g,'&gt;');
                         return `
                     <span
-                        class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
+                        class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300 pointer-events-none"
                         style="
                             left: 100%;
                             top: 50%;
