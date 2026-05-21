@@ -3682,8 +3682,9 @@ Configures the five coloured buttons on the Map page.
 Each row sets a VDI range and a default saved Target ID for
 that colour band.
 
-Tap "Apply preset for my detector" to automatically load VDI
-ranges scaled to your machine. Three presets are available:
+When you save your profile with a new detector, Detekta
+automatically updates the VDI ranges to match your machine.
+Three presets are available:
 
 • Minelab (-10 to +40)
   All Minelab models (Equinox, Vanquish, Manticore, etc.)
@@ -3695,8 +3696,9 @@ ranges scaled to your machine. Three presets are available:
   Garrett, Fisher, Nokta (other models), Teknetics,
   Bounty Hunter, White's, Rutus, XP
 
+You can also edit the ranges manually at any time.
 Tap Save to keep your changes permanently.
-Tap Reset to restore the original Minelab defaults.
+Tap Reset to defaults to restore the original Minelab ranges.
 
 Changes to ranges are reflected immediately on the Map page
 buttons without needing to save first.
@@ -11019,14 +11021,16 @@ function handleEditProfileSubmit(event) {
             const label = key === 'minelab' ? 'Minelab (-10→40)' :
                           key === 'legend'  ? 'Nokta Legend (0→60)' :
                                              'Standard (0→99)';
-            showMessage(`Profile saved. VDI preset applied for ${newDetector}: ${label}. Check Quick Target Buttons in Settings.`, 'success');
+            showMessage(`Profile saved. VDI ranges updated for ${newDetector}: ${label}.`, 'success');
+        } else {
+            showMessage('Profile saved.', 'success');
         }
+    } else {
+        showMessage('Profile saved.', 'success');
     }
 
-    // Save and re-render
-    saveSurveysToLocalStorage();
+    saveUserProfile();
     closeEditProfileModal();
-    showMessage(`Profile updated successfully!`, 'success');
     render();
 }
 
@@ -15156,6 +15160,49 @@ return `
                         <i class="fas fa-user-edit mr-1"></i> Edit Profile
                     </button>
                 </div>
+
+                <!-- QUICK TARGET RANGE SETTINGS (inside profile — auto-updates when detector changes) -->
+                <div class="mt-6 pt-4 border-t border-gray-100">
+                  <h4 class="text-lg font-bold text-gray-800 mb-2">Quick Target Buttons</h4>
+                  <p class="text-sm text-gray-600 mb-3">
+                    The five coloured buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour.
+                    These ranges update automatically when you change your detector in Edit Profile.
+                  </p>
+
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                      <thead class="bg-gray-50">
+                        <tr>
+                          <th class="text-left p-2 border-b">Colour</th>
+                          <th class="text-left p-2 border-b">Min ID</th>
+                          <th class="text-left p-2 border-b">Max ID</th>
+                          <th class="text-left p-2 border-b">Saved Target ID</th>
+                        </tr>
+                      </thead>
+                      <tbody id="quick-target-ranges-tbody">
+                        ${quickTargetRowsHtml || ''}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2 mt-3">
+                      <button type="button"
+                              id="quick-target-save-btn" onclick="saveQuickTargetSettingsFromUI()"
+                              class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-indigo-700 transition">
+                        Save
+                      </button>
+                      <button type="button"
+                              id="quick-target-reset-btn" onclick="resetQuickTargetSettingsToDefaults()"
+                              class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow hover:bg-gray-300 transition">
+                        Reset to defaults
+                      </button>
+                  </div>
+
+                  <p id="quick-target-validation-msg" class="text-xs text-red-600 mt-2 hidden"></p>
+                  <p class="text-xs text-gray-500 mt-2">
+                    Edits apply instantly to the Map buttons. Tap <b>Save</b> to keep them permanently.
+                  </p>
+                </div>
             </div>
 
             <!-- PHOTO SETTINGS -->
@@ -15284,55 +15331,6 @@ return `
 </div>
 
             
-
-<!-- QUICK TARGET RANGE SETTINGS -->
-<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
-  <h4 class="text-lg font-bold text-gray-800 mb-2">Quick Target Buttons</h4>
-  <p class="text-sm text-gray-600 mb-3">
-    Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour. Use <b>Apply preset for my detector</b> to load ranges scaled to your machine's VDI scale.
-  </p>
-
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="text-left p-2 border-b">Colour</th>
-          <th class="text-left p-2 border-b">Min ID</th>
-          <th class="text-left p-2 border-b">Max ID</th>
-          <th class="text-left p-2 border-b">Saved Target ID</th>
-        </tr>
-      </thead>
-      <tbody id="quick-target-ranges-tbody">
-        ${quickTargetRowsHtml || ''}
-      </tbody>
-    </table>
-  </div>
-
-<div class="flex flex-wrap gap-2 mt-3">
-    <button type="button"
-            id="quick-target-save-btn" onclick="saveQuickTargetSettingsFromUI()"
-            class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-indigo-700 transition">
-      Save
-    </button>
-
-    <button type="button"
-            id="quick-target-reset-btn" onclick="resetQuickTargetSettingsToDefaults()"
-            class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow hover:bg-gray-300 transition">
-      Reset
-    </button>
-
-    <button type="button"
-            id="quick-target-preset-btn" onclick="applyDetectorPreset(userProfile && userProfile.detector)"
-            class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-teal-700 transition">
-      Apply preset for my detector
-    </button>
-  </div>
-
-  <p id="quick-target-validation-msg" class="text-xs text-red-600 mt-2 hidden"></p>
-  <p class="text-xs text-gray-500 mt-2">
-    Edits apply instantly to the Map rainbow buttons. Tap <b>Save</b> to keep them permanently.
-  </p>
-</div>
 
 <!-- Danger Zone: Reset All Data -->
             <div class="mt-8 border-t border-gray-300 pt-6">
