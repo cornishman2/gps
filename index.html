@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3398,16 +3398,35 @@ QUICK TARGET BUTTONS
 Five coloured buttons (Blue, Sky, Green, Amber, Red) let you
 log a target instantly with a single tap.
 Each button logs a target using the VDI range configured for
-that colour in Settings.
+that colour in your Profile settings.
 The label on each button shows the VDI range it covers.
+
+TRACKS
+The Tracks section lists all tracks recorded for the open
+survey. Each track shows a coloured circle indicating its
+colour on the map, followed by the track name, point count,
+and time recorded.
+
+Use the checkbox beside each track to show or hide it on
+the map. Use the pencil icon to edit the track name,
+description, and colour. Use the bin icon to delete a track.
+
+Deleting a track in the middle of the list automatically
+moves the remaining tracks up.
 
 TRACKING
 Tap "Start Tracking" to record your path as you detect.
 Your track appears on the map as you move.
 Tap "Stop Tracking" when you finish.
 If you forget to stop, your journey home will be recorded.
-You can delete unwanted tracks from the Tracks section below
-the map.
+
+The first track created for a survey is named Perimeter
+by default. Subsequent tracks are named Track 2, Track 3,
+and so on. You can rename any track using the pencil icon.
+
+Track colours cycle through a palette of 16 colours.
+The first track (Perimeter) is always black by default.
+You can change any track colour using the pencil icon.
 
 STAKE BUTTON
 The STAKE button places a black square marker at your current
@@ -3474,7 +3493,8 @@ Row 3 – Management
 • Edit details   – change information and manage photos
 • Copy to Finds  – use this once you have dug and identified a
   find worth recording permanently
-• Delete         – permanently removes the target
+• Delete         – permanently removes the target and any photos
+  linked only to it. You will be asked to confirm first.
 
 When copying to Finds, the target is promoted to your Finds
 library and removed from the Targets list.
@@ -3499,8 +3519,8 @@ and photos. If a find has photos, tap the photo to step
 through them.
 
 Each find has buttons allowing you to edit or delete it.
-Deleted finds can only be restored by copying the original
-target again.
+Deleting a find is permanent and will also remove any photos
+linked only to that find. You will be asked to confirm first.
 
 --------------------------------
 EXPORT &amp; IMPORT PAGE
@@ -3549,22 +3569,25 @@ YOUR PROFILE
 Shows your name, NCMD membership number, and detector.
 Tap "Edit Profile" to update any of these.
 
-When you change your detector to a recognised model, Detekta
-will automatically apply the correct VDI ranges for your
-machine (see Quick Target Buttons below).
+The Edit Profile screen also contains the Quick Target Button
+range settings. When you change your detector to a recognised
+model, the VDI ranges update automatically to match your
+machine. Tap Save Changes to save your profile and ranges
+together.
 
 PHOTO SETTINGS
 Sets the maximum width photos are resized to before saving.
 Smaller values reduce storage and export file sizes.
 Set to 0 to disable resizing.
 
-QUICK TARGET BUTTONS
+QUICK TARGET BUTTONS (inside Edit Profile)
 Configures the five coloured buttons on the Map page.
 Each row sets a VDI range and a default saved Target ID for
 that colour band.
 
-Tap "Apply preset for my detector" to automatically load VDI
-ranges scaled to your machine. Three presets are available:
+Changing the detector in Edit Profile automatically updates
+the ranges to the correct preset for that machine.
+Three presets are available:
 
 • Minelab (-10 to +40)
   All Minelab models (Equinox, Vanquish, Manticore, etc.)
@@ -3575,12 +3598,6 @@ ranges scaled to your machine. Three presets are available:
 • Standard (0 to 99)
   Garrett, Fisher, Nokta (other models), Teknetics,
   Bounty Hunter, White's, Rutus, XP
-
-Tap Save to keep your changes permanently.
-Tap Reset to restore the original Minelab defaults.
-
-Changes to ranges are reflected immediately on the Map page
-buttons without needing to save first.
 
 APP LIMITS
 Displays any active limits on surveys, targets, and finds,
@@ -3597,7 +3614,7 @@ GETTING STARTED
    Go to Settings and tap "Edit Profile".
    Enter your name, NCMD number, and detector model.
    Detekta will automatically set up the correct VDI ranges
-   for your machine.
+   for your machine. Tap Save Changes.
 
 2. Create a Survey
    A survey represents a detecting session or location.
@@ -10925,7 +10942,8 @@ function handleTargetAction(element) {
     if (action === 'delete') {
         showConfirmationModal(
             `Confirm Delete Target: ${target.description}`,
-            `Are you sure you want to permanently delete this target?`,
+            `Are you sure you want to permanently delete this target?<br>
+             <span class="text-sm text-gray-600">This will also delete any photos linked only to this target. This cannot be undone.</span>`,
             executeAction
         );
     } else if (action === 'saveFind') {
