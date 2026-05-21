@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1530,7 +1530,7 @@ summary {
     </div>
 
 <div id="edit-profile-modal" class="modal">
-    <div class="modal-content bg-white p-6 shadow-2xl">
+    <div class="modal-content bg-white p-6 shadow-2xl" style="max-height:90vh;overflow-y:auto;">
         <h3 class="text-xl font-bold text-primary mb-4">
             Edit Detectorist Profile
         </h3>
@@ -1551,7 +1551,7 @@ summary {
                 >
             </div>
 
-            <!-- NCMD membership number (NEW, optional) -->
+            <!-- NCMD membership number -->
             <div class="mb-4">
                 <label for="profile-ncmd-number" class="block text-sm font-medium text-gray-700">
                     NCMD Membership Number <span class="text-gray-400">(optional)</span>
@@ -1578,13 +1578,35 @@ summary {
                         autocomplete="off"
                         placeholder="Type or select your detector…"
                         class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
-                        oninput="filterDetectorList(this.value)"
+                        oninput="filterDetectorList(this.value); profileDetectorChanged(this.value);"
                         onfocus="showDetectorDropdown()"
                     >
                     <div id="detector-dropdown"
                          class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-56 overflow-y-auto"
                          style="display:none;">
                     </div>
+                </div>
+            </div>
+
+            <!-- Quick Target Buttons (inside form for layout, inputs read by submit handler) -->
+            <div class="mb-4 border-t border-gray-200 pt-4">
+                <h4 class="text-sm font-semibold text-gray-700 mb-1">Quick Target Buttons</h4>
+                <p class="text-xs text-gray-500 mb-3">
+                    VDI ranges for the five colour buttons on the Map screen. Changing your detector above updates these automatically.
+                </p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="text-left p-2 border-b">Colour</th>
+                                <th class="text-left p-2 border-b">Min ID</th>
+                                <th class="text-left p-2 border-b">Max ID</th>
+                                <th class="text-left p-2 border-b">Target ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="profile-qtr-tbody">
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -10219,18 +10241,49 @@ async function handleEditTargetSubmit(event) {
     render();
 }
 
+        function buildProfileQtrRows(ranges) {
+            return ranges.map((r, idx) => {
+                const color = String(r.color || '').toUpperCase();
+                const swatchClass = (typeof getQuickTargetSwatchClass === 'function')
+                    ? getQuickTargetSwatchClass(color) : 'bg-gray-400';
+                const min = isFinite(Number(r.min)) ? r.min : '';
+                const max = isFinite(Number(r.max)) ? r.max : '';
+                const tid = (r.targetId !== '' && isFinite(Number(r.targetId))) ? r.targetId : '';
+                return `<tr class="border-b last:border-b-0">
+                    <td class="p-2 font-extrabold whitespace-nowrap">
+                        <span class="inline-block w-3 h-3 rounded-full mr-2 align-middle ${swatchClass}"></span>${color}
+                    </td>
+                    <td class="p-2"><input type="number" id="profile-qtr-min-${idx}" class="w-20 px-2 py-1 border rounded" value="${min}"></td>
+                    <td class="p-2"><input type="number" id="profile-qtr-max-${idx}" class="w-20 px-2 py-1 border rounded" value="${max}"></td>
+                    <td class="p-2"><input type="number" id="profile-qtr-id-${idx}"  class="w-20 px-2 py-1 border rounded" value="${tid}"></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function profileDetectorChanged(detectorName) {
+            const ranges = (typeof getPresetRangesForDetector === 'function')
+                ? getPresetRangesForDetector(detectorName) : null;
+            if (!ranges) return;
+            const tbody = document.getElementById('profile-qtr-tbody');
+            if (tbody) tbody.innerHTML = buildProfileQtrRows(ranges);
+        }
+
         function showEditProfileModal() {
             const modal = document.getElementById('edit-profile-modal');
             document.getElementById('profile-name').value = userProfile.name;
-            document.getElementById('profile-detector').value = userProfile.detector;
+            document.getElementById('profile-detector').value = userProfile.detector || '';
             document.getElementById('profile-ncmd-number').value = userProfile.ncmdNumber || '';
+
+            const ranges = (typeof loadQuickTargetRanges === 'function')
+                ? loadQuickTargetRanges() : [];
+            const tbody = document.getElementById('profile-qtr-tbody');
+            if (tbody) tbody.innerHTML = buildProfileQtrRows(ranges);
 
             modal.style.display = 'block';
 
             const form = document.getElementById('edit-profile-form');
             form.removeEventListener('submit', handleEditProfileSubmit);
             form.addEventListener('submit', handleEditProfileSubmit);
-            showMessage("Edit Profile modal opened. Please enter your name and detector and click 'Save Changes'.", 'info');
         }
 
         function closeEditProfileModal() {
@@ -10263,20 +10316,46 @@ function handleEditProfileSubmit(event) {
         });
     }
 
-    if (newDetector && newDetector !== oldDetector) {
-        const applied = applyDetectorPreset(newDetector, true);
-        if (applied) {
-            const key = getPresetKeyForDetector(newDetector);
-            const label = key === 'minelab' ? 'Minelab (-10→40)' :
-                          key === 'legend'  ? 'Nokta Legend (0→60)' :
-                                             'Standard (0→99)';
-            showMessage(`Profile saved. VDI preset applied for ${newDetector}: ${label}. Check Quick Target Buttons in Settings.`, 'success');
+    // Save Quick Target ranges from the profile modal table
+    try {
+        const ranges = loadQuickTargetRanges();
+        let rangesValid = true;
+        for (let i = 0; i < ranges.length; i++) {
+            const minEl = document.getElementById(`profile-qtr-min-${i}`);
+            const maxEl = document.getElementById(`profile-qtr-max-${i}`);
+            const idEl  = document.getElementById(`profile-qtr-id-${i}`);
+            if (!minEl || !maxEl || !idEl) continue;
+            const min = Number(minEl.value.trim());
+            const max = Number(maxEl.value.trim());
+            const idStr = idEl.value.trim();
+            const tid = idStr === '' ? '' : Number(idStr);
+            if (!isFinite(min) || !isFinite(max) || min > max) {
+                showMessage(`Quick Target row ${i + 1}: Min/Max invalid.`, 'error');
+                rangesValid = false;
+                break;
+            }
+            if (idStr !== '' && (!isFinite(tid) || tid < min || tid > max)) {
+                showMessage(`Quick Target row ${i + 1}: Target ID must be within range.`, 'error');
+                rangesValid = false;
+                break;
+            }
+            ranges[i] = { color: ranges[i].color, min, max, targetId: idStr === '' ? '' : tid };
         }
+        if (!rangesValid) return;
+        saveQuickTargetRanges(ranges);
+        quickTargetRangesDraft = null;
+        try { applyQuickTargetRangesToCompassButtons(ranges); } catch(e) {}
+    } catch(e) {
+        console.error('Failed to save Quick Target ranges from profile modal:', e);
+    }
+
+    if (newDetector && newDetector !== oldDetector) {
+        applyDetectorPreset(newDetector, true);
     }
 
     saveSurveysToLocalStorage();
     closeEditProfileModal();
-    showMessage(`Profile updated successfully!`, 'success');
+    showMessage('Profile updated successfully!', 'success');
     render();
 }
 
@@ -17370,6 +17449,7 @@ function selectDetector(val) {
     if (input) input.value = val;
     const dd = document.getElementById('detector-dropdown');
     if (dd) dd.style.display = 'none';
+    if (typeof profileDetectorChanged === 'function') profileDetectorChanged(val);
 }
 
 document.addEventListener('click', function(e) {
