@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2ab
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1631,6 +1631,71 @@ summary {
     </div>
 </div>
 
+<!-- Tile Grid Modal (Step 2) -->
+<div id="tile-grid-modal" class="modal modal-gallery">
+  <div class="modal-content bg-white p-4 shadow-2xl relative max-w-full">
+    <button
+      type="button"
+      class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center"
+      onclick="closeTileGridModal()"
+      title="Close"
+    >
+      <i class="fas fa-times text-sm"></i>
+    </button>
+
+    <h3 class="text-lg font-bold text-primary mb-1">Tile Grid (15 × 15)</h3>
+    <p id="tile-grid-subtitle" class="text-xs text-gray-600 mb-3">
+      1m squares. Your position is shown as a dot. (Coverage marking is ON in Step 3.) • Step 3c build 2026-02-08
+    </p>
+
+    <div class="w-full flex justify-center">
+      <!-- canvas moved to inline tile grid on Compass page -->
+    </div>
+
+<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+  <div class="text-xs text-gray-600">
+    <span class="font-semibold">Tile centre:</span>
+    <span id="tile-grid-centre-text">Not set</span>
+  </div>
+  <div class="text-xs text-gray-600">
+    <span class="font-semibold">You:</span>
+    <span id="tile-grid-user-text">No GPS fix</span>
+  </div>
+  <div class="text-xs text-gray-600">
+    <span class="font-semibold">Coverage:</span>
+    <span id="tile-grid-coverage-text">0%</span>
+  </div>
+</div>
+
+<div class="mt-3">
+  <div class="grid grid-cols-5 gap-2" id="tile-grid-rainbow-buttons">
+    <button type="button" class="compass-range-btn tile-grid-range-btn dtk-rainbow-btn bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn dtk-rainbow-btn bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn dtk-rainbow-btn bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn dtk-rainbow-btn bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+    <button type="button" class="compass-range-btn tile-grid-range-btn dtk-rainbow-btn bg-gray-500 hover:bg-gray-600" data-min="" data-max="" data-targetid="" data-color="">—</button>
+  </div>
+</div>
+<div class="mt-3 flex gap-2">
+  <button id="tile-grid-complete-btn" type="button"
+    class="flex-1 px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm"
+    style="background-color: rgb(var(--color-primary));" onclick="markTileGridComplete()">
+    Complete
+  </button>
+
+  <button id="tile-grid-clear-btn" type="button"
+    class="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow" onclick="clearTileCoverage()">
+    Clear
+  </button>
+
+  <button id="tile-grid-close-btn" type="button"
+    class="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
+    onclick="closeTileGridModal()"
+  >Close</button>
+</div>
+
+  </div>
+</div>
 
 <script>
 
@@ -1656,9 +1721,6 @@ let currentPage = 'Home';
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
-let showUserPosition = true;
-let compassSurveyIdForMap = null;
-let tracksPanelExpanded = true;
 
 let showMapTargets = true;
 let showMapStakes  = true; // Stakes are targets with VDI -100
@@ -1669,6 +1731,910 @@ let showMapTargetLabels = true;
 let showMapFindLabels   = true;
 
 let mapLayersExpanded = true;
+let tileGridExpanded = true;
+let tileGridControlsExpanded = true;
+let tracksPanelExpanded = true;
+
+function isStakeTarget(t) {
+    if (!t || t.isFind) return false;
+    const raw = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
+        ? t.vdi
+        : (t.targetVdi !== undefined && t.targetVdi !== null && String(t.targetVdi).trim() !== '')
+            ? t.targetVdi
+            : (t.targetVDI !== undefined && t.targetVDI !== null && String(t.targetVDI).trim() !== '')
+                ? t.targetVDI
+                : '';
+    const v = Number(raw);
+    return Number.isFinite(v) && v === -100;
+}
+
+let showUserPosition = true; // default: show user location on the map
+
+let compassSurveyIdForMap = null; // which survey the Compass/Map is currently showing (set in renderCompassPage)
+
+function getCompassOpenSurvey() {
+    if (!compassSurveyIdForMap) return surveys.find(s => s.status === 'Open') || null;
+    return surveys.find(s => s.id === compassSurveyIdForMap) || surveys.find(s => s.status === 'Open') || null;
+}
+
+function ensureSurveyGridTileDefaults(survey) {
+    if (!survey) return;
+    if (!survey.gridTile || typeof survey.gridTile !== 'object') {
+        survey.gridTile = { enabled: false, sizeM: 15, centerLat: null, centerLon: null };
+    }
+    if (!Array.isArray(survey.gridTileCompletedAreas)) {
+        survey.gridTileCompletedAreas = [];
+    }
+    if (typeof survey.gridTile.sizeM !== 'number' || !isFinite(survey.gridTile.sizeM) || survey.gridTile.sizeM <= 0) {
+        survey.gridTile.sizeM = 15;
+    }
+    if (typeof survey.gridTile.enabled !== 'boolean') {
+        survey.gridTile.enabled = !!survey.gridTile.enabled;
+    }
+    if (survey.gridTile.centerLat !== null && !isFinite(Number(survey.gridTile.centerLat))) survey.gridTile.centerLat = null;
+    if (survey.gridTile.centerLon !== null && !isFinite(Number(survey.gridTile.centerLon))) survey.gridTile.centerLon = null;
+}
+
+function getBestLiveGpsCoordsOrNull() {
+    const c = smoothedUserCoords || currentUserCoords || null;
+    if (!c) return null;
+    const lat = Number(c.lat);
+    const lon = Number(c.lon);
+    if (!isFinite(lat) || !isFinite(lon)) return null;
+    return { lat, lon };
+}
+
+function setGridTileToCurrentGps() {
+    const survey = getCompassOpenSurvey();
+    if (!survey) {
+        showMessage('No open survey.', 'error');
+        return;
+    }
+    const c = getBestLiveGpsCoordsOrNull();
+    if (!c) {
+        showMessage('No GPS fix yet. Turn GPS on and wait for a lock.', 'error');
+        return;
+    }
+
+    ensureSurveyGridTileDefaults(survey);
+    survey.gridTile.centerLat = c.lat;
+    survey.gridTile.centerLon = c.lon;
+    survey.gridTile.enabled = true;
+    survey.dateLastChanged = Date.now();
+    if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
+    saveSurveysToLocalStorage();
+
+    showMessage('Grid tile set to current GPS position.', 'success');
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else render();
+}
+
+function toggleGridTileEnabled() {
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+
+    ensureSurveyGridTileDefaults(survey);
+
+    if (!survey.gridTile.enabled && (survey.gridTile.centerLat == null || survey.gridTile.centerLon == null)) {
+        const c = getBestLiveGpsCoordsOrNull();
+        if (c) { survey.gridTile.centerLat = c.lat; survey.gridTile.centerLon = c.lon; }
+    }
+
+    survey.gridTile.enabled = !survey.gridTile.enabled;
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    showMessage(survey.gridTile.enabled ? 'Grid tile shown.' : 'Grid tile hidden.', 'info');
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else render();
+}
+
+function moveGridTileByMeters(dxMeters, dyMeters) {
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+    ensureSurveyGridTileDefaults(survey);
+
+    if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
+        showMessage('Grid tile is not set yet. Tap "Set Tile to GPS" first.', 'warning');
+        return;
+    }
+
+    const lat = Number(survey.gridTile.centerLat);
+    const lon = Number(survey.gridTile.centerLon);
+    if (!isFinite(lat) || !isFinite(lon)) return;
+
+    const M_PER_DEG_LAT = 110574;
+    const mPerDegLon = 111320 * Math.cos(lat * Math.PI / 180);
+
+    const dLat = dyMeters / M_PER_DEG_LAT;
+    const dLon = (mPerDegLon ? (dxMeters / mPerDegLon) : 0);
+
+    survey.gridTile.centerLat = lat + dLat;
+    survey.gridTile.centerLon = lon + dLon;
+    survey.dateLastChanged = Date.now();
+
+    // Rebuild coverage display for new centre position
+    if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
+    saveSurveysToLocalStorage();
+
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else render();
+}
+
+let tileGridModalIsOpen = false;
+
+let tileGridDrawTimer = null;
+let tileGridWatchId = null;
+let tileGridLastCoords = null;
+let tileGridLastFixTs = 0;
+
+function startTileGridLocationWatch() {
+    if (tileGridWatchId !== null || !navigator.geolocation) return;
+
+    tileGridWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            tileGridLastCoords = {
+                lat: position.coords.latitude,
+                lon: position.coords.longitude
+            };
+            tileGridLastFixTs = Date.now();
+
+            if (tileGridModalIsOpen) {
+                drawTileGrid();
+            }
+        },
+        (error) => {
+            console.warn('Tile Grid GPS Watch Error:', error);
+            tileGridLastCoords = null;
+            tileGridLastFixTs = 0;
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+    );
+}
+
+function stopTileGridLocationWatch() {
+    if (tileGridWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(tileGridWatchId);
+    }
+    tileGridWatchId = null;
+    tileGridLastCoords = null;
+    tileGridLastFixTs = 0;
+}
+
+function ensureTileCoverageStorage(tile) {
+    if (!tile) return;
+    const cells = Math.round(Number(tile.sizeM) || 15);
+    const total = cells * cells;
+
+    if (typeof tile.paintingEnabled !== 'boolean') tile.paintingEnabled = false;
+    if (typeof tile.completed !== 'boolean') tile.completed = false;
+
+    // GPS-based coverage storage (source of truth)
+    if (!Array.isArray(tile.coverageGps)) tile.coverageGps = [];
+
+    // Rebuild grid-relative cache from GPS coverage
+    rebuildCoverageFromGps(tile);
+}
+
+function rebuildCoverageFromGps(tile) {
+    if (!tile) return;
+    const cells = Math.round(Number(tile.sizeM) || 15);
+    const total = cells * cells;
+    const sizeM = Number(tile.sizeM) || 15;
+    const lat0  = Number(tile.centerLat);
+    const lon0  = Number(tile.centerLon);
+
+    tile.coverageBits   = '0'.repeat(total);
+    tile.coverageColors = {};
+
+    if (!isFinite(lat0) || !isFinite(lon0)) return;
+    if (!Array.isArray(tile.coverageGps) || !tile.coverageGps.length) return;
+
+    const M_PER_DEG_LAT = 111320;
+    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    for (const pt of tile.coverageGps) {
+        const dx = (pt.lon - lon0) * mPerDegLon;
+        const dy = (pt.lat - lat0) * M_PER_DEG_LAT;
+        const localX = dx + (sizeM / 2);
+        const localY = (sizeM / 2) - dy;
+        if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) continue;
+        const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
+        const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
+        const idx = row * cells + col;
+        const key = `${row},${col}`;
+        tile.coverageBits = tile.coverageBits.substring(0, idx) + '1' + tile.coverageBits.substring(idx + 1);
+        tile.coverageColors[key] = pt.color || 'rgba(34,197,94,0.18)';
+    }
+}
+
+function getCoveragePercent(tile) {
+    if (!tile || typeof tile.coverageBits !== 'string' || !tile.coverageBits.length) return 0;
+    const ones = (tile.coverageBits.match(/1/g) || []).length;
+    return (ones / tile.coverageBits.length) * 100;
+}
+
+function setTileCellVisited(tile, col, row, cells) {
+    if (!tile || typeof tile.coverageBits !== 'string') return false;
+    if (col < 0 || row < 0 || col >= cells || row >= cells) return false;
+    const idx = row * cells + col;
+    if (tile.coverageBits[idx] === '1') return false;
+    tile.coverageBits = tile.coverageBits.substring(0, idx) + '1' + tile.coverageBits.substring(idx + 1);
+    return true;
+}
+
+function openTileGridModal() {
+    const survey = getCompassOpenSurvey();
+    if (!survey) {
+        showMessage('No open survey.', 'error');
+        return;
+    }
+    ensureSurveyGridTileDefaults(survey);
+
+    if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
+        showMessage('Set the tile first (tap "Set Tile to GPS").', 'warning');
+        return;
+    }
+
+    ensureTileCoverageStorage(survey.gridTile);
+
+    const __cells = Math.round(Number(survey.gridTile.sizeM) || 15);
+    survey.gridTile.coverageGps    = [];
+    survey.gridTile.coverageBits   = '0'.repeat(__cells * __cells);
+    survey.gridTile.coverageColors = {};
+    survey.gridTile.paintingEnabled = true;
+    survey.gridTile.completed = false;
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    const modal = document.getElementById('tile-grid-modal');
+    if (!modal) return;
+
+    modal.style.display = 'block';
+    tileGridModalIsOpen = true;
+
+    try { applyQuickTargetRangesToCompassButtons(getQuickTargetRangesEffective()); } catch (e) {}
+
+    try { attachTileGridRainbowButtonsOnce(); } catch (e) { console.error(e); }
+startTileGridLocationWatch();
+syncTileGridButtons();
+    drawTileGrid();
+
+    if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
+    tileGridDrawTimer = setInterval(() => {
+        if (!tileGridModalIsOpen) return;
+
+        drawTileGrid();
+
+        const surveyNow = getCompassOpenSurvey();
+        const tileNow = surveyNow && surveyNow.gridTile ? surveyNow.gridTile : null;
+        if (tileNow && tileNow.paintingEnabled) {
+            const age = Date.now() - (tileGridLastFixTs || 0);
+            if (age > 1500 && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        tileGridLastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                        tileGridLastFixTs = Date.now();
+                        drawTileGrid();
+                    },
+                    () => { /* ignore */ },
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 2000 }
+                );
+            }
+        }
+    }, 600);
+}
+
+function closeTileGridModal() {
+    const modal = document.getElementById('tile-grid-modal');
+    if (modal) modal.style.display = 'none';
+    tileGridModalIsOpen = false;
+    stopTileGridLocationWatch();
+    if (tileGridDrawTimer) {
+        clearInterval(tileGridDrawTimer);
+        tileGridDrawTimer = null;
+    }
+}
+
+window.addEventListener('click', (e) => {
+    const modal = document.getElementById('tile-grid-modal');
+    if (modal && e.target === modal) closeTileGridModal();
+});
+
+/**
+ * Initialise the permanently-embedded tile grid on the Compass page.
+ * Called from attachPageEventListeners() whenever tile-grid-canvas exists in the DOM.
+ */
+function initInlineTileGrid() {
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+
+    ensureSurveyGridTileDefaults(survey);
+    ensureTileCoverageStorage(survey.gridTile);
+
+    if (survey.gridTile.enabled && !survey.gridTile.completed) {
+        survey.gridTile.paintingEnabled = true;
+    }
+
+    tileGridModalIsOpen = true;
+
+    try { applyQuickTargetRangesToCompassButtons(getQuickTargetRangesEffective()); } catch (e) {}
+    try { attachTileGridRainbowButtonsOnce(); } catch (e) { console.error(e); }
+
+    syncTileGridButtons();
+    startTileGridLocationWatch();
+    drawTileGrid();
+
+    if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
+    tileGridDrawTimer = setInterval(() => {
+        if (currentPage !== 'Compass') {
+            clearInterval(tileGridDrawTimer);
+            tileGridDrawTimer = null;
+            tileGridModalIsOpen = false;
+            stopTileGridLocationWatch();
+            return;
+        }
+        drawTileGrid();
+
+        const surveyNow = getCompassOpenSurvey();
+        const tileNow = surveyNow && surveyNow.gridTile ? surveyNow.gridTile : null;
+        if (tileNow && tileNow.paintingEnabled) {
+            const age = Date.now() - (tileGridLastFixTs || 0);
+            if (age > 1500 && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        tileGridLastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                        tileGridLastFixTs = Date.now();
+                        drawTileGrid();
+                    },
+                    () => {},
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 2000 }
+                );
+            }
+        }
+    }, 600);
+}
+
+function syncTileGridButtons() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+    ensureTileCoverageStorage(survey.gridTile);
+
+    const tile = survey.gridTile;
+
+    const paintBtn = document.getElementById('tile-grid-paint-toggle-btn');
+    const completeBtn = document.getElementById('tile-grid-complete-btn');
+
+    if (paintBtn) {
+        paintBtn.textContent = tile.paintingEnabled ? 'Stop Painting' : 'Start Painting';
+        paintBtn.disabled = !!tile.completed;
+        paintBtn.style.opacity = tile.completed ? '0.5' : '1';
+        paintBtn.title = tile.completed ? 'This grid is marked complete.' : '';
+    }
+
+    if (completeBtn) {
+        completeBtn.textContent = tile.completed ? 'Completed' : 'Complete';
+        completeBtn.disabled = false;
+        completeBtn.style.opacity = '1';
+    }
+}
+
+function toggleTilePainting() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+    ensureTileCoverageStorage(survey.gridTile);
+
+    if (survey.gridTile.completed) {
+        showMessage('This grid is marked complete. Clear coverage or set a new tile to paint again.', 'info');
+        return;
+    }
+survey.gridTile.paintingEnabled = !survey.gridTile.paintingEnabled;
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    syncTileGridButtons();
+    drawTileGrid();
+    showMessage(survey.gridTile.paintingEnabled ? 'Painting enabled.' : 'Painting stopped.', 'info');
+}
+
+function clearTileCoverage() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+    ensureTileCoverageStorage(survey.gridTile);
+    const cells = Math.round(Number(survey.gridTile.sizeM) || 15);
+    survey.gridTile.coverageGps    = [];
+    survey.gridTile.coverageBits   = '0'.repeat(cells * cells);
+    survey.gridTile.coverageColors = {};
+    survey.gridTile.paintingEnabled = true;
+    survey.gridTile.completed = false;
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    syncTileGridButtons();
+    drawTileGrid();
+    showMessage('Coverage cleared.', 'success');
+}
+
+let tileGridRainbowButtonsAttached = false;
+
+function colourNameToTileFill(colourName) {
+    const c = String(colourName || '').toUpperCase();
+    const map = {
+        BLUE:  'rgba(37,99,235,0.28)',
+        SKY:   'rgba(14,165,233,0.28)',
+        GREEN: 'rgba(34,197,94,0.28)',
+        AMBER: 'rgba(245,158,11,0.28)',
+        RED:   'rgba(239,68,68,0.28)'
+    };
+    return map[c] || 'rgba(34,197,94,0.18)';
+}
+
+function paintTileCellUnderUserWithColour(colourName) {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return false;
+    ensureSurveyGridTileDefaults(survey);
+    const tile = survey.gridTile;
+    ensureTileCoverageStorage(tile);
+
+    const user = getBestLiveGpsCoordsOrNull();
+    if (!user) return false;
+
+    const lat0 = Number(tile.centerLat);
+    const lon0 = Number(tile.centerLon);
+    if (!isFinite(lat0) || !isFinite(lon0)) return false;
+
+    const sizeM = Number(tile.sizeM) || 15;
+    const cells = Math.round(sizeM);
+
+    const M_PER_DEG_LAT = 111320;
+    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    const dx = (user.lon - lon0) * mPerDegLon;
+    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+
+    const localX = dx + (sizeM / 2);
+    const localY = (sizeM / 2) - dy;
+
+    const clampedX = Math.min(Math.max(localX, 0), sizeM);
+    const clampedY = Math.min(Math.max(localY, 0), sizeM);
+
+    const col = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
+    const row = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
+
+    // Store coverage as GPS coordinates (grid-position-independent)
+    if (!Array.isArray(tile.coverageGps)) tile.coverageGps = [];
+    const cellCentreX = (col + 0.5) / cells * sizeM - (sizeM / 2);
+    const cellCentreY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
+    const cellLat = lat0 + cellCentreY / M_PER_DEG_LAT;
+    const cellLon = lon0 + cellCentreX / mPerDegLon;
+    const cellColor = colourNameToTileFill(colourName);
+    const existingIdx = tile.coverageGps.findIndex(p => {
+        const pdx = (p.lon - lon0) * mPerDegLon + (sizeM / 2);
+        const pdy = (sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT;
+        const pc = Math.min(cells-1, Math.max(0, Math.floor((pdx/sizeM)*cells)));
+        const pr = Math.min(cells-1, Math.max(0, Math.floor((pdy/sizeM)*cells)));
+        return pc === col && pr === row;
+    });
+    if (existingIdx >= 0) {
+        tile.coverageGps[existingIdx].color = cellColor;
+    } else {
+        tile.coverageGps.push({ lat: cellLat, lon: cellLon, color: cellColor });
+    }
+
+    // Rebuild grid-relative cache
+    rebuildCoverageFromGps(tile);
+
+    tile.coverageLastPainted = Date.now();
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+    return true;
+}
+
+function attachTileGridRainbowButtonsOnce() {
+    if (tileGridRainbowButtonsAttached) return;
+
+    // Use event delegation on appContent so it survives page re-renders
+    const appContent = document.getElementById('app-content');
+    if (!appContent) return;
+
+    appContent.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tile-grid-range-btn');
+        if (!btn) return;
+        const min = Number(btn.getAttribute('data-min'));
+        const max = Number(btn.getAttribute('data-max'));
+        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+        const colour = (btn.getAttribute('data-color') || '').toString().trim();
+
+        let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+        if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+            if (vdi < min) vdi = min;
+            if (vdi > max) vdi = max;
+        }
+
+        quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
+        paintTileCellUnderUserWithColour(colour);
+        try { drawTileGrid(); } catch (e) {}
+    });
+
+    // Tile grid camera buttons
+    let _tileGridPhotoPendingRange = null;
+    appContent.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tile-grid-camera-btn');
+        if (!btn) return;
+        const min    = btn.getAttribute('data-min');
+        const max    = btn.getAttribute('data-max');
+        const tid    = btn.getAttribute('data-targetid');
+        const color  = btn.getAttribute('data-color');
+        _tileGridPhotoPendingRange = { min, max, targetId: tid, color };
+        const inp = document.getElementById('tile-grid-photo-input');
+        if (inp) { inp.value = ''; inp.click(); }
+    });
+
+    appContent.addEventListener('change', async (e) => {
+        const inp = e.target.closest('#tile-grid-photo-input');
+        if (!inp) return;
+        const file = inp.files && inp.files[0];
+        if (!file || !_tileGridPhotoPendingRange) return;
+        const r = _tileGridPhotoPendingRange;
+        _tileGridPhotoPendingRange = null;
+
+        const tid = Number(r.targetId);
+        const min = Number(r.min);
+        const max = Number(r.max);
+        let vdi = isFinite(tid) && r.targetId !== '' ? tid
+                : (isFinite(min) && isFinite(max) ? randomIntInclusive(min, max) : 0);
+
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        if (!openSurvey) { showMessage('No open survey.', 'error'); return; }
+
+        const ok = quickLogTargetByVDI(vdi, `${r.color} camera`, { type: 'Unidentified' });
+        if (!ok) return;
+
+        paintTileCellUnderUserWithColour(r.color);
+        try { drawTileGrid(); } catch(err) {}
+
+        const target = openSurvey.targets[0];
+        if (!target) return;
+        try {
+            showMessage('Processing photo…', 'info');
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                if (!Array.isArray(target.photos)) target.photos = [];
+                target.photos.push(resized);
+                target.targetPhotoRef  = resized;
+                target.targetPhotoData = resized;
+                openSurvey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                showMessage(`Target logged with photo (${r.color} ${min}→${max})`, 'success');
+                updateMapWithUserLocationAndRender();
+            }
+        } catch(err) {
+            console.error('Tile grid photo error:', err);
+            showMessage('Photo could not be saved, but target was logged.', 'error');
+        }
+    });
+
+    tileGridRainbowButtonsAttached = true;
+}
+function markTileGridComplete() {
+    const survey = getCompassOpenSurvey();
+    if (!survey || !survey.gridTile) return;
+
+    ensureSurveyGridTileDefaults(survey);
+    ensureTileCoverageStorage(survey.gridTile);
+    const tile = survey.gridTile;
+
+    const hasCoverage = typeof tile.coverageBits === 'string' && tile.coverageBits.indexOf('1') !== -1;
+    if (!hasCoverage) {
+        if (typeof closeTileGridModal === 'function') closeTileGridModal();
+        showMessage('No painted coverage to complete.', 'info');
+        return;
+    }
+
+    const sizeM = Number(tile.sizeM) || 15;
+
+    if (isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
+        survey.gridTileCompletedAreas.unshift({
+            id: (typeof generateId === 'function') ? generateId() : String(Date.now()),
+            centerLat: Number(tile.centerLat),
+            centerLon: Number(tile.centerLon),
+            sizeM: sizeM,
+            completedAt: Date.now()
+        });
+    }
+
+    const cells = Math.round(Number(sizeM) || 15);
+    tile.coverageGps    = [];
+    tile.coverageBits   = '0'.repeat(cells * cells);
+    tile.coverageColors = {};
+    tile.paintingEnabled = false;
+    tile.completed = false;
+
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    syncTileGridButtons();
+    drawTileGrid();
+
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else if (typeof render === 'function' && currentPage === 'Compass') render();
+
+    if (typeof closeTileGridModal === 'function') closeTileGridModal();
+    showMessage('Tile recorded as complete.', 'success');
+}
+
+function drawTileGrid() {
+    const canvas = document.getElementById('tile-grid-canvas');
+    if (!canvas) return;
+
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+    ensureSurveyGridTileDefaults(survey);
+    const tile = survey.gridTile;
+    ensureTileCoverageStorage(tile);
+
+    const sizeM = Number(tile.sizeM) || 15;
+    const cells = Math.round(sizeM);
+    const total = cells * cells;
+
+    const cssMax = Math.min(window.innerWidth - 48, 520);
+    const px = Math.max(240, cssMax);
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = px + 'px';
+    canvas.style.height = px + 'px';
+    canvas.width = Math.floor(px * dpr);
+    canvas.height = Math.floor(px * dpr);
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, px, px);
+
+    const cellPx = px / cells;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, px, px);
+
+    if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
+        for (let i = 0; i < total; i++) {
+            if (tile.coverageBits[i] !== '1') continue;
+            const r = Math.floor(i / cells);
+            const c = i - r * cells;
+            const key = `${r},${c}`;
+            const fill = (tile.coverageColors && tile.coverageColors[key]) ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
+            ctx.fillStyle = fill;
+            ctx.fillRect(c * cellPx, r * cellPx, cellPx, cellPx);
+        }
+    }
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= cells; i++) {
+        const x = i * cellPx;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, px); ctx.stroke();
+        const y = i * cellPx;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(239,68,68,0.95)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, px - 2, px - 2);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', px / 2, 14);
+    ctx.fillText('S', px / 2, px - 6);
+    ctx.textAlign = 'left';
+    ctx.fillText('W', 6, px / 2);
+    ctx.textAlign = 'right';
+    ctx.fillText('E', px - 6, px / 2);
+
+    const centreEl = document.getElementById('tile-grid-centre-text');
+    if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
+
+    const live = getBestLiveGpsCoordsOrNull();
+    const tileAge = Date.now() - (tileGridLastFixTs || 0);
+    const user = (tileGridLastCoords && tileAge <= 2000) ? tileGridLastCoords : (live || tileGridLastCoords);
+
+    const userEl = document.getElementById('tile-grid-user-text');
+    if (userEl) userEl.textContent = user ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
+
+    const covEl = document.getElementById('tile-grid-coverage-text');
+    if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
+
+    if (!user) return;
+
+    const lat0 = Number(tile.centerLat);
+    const lon0 = Number(tile.centerLon);
+    if (!isFinite(lat0) || !isFinite(lon0)) return;
+
+    const M_PER_DEG_LAT = 110574;
+    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    const dx = (user.lon - lon0) * mPerDegLon;
+    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+
+    const localX = dx + (sizeM / 2);
+    const localY = (sizeM / 2) - dy;
+
+    if (tile.paintingEnabled) {
+        const clampedX = Math.min(Math.max(localX, 0), sizeM);
+        const clampedY = Math.min(Math.max(localY, 0), sizeM);
+
+        const col0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
+        const row0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
+
+        let paintedAny = false;
+
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const col = col0 + dc;
+                const row = row0 + dr;
+                const did = setTileCellVisited(tile, col, row, cells);
+                if (did) {
+                    paintedAny = true;
+
+                    const __k = `${row},${col}`;
+                    const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
+                    ctx.fillStyle = __fill;
+                    ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
+
+                    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(col * cellPx, row * cellPx, cellPx, cellPx);
+                }
+            }
+        }
+
+        if (paintedAny) {
+            tile.coverageLastPainted = Date.now();
+            survey.dateLastChanged = Date.now();
+            saveSurveysToLocalStorage();
+        }
+    }
+
+    // ── Draw targets, stakes, and finds within the tile ──
+    const openSurveyForGrid = survey;
+    const allTargets = Array.isArray(openSurveyForGrid.targets)
+        ? openSurveyForGrid.targets.filter(t => t && !t.deleted)
+        : [];
+    const allFindsForGrid = Array.isArray(finds)
+        ? finds.filter(f => f && !f.deleted && f.surveyId === openSurveyForGrid.id)
+        : [];
+
+    const PIN_COLORS = {
+        target: {
+            'not dug':  'rgba(59,130,246,0.95)',
+            'dug':      'rgba(245,158,11,0.95)',
+            'refilled': 'rgba(34,197,94,0.95)',
+            'ignore':   'rgba(107,114,128,0.95)',
+        },
+        find: {
+            'Coin':         'rgba(234,179,8,0.95)',
+            'Button':       'rgba(180,83,9,0.95)',
+            'Relic':        'rgba(239,68,68,0.95)',
+            'Jewelry':      'rgba(236,72,153,0.95)',
+            'Iron Junk':    'rgba(75,85,99,0.95)',
+            'Modern Junk':  'rgba(156,163,175,0.95)',
+            'Unidentified': 'rgba(168,85,247,0.95)',
+        },
+        findDefault: 'rgba(20,184,166,0.95)',
+        stake: 'rgba(0,0,0,0.90)',
+    };
+
+    function drawGridPin(itemLat, itemLon, color, isStakePin) {
+        if (!isFinite(itemLat) || !isFinite(itemLon)) return;
+        const idx = (itemLon - lon0) * mPerDegLon + (sizeM / 2);
+        const idy = (sizeM / 2) - (itemLat - lat0) * M_PER_DEG_LAT;
+        if (idx < -1 || idx > sizeM + 1 || idy < -1 || idy > sizeM + 1) return;
+        const px2x = (idx / sizeM) * px;
+        const px2y = (idy / sizeM) * px;
+        const r = 4;
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        if (isStakePin) {
+            ctx.rect(px2x - r, px2y - r, r * 2, r * 2);
+        } else {
+            ctx.arc(px2x, px2y, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.stroke();
+    }
+
+    // Helper: parse lat/lon from either direct fields or coordinates string
+    function parseItemCoords(item) {
+        if (!item) return null;
+        // Direct lat/lon fields
+        let lat = Number(item.lat ?? item.latitude);
+        let lon = Number(item.lon ?? item.longitude);
+        if (isFinite(lat) && isFinite(lon)) return { lat, lon };
+        // Coordinates string "lat, lon"
+        const coordStr = String(item.coordinates || item.coords || '');
+        if (coordStr) {
+            const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
+            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+                return { lat: parts[0], lon: parts[1] };
+            }
+        }
+        return null;
+    }
+
+    // Draw tracks
+    const visibleTracksForGrid = Array.isArray(survey.tracks)
+        ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
+        : [];
+    for (const track of visibleTracksForGrid) {
+        const trackColor = track.color || '#000000';
+        ctx.beginPath();
+        ctx.strokeStyle = trackColor;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.75;
+        let started = false;
+        for (const p of track.points) {
+            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
+            const tx = ((p.lon - lon0) * mPerDegLon + (sizeM / 2)) / sizeM * px;
+            const ty = ((sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * px;
+            if (!started) { ctx.moveTo(tx, ty); started = true; }
+            else ctx.lineTo(tx, ty);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Draw targets
+    for (const t of allTargets) {
+        const c = parseItemCoords(t);
+        if (!c) continue;
+        const isStakePin = String(t.vdi).trim() === '-100';
+        if (isStakePin) {
+            drawGridPin(c.lat, c.lon, PIN_COLORS.stake, true);
+        } else {
+            const st = (t.status || 'not dug').toLowerCase();
+            if (st === 'ignore') {
+                drawGridPin(c.lat, c.lon, PIN_COLORS.target['ignore'], false);
+            } else {
+                const vdiColorClass = (typeof getVdiPinColor === 'function') ? getVdiPinColor(t.vdi) : null;
+                const vdiColorMap = {
+                    'bg-blue-600':    'rgba(37,99,235,0.95)',
+                    'bg-sky-400':     'rgba(56,189,248,0.95)',
+                    'bg-emerald-500': 'rgba(16,185,129,0.95)',
+                    'bg-amber-500':   'rgba(245,158,11,0.95)',
+                    'bg-red-600':     'rgba(220,38,38,0.95)',
+                };
+                const color = vdiColorClass
+                    ? (vdiColorMap[vdiColorClass] || PIN_COLORS.target[st] || PIN_COLORS.target['not dug'])
+                    : (PIN_COLORS.target[st] || PIN_COLORS.target['not dug']);
+                drawGridPin(c.lat, c.lon, color, false);
+            }
+        }
+    }
+
+    // Draw finds
+    for (const f of allFindsForGrid) {
+        const c = parseItemCoords(f);
+        if (!c) continue;
+        const color = PIN_COLORS.find[f.findType || f.type] || PIN_COLORS.findDefault;
+        drawGridPin(c.lat, c.lon, color, false);
+    }
+
+if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
+
+    const pxX = (localX / sizeM) * px;
+    const pxY = (localY / sizeM) * px;
+
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(29,78,216,0.95)';
+    ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.stroke();
+}
 
 let targetSortMode = 'date'; // 'date' | 'id'
 
@@ -2726,6 +3692,30 @@ The STAKE button places a black square marker at your current
 GPS position. Use stakes to mark field boundaries, gates, or
 reference points.
 
+TILE GRID (15×15 metres)
+The Tile Grid divides your survey area into a 15×15 metre
+square. It helps you track which parts of the field you have
+covered systematically.
+
+To use the tile grid:
+1. Stand at the centre of the area you want to cover.
+2. Tap "Set Centre Here" (in the GPS section above the map).
+   This places the 15×15 metre grid centred on your position.
+3. The grid appears on the map as a red outline.
+4. As you move within the grid, cells are shaded automatically
+   to show which areas you have walked over.
+5. Tap "Complete" when you have finished that square.
+   The completed area is saved and shown in green on the map.
+6. Move to an adjacent area and repeat.
+
+The Tile Grid panel also shows:
+• The grid centre coordinates
+• Your current position within the grid
+• Your coverage percentage for the current tile
+
+Use "Clear" to reset the coverage for the current tile without
+marking it as complete.
+
 --------------------------------
 TARGETS PAGE
 --------------------------------
@@ -2903,7 +3893,13 @@ GETTING STARTED
    When you finish, tap "Stop Tracking".
    Delete any unwanted tracks from the Tracks section.
 
-4. Record Your Finds
+4. Use the Tile Grid for Thorough Coverage
+   Stand at the centre of an area you want to cover.
+   Tap "Set Centre Here" to place the 15×15 metre grid.
+   Walk the grid systematically — cells paint as you move.
+   Tap "Complete" and move on to the next square.
+
+5. Record Your Finds
    Once you have dug a target and identified a find, go to
    the Targets page and tap "Copy to Finds".
    Update the find type, description, and photos.
@@ -4575,124 +5571,6 @@ async function fileToResizedDataUrl(file) {
 function isAnyTrackRecording() {
     return Boolean(activeTrackId && activeTrackSurveyId);
 }
-
-// ── GPS-bearing compass needle ────────────────────────────────────────────
-// Calculates direction of travel from last two GPS positions.
-// Needle points in the direction the user is moving; since the map is
-// North-up, this also tells the user their orientation relative to the map.
-
-// Accumulate GPS fixes to average movement direction — reduces jitter
-let _gpsCompassHistory = []; // array of {lat, lon}
-const _GPS_COMPASS_HISTORY_SIZE = 5;  // average over 5 fixes
-const _GPS_COMPASS_MIN_TOTAL_M  = 10; // need 10m total movement before updating
-
-let _gpsCompassLastNorthAngle = null;
-let _gpsCompassHeadingLabel   = null;
-let _gpsCompassHeadingDeg     = null;
-
-function _updateGpsCompassBearingDisplay() {
-    if (_gpsCompassLastNorthAngle === null) return;
-    setTimeout(() => {
-        document.querySelectorAll('#map-compass-needle').forEach(el => {
-            el.style.transform = 'rotate(' + _gpsCompassLastNorthAngle + 'deg)';
-        });
-        document.querySelectorAll('#map-compass-rose').forEach(el => {
-            el.style.opacity = '1';
-        });
-        // Update heading text directly in DOM so it doesn't require a full re-render
-        const hdgEl = document.getElementById('map-heading-text');
-        if (hdgEl && _gpsCompassHeadingLabel) {
-            hdgEl.textContent = 'Heading: ' + _gpsCompassHeadingLabel + ' (' + _gpsCompassHeadingDeg + '°)';
-        }
-        const nthEl = document.getElementById('map-north-text');
-        if (nthEl && _gpsCompassLastNorthAngle !== null) {
-            const n = _gpsCompassLastNorthAngle;
-            let northText;
-            if      (n === 0)   northText = 'North: directly ahead';
-            else if (n === 180) northText = 'North: directly behind';
-            else if (n === 90)  northText = 'North: 90° to your right';
-            else if (n === 270) northText = 'North: 90° to your left';
-            else if (n === 45)  northText = 'North: ahead-right (45°)';
-            else if (n === 135) northText = 'North: behind-right (45°)';
-            else if (n === 225) northText = 'North: behind-left (45°)';
-            else if (n === 315) northText = 'North: ahead-left (45°)';
-            else                northText = 'North: ' + n + '° (needle shows direction)';
-            nthEl.textContent = northText;
-        }
-    }, 0);
-}
-
-function _updateGpsCompassBearing(newCoords) {
-    if (!newCoords || !isFinite(newCoords.lat) || !isFinite(newCoords.lon)) return;
-
-    // Add to history
-    _gpsCompassHistory.push({ lat: newCoords.lat, lon: newCoords.lon });
-    if (_gpsCompassHistory.length > _GPS_COMPASS_HISTORY_SIZE) {
-        _gpsCompassHistory.shift();
-    }
-    if (_gpsCompassHistory.length < 2) return;
-
-    // Use oldest and newest point in history for direction
-    const oldest = _gpsCompassHistory[0];
-    const newest = _gpsCompassHistory[_gpsCompassHistory.length - 1];
-
-    const M_PER_DEG_LAT = 111320;
-    const mPerDegLon    = 111320 * Math.cos(newest.lat * Math.PI / 180);
-    const dLatM = (newest.lat - oldest.lat) * M_PER_DEG_LAT;
-    const dLonM = (newest.lon - oldest.lon) * mPerDegLon;
-    const distM = Math.sqrt(dLatM * dLatM + dLonM * dLonM);
-
-    // Only update if enough total movement to be reliable
-    if (distM < _GPS_COMPASS_MIN_TOTAL_M) return;
-
-    // Determine direction using explicit quadrant logic
-    const goingNorth = dLatM > 0;
-    const goingSouth = dLatM < 0;
-    const goingEast  = dLonM > 0;
-    const goingWest  = dLonM < 0;
-
-    const absLat = Math.abs(dLatM);
-    const absLon = Math.abs(dLonM);
-
-    // Require one axis to be at least 2.5x the other to call it cardinal
-    // Otherwise treat as intercardinal
-    const dominant = absLat > absLon * 2.5 ? 'lat'
-                   : absLon > absLat * 2.5 ? 'lon'
-                   : 'both';
-
-    let travelLabel, travelDeg;
-    if (dominant === 'lat') {
-        if (goingNorth) { travelLabel = 'North'; travelDeg = 0;   }
-        else            { travelLabel = 'South'; travelDeg = 180; }
-    } else if (dominant === 'lon') {
-        if (goingEast)  { travelLabel = 'East';  travelDeg = 90;  }
-        else            { travelLabel = 'West';  travelDeg = 270; }
-    } else {
-        if      (goingNorth && goingEast) { travelLabel = 'North-East'; travelDeg = 45;  }
-        else if (goingSouth && goingEast) { travelLabel = 'South-East'; travelDeg = 135; }
-        else if (goingSouth && goingWest) { travelLabel = 'South-West'; travelDeg = 225; }
-        else if (goingNorth && goingWest) { travelLabel = 'North-West'; travelDeg = 315; }
-        else { return; } // no clear direction
-    }
-
-    const northAngle = (360 - travelDeg) % 360;
-
-    _gpsCompassLastNorthAngle = northAngle;
-    _gpsCompassHeadingLabel   = travelLabel;
-    _gpsCompassHeadingDeg     = travelDeg;
-
-    document.querySelectorAll('#map-compass-needle').forEach(el => {
-        el.style.transform = 'rotate(' + northAngle + 'deg)';
-    });
-    document.querySelectorAll('#map-compass-rose').forEach(el => {
-        el.style.opacity = '1';
-    });
-    // Also update the heading text labels below the map directly in the DOM
-    if (typeof _updateGpsCompassBearingDisplay === 'function') {
-        _updateGpsCompassBearingDisplay();
-    }
-}
-
 
 function ensureTrackingThen(fn) {
     if (typeof isAnyTrackRecording === 'function' && isAnyTrackRecording()) {
@@ -7417,11 +8295,6 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
             }
-            // Update bearing BEFORE render so display function has latest angle
-            if (typeof _updateGpsCompassBearing === 'function') {
-                _updateGpsCompassBearing(currentUserCoords);
-            }
-
             const now = Date.now();
             if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 700) { // 0.7s throttle
                 lastGpsUiRefreshMs = now;
@@ -7461,10 +8334,6 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
             if (currentUserCoords && activeTrackId && activeTrackSurveyId) {
                 logPointToActiveTrack(currentUserCoords.lat, currentUserCoords.lon, accuracy);
             }
-
-
-
-
 
             if (accuracy < bestLiveAccuracy) {
                 bestLiveAccuracy = accuracy;
@@ -8069,11 +8938,6 @@ function updateMapWithUserLocationAndRender() {
     attachPageEventListeners();
     if (scrollY > 0) {
         window.scrollTo({ top: scrollY, behavior: 'instant' });
-    }
-
-    // Re-apply compass needle rotation after DOM replacement
-    if (typeof _updateGpsCompassBearingDisplay === 'function') {
-        _updateGpsCompassBearingDisplay();
     }
 }
 
@@ -11973,6 +12837,76 @@ const toPercent = (x, y) => {
 
     let trackSvgHtml = '';
 
+    let gridTileHtml = '';
+    try {
+        const survey = getCompassOpenSurvey ? getCompassOpenSurvey() : (surveys.find(s => s.status === 'Open') || null);
+        if (survey) { try { ensureSurveyGridTileDefaults(survey); } catch (_) {} }
+
+        const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
+        const tile = survey && survey.gridTile ? survey.gridTile : null;
+
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText) => {
+            const half = sizeM / 2;
+            const cx = Number(centerLon) * mPerDegLon;
+            const cy = Number(centerLat) * M_PER_DEG_LAT;
+
+            const minTx = cx - half, maxTx = cx + half;
+            const minTy = cy - half, maxTy = cy + half;
+
+            const pTL = toPercent(minTx, maxTy);
+            const pBR = toPercent(maxTx, minTy);
+
+            const left = pTL.xPct;
+            const top = pTL.yPct;
+            const width = (pBR.xPct - pTL.xPct);
+            const height = (pBR.yPct - pTL.yPct);
+
+            const fontPx = (10 * invZoom);
+
+            return `
+                <div class="absolute pointer-events-none"
+                     style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
+                            ${style}; border-radius: 6px;">
+                    ${labelText ? `
+                    <div class="absolute"
+                         style="left:50%; top:-10px; transform:translateX(-50%);
+                                font-size:${fontPx.toFixed(2)}px;
+                                padding:2px 6px; border-radius:999px;
+                                background: rgba(255,255,255,0.92);
+                                border: 1px solid rgba(34,197,94,0.35);
+                                color: rgba(20,83,45,0.95);">
+                        ${labelText}
+                    </div>` : ''}
+                </div>
+            `;
+        };
+
+        let completedHtml = '';
+        if (completed.length) {
+            completedHtml = completed
+                .filter(a => a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)) && isFinite(Number(a.sizeM)))
+                .map(a => {
+                    const sizeM = Number(a.sizeM) || 15;
+                    const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
+                    const label = '';
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
+                })
+                .join('');
+        }
+
+        let activeHtml = '';
+        if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
+            const sizeM = Number(tile.sizeM) || 15;
+            const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
+            const label = '';
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
+        }
+
+        gridTileHtml = completedHtml + activeHtml;
+
+    } catch (e) {
+        console.warn('Grid tile render error:', e);
+    }
 
     if (drawTracks.length) {
         const polylines = drawTracks.map(track => {
@@ -12060,39 +12994,11 @@ const toPercent = (x, y) => {
              id="target-map-container"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
+                ${gridTileHtml}
                 ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
                 ${userHtml}
-            </div>
-            <!-- GPS bearing compass needle (shows direction of travel) -->
-            <div id="map-compass-rose" style="position:absolute;top:10px;left:10px;z-index:30;pointer-events:none;
-                        width:56px;height:56px;background:rgba(255,255,255,0.92);
-                        border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
-                        display:flex;align-items:center;justify-content:center;
-                        opacity:0.35;transition:opacity 0.5s;isolation:isolate;"
-                 title="North indicator (updates when moving)">
-                <div id="map-compass-needle" style="width:40px;height:40px;position:relative;transform-origin:center center;will-change:transform;">
-                    <!-- North tip (red) -->
-                    <div style="position:absolute;left:50%;top:2px;transform:translateX(-50%);
-                                width:0;height:0;
-                                border-left:6px solid transparent;
-                                border-right:6px solid transparent;
-                                border-bottom:18px solid #e53e3e;"></div>
-                    <!-- South tip (grey) -->
-                    <div style="position:absolute;left:50%;bottom:2px;transform:translateX(-50%);
-                                width:0;height:0;
-                                border-left:6px solid transparent;
-                                border-right:6px solid transparent;
-                                border-top:18px solid #a0aec0;"></div>
-                    <!-- Centre dot -->
-                    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-                                width:8px;height:8px;background:#2d3748;border-radius:50%;"></div>
-                    <!-- N label -->
-                    <div style="position:absolute;left:50%;top:1px;transform:translateX(-50%);
-                                font-size:8px;font-weight:bold;color:#e53e3e;font-family:Arial;
-                                line-height:1;">N</div>
-                </div>
             </div>
 </div>
 
@@ -12149,37 +13055,17 @@ const toPercent = (x, y) => {
 
 </div>
 
-<!-- Current GPS info -->
+<!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
-      <div class="font-semibold text-gray-700">Current GPS</div>
+      <div class="font-semibold text-gray-700">Current GPS <span class="text-xs text-gray-400 font-normal">(Step 3c build 2026-02-08)</span></div>
       <div class="text-xs text-gray-600">
         ${(() => {
-          const c = smoothedUserCoords || currentUserCoords;
+          const c = getBestLiveGpsCoordsOrNull();
           const acc = (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy : 0;
           if (!c) return 'No GPS fix yet';
           return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} (±${acc.toFixed(1)}m)`;
-        })()}
-      </div>
-      <div id="map-heading-text" class="text-xs text-gray-600 mt-1">
-        ${_gpsCompassHeadingLabel
-            ? 'Heading: ' + _gpsCompassHeadingLabel + ' (' + _gpsCompassHeadingDeg + '°)'
-            : 'Heading: — (move to calculate)'}
-      </div>
-      <div id="map-north-text" class="text-xs text-gray-600 mt-1">
-        ${(() => {
-          if (_gpsCompassLastNorthAngle === null) return 'North: — (move to calculate)';
-          const n = _gpsCompassLastNorthAngle;
-          if (n === 0)   return 'North: directly ahead';
-          if (n === 180) return 'North: directly behind';
-          if (n === 90)  return 'North: 90° to your right';
-          if (n === 270) return 'North: 90° to your left';
-          if (n === 45)  return 'North: ahead-right (45°)';
-          if (n === 135) return 'North: behind-right (45°)';
-          if (n === 225) return 'North: behind-left (45°)';
-          if (n === 315) return 'North: ahead-left (45°)';
-          return 'North: ' + n + '° (needle shows direction)';
         })()}
       </div>
     </div>
@@ -12219,6 +13105,75 @@ const toPercent = (x, y) => {
   </div>
 </details>
 </div>
+<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4 mt-3">
+  <details id="tile-grid-details" class="w-full">
+  <summary class="cursor-pointer select-none flex items-center gap-2 justify-start">
+  <span class="caret text-lg">▸</span>
+
+  <span>Tile / Grid</span>
+</summary>
+  <div class="mt-2">
+<div class="flex gap-2">
+      <button id="gridtile-set-gps-btn" type="button"
+        class="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm">
+        Set Tile to GPS
+      </button>
+
+      <button id="gridtile-toggle-btn" type="button"
+        class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">
+        ${(() => {
+          const s = getCompassOpenSurvey();
+          const t = s && s.gridTile ? s.gridTile : null;
+          return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
+        })()}
+      </button>
+    </div>
+  </div>
+
+  <div class="mt-3 text-xs text-gray-600">Move tile (buttons):</div>
+
+  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
+    <div></div>
+    <button data-gridtile-move="N" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">N</button>
+    <div></div>
+
+    <button data-gridtile-move="W" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">W</button>
+    <button type="button" disabled
+      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
+    <button data-gridtile-move="E" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">E</button>
+
+    <div></div>
+    <button data-gridtile-move="S" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">S</button>
+    <div></div>
+  </div>
+
+  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
+    <div></div>
+    <button data-gridtile-move="N" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">N 5m</button>
+    <div></div>
+
+    <button data-gridtile-move="W" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">W 5m</button>
+    <button type="button" disabled
+      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
+    <button data-gridtile-move="E" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">E 5m</button>
+
+    <div></div>
+    <button data-gridtile-move="S" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">S 5m</button>
+    <div></div>
+  </div>
+
+      </div>
+    </details>
+</div>
+
     `;
 }
 
@@ -12345,35 +13300,6 @@ const toPercent = (x, y) => {
                 ${navLineHtml}
                 ${pinsHtml}
                 ${userHtml}
-            </div>
-            <!-- GPS bearing compass needle (shows direction of travel) -->
-            <div id="map-compass-rose" style="position:absolute;top:10px;left:10px;z-index:30;pointer-events:none;
-                        width:56px;height:56px;background:rgba(255,255,255,0.92);
-                        border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
-                        display:flex;align-items:center;justify-content:center;
-                        opacity:0.35;transition:opacity 0.5s;isolation:isolate;"
-                 title="North indicator (updates when moving)">
-                <div id="map-compass-needle" style="width:40px;height:40px;position:relative;transform-origin:center center;will-change:transform;">
-                    <!-- North tip (red) -->
-                    <div style="position:absolute;left:50%;top:2px;transform:translateX(-50%);
-                                width:0;height:0;
-                                border-left:6px solid transparent;
-                                border-right:6px solid transparent;
-                                border-bottom:18px solid #e53e3e;"></div>
-                    <!-- South tip (grey) -->
-                    <div style="position:absolute;left:50%;bottom:2px;transform:translateX(-50%);
-                                width:0;height:0;
-                                border-left:6px solid transparent;
-                                border-right:6px solid transparent;
-                                border-top:18px solid #a0aec0;"></div>
-                    <!-- Centre dot -->
-                    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-                                width:8px;height:8px;background:#2d3748;border-radius:50%;"></div>
-                    <!-- N label -->
-                    <div style="position:absolute;left:50%;top:1px;transform:translateX(-50%);
-                                font-size:8px;font-weight:bold;color:#e53e3e;font-family:Arial;
-                                line-height:1;">N</div>
-                </div>
             </div>
 </div>
 
@@ -13284,6 +14210,7 @@ function renderCompassPage(isAutoRefresh = false) {
     const openSurvey = surveys.find(s => s.status === 'Open');
 
         compassSurveyIdForMap = openSurvey ? openSurvey.id : null;
+    if (openSurvey) { try { ensureSurveyGridTileDefaults(openSurvey); } catch(e){} }
 
 if (!openSurvey) {
         return `
@@ -13459,7 +14386,95 @@ ${(() => {
                 ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
             </div>
 
+            <!-- Inline Tile Grid (permanently embedded) -->
+            ${(() => {
+                const _survey = openSurvey;
+                ensureSurveyGridTileDefaults(_survey);
+                const _tile = _survey.gridTile;
+                const _tileEnabled = _tile && _tile.enabled && _tile.centerLat != null && _tile.centerLon != null;
+                const _coveragePct = _tileEnabled ? getCoveragePercent(_tile).toFixed(1) : '0.0';
+                const _ranges = (typeof getQuickTargetRangesEffective === 'function') ? getQuickTargetRangesEffective() : [];
 
+                const _colorCls = {
+                    BLUE:  'bg-blue-600 hover:bg-blue-700',
+                    SKY:   'bg-sky-500 hover:bg-sky-600',
+                    GREEN: 'bg-emerald-600 hover:bg-emerald-700',
+                    AMBER: 'bg-amber-500 hover:bg-amber-600',
+                    RED:   'bg-red-600 hover:bg-red-700'
+                };
+                const _rainbowButtons = _ranges.map(function(r) {
+                    const color = String(r && r.color || '').toUpperCase();
+                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+                    const rangeLabel = (min !== '' && max !== '') ? (min + '&rarr;' + max) : '&mdash;';
+                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
+                    return '<button type="button"'
+                        + ' class="compass-range-btn tile-grid-range-btn dtk-rainbow-btn ' + cls + '"'
+                        + ' data-min="' + min + '"'
+                        + ' data-max="' + max + '"'
+                        + ' data-targetid="' + tid + '"'
+                        + ' data-color="' + color + '"'
+                        + '>' + rangeLabel + '</button>';
+                }).join('');
+
+                const _centreTxt = _tileEnabled
+                    ? (Number(_tile.centerLat).toFixed(6) + ', ' + Number(_tile.centerLon).toFixed(6))
+                    : 'Not set';
+
+                // Camera buttons (same colours, same order)
+                const _cameraButtons = _ranges.map(function(r) {
+                    const color = String(r && r.color || '').toUpperCase();
+                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
+                    return '<button type="button"'
+                        + ' class="tile-grid-camera-btn dtk-rainbow-btn ' + cls + '"'
+                        + ' data-min="' + min + '"'
+                        + ' data-max="' + max + '"'
+                        + ' data-targetid="' + tid + '"'
+                        + ' data-color="' + color + '"'
+                        + ' title="Photo + target (' + color + ' ' + min + '→' + max + ')">'
+                        + '<i class="fas fa-camera"></i></button>';
+                }).join('');
+
+                const _rainbowHtml = _rainbowButtons
+                    ? '<div class="grid grid-cols-5 gap-2 mb-2" id="tile-grid-camera-buttons">' + _cameraButtons + '</div>'
+                    + '<input type="file" id="tile-grid-photo-input" accept="image/*" capture="environment" class="hidden">'
+                    + '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
+                    : '<div id="tile-grid-rainbow-buttons"></div>';
+
+                return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
+                    + '<details id="tile-grid-inline-details" ' + (tileGridExpanded ? 'open' : '') + '>'
+                    + '<summary class="cursor-pointer select-none flex items-center gap-2 justify-start">'
+                    + '<span class="caret text-lg">&#9658;</span>'
+                    + '<span class="text-xl font-semibold text-gray-700 flex items-center gap-2">'
+                    + '<i class="fas fa-th text-primary"></i> Tile Grid (15&times;15)'
+                    + '</span></summary>'
+                    + '<div class="mt-3">'
+                    + '<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 mb-2">'
+                    + '<div><span class="font-semibold">Tile centre:</span> <span id="tile-grid-centre-text">' + _centreTxt + '</span></div>'
+                    + '<div><span class="font-semibold">You:</span> <span id="tile-grid-user-text">No GPS fix</span></div>'
+                    + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
+                    + '</div>'
+                    + '<div class="w-full flex justify-center mb-3">'
+                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="max-width: 100%;"></canvas>'
+                    + '</div>'
+                    + _rainbowHtml
+                    + '<div class="flex gap-2">'
+                    + '<button id="tile-grid-complete-btn" type="button"'
+                    + ' class="flex-1 px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm"'
+                    + ' style="background-color: rgb(var(--color-primary));"'
+                    + ' onclick="markTileGridComplete()">Complete</button>'
+                    + '<button id="tile-grid-clear-btn" type="button"'
+                    + ' class="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"'
+                    + ' onclick="clearTileCoverage()">Clear</button>'
+                    + '</div>'
+                    + '</div>'
+                    + '</details>'
+                    + '</div>';
+            })()}
 
             <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
@@ -15750,7 +16765,38 @@ if (gpsBtn) {
     });
 }
 
+    const gridSetBtn = document.getElementById('gridtile-set-gps-btn');
+    if (gridSetBtn) {
+        gridSetBtn.addEventListener('click', () => {
+            try { setGridTileToCurrentGps(); } catch (e) { console.error(e); }
+        });
+    }
 
+    const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
+    if (gridToggleBtn) {
+        gridToggleBtn.addEventListener('click', () => {
+            try { toggleGridTileEnabled(); } catch (e) { console.error(e); }
+        });
+    }
+
+    const inlineTileCanvas = document.getElementById('tile-grid-canvas');
+    if (inlineTileCanvas) {
+        try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
+    }
+
+document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dir = btn.getAttribute('data-gridtile-move') || '';
+            const step = Number(btn.getAttribute('data-gridtile-step') || '1');
+            if (!isFinite(step)) return;
+
+            const d = step;
+            if (dir === 'N') moveGridTileByMeters(0, d);
+            if (dir === 'S') moveGridTileByMeters(0, -d);
+            if (dir === 'E') moveGridTileByMeters(d, 0);
+            if (dir === 'W') moveGridTileByMeters(-d, 0);
+        });
+    });
 
 const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
@@ -15858,9 +16904,20 @@ if (mapLayersDetails) {
     });
 }
 
+const tileGridDetails = document.getElementById('tile-grid-details');
+if (tileGridDetails) {
+    tileGridDetails.open = !!tileGridControlsExpanded;
+    tileGridDetails.addEventListener('toggle', () => {
+        tileGridControlsExpanded = tileGridDetails.open;
+    });
+}
 
-
-
+const tileGridInlineDetails = document.getElementById('tile-grid-inline-details');
+if (tileGridInlineDetails) {
+    tileGridInlineDetails.addEventListener('toggle', () => {
+        tileGridExpanded = tileGridInlineDetails.open;
+    });
+}
 
 const tracksPanelDetails = document.getElementById('tracks-panel-details');
 if (tracksPanelDetails) {
@@ -16053,72 +17110,86 @@ if (stakeBtn) {
         });
     });
 
-// ── Compass photo buttons (delegated — survives re-renders) ───────
+// ── Compass photo buttons ──────────────────────────────────────────
 let _compassPhotoPendingRange = null;
 
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.compass-photo-btn');
-    if (!btn) return;
-    _compassPhotoPendingRange = {
-        min:      btn.getAttribute('data-min'),
-        max:      btn.getAttribute('data-max'),
-        targetId: btn.getAttribute('data-targetid'),
-        color:    btn.getAttribute('data-color')
-    };
-    const inp = document.getElementById('compass-photo-capture-input');
-    if (inp) { inp.value = ''; inp.click(); }
+document.querySelectorAll('.compass-photo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const min   = btn.getAttribute('data-min');
+        const max   = btn.getAttribute('data-max');
+        const tid   = btn.getAttribute('data-targetid');
+        const color = btn.getAttribute('data-color');
+        _compassPhotoPendingRange = { min, max, targetId: tid, color };
+        const inp = document.getElementById('compass-photo-capture-input');
+        if (inp) { inp.value = ''; inp.click(); }
+    });
 });
 
-document.addEventListener('change', async (e) => {
-    if (!e.target || e.target.id !== 'compass-photo-capture-input') return;
-    const file = e.target.files && e.target.files[0];
-    if (!file || !_compassPhotoPendingRange) return;
-    const r = _compassPhotoPendingRange;
-    _compassPhotoPendingRange = null;
-    const tid = Number(r.targetId);
-    const min = Number(r.min);
-    const max = Number(r.max);
-    let vdi = isFinite(tid) && r.targetId !== '' ? tid
-            : (isFinite(min) && isFinite(max) ? randomIntInclusive(min, max) : 0);
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey) { showMessage('No open survey to log a target.', 'error'); return; }
-    const ok = quickLogTargetByVDI(vdi, r.color + ' camera', { type: 'Unidentified' });
-    if (!ok) return;
-    const target = openSurvey.targets[0];
-    if (!target) return;
-    try {
-        showMessage('Processing photo…', 'info');
-        const resized = await fileToResizedDataUrl(file);
-        if (typeof resized === 'string' && resized.startsWith('data:image/')) {
-            if (!Array.isArray(target.photos)) target.photos = [];
-            target.photos.push(resized);
-            target.targetPhotoRef  = resized;
-            target.targetPhotoData = resized;
-            openSurvey.dateLastChanged = Date.now();
-            saveSurveysToLocalStorage();
-            showMessage('Target logged with photo (' + r.color + ' ' + min + '→' + max + ')', 'success');
-            updateMapWithUserLocationAndRender();
+const compassPhotoInput = document.getElementById('compass-photo-capture-input');
+if (compassPhotoInput) {
+    compassPhotoInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file || !_compassPhotoPendingRange) return;
+        const r = _compassPhotoPendingRange;
+        _compassPhotoPendingRange = null;
+
+        // Determine VDI
+        const tid = Number(r.targetId);
+        const min = Number(r.min);
+        const max = Number(r.max);
+        let vdi = isFinite(tid) && tid !== '' ? tid
+                : (isFinite(min) && isFinite(max) ? randomIntInclusive(min, max) : 0);
+
+        // Create the target first
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        if (!openSurvey) { showMessage('No open survey to log a target.', 'error'); return; }
+
+        const ok = quickLogTargetByVDI(vdi, `${r.color} camera`, { type: 'Unidentified' });
+        if (!ok) return;
+
+        // Attach photo to the just-created target (it was unshifted to index 0)
+        const target = openSurvey.targets[0];
+        if (!target) return;
+
+        try {
+            showMessage('Processing photo…', 'info');
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                if (!Array.isArray(target.photos)) target.photos = [];
+                target.photos.push(resized);
+                target.targetPhotoRef  = resized;
+                target.targetPhotoData = resized;
+                openSurvey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                showMessage(`Target logged with photo (${r.color} ${min}→${max})`, 'success');
+                updateMapWithUserLocationAndRender();
+            }
+        } catch(err) {
+            console.error('Compass photo capture error:', err);
+            showMessage('Photo could not be saved, but target was logged.', 'error');
         }
-    } catch(err) {
-        console.error('Compass photo capture error:', err);
-        showMessage('Photo could not be saved, but target was logged.', 'error');
-    }
-});
+    });
+}
 
-// ── Compass range buttons (delegated — survives re-renders) ────────
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.compass-range-btn');
-    if (!btn) return;
-    const min = Number(btn.getAttribute('data-min'));
-    const max = Number(btn.getAttribute('data-max'));
-    const preferredStr = (btn.getAttribute('data-targetid') || '').toString().trim();
-    const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
-    let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
-    if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
-        if (vdi < min) vdi = min;
-        if (vdi > max) vdi = max;
-    }
-    quickLogTargetByVDI(vdi, min + '→' + max, { type: 'Unidentified' });
+document.querySelectorAll('.compass-range-btn').forEach(btn => {
+    if (btn.classList.contains('tile-grid-range-btn')) return;
+    btn.addEventListener('click', () => {
+        const min = Number(btn.getAttribute('data-min'));
+        const max = Number(btn.getAttribute('data-max'));
+        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+
+        {
+            let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+
+            if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+                if (vdi < min) vdi = min;
+                if (vdi > max) vdi = max;
+            }
+
+            quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
+        }
+    });
 });
 
     try { attachLiveQuickTargetSettingsListeners(); } catch (e) {}
