@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2aj
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2ak
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -7354,6 +7354,11 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
             }
+            // Update bearing BEFORE render so display function has latest angle
+            if (typeof _updateGpsCompassBearing === 'function') {
+                _updateGpsCompassBearing(currentUserCoords);
+            }
+
             const now = Date.now();
             if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 700) { // 0.7s throttle
                 lastGpsUiRefreshMs = now;
@@ -7394,9 +7399,7 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
                 logPointToActiveTrack(currentUserCoords.lat, currentUserCoords.lon, accuracy);
             }
 
-            if (typeof _updateGpsCompassBearing === 'function' && currentUserCoords) {
-                _updateGpsCompassBearing(currentUserCoords);
-            }
+
 
 
 
