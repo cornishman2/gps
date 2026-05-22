@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6084,45 +6084,6 @@ function computeMovementBearingDegrees() {
     return initialBearingDegrees(first.lat, first.lon, last.lat, last.lon);
 }
 
-// ── Compass direction-of-travel display ──────────────────────────────────────
-// Reads the existing movementHistory via computeMovementBearingDegrees() and
-// updates the collapsible compass section directly in the DOM — no re-render needed.
-function updateCompassDisplay() {
-    const needleGroup = document.getElementById('compass-needle-group');
-    const labelEl     = document.getElementById('compass-heading-label');
-    const degEl       = document.getElementById('compass-heading-deg');
-    const noteEl      = document.getElementById('compass-heading-note');
-
-    // Section may not be in DOM if we are on a different page
-    if (!needleGroup && !labelEl) return;
-
-    const bearingDeg = computeMovementBearingDegrees();
-
-    if (bearingDeg === null) {
-        // Not enough movement yet — reset to default state
-        if (needleGroup) needleGroup.style.transform = 'rotate(0deg)';
-        if (labelEl)     labelEl.textContent  = '—';
-        if (degEl)       degEl.textContent    = 'Move to calculate direction';
-        if (noteEl)      noteEl.textContent   = 'Updates as you walk';
-        return;
-    }
-
-    // Rotate the needle so the red tip points in the direction of travel.
-    // The SVG needle points "up" (North) at 0°, so we rotate by bearingDeg directly.
-    if (needleGroup) {
-        needleGroup.style.transform = 'rotate(' + bearingDeg.toFixed(1) + 'deg)';
-    }
-
-    // Human-readable compass point
-    const compassPoint = (typeof bearingToCompassPoint === 'function')
-        ? bearingToCompassPoint(bearingDeg, 16)
-        : '';
-
-    if (labelEl) labelEl.textContent = compassPoint || Math.round(bearingDeg) + '°';
-    if (degEl)   degEl.textContent   = Math.round(bearingDeg) + '° bearing';
-    if (noteEl)  noteEl.textContent  = 'Direction of travel';
-}
-
 function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
@@ -8334,10 +8295,6 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             if (smoothedUserCoords) {
                 recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
             }
-            // Update compass direction display on every GPS fix (direct DOM write, no re-render)
-            if (currentPage === 'Compass' && typeof updateCompassDisplay === 'function') {
-                updateCompassDisplay();
-            }
             const now = Date.now();
             if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 700) { // 0.7s throttle
                 lastGpsUiRefreshMs = now;
@@ -8976,26 +8933,11 @@ function updateMapWithUserLocationAndRender() {
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
 
-    // Preserve open/closed state of collapsible sections before re-render
-    const compassOpen     = !!(document.getElementById('compass-direction-details') || {}).open;
-    const mapLayersOpen   = !!(document.getElementById('map-layers-details') || {}).open;
-    const tileGridOpen    = !!(document.getElementById('tile-grid-details') || {}).open;
-
     const scrollY = window.scrollY || window.pageYOffset || 0;
     appContent.innerHTML = renderCompassPage(true);
     attachPageEventListeners();
-
-    // Restore open/closed state after re-render
-    if (compassOpen)   { const el = document.getElementById('compass-direction-details'); if (el) el.open = true; }
-    if (mapLayersOpen) { const el = document.getElementById('map-layers-details');        if (el) el.open = true; }
-    if (tileGridOpen)  { const el = document.getElementById('tile-grid-details');         if (el) el.open = true; }
-
     if (scrollY > 0) {
         window.scrollTo({ top: scrollY, behavior: 'instant' });
-    }
-    // Restore compass display after DOM replacement
-    if (typeof updateCompassDisplay === 'function') {
-        updateCompassDisplay();
     }
 }
 
@@ -10897,15 +10839,8 @@ case 'edit': {
     if (currentPage === 'Compass') {
         const appContent = document.getElementById('app-content');
         if (appContent) {
-        const _compassOpen   = !!(document.getElementById('compass-direction-details') || {}).open;
-        const _layersOpen    = !!(document.getElementById('map-layers-details') || {}).open;
-        const _tileOpen      = !!(document.getElementById('tile-grid-details') || {}).open;
-        appContent.innerHTML = renderCompassPage(true);
-        attachPageEventListeners();
-        if (_compassOpen) { const _e = document.getElementById('compass-direction-details'); if (_e) _e.open = true; }
-        if (_layersOpen)  { const _e = document.getElementById('map-layers-details');        if (_e) _e.open = true; }
-        if (_tileOpen)    { const _e = document.getElementById('tile-grid-details');         if (_e) _e.open = true; }
-        if (typeof updateCompassDisplay === 'function') updateCompassDisplay();
+            appContent.innerHTML = renderCompassPage(true);
+            attachPageEventListeners();
         }
     }
 }
@@ -12500,15 +12435,10 @@ function rerenderCompassIfActive() {
     if (typeof currentPage !== 'undefined' && currentPage === 'Compass') {
         const appContent = document.getElementById('app-content');
         if (appContent && typeof renderCompassPage === 'function') {
-        const _compassOpen   = !!(document.getElementById('compass-direction-details') || {}).open;
-        const _layersOpen    = !!(document.getElementById('map-layers-details') || {}).open;
-        const _tileOpen      = !!(document.getElementById('tile-grid-details') || {}).open;
-        appContent.innerHTML = renderCompassPage(true);
-            if (typeof attachPageEventListeners === 'function') attachPageEventListeners();
-        if (_compassOpen) { const _e = document.getElementById('compass-direction-details'); if (_e) _e.open = true; }
-        if (_layersOpen)  { const _e = document.getElementById('map-layers-details');        if (_e) _e.open = true; }
-        if (_tileOpen)    { const _e = document.getElementById('tile-grid-details');         if (_e) _e.open = true; }
-        if (typeof updateCompassDisplay === 'function') updateCompassDisplay();
+            appContent.innerHTML = renderCompassPage(true);
+            if (typeof attachPageEventListeners === 'function') {
+                attachPageEventListeners();
+            }
         }
     }
 }
@@ -13124,46 +13054,6 @@ const toPercent = (x, y) => {
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
 
 </div>
-
-<!-- Compass Direction Section -->
-<details id="compass-direction-details" class="mt-2 bg-white border border-gray-200 rounded-xl shadow-sm">
-  <summary class="cursor-pointer select-none flex items-center gap-2 p-3">
-    <span class="caret text-lg">&#9658;</span>
-    <span class="font-semibold text-gray-700 text-sm">Compass / Direction of Travel</span>
-  </summary>
-  <div class="px-3 pb-3">
-    <div class="flex items-center gap-4 mt-1">
-      <!-- Compass rose SVG -->
-      <div class="flex-shrink-0 flex items-center justify-center"
-           style="width:72px;height:72px;background:rgba(243,244,246,0.9);border-radius:50%;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
-        <svg id="compass-svg" viewBox="0 0 72 72" width="72" height="72" style="display:block;">
-          <!-- Cardinal labels (fixed, outside needle group) -->
-          <text x="36" y="9"  text-anchor="middle" font-size="9" font-weight="bold" fill="#374151" font-family="Arial">N</text>
-          <text x="36" y="68" text-anchor="middle" font-size="9" font-weight="bold" fill="#6b7280" font-family="Arial">S</text>
-          <text x="8"  y="39" text-anchor="middle" font-size="9" font-weight="bold" fill="#6b7280" font-family="Arial">W</text>
-          <text x="64" y="39" text-anchor="middle" font-size="9" font-weight="bold" fill="#6b7280" font-family="Arial">E</text>
-          <!-- Outer ring -->
-          <circle cx="36" cy="36" r="26" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
-          <!-- Needle group — rotated by JS -->
-          <g id="compass-needle-group" style="transform-origin:36px 36px;transform:rotate(0deg);">
-            <!-- North tip (red) -->
-            <polygon points="36,12 31,36 41,36" fill="#e53e3e"/>
-            <!-- South tip (grey) -->
-            <polygon points="36,60 31,36 41,36" fill="#a0aec0"/>
-            <!-- Centre dot -->
-            <circle cx="36" cy="36" r="4" fill="#2d3748"/>
-          </g>
-        </svg>
-      </div>
-      <!-- Heading text -->
-      <div class="text-sm flex-1">
-        <div id="compass-heading-label" class="font-semibold text-gray-800 text-base">—</div>
-        <div id="compass-heading-deg"   class="text-xs text-gray-500 mt-0.5">Move to calculate direction</div>
-        <div id="compass-heading-note"  class="text-xs text-gray-400 mt-1">Updates as you walk</div>
-      </div>
-    </div>
-  </div>
-</details>
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -16868,15 +16758,8 @@ if (gpsBtn) {
         if (currentPage === 'Compass') {
             const appContent = document.getElementById('app-content');
             if (appContent) {
-            const _compassOpen   = !!(document.getElementById('compass-direction-details') || {}).open;
-        const _layersOpen    = !!(document.getElementById('map-layers-details') || {}).open;
-        const _tileOpen      = !!(document.getElementById('tile-grid-details') || {}).open;
-        appContent.innerHTML = renderCompassPage(true);
-            attachPageEventListeners();
-        if (_compassOpen) { const _e = document.getElementById('compass-direction-details'); if (_e) _e.open = true; }
-        if (_layersOpen)  { const _e = document.getElementById('map-layers-details');        if (_e) _e.open = true; }
-        if (_tileOpen)    { const _e = document.getElementById('tile-grid-details');         if (_e) _e.open = true; }
-        if (typeof updateCompassDisplay === 'function') updateCompassDisplay();
+                appContent.innerHTML = renderCompassPage(true);
+                attachPageEventListeners();
             }
         }
     });
