@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5339,11 +5339,11 @@ async function resizeDataUrlToMaxWidth(dataUrl, maxWidth) {
  * Full pipeline: File -> dataUrl -> resized dataUrl (based on Settings)
  */
 async function fileToResizedDataUrl(file) {
-    const maxW = getMaxPhotoWidth();
-    if (!maxW || maxW < 1) {
-        return await fileToDataUrl(file);
-    }
-    // Use createObjectURL to avoid holding two copies of image data in memory
+    // Hard cap to protect against very large photos exhausting browser memory
+    const MAX_CANVAS_PX = 1600;
+    const rawMaxW = getMaxPhotoWidth();
+    const maxW = (rawMaxW && rawMaxW > 0) ? Math.min(rawMaxW, MAX_CANVAS_PX) : MAX_CANVAS_PX;
+
     const objUrl = URL.createObjectURL(file);
     try {
         const img = await new Promise((resolve, reject) => {
@@ -5352,33 +5352,43 @@ async function fileToResizedDataUrl(file) {
             im.onerror = () => reject(new Error('Image decode failed'));
             im.src = objUrl;
         });
+        // Revoke immediately after decode — no longer needed
+        URL.revokeObjectURL(objUrl);
+
         const srcW = img.naturalWidth || img.width;
         const srcH = img.naturalHeight || img.height;
-        if (!srcW || !srcH) return await fileToDataUrl(file);
+        if (!srcW || !srcH) throw new Error('Zero-size image');
+
         const scale = srcW > maxW ? maxW / srcW : 1;
         const dstW = Math.round(srcW * scale);
         const dstH = Math.round(srcH * scale);
+
         const canvas = document.createElement('canvas');
-        canvas.width = dstW;
+        canvas.width  = dstW;
         canvas.height = dstH;
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, dstW, dstH);
-        // Release the object URL before toDataURL to free memory
-        URL.revokeObjectURL(objUrl);
-        canvas.width; // force layout
-        return await new Promise(resolve => canvas.toBlob(
-            blob => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.readAsDataURL(blob);
-            },
-            'image/jpeg', 0.85
-        ));
+
+        // Encode to JPEG blob, then convert to dataURL via FileReader
+        const blob = await new Promise(resolve =>
+            canvas.toBlob(resolve, 'image/jpeg', 0.82)
+        );
+        // Release canvas pixel buffer before reading blob
+        canvas.width = 0;
+        canvas.height = 0;
+
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('FileReader failed'));
+            reader.readAsDataURL(blob);
+        });
     } catch(e) {
-        URL.revokeObjectURL(objUrl);
+        try { URL.revokeObjectURL(objUrl); } catch(_) {}
         console.error('fileToResizedDataUrl failed:', e);
+        // Final fallback — read file directly (no resize)
         return await fileToDataUrl(file);
     }
 }
