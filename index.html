@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12225,9 +12225,21 @@ switch (s) {
             class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 text-xs sm:text-sm font-semibold">
         Delete
     </button>              </div>
+
+                <!-- Row 4: New Photo -->
+                <div class="mt-2">
+                    <button type="button"
+                        class="target-new-photo-btn w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm font-semibold"
+                        data-target-id="${target.id}" data-survey-id="${surveyId}">
+                        <i class="fas fa-camera mr-2"></i> New Photo
+                    </button>
+                    <input type="file" accept="image/*" capture="environment"
+                        class="target-photo-file-input hidden"
+                        data-target-id="${target.id}" data-survey-id="${surveyId}">
+                </div>
             </div>
         </div>
-    `;
+    \`;
 }
 
 let mapZoom = 1;
@@ -16971,7 +16983,50 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
             if (btn && typeof handleTargetAction === 'function') {
                 handleTargetAction(btn);
             }
+
+            // New Photo button on target cards
+            const photoBtn = e.target.closest('.target-new-photo-btn');
+            if (photoBtn) {
+                const targetId = photoBtn.getAttribute('data-target-id');
+                const inp = appContent.querySelector(
+                    `.target-photo-file-input[data-target-id="${targetId}"]`
+                );
+                if (inp) { inp.value = ''; inp.click(); }
+            }
         };
+
+        // Handle photo file selected for a target card
+        appContent.addEventListener('change', async (e) => {
+            const inp = e.target.closest('.target-photo-file-input');
+            if (!inp) return;
+            const file = inp.files && inp.files[0];
+            if (!file) return;
+            const targetId  = inp.getAttribute('data-target-id');
+            const surveyId  = inp.getAttribute('data-survey-id');
+            inp.value = '';
+            const survey = surveys.find(s => s.id === surveyId);
+            if (!survey) { showMessage('Survey not found.', 'error'); return; }
+            const target = Array.isArray(survey.targets)
+                ? survey.targets.find(t => t.id === targetId) : null;
+            if (!target) { showMessage('Target not found.', 'error'); return; }
+            try {
+                showMessage('Processing photo…', 'info');
+                const resized = await fileToResizedDataUrl(file);
+                if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                    if (!Array.isArray(target.photos)) target.photos = [];
+                    target.photos.push(resized);
+                    target.targetPhotoRef  = resized;
+                    target.targetPhotoData = resized;
+                    survey.dateLastChanged = Date.now();
+                    saveSurveysToLocalStorage();
+                    showMessage('Photo added to target.', 'success');
+                    render();
+                }
+            } catch(err) {
+                console.error('Target new photo error:', err);
+                showMessage('Photo could not be saved.', 'error');
+            }
+        });
     }
 
         const scanTargetQrBtn = document.getElementById('scan-target-qr-btn');
