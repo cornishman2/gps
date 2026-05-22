@@ -1,5 +1,4 @@
-const CACHE_NAME = "detekta-cache-v6"; // <-- bump this on every deployment
-
+const CACHE_NAME = "detekta-cache-v7"; // <-- bump this on every deployment
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,7 +6,6 @@ const APP_SHELL = [
   "./assets/icon-192.png",
   "./assets/icon-512.png"
 ];
-
 // Install: pre-cache app shell
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -16,7 +14,6 @@ self.addEventListener("install", (event) => {
       .then(() => self.skipWaiting())
   );
 });
-
 // Activate: cleanup old caches + take control
 self.addEventListener("activate", (event) => {
   event.waitUntil(
@@ -29,7 +26,6 @@ self.addEventListener("activate", (event) => {
     })()
   );
 });
-
 // Helper: network-first (good for HTML so updates land)
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
@@ -45,12 +41,10 @@ async function networkFirst(request) {
     return cached || Promise.reject(err);
   }
 }
-
 // Helper: cache-first (good for icons/assets)
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
-
   const fresh = await fetch(request);
   if (fresh && fresh.ok && fresh.type === "basic") {
     const cache = await caches.open(CACHE_NAME);
@@ -58,27 +52,20 @@ async function cacheFirst(request) {
   }
   return fresh;
 }
-
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-
   // Only handle GET
   if (req.method !== "GET") return;
-
   const url = new URL(req.url);
-
   // Only same-origin requests (avoid caching third-party)
   if (url.origin !== self.location.origin) return;
-
   // Treat navigations + HTML as network-first so index updates
   const isNavigation = req.mode === "navigate";
   const isHtml = req.headers.get("accept")?.includes("text/html");
-
   if (isNavigation || isHtml || url.pathname.endsWith("/") || url.pathname.endsWith("/index.html")) {
     event.respondWith(networkFirst(req));
     return;
   }
-
   // Everything else: cache-first
   event.respondWith(cacheFirst(req));
 });
