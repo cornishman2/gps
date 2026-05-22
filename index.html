@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2ai
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2aj
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4581,7 +4581,18 @@ function isAnyTrackRecording() {
 // North-up, this also tells the user their orientation relative to the map.
 
 let _gpsCompassPrevCoords = null;
+let _gpsCompassLastNorthAngle = null;
 const _GPS_COMPASS_MIN_DIST_M = 3; // minimum movement to update bearing
+
+function _updateGpsCompassBearingDisplay() {
+    if (_gpsCompassLastNorthAngle === null) return;
+    document.querySelectorAll('#map-compass-needle').forEach(el => {
+        el.style.transform = `rotate(${_gpsCompassLastNorthAngle}deg)`;
+    });
+    document.querySelectorAll('#map-compass-rose').forEach(el => {
+        el.style.opacity = '1';
+    });
+}
 
 function _updateGpsCompassBearing(newCoords) {
     if (!newCoords || !isFinite(newCoords.lat) || !isFinite(newCoords.lon)) return;
@@ -4604,6 +4615,7 @@ function _updateGpsCompassBearing(newCoords) {
 
             const needles = document.querySelectorAll('#map-compass-needle');
             const northAngle = (360 - bearing) % 360;
+            _gpsCompassLastNorthAngle = northAngle;
             needles.forEach(el => {
                 el.style.transform = `rotate(${northAngle}deg)`;
             });
@@ -7382,10 +7394,11 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
                 logPointToActiveTrack(currentUserCoords.lat, currentUserCoords.lon, accuracy);
             }
 
-            // Update GPS bearing compass needle
             if (typeof _updateGpsCompassBearing === 'function' && currentUserCoords) {
                 _updateGpsCompassBearing(currentUserCoords);
             }
+
+
 
             if (accuracy < bestLiveAccuracy) {
                 bestLiveAccuracy = accuracy;
@@ -7990,6 +8003,11 @@ function updateMapWithUserLocationAndRender() {
     attachPageEventListeners();
     if (scrollY > 0) {
         window.scrollTo({ top: scrollY, behavior: 'instant' });
+    }
+
+    // Re-apply compass needle rotation after DOM replacement
+    if (typeof _updateGpsCompassBearingDisplay === 'function') {
+        _updateGpsCompassBearingDisplay();
     }
 }
 
@@ -11983,17 +12001,17 @@ const toPercent = (x, y) => {
             </div>
             <!-- GPS bearing compass needle (shows direction of travel) -->
             <div id="map-compass-rose" style="position:absolute;top:10px;left:10px;z-index:30;pointer-events:none;
-                        width:40px;height:40px;background:rgba(255,255,255,0.88);
-                        border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.25);
+                        width:56px;height:56px;background:rgba(255,255,255,0.92);
+                        border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
                         display:flex;align-items:center;justify-content:center;
                         opacity:0.35;transition:opacity 0.5s;"
                  title="Direction of travel (updates when moving)">
-                <svg id="map-compass-needle" width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"
+                <svg id="map-compass-needle" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"
                      style="transition:transform 0.4s ease-out;">
-                    <polygon points="14,2 11,14 14,12 17,14" fill="#e53e3e"/>
-                    <polygon points="14,26 11,14 14,16 17,14" fill="#cbd5e0" stroke="#a0aec0" stroke-width="0.5"/>
-                    <circle cx="14" cy="14" r="2.5" fill="#2d3748"/>
-                    <text x="14" y="10" text-anchor="middle" font-size="5.5" font-family="Arial" font-weight="bold" fill="#e53e3e">N</text>
+                    <polygon points="20,3 16,20 20,17 24,20" fill="#e53e3e"/>
+                    <polygon points="20,37 16,20 20,23 24,20" fill="#cbd5e0" stroke="#a0aec0" stroke-width="0.5"/>
+                    <circle cx="20" cy="20" r="3" fill="#2d3748"/>
+                    <text x="20" y="13" text-anchor="middle" font-size="7" font-family="Arial" font-weight="bold" fill="#e53e3e">N</text>
                 </svg>
             </div>
 </div>
@@ -12230,17 +12248,17 @@ const toPercent = (x, y) => {
             </div>
             <!-- GPS bearing compass needle (shows direction of travel) -->
             <div id="map-compass-rose" style="position:absolute;top:10px;left:10px;z-index:30;pointer-events:none;
-                        width:40px;height:40px;background:rgba(255,255,255,0.88);
-                        border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.25);
+                        width:56px;height:56px;background:rgba(255,255,255,0.92);
+                        border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
                         display:flex;align-items:center;justify-content:center;
                         opacity:0.35;transition:opacity 0.5s;"
                  title="Direction of travel (updates when moving)">
-                <svg id="map-compass-needle" width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"
+                <svg id="map-compass-needle" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"
                      style="transition:transform 0.4s ease-out;">
-                    <polygon points="14,2 11,14 14,12 17,14" fill="#e53e3e"/>
-                    <polygon points="14,26 11,14 14,16 17,14" fill="#cbd5e0" stroke="#a0aec0" stroke-width="0.5"/>
-                    <circle cx="14" cy="14" r="2.5" fill="#2d3748"/>
-                    <text x="14" y="10" text-anchor="middle" font-size="5.5" font-family="Arial" font-weight="bold" fill="#e53e3e">N</text>
+                    <polygon points="20,3 16,20 20,17 24,20" fill="#e53e3e"/>
+                    <polygon points="20,37 16,20 20,23 24,20" fill="#cbd5e0" stroke="#a0aec0" stroke-width="0.5"/>
+                    <circle cx="20" cy="20" r="3" fill="#2d3748"/>
+                    <text x="20" y="13" text-anchor="middle" font-size="7" font-family="Arial" font-weight="bold" fill="#e53e3e">N</text>
                 </svg>
             </div>
 </div>
