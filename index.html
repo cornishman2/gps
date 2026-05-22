@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2449,8 +2449,23 @@ function drawTileGrid() {
             drawGridPin(lat, lon, PIN_COLORS.stake, true);
         } else {
             const st = (t.status || 'not dug').toLowerCase();
-            const color = PIN_COLORS.target[st] || PIN_COLORS.target['not dug'];
-            drawGridPin(lat, lon, color, false);
+            if (st === 'ignore') {
+                drawGridPin(lat, lon, PIN_COLORS.target['ignore'], false);
+            } else {
+                // Use VDI range colour, fall back to dig-status colour
+                const vdiColorClass = (typeof getVdiPinColor === 'function') ? getVdiPinColor(t.vdi) : null;
+                const vdiColorMap = {
+                    'bg-blue-600':    'rgba(37,99,235,0.95)',
+                    'bg-sky-400':     'rgba(56,189,248,0.95)',
+                    'bg-emerald-500': 'rgba(16,185,129,0.95)',
+                    'bg-amber-500':   'rgba(245,158,11,0.95)',
+                    'bg-red-600':     'rgba(220,38,38,0.95)',
+                };
+                const color = vdiColorClass
+                    ? (vdiColorMap[vdiColorClass] || PIN_COLORS.target[st] || PIN_COLORS.target['not dug'])
+                    : (PIN_COLORS.target[st] || PIN_COLORS.target['not dug']);
+                drawGridPin(lat, lon, color, false);
+            }
         }
     }
 
@@ -12555,10 +12570,13 @@ const toPercent = (x, y) => {
             const isFind = !!t.isFind || (String(t.type || '').toLowerCase() === 'find');
             const st = (t.status || (isFind ? 'find' : 'Not dug')).toLowerCase();
 
-            let pinColor = 'bg-blue-500';      // Not dug
-            if (st === 'dug')      pinColor = 'bg-amber-500';
-            if (st === 'refilled') pinColor = 'bg-green-500';
-            if (st === 'ignore')   pinColor = 'bg-gray-500';
+            // Dig-status colour (used as border so you can always see dig state)
+            let statusColor = 'bg-blue-500';      // Not dug
+            if (st === 'dug')      statusColor = 'bg-amber-500';
+            if (st === 'refilled') statusColor = 'bg-green-500';
+            if (st === 'ignore')   statusColor = 'bg-gray-500';
+
+            let pinColor = statusColor;
 
             if (isFind || st === 'find') {
                 const findTypeColors = {
@@ -12572,6 +12590,12 @@ const toPercent = (x, y) => {
                 };
                 const findTypeName = t.findType || t.type || '';
                 pinColor = findTypeColors[findTypeName] || 'bg-teal-500';
+            } else if (st !== 'ignore') {
+                // Colour by VDI range (Quick Target Button colours)
+                const vdiColor = (typeof getVdiPinColor === 'function')
+                    ? getVdiPinColor(t.vdi)
+                    : null;
+                if (vdiColor) pinColor = vdiColor;
             }
 
             const isStake = (!isFind) && (String(t.vdi).trim() === '-100');
@@ -12603,7 +12627,7 @@ const toPercent = (x, y) => {
                           ${isStake ? 'bg-black' : pinColor}
                           ${isStake ? 'rounded-none' : 'rounded-full'}
                           border-2
-                          ${isStake ? 'border-black' : 'border-primary'}
+                          ${isStake ? 'border-black' : (isFind ? 'border-primary' : statusColor.replace('bg-','border-'))}
                           shadow-lg
                           cursor-pointer
                           "
@@ -17013,6 +17037,27 @@ function getQuickTargetSwatchClass(colorName) {
         RED:   'bg-red-600'
     };
     return map[c] || 'bg-gray-400';
+}
+
+function getVdiPinColor(vdi) {
+    const v = Number(vdi);
+    if (!isFinite(v)) return null;
+    const ranges = (typeof loadQuickTargetRanges === 'function')
+        ? loadQuickTargetRanges()
+        : getDefaultQuickTargetRanges();
+    const colorMap = {
+        BLUE:  'bg-blue-600',
+        SKY:   'bg-sky-400',
+        GREEN: 'bg-emerald-500',
+        AMBER: 'bg-amber-500',
+        RED:   'bg-red-600'
+    };
+    for (const r of ranges) {
+        if (v >= r.min && v <= r.max) {
+            return colorMap[String(r.color).toUpperCase()] || null;
+        }
+    }
+    return null;
 }
 
 function loadQuickTargetRanges() {
