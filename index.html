@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2ak
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2am
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12008,14 +12008,28 @@ const toPercent = (x, y) => {
                         border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
                         display:flex;align-items:center;justify-content:center;
                         opacity:0.35;transition:opacity 0.5s;"
-                 title="Direction of travel (updates when moving)">
-                <svg id="map-compass-needle" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"
-                     style="transition:transform 0.4s ease-out;">
-                    <polygon points="20,3 16,20 20,17 24,20" fill="#e53e3e"/>
-                    <polygon points="20,37 16,20 20,23 24,20" fill="#cbd5e0" stroke="#a0aec0" stroke-width="0.5"/>
-                    <circle cx="20" cy="20" r="3" fill="#2d3748"/>
-                    <text x="20" y="13" text-anchor="middle" font-size="7" font-family="Arial" font-weight="bold" fill="#e53e3e">N</text>
-                </svg>
+                 title="North indicator (updates when moving)">
+                <div id="map-compass-needle" style="width:40px;height:40px;position:relative;transition:transform 0.4s ease-out;">
+                    <!-- North tip (red) -->
+                    <div style="position:absolute;left:50%;top:2px;transform:translateX(-50%);
+                                width:0;height:0;
+                                border-left:6px solid transparent;
+                                border-right:6px solid transparent;
+                                border-bottom:18px solid #e53e3e;"></div>
+                    <!-- South tip (grey) -->
+                    <div style="position:absolute;left:50%;bottom:2px;transform:translateX(-50%);
+                                width:0;height:0;
+                                border-left:6px solid transparent;
+                                border-right:6px solid transparent;
+                                border-top:18px solid #a0aec0;"></div>
+                    <!-- Centre dot -->
+                    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+                                width:8px;height:8px;background:#2d3748;border-radius:50%;"></div>
+                    <!-- N label -->
+                    <div style="position:absolute;left:50%;top:1px;transform:translateX(-50%);
+                                font-size:8px;font-weight:bold;color:#e53e3e;font-family:Arial;
+                                line-height:1;">N</div>
+                </div>
             </div>
 </div>
 
@@ -12072,17 +12086,39 @@ const toPercent = (x, y) => {
 
 </div>
 
-<!-- Current GPS + Grid Tile controls (Step 1) -->
+<!-- Current GPS info -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
-      <div class="font-semibold text-gray-700">Current GPS <span class="text-xs text-gray-400 font-normal">(Step 3c build 2026-02-08)</span></div>
+      <div class="font-semibold text-gray-700">Current GPS</div>
       <div class="text-xs text-gray-600">
         ${(() => {
           const c = smoothedUserCoords || currentUserCoords;
           const acc = (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy : 0;
           if (!c) return 'No GPS fix yet';
           return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} (±${acc.toFixed(1)}m)`;
+        })()}
+      </div>
+      <div class="text-xs text-gray-600 mt-1">
+        ${(() => {
+          const bearing = _gpsCompassLastNorthAngle;
+          if (bearing === null || bearing === undefined) return 'Heading: — (move to calculate)';
+          // Travel bearing is opposite of north angle
+          const travelBearing = (360 - bearing) % 360;
+          const dirs = ['North','North-East','East','South-East','South','South-West','West','North-West'];
+          const dir = dirs[Math.round(travelBearing / 45) % 8];
+          return `Heading: ${dir} (${Math.round(travelBearing)}°)`;
+        })()}
+      </div>
+      <div class="text-xs text-gray-600 mt-1">
+        ${(() => {
+          const bearing = _gpsCompassLastNorthAngle;
+          if (bearing === null || bearing === undefined) return 'North: — (move to calculate)';
+          const northAngle = Math.round(bearing) % 360;
+          if (northAngle <= 10 || northAngle >= 350) return 'North: directly ahead';
+          if (northAngle >= 170 && northAngle <= 190) return 'North: directly behind';
+          if (northAngle > 10 && northAngle < 180) return `North: ${northAngle}° to your left`;
+          return `North: ${360 - northAngle}° to your right`;
         })()}
       </div>
     </div>
@@ -12255,14 +12291,28 @@ const toPercent = (x, y) => {
                         border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
                         display:flex;align-items:center;justify-content:center;
                         opacity:0.35;transition:opacity 0.5s;"
-                 title="Direction of travel (updates when moving)">
-                <svg id="map-compass-needle" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"
-                     style="transition:transform 0.4s ease-out;">
-                    <polygon points="20,3 16,20 20,17 24,20" fill="#e53e3e"/>
-                    <polygon points="20,37 16,20 20,23 24,20" fill="#cbd5e0" stroke="#a0aec0" stroke-width="0.5"/>
-                    <circle cx="20" cy="20" r="3" fill="#2d3748"/>
-                    <text x="20" y="13" text-anchor="middle" font-size="7" font-family="Arial" font-weight="bold" fill="#e53e3e">N</text>
-                </svg>
+                 title="North indicator (updates when moving)">
+                <div id="map-compass-needle" style="width:40px;height:40px;position:relative;transition:transform 0.4s ease-out;">
+                    <!-- North tip (red) -->
+                    <div style="position:absolute;left:50%;top:2px;transform:translateX(-50%);
+                                width:0;height:0;
+                                border-left:6px solid transparent;
+                                border-right:6px solid transparent;
+                                border-bottom:18px solid #e53e3e;"></div>
+                    <!-- South tip (grey) -->
+                    <div style="position:absolute;left:50%;bottom:2px;transform:translateX(-50%);
+                                width:0;height:0;
+                                border-left:6px solid transparent;
+                                border-right:6px solid transparent;
+                                border-top:18px solid #a0aec0;"></div>
+                    <!-- Centre dot -->
+                    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+                                width:8px;height:8px;background:#2d3748;border-radius:50%;"></div>
+                    <!-- N label -->
+                    <div style="position:absolute;left:50%;top:1px;transform:translateX(-50%);
+                                font-size:8px;font-weight:bold;color:#e53e3e;font-family:Arial;
+                                line-height:1;">N</div>
+                </div>
             </div>
 </div>
 
