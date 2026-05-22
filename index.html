@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2ap
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2aq
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -4581,15 +4581,17 @@ function isAnyTrackRecording() {
 // Needle points in the direction the user is moving; since the map is
 // North-up, this also tells the user their orientation relative to the map.
 
-let _gpsCompassPrevCoords = null;
-let _gpsCompassLastNorthAngle = null; // degrees to rotate needle so red tip points North
-let _gpsCompassHeadingLabel = null;   // e.g. "North-East"
-let _gpsCompassHeadingDeg = null;     // travel bearing in degrees
-const _GPS_COMPASS_MIN_DIST_M = 8;
+// Accumulate GPS fixes to average movement direction — reduces jitter
+let _gpsCompassHistory = []; // array of {lat, lon}
+const _GPS_COMPASS_HISTORY_SIZE = 5;  // average over 5 fixes
+const _GPS_COMPASS_MIN_TOTAL_M  = 10; // need 10m total movement before updating
+
+let _gpsCompassLastNorthAngle = null;
+let _gpsCompassHeadingLabel   = null;
+let _gpsCompassHeadingDeg     = null;
 
 function _updateGpsCompassBearingDisplay() {
     if (_gpsCompassLastNorthAngle === null) return;
-    // Use setTimeout to ensure DOM is settled after re-render
     setTimeout(() => {
         document.querySelectorAll('#map-compass-needle').forEach(el => {
             el.style.transform = 'rotate(' + _gpsCompassLastNorthAngle + 'deg)';
@@ -4603,74 +4605,62 @@ function _updateGpsCompassBearingDisplay() {
 function _updateGpsCompassBearing(newCoords) {
     if (!newCoords || !isFinite(newCoords.lat) || !isFinite(newCoords.lon)) return;
 
-    if (!_gpsCompassPrevCoords) {
-        _gpsCompassPrevCoords = { lat: newCoords.lat, lon: newCoords.lon };
-        return;
+    // Add to history
+    _gpsCompassHistory.push({ lat: newCoords.lat, lon: newCoords.lon });
+    if (_gpsCompassHistory.length > _GPS_COMPASS_HISTORY_SIZE) {
+        _gpsCompassHistory.shift();
     }
+    if (_gpsCompassHistory.length < 2) return;
 
-    const prevLat = _gpsCompassPrevCoords.lat;
-    const prevLon = _gpsCompassPrevCoords.lon;
-    const newLat  = newCoords.lat;
-    const newLon  = newCoords.lon;
+    // Use oldest and newest point in history for direction
+    const oldest = _gpsCompassHistory[0];
+    const newest = _gpsCompassHistory[_gpsCompassHistory.length - 1];
 
-    // Approximate distance in metres (handles crossing 0 longitude)
     const M_PER_DEG_LAT = 111320;
-    const mPerDegLon    = 111320 * Math.cos(newLat * Math.PI / 180);
-    const dLatM = (newLat - prevLat) * M_PER_DEG_LAT;
-    const dLonM = (newLon - prevLon) * mPerDegLon;
+    const mPerDegLon    = 111320 * Math.cos(newest.lat * Math.PI / 180);
+    const dLatM = (newest.lat - oldest.lat) * M_PER_DEG_LAT;
+    const dLonM = (newest.lon - oldest.lon) * mPerDegLon;
     const distM = Math.sqrt(dLatM * dLatM + dLonM * dLonM);
 
-    if (distM < _GPS_COMPASS_MIN_DIST_M) return; // not moved enough
+    // Only update if enough total movement to be reliable
+    if (distM < _GPS_COMPASS_MIN_TOTAL_M) return;
 
-    _gpsCompassPrevCoords = { lat: newLat, lon: newLon };
-
-    // Determine quadrant using explicit IF logic
-    // dLat > 0 means moving North, dLon > 0 means moving East
-    // (handles crossing 0 longitude automatically since lon difference is just a number)
+    // Determine direction using explicit quadrant logic
     const goingNorth = dLatM > 0;
     const goingSouth = dLatM < 0;
     const goingEast  = dLonM > 0;
     const goingWest  = dLonM < 0;
 
-    // Use ratio to distinguish cardinal vs intercardinal
-    // If one axis is dominant (>2x the other), treat as cardinal
     const absLat = Math.abs(dLatM);
     const absLon = Math.abs(dLonM);
-    const dominant = absLat > absLon * 2 ? 'lat'
-                   : absLon > absLat * 2 ? 'lon'
+
+    // Require one axis to be at least 2.5x the other to call it cardinal
+    // Otherwise treat as intercardinal
+    const dominant = absLat > absLon * 2.5 ? 'lat'
+                   : absLon > absLat * 2.5 ? 'lon'
                    : 'both';
 
-    // Travel direction label and degrees (clockwise from North)
-    // North=0, NE=45, E=90, SE=135, S=180, SW=225, W=270, NW=315
     let travelLabel, travelDeg;
-
     if (dominant === 'lat') {
-        if (goingNorth) { travelLabel = 'North';  travelDeg = 0;   }
-        else            { travelLabel = 'South';  travelDeg = 180; }
+        if (goingNorth) { travelLabel = 'North'; travelDeg = 0;   }
+        else            { travelLabel = 'South'; travelDeg = 180; }
     } else if (dominant === 'lon') {
-        if (goingEast)  { travelLabel = 'East';   travelDeg = 90;  }
-        else            { travelLabel = 'West';   travelDeg = 270; }
+        if (goingEast)  { travelLabel = 'East';  travelDeg = 90;  }
+        else            { travelLabel = 'West';  travelDeg = 270; }
     } else {
-        // Intercardinal
         if      (goingNorth && goingEast) { travelLabel = 'North-East'; travelDeg = 45;  }
         else if (goingSouth && goingEast) { travelLabel = 'South-East'; travelDeg = 135; }
         else if (goingSouth && goingWest) { travelLabel = 'South-West'; travelDeg = 225; }
         else if (goingNorth && goingWest) { travelLabel = 'North-West'; travelDeg = 315; }
-        else { travelLabel = '—'; travelDeg = 0; }
+        else { return; } // no clear direction
     }
 
-    // North needle angle: needle points opposite to travel direction
-    // If travelling North (0°), North is ahead — needle points up (0°)
-    // If travelling East (90°), North is to the left — needle points left (270°)
-    // If travelling South (180°), North is behind — needle points down (180°)
-    // If travelling West (270°), North is to the right — needle points right (90°)
     const northAngle = (360 - travelDeg) % 360;
 
     _gpsCompassLastNorthAngle = northAngle;
     _gpsCompassHeadingLabel   = travelLabel;
     _gpsCompassHeadingDeg     = travelDeg;
 
-    // Update needle
     document.querySelectorAll('#map-compass-needle').forEach(el => {
         el.style.transform = 'rotate(' + northAngle + 'deg)';
     });
