@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2z
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2ab
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2232,32 +2232,87 @@ function paintTileCellUnderUserWithColour(colourName) {
 
 function attachTileGridRainbowButtonsOnce() {
     if (tileGridRainbowButtonsAttached) return;
-    const btns = Array.from(document.querySelectorAll('.tile-grid-range-btn'));
-    if (!btns.length) return;
 
-    btns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const min = Number(btn.getAttribute('data-min'));
-            const max = Number(btn.getAttribute('data-max'));
-            const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
-            const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
-            const colour = (btn.getAttribute('data-color') || '').toString().trim();
+    // Use event delegation on appContent so it survives page re-renders
+    const appContent = document.getElementById('app-content');
+    if (!appContent) return;
 
-            {
-                let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+    appContent.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tile-grid-range-btn');
+        if (!btn) return;
+        const min = Number(btn.getAttribute('data-min'));
+        const max = Number(btn.getAttribute('data-max'));
+        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+        const colour = (btn.getAttribute('data-color') || '').toString().trim();
 
-                if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
-                    if (vdi < min) vdi = min;
-                    if (vdi > max) vdi = max;
-                }
+        let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+        if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+            if (vdi < min) vdi = min;
+            if (vdi > max) vdi = max;
+        }
 
-                quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
+        quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
+        paintTileCellUnderUserWithColour(colour);
+        try { drawTileGrid(); } catch (e) {}
+    });
 
-                paintTileCellUnderUserWithColour(colour);
+    // Tile grid camera buttons
+    let _tileGridPhotoPendingRange = null;
+    appContent.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tile-grid-camera-btn');
+        if (!btn) return;
+        const min    = btn.getAttribute('data-min');
+        const max    = btn.getAttribute('data-max');
+        const tid    = btn.getAttribute('data-targetid');
+        const color  = btn.getAttribute('data-color');
+        _tileGridPhotoPendingRange = { min, max, targetId: tid, color };
+        const inp = document.getElementById('tile-grid-photo-input');
+        if (inp) { inp.value = ''; inp.click(); }
+    });
 
-                try { drawTileGrid(); } catch (e) {}
+    appContent.addEventListener('change', async (e) => {
+        const inp = e.target.closest('#tile-grid-photo-input');
+        if (!inp) return;
+        const file = inp.files && inp.files[0];
+        if (!file || !_tileGridPhotoPendingRange) return;
+        const r = _tileGridPhotoPendingRange;
+        _tileGridPhotoPendingRange = null;
+
+        const tid = Number(r.targetId);
+        const min = Number(r.min);
+        const max = Number(r.max);
+        let vdi = isFinite(tid) && r.targetId !== '' ? tid
+                : (isFinite(min) && isFinite(max) ? randomIntInclusive(min, max) : 0);
+
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        if (!openSurvey) { showMessage('No open survey.', 'error'); return; }
+
+        const ok = quickLogTargetByVDI(vdi, `${r.color} camera`, { type: 'Unidentified' });
+        if (!ok) return;
+
+        paintTileCellUnderUserWithColour(r.color);
+        try { drawTileGrid(); } catch(err) {}
+
+        const target = openSurvey.targets[0];
+        if (!target) return;
+        try {
+            showMessage('Processing photo…', 'info');
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                if (!Array.isArray(target.photos)) target.photos = [];
+                target.photos.push(resized);
+                target.targetPhotoRef  = resized;
+                target.targetPhotoData = resized;
+                openSurvey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                showMessage(`Target logged with photo (${r.color} ${min}→${max})`, 'success');
+                updateMapWithUserLocationAndRender();
             }
-        });
+        } catch(err) {
+            console.error('Tile grid photo error:', err);
+            showMessage('Photo could not be saved, but target was logged.', 'error');
+        }
     });
 
     tileGridRainbowButtonsAttached = true;
@@ -14367,8 +14422,27 @@ ${(() => {
                     ? (Number(_tile.centerLat).toFixed(6) + ', ' + Number(_tile.centerLon).toFixed(6))
                     : 'Not set';
 
+                // Camera buttons (same colours, same order)
+                const _cameraButtons = _ranges.map(function(r) {
+                    const color = String(r && r.color || '').toUpperCase();
+                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
+                    return '<button type="button"'
+                        + ' class="tile-grid-camera-btn dtk-rainbow-btn ' + cls + '"'
+                        + ' data-min="' + min + '"'
+                        + ' data-max="' + max + '"'
+                        + ' data-targetid="' + tid + '"'
+                        + ' data-color="' + color + '"'
+                        + ' title="Photo + target (' + color + ' ' + min + '→' + max + ')">'
+                        + '<i class="fas fa-camera"></i></button>';
+                }).join('');
+
                 const _rainbowHtml = _rainbowButtons
-                    ? '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
+                    ? '<div class="grid grid-cols-5 gap-2 mb-2" id="tile-grid-camera-buttons">' + _cameraButtons + '</div>'
+                    + '<input type="file" id="tile-grid-photo-input" accept="image/*" capture="environment" class="hidden">'
+                    + '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
                     : '<div id="tile-grid-rainbow-buttons"></div>';
 
                 return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
