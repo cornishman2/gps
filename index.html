@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2y
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2z
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2490,20 +2490,58 @@ function drawTileGrid() {
         ctx.stroke();
     }
 
+    // Helper: parse lat/lon from either direct fields or coordinates string
+    function parseItemCoords(item) {
+        if (!item) return null;
+        // Direct lat/lon fields
+        let lat = Number(item.lat ?? item.latitude);
+        let lon = Number(item.lon ?? item.longitude);
+        if (isFinite(lat) && isFinite(lon)) return { lat, lon };
+        // Coordinates string "lat, lon"
+        const coordStr = String(item.coordinates || item.coords || '');
+        if (coordStr) {
+            const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
+            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+                return { lat: parts[0], lon: parts[1] };
+            }
+        }
+        return null;
+    }
+
+    // Draw tracks
+    const visibleTracksForGrid = Array.isArray(survey.tracks)
+        ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
+        : [];
+    for (const track of visibleTracksForGrid) {
+        const trackColor = track.color || '#000000';
+        ctx.beginPath();
+        ctx.strokeStyle = trackColor;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.75;
+        let started = false;
+        for (const p of track.points) {
+            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
+            const tx = ((p.lon - lon0) * mPerDegLon + (sizeM / 2)) / sizeM * px;
+            const ty = ((sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * px;
+            if (!started) { ctx.moveTo(tx, ty); started = true; }
+            else ctx.lineTo(tx, ty);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
     // Draw targets
     for (const t of allTargets) {
-        const lat = Number(t.lat ?? t.latitude);
-        const lon = Number(t.lon ?? t.longitude);
-        if (!isFinite(lat) || !isFinite(lon)) continue;
+        const c = parseItemCoords(t);
+        if (!c) continue;
         const isStakePin = String(t.vdi).trim() === '-100';
         if (isStakePin) {
-            drawGridPin(lat, lon, PIN_COLORS.stake, true);
+            drawGridPin(c.lat, c.lon, PIN_COLORS.stake, true);
         } else {
             const st = (t.status || 'not dug').toLowerCase();
             if (st === 'ignore') {
-                drawGridPin(lat, lon, PIN_COLORS.target['ignore'], false);
+                drawGridPin(c.lat, c.lon, PIN_COLORS.target['ignore'], false);
             } else {
-                // Use VDI range colour, fall back to dig-status colour
                 const vdiColorClass = (typeof getVdiPinColor === 'function') ? getVdiPinColor(t.vdi) : null;
                 const vdiColorMap = {
                     'bg-blue-600':    'rgba(37,99,235,0.95)',
@@ -2515,18 +2553,17 @@ function drawTileGrid() {
                 const color = vdiColorClass
                     ? (vdiColorMap[vdiColorClass] || PIN_COLORS.target[st] || PIN_COLORS.target['not dug'])
                     : (PIN_COLORS.target[st] || PIN_COLORS.target['not dug']);
-                drawGridPin(lat, lon, color, false);
+                drawGridPin(c.lat, c.lon, color, false);
             }
         }
     }
 
     // Draw finds
     for (const f of allFindsForGrid) {
-        const lat = Number(f.lat ?? f.latitude);
-        const lon = Number(f.lon ?? f.longitude);
-        if (!isFinite(lat) || !isFinite(lon)) continue;
+        const c = parseItemCoords(f);
+        if (!c) continue;
         const color = PIN_COLORS.find[f.findType || f.type] || PIN_COLORS.findDefault;
-        drawGridPin(lat, lon, color, false);
+        drawGridPin(c.lat, c.lon, color, false);
     }
 
 if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
