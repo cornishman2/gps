@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3210,35 +3210,61 @@ function getAppTotals() {
 }
 
 async function updateHomeStorageStats() {
-    const usedEl = document.getElementById('home-storage-used');
-    const freeEl = document.getElementById('home-storage-free');
+    const usedEl      = document.getElementById('home-storage-used');
+    const freeEl      = document.getElementById('home-storage-free');
+    const quotaEl     = document.getElementById('home-storage-quota');
+    const breakdownEl = document.getElementById('home-storage-breakdown');
     if (!usedEl || !freeEl) return;
 
-    usedEl.textContent = '—';
-    freeEl.textContent = '—';
+    const bytesToNice = (bytes) => {
+        if (!Number.isFinite(bytes) || bytes < 0) return '—';
+        const kb = 1024, mb = kb * 1024, gb = mb * 1024;
+        if (bytes >= gb) return (bytes / gb).toFixed(2) + ' GB';
+        if (bytes >= mb) return (bytes / mb).toFixed(1) + ' MB';
+        return (bytes / kb).toFixed(0) + ' KB';
+    };
 
+    // Calculate localStorage usage (surveys + finds + settings)
+    let lsBytes = 0;
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            const v = localStorage.getItem(k) || '';
+            lsBytes += (k.length + v.length) * 2; // UTF-16 chars = 2 bytes each
+        }
+    } catch(e) {}
+
+    // Rough breakdown: photos are the bulk of survey/finds data
+    let photoBytes = 0;
+    try {
+        const surveyRaw = localStorage.getItem('geoFindSurveys') || '[]';
+        const findsRaw  = localStorage.getItem('geoFindFinds')   || '[]';
+        // Count base64 photo data (data:image/... strings)
+        const photoMatches = (surveyRaw + findsRaw).match(/data:image\/[^"]+/g) || [];
+        photoBytes = photoMatches.reduce((sum, s) => sum + s.length * 0.75, 0); // base64 → bytes
+    } catch(e) {}
+
+    usedEl.textContent = bytesToNice(lsBytes);
+
+    if (breakdownEl && photoBytes > 0) {
+        const otherBytes = Math.max(0, lsBytes - photoBytes);
+        breakdownEl.textContent =
+            `Photos: ${bytesToNice(photoBytes)}  ·  Survey/Find data: ${bytesToNice(otherBytes)}`;
+    }
+
+    // Browser quota via Storage API
     try {
         if (!navigator.storage || !navigator.storage.estimate) return;
-
         const est = await navigator.storage.estimate();
-        const usage = est && typeof est.usage === 'number' ? est.usage : null;
         const quota = est && typeof est.quota === 'number' ? est.quota : null;
-        if (usage == null || quota == null || quota <= 0) return;
-
-        const bytesToNice = (bytes) => {
-            if (!Number.isFinite(bytes) || bytes < 0) return '—';
-            const kb = 1024;
-            const mb = kb * 1024;
-            const gb = mb * 1024;
-            if (bytes >= gb) return (bytes / gb).toFixed(2) + ' GB';
-            if (bytes >= mb) return (bytes / mb).toFixed(0) + ' MB';
-            return (bytes / kb).toFixed(0) + ' KB';
-        };
-
-        usedEl.textContent = bytesToNice(usage);
-        freeEl.textContent = bytesToNice(Math.max(0, quota - usage));
-    } catch (e) {
-    }
+        const apiUsage = est && typeof est.usage === 'number' ? est.usage : null;
+        if (quota && quota > 0) {
+            if (quotaEl) quotaEl.textContent = bytesToNice(quota);
+            // Use API usage for free calc (more accurate than localStorage estimate)
+            const used = apiUsage != null ? apiUsage : lsBytes;
+            freeEl.textContent = bytesToNice(Math.max(0, quota - used));
+        }
+    } catch(e) {}
 }
 
     function updateActiveNavButtons() {
@@ -11216,19 +11242,29 @@ function renderHomePage() {
                 <div class="text-2xl font-bold text-gray-800">${totalPhotos}</div>
             </div>
 
-            <!-- Row 3: Storage (browser-managed) -->
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Storage Used</div>
-                <div id="home-storage-used" class="text-2xl font-bold text-gray-800">—</div>
-            </div>
+        </div>
 
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Storage Free</div>
-                <div id="home-storage-free" class="text-2xl font-bold text-gray-800">—</div>
+        <!-- Storage row: full width below the grid -->
+        <div class="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+            <div class="dtk-label-upper mb-2">App Storage</div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Used by Detekta</div>
+                    <div id="home-storage-used" class="text-lg font-bold text-gray-800">—</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Available</div>
+                    <div id="home-storage-free" class="text-lg font-bold text-green-700">—</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Browser Quota</div>
+                    <div id="home-storage-quota" class="text-lg font-bold text-gray-500">—</div>
+                </div>
             </div>
-
-            <!-- Spacer to keep the 3-column grid aligned -->
-            <div class="p-3 rounded-lg bg-transparent border border-transparent text-center"></div>
+            <div class="mt-2 text-xs text-gray-500 text-center" id="home-storage-breakdown"></div>
+            <div class="mt-1 text-xs text-gray-400 text-center">
+                Browser quota is a portion of device storage allocated to this app by Android.
+            </div>
         </div>
     </div>
 
