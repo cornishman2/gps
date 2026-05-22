@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11806,6 +11806,18 @@ function renderFindsPage() {
                         Delete Find
                     </button>
                 </div>
+
+                <!-- New Photo row -->
+                <div class="mt-2">
+                    <button type="button"
+                        class="find-new-photo-btn w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm font-semibold"
+                        data-find-id="${find.id}">
+                        <i class="fas fa-camera mr-2"></i> New Photo
+                    </button>
+                    <input type="file" accept="image/*" capture="environment"
+                        class="find-photo-file-input hidden"
+                        data-find-id="${find.id}">
+                </div>
             </div>
         `;
     }).join('');
@@ -16878,6 +16890,40 @@ if (stakeBtn) {
     });
     document.querySelectorAll('.find-card-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteFind(btn.getAttribute('data-find-id')));
+    });
+    document.querySelectorAll('.find-new-photo-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const findId = btn.getAttribute('data-find-id');
+            const inp = document.querySelector(`.find-photo-file-input[data-find-id="${findId}"]`);
+            if (inp) { inp.value = ''; inp.click(); }
+        });
+    });
+    document.querySelectorAll('.find-photo-file-input').forEach(inp => {
+        inp.addEventListener('change', async (e) => {
+            const file = inp.files && inp.files[0];
+            if (!file) return;
+            const findId = inp.getAttribute('data-find-id');
+            inp.value = '';
+            const find = finds.find(f => f.id === findId);
+            if (!find) { showMessage('Find not found.', 'error'); return; }
+            try {
+                showMessage('Processing photo…', 'info');
+                const resized = await fileToResizedDataUrl(file);
+                if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                    if (!Array.isArray(find.photos)) find.photos = [];
+                    find.photos.push(resized);
+                    find.targetPhotoRef  = resized;
+                    find.targetPhotoData = resized;
+                    find.dateLastChanged = Date.now();
+                    saveFindsToLocalStorage();
+                    showMessage('Photo added to find.', 'success');
+                    render();
+                }
+            } catch(err) {
+                console.error('Find new photo error:', err);
+                showMessage('Photo could not be saved.', 'error');
+            }
+        });
     });
 
 // ── Compass photo buttons ──────────────────────────────────────────
