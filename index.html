@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13059,7 +13059,7 @@ const toPercent = (x, y) => {
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
-      <div class="font-semibold text-gray-700">Current GPS</div>
+      <div class="font-semibold text-gray-700">Current GPS <span class="text-xs text-gray-400 font-normal">(Step 3c build 2026-02-08)</span></div>
       <div class="text-xs text-gray-600">
         ${(() => {
           const c = getBestLiveGpsCoordsOrNull();
@@ -17171,6 +17171,9 @@ if (compassPhotoInput) {
     });
 }
 
+// Guard: only attach once — these buttons are static DOM, not re-rendered
+if (!window._compassRangeBtnsAttached) {
+    window._compassRangeBtnsAttached = true;
 document.querySelectorAll('.compass-range-btn').forEach(btn => {
     if (btn.classList.contains('tile-grid-range-btn')) return;
     btn.addEventListener('click', () => {
@@ -17191,6 +17194,7 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
         }
     });
 });
+} // end _compassRangeBtnsAttached guard
 
     try { attachLiveQuickTargetSettingsListeners(); } catch (e) {}
 
@@ -17226,7 +17230,8 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
         };
 
         // Handle photo file selected for a target card
-        appContent.addEventListener('change', async (e) => {
+        // Use .onchange (assignment) not addEventListener so re-renders replace rather than stack
+        appContent.onchange = async (e) => {
             const inp = e.target.closest('.target-photo-file-input');
             if (!inp) return;
             const file = inp.files && inp.files[0];
@@ -17256,7 +17261,7 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
                 console.error('Target new photo error:', err);
                 showMessage('Photo could not be saved.', 'error');
             }
-        });
+        };
     }
 
         const scanTargetQrBtn = document.getElementById('scan-target-qr-btn');
