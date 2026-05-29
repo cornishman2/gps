@@ -14813,6 +14813,13 @@ return `
                         Removes any leftover “deleted” items and tidies storage.
                       </p>
 
+                      <button id="survey-status-diag-btn"
+                      type="button"
+                      class="w-full mt-2 bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-700 transition">
+                        Show Survey Statuses (Diagnostic)
+                      </button>
+                      <pre id="survey-status-diag-out" class="text-xs bg-gray-100 rounded p-2 mt-2 whitespace-pre-wrap hidden"></pre>
+
             </div>
 
         </div>
@@ -17341,6 +17348,22 @@ if (sortByDateBtn) {
         render();
     });
 }
+
+    const diagBtn = document.getElementById('survey-status-diag-btn');
+    if (diagBtn) {
+        diagBtn.addEventListener('click', () => {
+            const out = document.getElementById('survey-status-diag-out');
+            if (!out) return;
+            const raw = localStorage.getItem('geoFindSurveys') || '[]';
+            let parsed;
+            try { parsed = JSON.parse(raw); } catch(e) { out.textContent = 'Parse error: ' + e.message; out.classList.remove('hidden'); return; }
+            const lines = (Array.isArray(parsed) ? parsed : []).map((s, i) =>
+                `[${i}] id=${s.id || '?'} status="${s.status || '?'}" name="${s.name || '?'}"`
+            );
+            out.textContent = lines.length ? lines.join('\n') : '(no surveys in localStorage)';
+            out.classList.remove('hidden');
+        });
+    }
 
     const maintenanceBtn = document.getElementById('maintenance-btn');
 if (maintenanceBtn) {
