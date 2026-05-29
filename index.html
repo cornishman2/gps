@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3468,7 +3468,7 @@ function getDefaultAppLimits() {
         maxSurveys: 3,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-06-01' // ISO YYYY-MM-DD
+        expiryDate: '2027-06-01' // ISO YYYY-MM-DD
     };
 }
 
@@ -14605,7 +14605,7 @@ function renderSettingsPage() {
         maxSurveys: 3,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-06-01'
+        expiryDate: '2027-06-01'
     };
 
     const valOrBlank = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
@@ -14755,70 +14755,53 @@ return `
     </div>
 </div>
 
-<!-- APP LIMITS (TESTER BUILD) - READ ONLY -->
+<!-- APP LIMITS (TESTER BUILD) -->
+${(() => {
+  const isAdmin = (userProfile && typeof userProfile.name === 'string' && userProfile.name.trim() === 'Laurence Wright');
+  const inputClass = isAdmin
+    ? 'w-full border border-emerald-300 rounded-lg p-2 bg-white text-gray-800'
+    : 'w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700';
+  const readonlyAttr = isAdmin ? '' : 'readonly';
+  return `
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
   <div class="flex items-start justify-between gap-3">
     <div>
       <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits (Tester Build)</h4>
       <p class="text-sm text-gray-600">
         These limits are set by the build. Blank means <strong>unlimited</strong>.
+        ${isAdmin ? '<span class="text-emerald-600 font-semibold">Changes save immediately.</span>' : ''}
       </p>
     </div>
-    ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
+    ${expired ? '<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>' : ''}
   </div>
 
   <div class="mt-4 space-y-3">
     <div>
-      <label class="dtk-label" for="limits-max-surveys">
-        Max number of surveys
-      </label>
-      <input id="limits-max-surveys"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayMaxSurveys}"
-             placeholder="Unlimited" />
+      <label class="dtk-label" for="limits-max-surveys">Max number of surveys</label>
+      <input id="limits-max-surveys" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayMaxSurveys}" placeholder="Unlimited" />
     </div>
-
     <div>
-      <label class="dtk-label" for="limits-max-targets">
-        Max number of targets
-      </label>
-      <input id="limits-max-targets"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayMaxTargets}"
-             placeholder="Unlimited" />
+      <label class="dtk-label" for="limits-max-targets">Max number of targets</label>
+      <input id="limits-max-targets" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayMaxTargets}" placeholder="Unlimited" />
     </div>
-
     <div>
-      <label class="dtk-label" for="limits-max-finds">
-        Max number of finds
-      </label>
-      <input id="limits-max-finds"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayMaxFinds}"
-             placeholder="Unlimited" />
+      <label class="dtk-label" for="limits-max-finds">Max number of finds</label>
+      <input id="limits-max-finds" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayMaxFinds}" placeholder="Unlimited" />
     </div>
-<div>
-      <label class="dtk-label" for="limits-expiry-date">
-        Expiration date
-      </label>
-      <input id="limits-expiry-date"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayExpiryDate}"
-             placeholder="No expiry" />
+    <div>
+      <label class="dtk-label" for="limits-expiry-date">Expiration date</label>
+      <input id="limits-expiry-date" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayExpiryDate}" placeholder="No expiry" />
       <p class="text-xs text-gray-500 mt-1">
         If expired, no new surveys, targets, or finds can be created.
       </p>
     </div>
   </div>
-</div>
+</div>`;
+})()}
 
 
 <!-- Danger Zone: Reset All Data -->
@@ -17074,6 +17057,28 @@ if (trackEditButtons && trackEditButtons.length > 0) {
     if (resetBtn) resetBtn.addEventListener('click', resetAllAppData);
 
     const maxWidthInput = document.getElementById('max-photo-width-input');
+    // App Limits auto-save (only active for Laurence Wright)
+    const isAdmin = (typeof userProfile !== 'undefined' &&
+                     userProfile && typeof userProfile.name === 'string' &&
+                     userProfile.name.trim() === 'Laurence Wright');
+    if (isAdmin) {
+        const limitInputIds = ['limits-max-surveys', 'limits-max-targets', 'limits-max-finds', 'limits-expiry-date'];
+        limitInputIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', () => {
+                const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {};
+                const v = el.value.trim();
+                if (id === 'limits-max-surveys') limits.maxSurveys = v === '' ? null : (Number.isFinite(+v) ? +v : limits.maxSurveys);
+                if (id === 'limits-max-targets') limits.maxTargets = v === '' ? null : (Number.isFinite(+v) ? +v : limits.maxTargets);
+                if (id === 'limits-max-finds')   limits.maxFinds   = v === '' ? null : (Number.isFinite(+v) ? +v : limits.maxFinds);
+                if (id === 'limits-expiry-date') limits.expiryDate = v === '' ? null : v;
+                if (typeof saveAppLimits === 'function') saveAppLimits(limits);
+                showMessage('Limits saved.', 'success');
+            });
+        });
+    }
+
     const savePhotoBtn = document.getElementById('save-photo-settings-btn');
     if (maxWidthInput) maxWidthInput.value = String(getMaxPhotoWidth() || 0);
     if (savePhotoBtn && maxWidthInput) {
@@ -17972,7 +17977,7 @@ function bootstrapAppLimitsIfMissing() {
         maxSurveys: 3,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-06-01'
+        expiryDate: '2027-06-01'
     };
 
     localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(testerDefaults));
