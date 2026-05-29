@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13115,107 +13115,99 @@ const toPercent = (x, y) => {
             </div>
 </div>
 
-            <!-- Tile size segmented buttons + toggle -->
-            <div class="mt-2 mb-1">
-                <div class="text-xs text-gray-500 text-center mb-1">Set tile size &amp; position to GPS:</div>
-                <div class="flex gap-1 justify-center flex-wrap">
+            <!-- Tile size + MAP + GRID button rows — all w-11 h-11 for alignment -->
+            <div class="mt-2 mb-1 flex flex-col gap-1">
+
+              <!-- Row 1: TILE label + size buttons + show/hide -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
                     ${[15, 20, 25, 30].map(sz => {
                       const s = getCompassOpenSurvey();
                       const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
                       const active = cur === sz;
                       return `<button type="button"
-                        class="px-3 py-2 rounded-xl font-bold shadow text-sm ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
                         onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
                     }).join('')}
-                    <button id="gridtile-toggle-btn" type="button"
-                        class="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">
-                        ${(() => {
-                          const s = getCompassOpenSurvey();
-                          const t = s && s.gridTile ? s.gridTile : null;
-                          return (t && t.enabled) ? 'Hide' : 'Show';
-                        })()}
-                    </button>
-                </div>
-            </div>
+                <button id="gridtile-toggle-btn" type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const t = s && s.gridTile ? s.gridTile : null;
+                      return (t && t.enabled) ? 'Hide' : 'Show';
+                    })()}
+                </button>
+              </div>
 
-            <!-- MAP label + directional pan buttons -->
-            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center items-center">
-                    <span class="text-xs font-bold text-gray-500 w-10 text-center">MAP</span>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >◀</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >▲</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >▼</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >▶</button>
-            </div>
+              <!-- Row 2: MAP label + directional pan buttons -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">MAP</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >◀</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >▲</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >▼</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >▶</button>
+              </div>
 
-            <!-- GRID label + tile pan buttons -->
-            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center items-center">
-                    <span class="text-xs font-bold text-gray-500 w-10 text-center">GRID</span>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                        onmousedown="startTilePan('W',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                        ontouchstart="startTilePan('W',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                    >W</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                        onmousedown="startTilePan('N',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                        ontouchstart="startTilePan('N',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                    >N</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                        onmousedown="startTilePan('S',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                        ontouchstart="startTilePan('S',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                    >S</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                        onmousedown="startTilePan('E',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                        ontouchstart="startTilePan('E',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                    >E</button>
+              <!-- Row 3: GRID label + tile pan buttons -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">GRID</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('W',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('W',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >W</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('N',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('N',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >N</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('S',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('S',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >S</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('E',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('E',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >E</button>
+              </div>
+
             </div>
 
             <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                <button
-                    type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapIn(event)"
-                >+</button>
-
-                <button
-                    type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapOut(event)"
-                >−</button>
-
-                <button
-                    type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
-                    onclick="resetMapView(event)"
-                >Reset</button>
-
-                <button
-                    id="toggle-gps-btn"
-                    type="button"
-                    class="px-5 py-2 rounded-xl font-bold text-white shadow hover:opacity-90 text-base"
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapIn(event)">+</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapOut(event)">−</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
+                    onclick="resetMapView(event)">Reset</button>
+                <button id="toggle-gps-btn" type="button"
+                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
                     style="background-color: rgb(var(--color-secondary));"
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
-
-</div>
+            </div>
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
