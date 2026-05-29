@@ -1784,7 +1784,7 @@ function getBestLiveGpsCoordsOrNull() {
     return { lat, lon };
 }
 
-function setGridTileToCurrentGps() {
+function setGridTileToCurrentGps(sizeM) {
     const survey = getCompassOpenSurvey();
     if (!survey) {
         showMessage('No open survey.', 'error');
@@ -1800,11 +1800,12 @@ function setGridTileToCurrentGps() {
     survey.gridTile.centerLat = c.lat;
     survey.gridTile.centerLon = c.lon;
     survey.gridTile.enabled = true;
+    if (sizeM && Number.isFinite(+sizeM)) survey.gridTile.sizeM = +sizeM;
     survey.dateLastChanged = Date.now();
     if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
     saveSurveysToLocalStorage();
 
-    showMessage('Grid tile set to current GPS position.', 'success');
+    showMessage(`Grid tile set to current GPS position (${survey.gridTile.sizeM}m).`, 'success');
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
 }
@@ -1835,7 +1836,7 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
     ensureSurveyGridTileDefaults(survey);
 
     if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Grid tile is not set yet. Tap "Set Tile to GPS" first.', 'warning');
+        showMessage('Grid tile is not set yet. Tap a size button to place the tile.', 'warning');
         return;
     }
 
@@ -2034,7 +2035,7 @@ function openTileGridModal() {
     ensureSurveyGridTileDefaults(survey);
 
     if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Set the tile first (tap "Set Tile to GPS").', 'warning');
+        showMessage('Set the tile first — tap a size button.', 'warning');
         return;
     }
 
@@ -13114,20 +13115,27 @@ const toPercent = (x, y) => {
             </div>
 </div>
 
-            <!-- Tile GPS + toggle buttons -->
-            <div class="mt-2 mb-1 flex gap-2 justify-center">
-                <button id="gridtile-set-gps-btn" type="button"
-                    class="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm">
-                    Set Tile to GPS
-                </button>
-                <button id="gridtile-toggle-btn" type="button"
-                    class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">
-                    ${(() => {
+            <!-- Tile size segmented buttons + toggle -->
+            <div class="mt-2 mb-1">
+                <div class="text-xs text-gray-500 text-center mb-1">Set tile size &amp; position to GPS:</div>
+                <div class="flex gap-1 justify-center flex-wrap">
+                    ${[10, 15, 20, 25, 30].map(sz => {
                       const s = getCompassOpenSurvey();
-                      const t = s && s.gridTile ? s.gridTile : null;
-                      return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
-                    })()}
-                </button>
+                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
+                      const active = cur === sz;
+                      return `<button type="button"
+                        class="px-3 py-2 rounded-xl font-bold shadow text-sm ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
+                    }).join('')}
+                    <button id="gridtile-toggle-btn" type="button"
+                        class="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">
+                        ${(() => {
+                          const s = getCompassOpenSurvey();
+                          const t = s && s.gridTile ? s.gridTile : null;
+                          return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
+                        })()}
+                    </button>
+                </div>
             </div>
 
             <!-- MAP label + directional pan buttons -->
@@ -16849,12 +16857,7 @@ if (gpsBtn) {
     });
 }
 
-    const gridSetBtn = document.getElementById('gridtile-set-gps-btn');
-    if (gridSetBtn) {
-        gridSetBtn.addEventListener('click', () => {
-            try { setGridTileToCurrentGps(); } catch (e) { console.error(e); }
-        });
-    }
+    // gridtile size buttons use inline onclick — no separate listener needed
 
     const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
     if (gridToggleBtn) {
