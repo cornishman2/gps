@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2569,7 +2569,7 @@ function drawTileGrid() {
         ctx.beginPath();
         ctx.fillStyle = color;
         if (isStakePin) {
-            ctx.rect(px2x - r, px2y - r, r * 2, r * 2);
+            ctx.arc(px2x, px2y, 3, 0, Math.PI * 2);
         } else {
             ctx.arc(px2x, px2y, r, 0, Math.PI * 2);
         }
@@ -7064,6 +7064,9 @@ importedSurvey.surveyPhotoData = '';
             `${importedFindsActual} finds.`,
             'success'
         );
+
+        // Refresh the UI so the imported survey appears on the home page
+        if (typeof render === 'function') render();
 
     } catch (e) {
         console.error('Error importing ZIP survey:', e);
@@ -12788,7 +12791,7 @@ const toPercent = (x, y) => {
             }
 
             const isStake = (!isFind) && (String(t.vdi).trim() === '-100');
-            const pinSize = 'w-4 h-4';
+            const pinSize = isStake ? 'w-2 h-2' : 'w-4 h-4';
 
             let extraRing = '';
             if (typeof t.accuracy === 'number' && t.accuracy > 0 && mapWidthMeters && mapHeightMeters) {
@@ -12814,7 +12817,7 @@ const toPercent = (x, y) => {
                           class="
                           ${pinSize}
                           ${isStake ? 'bg-black' : pinColor}
-                          ${isStake ? 'rounded-none' : 'rounded-full'}
+                          rounded-full
                           border-2
                           ${isStake ? 'border-black' : (isFind ? 'border-primary' : statusColor.replace('bg-','border-'))}
                           shadow-lg
@@ -13093,7 +13096,7 @@ const toPercent = (x, y) => {
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
-      <div class="font-semibold text-gray-700">Current GPS <span class="text-xs text-gray-400 font-normal">(Step 3c build 2026-02-08)</span></div>
+      <div class="font-semibold text-gray-700">Current GPS</div>
       <div class="text-xs text-gray-600">
         ${(() => {
           const c = getBestLiveGpsCoordsOrNull();
@@ -16657,6 +16660,9 @@ for (const tr of importedSurvey.tracks) {
             `${importedFinds.length} finds.`,
             'success'
         );
+
+        // Refresh the UI so the imported survey appears on the home page
+        if (typeof render === 'function') render();
 
     } catch (e) {
         console.error('Error importing survey :', e);
