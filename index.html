@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2257,11 +2257,11 @@ function paintTileCellUnderUserWithColour(colourName) {
     const localX = dx + (sizeM / 2);
     const localY = (sizeM / 2) - dy;
 
-    const clampedX = Math.min(Math.max(localX, 0), sizeM);
-    const clampedY = Math.min(Math.max(localY, 0), sizeM);
+    // Only paint if user is actually inside the grid bounds
+    if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) return false;
 
-    const col = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
-    const row = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
+    const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
+    const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
 
     // Store coverage as GPS coordinates (grid-position-independent)
     if (!Array.isArray(tile.coverageGps)) tile.coverageGps = [];
@@ -2517,12 +2517,10 @@ function drawTileGrid() {
     const localX = user ? (user.lon - lon0) * mPerDegLon + (sizeM / 2) : null;
     const localY = user ? (sizeM / 2) - (user.lat - lat0) * M_PER_DEG_LAT : null;
 
-    if (user && tile.paintingEnabled) {
-        const clampedX = Math.min(Math.max(localX, 0), sizeM);
-        const clampedY = Math.min(Math.max(localY, 0), sizeM);
-
-        const col0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
-        const row0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
+    // Only paint if user is actually inside the grid bounds (not just clamped to edge)
+    if (user && tile.paintingEnabled && localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
+        const col0 = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
+        const row0 = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
 
         let paintedAny = false;
 
