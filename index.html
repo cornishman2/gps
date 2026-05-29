@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2461,18 +2461,9 @@ function drawTileGrid() {
     ctx.clearRect(0, 0, px, px);
 
     const cellPx = px / cells;
-    const rotDeg  = Number(tile.rotationDeg) || 0;
-    const rotRad  = rotDeg * Math.PI / 180;
-    const cx = px / 2, cy = px / 2; // canvas centre
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, px, px);
-
-    // ── Rotated grid frame ────────────────────────────────────────────────
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(rotRad);
-    ctx.translate(-cx, -cy);
 
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
         for (let i = 0; i < total; i++) {
@@ -2498,10 +2489,6 @@ function drawTileGrid() {
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, px - 2, px - 2);
-
-    ctx.restore(); // end rotated frame
-
-    // ── Fixed labels (always aligned with screen) ─────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
@@ -2511,13 +2498,7 @@ function drawTileGrid() {
     ctx.fillText('W', 6, px / 2);
     ctx.textAlign = 'right';
     ctx.fillText('E', px - 6, px / 2);
-    // Show rotation angle if non-zero
-    if (rotDeg !== 0) {
-        ctx.textAlign = 'center';
-        ctx.font = '10px Arial';
-        ctx.fillStyle = 'rgba(220,38,38,0.85)';
-        ctx.fillText(`${rotDeg}°`, px / 2, px / 2);
-    }
+
 
     const centreEl = document.getElementById('tile-grid-centre-text');
     if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
@@ -2557,12 +2538,6 @@ function drawTileGrid() {
 
         let paintedAny = false;
 
-        // Paint in rotated canvas frame
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(rotRad);
-        ctx.translate(-cx, -cy);
-
         for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
                 const col = col0 + dc;
@@ -2582,7 +2557,6 @@ function drawTileGrid() {
                 }
             }
         }
-        ctx.restore();
 
         if (paintedAny) {
             tile.coverageLastPainted = Date.now();
@@ -2659,12 +2633,6 @@ function drawTileGrid() {
         return null;
     }
 
-    // ── Rotated frame for tracks, pins and user dot ─────────────────────────
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(rotRad);
-    ctx.translate(-cx, -cy);
-
     // Draw tracks
     const visibleTracksForGrid = Array.isArray(survey.tracks)
         ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
@@ -2723,20 +2691,14 @@ function drawTileGrid() {
         drawGridPin(c.lat, c.lon, color, false);
     }
 
-    ctx.restore(); // end rotated frame for tracks/pins
-
     if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
 
-    // User dot drawn in screen space (unrotated) so it always shows true position
     const pxX = (localX / sizeM) * px;
     const pxY = (localY / sizeM) * px;
-    // Convert rotated grid position back to screen position
-    const userScreenX = cx + (pxX - cx) * Math.cos(rotRad) - (pxY - cy) * Math.sin(rotRad);
-    const userScreenY = cy + (pxX - cx) * Math.sin(rotRad) + (pxY - cy) * Math.cos(rotRad);
 
     ctx.beginPath();
     ctx.fillStyle = 'rgba(29,78,216,0.95)';
-    ctx.arc(userScreenX, userScreenY, 5, 0, Math.PI * 2);
+    ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.lineWidth = 2;
