@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11642,6 +11642,17 @@ function renderSurveyCard(survey, isOpen = false) {
     const createdStr = formatDateDMY(survey.creationDate);
     const changedStr = formatDateDMY(survey.dateLastChanged);
 
+    // Backup warning: show if never exported or changes since last export
+    const exportedTs  = survey.dateLastExported || 0;
+    const changedTs   = survey.dateLastChanged  || 0;
+    const needsBackup = !exportedTs || changedTs > exportedTs;
+    const backupWarningHtml = needsBackup
+        ? `<tr>
+                <td class="p-2 font-semibold" style="color:#b45309;">&#9888; Backup</td>
+                <td class="p-2 font-bold" style="color:#b45309;">${exportedTs ? 'Changes since last export' : 'Never exported'}</td>
+           </tr>`
+        : '';
+
     const allPins = Array.isArray(survey.targets) ? survey.targets.filter(t => t && !t.deleted) : [];
     const isStake = (t) => !!(t && (t.type === 'Stake' || (typeof isStakeTarget === 'function' && isStakeTarget(t))));
     const stakesCount  = allPins.filter(isStake).length;
@@ -11686,6 +11697,7 @@ function renderSurveyCard(survey, isOpen = false) {
                             <td class="p-2 text-gray-500 font-semibold">Last change</td>
                             <td class="p-2 font-bold">${changedStr}</td>
                         </tr>
+                        ${backupWarningHtml}
                     </tbody>
                 </table>
             </div>
@@ -16499,6 +16511,10 @@ if (payload.survey) {
 
         log(`Export complete. "${filename}" saved to Downloads.`);
         showMessage('Survey export completed (ZIP with photos).', 'success');
+
+        // Record export timestamp on the live survey so the backup warning clears
+        openSurvey.dateLastExported = Date.now();
+        saveSurveysToLocalStorage();
 
     } catch (e) {
         console.error('Error exporting open survey ZIP:', e);
