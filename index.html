@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1928,6 +1928,19 @@ function stopTileRotate() {
     }
 }
 
+function _doTileRotateReset() {
+    const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
+    if (!survey || !survey.gridTile) return;
+    ensureSurveyGridTileDefaults(survey);
+    survey.gridTile.rotationDeg = 0;
+    survey.dateLastChanged = Date.now();
+    if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
+    if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
+    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else if (typeof render === 'function') render();
+}
+
 function _doTileRotate(dir) {
     const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
     if (!survey || !survey.gridTile) return;
@@ -2497,26 +2510,24 @@ function drawTileGrid() {
     const tile = survey.gridTile;
     ensureTileCoverageStorage(tile);
 
-    const sizeM = Number(tile.sizeM) || 15;
-    const cells = Math.round(sizeM);
-    const total = cells * cells;
+    const sizeM  = Number(tile.sizeM) || 15;
+    const cells  = Math.round(sizeM);
+    const total  = cells * cells;
     const rotDeg = Number(tile.rotationDeg) || 0;
     const rotRad = rotDeg * Math.PI / 180;
 
-    // Canvas sized to the diagonal so the rotated square always fits
-    const cssMax = Math.min(window.innerWidth - 48, 520);
-    const gridPx = Math.max(180, Math.round(cssMax * 0.72));
-    const px = Math.round(gridPx * Math.SQRT2 * 1.05);
+    // Canvas sized to the diagonal so the rotated red square always fits
+    const cssMax  = Math.min(window.innerWidth - 48, 520);
+    const gridPx  = Math.max(180, Math.round(cssMax * 0.72));
+    const px      = Math.round(gridPx * Math.SQRT2 * 1.05);
     const cx = px / 2, cy = px / 2;
-    // Grid square is always centred in the canvas
     const gridOffX = cx - gridPx / 2;
     const gridOffY = cy - gridPx / 2;
-    const cellPx = gridPx / cells;
+    const cellPx   = gridPx / cells;
 
     const dpr = window.devicePixelRatio || 1;
-    // Set both CSS dimensions explicitly and equally to keep the canvas square
-    canvas.style.width  = px + 'px';
-    canvas.style.height = px + 'px';
+    canvas.style.width     = px + 'px';
+    canvas.style.height    = px + 'px';
     canvas.style.minWidth  = px + 'px';
     canvas.style.minHeight = px + 'px';
     canvas.width  = Math.floor(px * dpr);
@@ -2526,30 +2537,27 @@ function drawTileGrid() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, px, px);
 
+    // ── Background ────────────────────────────────────────────────────────
     ctx.fillStyle = '#f9fafb';
     ctx.fillRect(0, 0, px, px);
-
-    // ── Rotate the entire grid square around the canvas centre ────────────
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(rotRad);
-    ctx.translate(-cx, -cy);
-
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(gridOffX, gridOffY, gridPx, gridPx);
 
+    // ── Coverage cells — drawn in North-up grid frame, no rotation ────────
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
         for (let i = 0; i < total; i++) {
             if (tile.coverageBits[i] !== '1') continue;
-            const r = Math.floor(i / cells);
-            const c = i - r * cells;
+            const r   = Math.floor(i / cells);
+            const c   = i - r * cells;
             const key = `${r},${c}`;
-            const fill = (tile.coverageColors && tile.coverageColors[key]) ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
+            const fill = (tile.coverageColors && tile.coverageColors[key])
+                ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
             ctx.fillStyle = fill;
             ctx.fillRect(gridOffX + c * cellPx, gridOffY + r * cellPx, cellPx, cellPx);
         }
     }
 
+    // ── Grid lines — North-up, no rotation ───────────────────────────────
     ctx.strokeStyle = 'rgba(0,0,0,0.10)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= cells; i++) {
@@ -2559,13 +2567,17 @@ function drawTileGrid() {
         ctx.beginPath(); ctx.moveTo(gridOffX, y); ctx.lineTo(gridOffX + gridPx, y); ctx.stroke();
     }
 
+    // ── Red border square — ONLY this rotates ────────────────────────────
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotRad);
+    ctx.translate(-cx, -cy);
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     ctx.lineWidth = 2;
     ctx.strokeRect(gridOffX + 1, gridOffY + 1, gridPx - 2, gridPx - 2);
+    ctx.restore();
 
-    ctx.restore(); // end rotated frame
-
-    // ── Fixed labels — always North-up ───────────────────────────────────
+    // ── N/S/E/W labels — fixed to canvas edges ────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
@@ -2582,15 +2594,19 @@ function drawTileGrid() {
         ctx.fillText(rotDeg + '°', px / 2, px / 2 + 4);
     }
 
+    // ── Update text displays ──────────────────────────────────────────────
     const centreEl = document.getElementById('tile-grid-centre-text');
-    if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
+    if (centreEl) centreEl.textContent =
+        `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
 
-    const live = getBestLiveGpsCoordsOrNull();
+    const live    = getBestLiveGpsCoordsOrNull();
     const tileAge = Date.now() - (tileGridLastFixTs || 0);
-    const user = (tileGridLastCoords && tileAge <= 2000) ? tileGridLastCoords : (live || tileGridLastCoords);
+    const user    = (tileGridLastCoords && tileAge <= 2000)
+        ? tileGridLastCoords : (live || tileGridLastCoords);
 
     const userEl = document.getElementById('tile-grid-user-text');
-    if (userEl) userEl.textContent = user ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
+    if (userEl) userEl.textContent = user
+        ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
 
     const covEl = document.getElementById('tile-grid-coverage-text');
     if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
@@ -2600,17 +2616,24 @@ function drawTileGrid() {
     if (!isFinite(lat0) || !isFinite(lon0)) return;
 
     const M_PER_DEG_LAT = 110574;
-    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const mPerDegLon    = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    // User position in unrotated grid frame (visual rotation handled by ctx.rotate)
+    // ── Helper: GPS → canvas pixel (no rotation) ─────────────────────────
+    const gpsToPx = (lat, lon) => ({
+        x: gridOffX + ((lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * gridPx,
+        y: gridOffY + (sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT) / sizeM * gridPx
+    });
+
+    // ── User position ─────────────────────────────────────────────────────
     const localX = user ? (user.lon - lon0) * mPerDegLon + sizeM / 2 : null;
     const localY = user ? sizeM / 2 - (user.lat - lat0) * M_PER_DEG_LAT : null;
 
-    // Only paint if user is actually inside the grid bounds
-    if (user && tile.paintingEnabled && localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
-        const col0 = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
-        const row0 = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
+    // ── Paint cells under user (auto-paint) ───────────────────────────────
+    if (user && tile.paintingEnabled &&
+        localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
 
+        const col0 = Math.min(cells-1, Math.max(0, Math.floor((localX / sizeM) * cells)));
+        const row0 = Math.min(cells-1, Math.max(0, Math.floor((localY / sizeM) * cells)));
         let paintedAny = false;
 
         for (let dr = -1; dr <= 1; dr++) {
@@ -2620,35 +2643,28 @@ function drawTileGrid() {
                 const did = setTileCellVisited(tile, col, row, cells);
                 if (did) {
                     paintedAny = true;
-
-                    const __k = `${row},${col}`;
-                    const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
-                    ctx.save();
-                    ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
+                    const __k    = `${row},${col}`;
+                    const __fill = (tile.coverageColors && tile.coverageColors[__k])
+                        ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
                     ctx.fillStyle = __fill;
                     ctx.fillRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
                     ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
                     ctx.strokeRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
-                    ctx.restore();
                 }
             }
         }
-
         if (paintedAny) {
             tile.coverageLastPainted = Date.now();
-            survey.dateLastChanged = Date.now();
+            survey.dateLastChanged   = Date.now();
             saveSurveysToLocalStorage();
         }
     }
 
-    // ── Draw targets, stakes, and finds within the tile ──
-    const openSurveyForGrid = survey;
-    const allTargets = Array.isArray(openSurveyForGrid.targets)
-        ? openSurveyForGrid.targets.filter(t => t && !t.deleted)
-        : [];
+    // ── Targets, stakes, finds ────────────────────────────────────────────
+    const allTargets     = Array.isArray(survey.targets)
+        ? survey.targets.filter(t => t && !t.deleted) : [];
     const allFindsForGrid = Array.isArray(finds)
-        ? finds.filter(f => f && !f.deleted && f.surveyId === openSurveyForGrid.id)
-        : [];
+        ? finds.filter(f => f && !f.deleted && f.surveyId === survey.id) : [];
 
     const PIN_COLORS = {
         target: {
@@ -2672,70 +2688,53 @@ function drawTileGrid() {
 
     function drawGridPin(itemLat, itemLon, color, isStakePin) {
         if (!isFinite(itemLat) || !isFinite(itemLon)) return;
-        const idx = (itemLon - lon0) * mPerDegLon + (sizeM / 2);
-        const idy = (sizeM / 2) - (itemLat - lat0) * M_PER_DEG_LAT;
-        if (idx < -1 || idx > sizeM + 1 || idy < -1 || idy > sizeM + 1) return;
-        const px2x = gridOffX + (idx / sizeM) * gridPx;
-        const px2y = gridOffY + (idy / sizeM) * gridPx;
-        const r = 4;
+        const p = gpsToPx(itemLat, itemLon);
+        if (p.x < gridOffX - 5 || p.x > gridOffX + gridPx + 5) return;
+        if (p.y < gridOffY - 5 || p.y > gridOffY + gridPx + 5) return;
         ctx.beginPath();
         ctx.fillStyle = color;
-        if (isStakePin) {
-            ctx.arc(px2x, px2y, 3, 0, Math.PI * 2);
-        } else {
-            ctx.arc(px2x, px2y, r, 0, Math.PI * 2);
-        }
+        ctx.arc(p.x, p.y, isStakePin ? 3 : 4, 0, Math.PI * 2);
         ctx.fill();
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.stroke();
     }
 
-    // Helper: parse lat/lon from either direct fields or coordinates string
     function parseItemCoords(item) {
         if (!item) return null;
-        // Direct lat/lon fields
         let lat = Number(item.lat ?? item.latitude);
         let lon = Number(item.lon ?? item.longitude);
         if (isFinite(lat) && isFinite(lon)) return { lat, lon };
-        // Coordinates string "lat, lon"
         const coordStr = String(item.coordinates || item.coords || '');
         if (coordStr) {
             const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
-            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1]))
                 return { lat: parts[0], lon: parts[1] };
-            }
         }
         return null;
     }
 
-    // Draw tracks, pins and finds in the rotated frame
-    ctx.save();
-    ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
-
-    // Draw tracks
-    const visibleTracksForGrid = Array.isArray(survey.tracks)
-        ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
-        : [];
-    for (const track of visibleTracksForGrid) {
-        const trackColor = track.color || '#000000';
+    // ── Draw tracks ───────────────────────────────────────────────────────
+    const visibleTracks = Array.isArray(survey.tracks)
+        ? survey.tracks.filter(t => t && t.isVisible !== false &&
+            Array.isArray(t.points) && t.points.length > 1) : [];
+    for (const track of visibleTracks) {
         ctx.beginPath();
-        ctx.strokeStyle = trackColor;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = track.color || '#000000';
+        ctx.lineWidth   = 2;
         ctx.globalAlpha = 0.75;
         let started = false;
         for (const p of track.points) {
             if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
-            const tx = gridOffX + ((p.lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * gridPx;
-            const ty = gridOffY + (sizeM / 2 - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * gridPx;
-            if (!started) { ctx.moveTo(tx, ty); started = true; }
-            else ctx.lineTo(tx, ty);
+            const tp = gpsToPx(p.lat, p.lon);
+            if (!started) { ctx.moveTo(tp.x, tp.y); started = true; }
+            else ctx.lineTo(tp.x, tp.y);
         }
         ctx.stroke();
         ctx.globalAlpha = 1;
     }
 
-    // Draw targets
+    // ── Draw targets ──────────────────────────────────────────────────────
     for (const t of allTargets) {
         const c = parseItemCoords(t);
         if (!c) continue;
@@ -2763,7 +2762,7 @@ function drawTileGrid() {
         }
     }
 
-    // Draw finds
+    // ── Draw finds ────────────────────────────────────────────────────────
     for (const f of allFindsForGrid) {
         const c = parseItemCoords(f);
         if (!c) continue;
@@ -2771,26 +2770,17 @@ function drawTileGrid() {
         drawGridPin(c.lat, c.lon, color, false);
     }
 
-    ctx.restore(); // end tracks/pins rotated frame
-
-    // Draw user dot — drawn in rotated frame so it appears in correct grid cell
+    // ── User dot ──────────────────────────────────────────────────────────
     if (localX !== null && localY !== null &&
-        localX >= -1 && localX <= sizeM + 1 &&
-        localY >= -1 && localY <= sizeM + 1) {
-
-        const dotX = gridOffX + (localX / sizeM) * gridPx;
-        const dotY = gridOffY + (localY / sizeM) * gridPx;
-
-        ctx.save();
-        ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
+        localX >= -1 && localX <= sizeM + 1 && localY >= -1 && localY <= sizeM + 1) {
+        const up = gpsToPx(user.lat, user.lon);
         ctx.beginPath();
         ctx.fillStyle = 'rgba(29,78,216,0.95)';
-        ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
+        ctx.arc(up.x, up.y, 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
         ctx.stroke();
-        ctx.restore();
     }
 }
 
@@ -13286,7 +13276,7 @@ const toPercent = (x, y) => {
                 >E</button>
               </div>
 
-              <!-- Row 4: ROT label + rotate buttons -->
+              <!-- Row 4: ROT label + rotate buttons + reset -->
               <div class="flex gap-2 justify-center items-center">
                 <span class="text-xs font-bold text-gray-500 w-10 text-center">ROT</span>
                 <button type="button"
@@ -13299,13 +13289,10 @@ const toPercent = (x, y) => {
                     onmousedown="startTileRotate('cw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
                     ontouchstart="startTileRotate('cw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
                 >&#8635;</button>
-                <span id="tile-rotation-display" class="w-11 h-11 flex items-center justify-center text-xs font-bold text-gray-500">
-                    ${(() => {
-                      const s = getCompassOpenSurvey();
-                      const d = (s && s.gridTile && s.gridTile.rotationDeg) ? Math.round(s.gridTile.rotationDeg) : 0;
-                      return d === 0 ? '0°' : d + '°';
-                    })()}
-                </span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-amber-50 hover:bg-amber-100 font-bold text-xs shadow select-none"
+                    onclick="_doTileRotateReset()"
+                >0°</button>
               </div>
 
             </div>
