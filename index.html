@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1916,8 +1916,8 @@ function startTileRotate(dir, event) {
     stopTileRotate();
     _doTileRotate(dir);
     _tileRotTimer = setTimeout(() => {
-        _tileRotTimer = setInterval(() => _doTileRotate(dir), 80);
-    }, 350);
+        _tileRotTimer = setInterval(() => _doTileRotate(dir), 60);
+    }, 250);
 }
 
 function stopTileRotate() {
@@ -1932,7 +1932,7 @@ function _doTileRotate(dir) {
     const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
     if (!survey || !survey.gridTile) return;
     ensureSurveyGridTileDefaults(survey);
-    let rot = (Number(survey.gridTile.rotationDeg) || 0) + (dir === 'cw' ? 1 : -1);
+    let rot = (Number(survey.gridTile.rotationDeg) || 0) + (dir === 'cw' ? -3 : 3);
     rot = ((rot % 360) + 360) % 360;
     survey.gridTile.rotationDeg = rot;
     survey.dateLastChanged = Date.now();
@@ -2503,13 +2503,15 @@ function drawTileGrid() {
     const rotDeg = Number(tile.rotationDeg) || 0;
     const rotRad = rotDeg * Math.PI / 180;
 
-    // Canvas must be large enough to contain the rotated square at any angle
-    // Worst case (45°): diagonal = sizeM * sqrt(2). Add 10% padding.
+    // Canvas sized to the diagonal so the rotated square always fits
     const cssMax = Math.min(window.innerWidth - 48, 520);
-    const gridPx = Math.max(180, Math.round(cssMax * 0.72)); // grid square size in pixels
-    const canvasPx = Math.round(gridPx * Math.SQRT2 * 1.05); // canvas = diagonal + 5% padding
-    const px = canvasPx;
-    const cx = px / 2, cy = px / 2; // canvas centre
+    const gridPx = Math.max(180, Math.round(cssMax * 0.72));
+    const px = Math.round(gridPx * Math.SQRT2 * 1.05);
+    const cx = px / 2, cy = px / 2;
+    // Grid square is always centred in the canvas
+    const gridOffX = cx - gridPx / 2;
+    const gridOffY = cy - gridPx / 2;
+    const cellPx = gridPx / cells;
 
     const dpr = window.devicePixelRatio || 1;
     canvas.style.width = px + 'px';
@@ -2521,22 +2523,15 @@ function drawTileGrid() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, px, px);
 
-    const cellPx = gridPx / cells;
-
     ctx.fillStyle = '#f9fafb';
     ctx.fillRect(0, 0, px, px);
 
-    // ── Rotated grid frame ────────────────────────────────────────────────
-    // Offset so grid square is centred in the (larger) canvas
-    const gridOffX = cx - gridPx / 2;
-    const gridOffY = cy - gridPx / 2;
-
+    // ── Rotate the entire grid square around the canvas centre ────────────
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rotRad);
     ctx.translate(-cx, -cy);
 
-    // White background for the grid square
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(gridOffX, gridOffY, gridPx, gridPx);
 
@@ -2567,7 +2562,7 @@ function drawTileGrid() {
 
     ctx.restore(); // end rotated frame
 
-    // ── Fixed labels (always aligned with screen / North up) ─────────────
+    // ── Fixed labels — always North-up ───────────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
@@ -2577,7 +2572,6 @@ function drawTileGrid() {
     ctx.fillText('W', 6, px / 2 + 4);
     ctx.textAlign = 'right';
     ctx.fillText('E', px - 6, px / 2 + 4);
-    // Show rotation angle when non-zero
     if (rotDeg !== 0) {
         ctx.textAlign = 'center';
         ctx.font = '10px Arial';
@@ -2605,9 +2599,9 @@ function drawTileGrid() {
     const M_PER_DEG_LAT = 110574;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    // Rotate user position into grid frame
-    const localX = user ? (() => { const rp = rotatePtIntoGrid((user.lon-lon0)*mPerDegLon, (user.lat-lat0)*M_PER_DEG_LAT, rotDeg); return rp.x + sizeM/2; })() : null;
-    const localY = user ? (() => { const rp = rotatePtIntoGrid((user.lon-lon0)*mPerDegLon, (user.lat-lat0)*M_PER_DEG_LAT, rotDeg); return sizeM/2 - rp.y; })() : null;
+    // User position in unrotated grid frame (visual rotation handled by ctx.rotate)
+    const localX = user ? (user.lon - lon0) * mPerDegLon + sizeM / 2 : null;
+    const localY = user ? sizeM / 2 - (user.lat - lat0) * M_PER_DEG_LAT : null;
 
     // Only paint if user is actually inside the grid bounds
     if (user && tile.paintingEnabled && localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
@@ -2626,13 +2620,11 @@ function drawTileGrid() {
 
                     const __k = `${row},${col}`;
                     const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
-                    // Draw in rotated frame
                     ctx.save();
                     ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
                     ctx.fillStyle = __fill;
                     ctx.fillRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
-                    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
                     ctx.strokeRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
                     ctx.restore();
                 }
@@ -2677,9 +2669,8 @@ function drawTileGrid() {
 
     function drawGridPin(itemLat, itemLon, color, isStakePin) {
         if (!isFinite(itemLat) || !isFinite(itemLon)) return;
-        const rp = rotatePtIntoGrid((itemLon - lon0) * mPerDegLon, (itemLat - lat0) * M_PER_DEG_LAT, rotDeg);
-        const idx = rp.x + (sizeM / 2);
-        const idy = (sizeM / 2) - rp.y;
+        const idx = (itemLon - lon0) * mPerDegLon + (sizeM / 2);
+        const idy = (sizeM / 2) - (itemLat - lat0) * M_PER_DEG_LAT;
         if (idx < -1 || idx > sizeM + 1 || idy < -1 || idy > sizeM + 1) return;
         const px2x = gridOffX + (idx / sizeM) * gridPx;
         const px2y = gridOffY + (idy / sizeM) * gridPx;
@@ -2715,6 +2706,10 @@ function drawTileGrid() {
         return null;
     }
 
+    // Draw tracks, pins and finds in the rotated frame
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
+
     // Draw tracks
     const visibleTracksForGrid = Array.isArray(survey.tracks)
         ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
@@ -2728,9 +2723,8 @@ function drawTileGrid() {
         let started = false;
         for (const p of track.points) {
             if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
-            const trp = rotatePtIntoGrid((p.lon - lon0) * mPerDegLon, (p.lat - lat0) * M_PER_DEG_LAT, rotDeg);
-            const tx = gridOffX + (trp.x + sizeM / 2) / sizeM * gridPx;
-            const ty = gridOffY + (sizeM / 2 - trp.y) / sizeM * gridPx;
+            const tx = gridOffX + ((p.lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * gridPx;
+            const ty = gridOffY + (sizeM / 2 - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * gridPx;
             if (!started) { ctx.moveTo(tx, ty); started = true; }
             else ctx.lineTo(tx, ty);
         }
@@ -2774,27 +2768,26 @@ function drawTileGrid() {
         drawGridPin(c.lat, c.lon, color, false);
     }
 
-    // Draw user dot — position is already in rotated grid frame, map to canvas coords
+    ctx.restore(); // end tracks/pins rotated frame
+
+    // Draw user dot — drawn in rotated frame so it appears in correct grid cell
     if (localX !== null && localY !== null &&
         localX >= -1 && localX <= sizeM + 1 &&
         localY >= -1 && localY <= sizeM + 1) {
 
-        // gridPx coords of user in the rotated frame
-        const gx = gridOffX + (localX / sizeM) * gridPx;
-        const gy = gridOffY + (localY / sizeM) * gridPx;
-        // Rotate back to screen coords
-        const cosR = Math.cos(rotRad), sinR = Math.sin(rotRad);
-        const screenX = cx + (gx - cx) * cosR - (gy - cy) * sinR;
-        const screenY = cy + (gx - cx) * sinR + (gy - cy) * cosR;
+        const dotX = gridOffX + (localX / sizeM) * gridPx;
+        const dotY = gridOffY + (localY / sizeM) * gridPx;
 
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
         ctx.beginPath();
         ctx.fillStyle = 'rgba(29,78,216,0.95)';
-        ctx.arc(screenX, screenY, 5, 0, Math.PI * 2);
+        ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
         ctx.fill();
-
         ctx.lineWidth = 2;
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
         ctx.stroke();
+        ctx.restore();
     }
 }
 
