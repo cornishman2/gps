@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1773,6 +1773,24 @@ function ensureSurveyGridTileDefaults(survey) {
     }
     if (survey.gridTile.centerLat !== null && !isFinite(Number(survey.gridTile.centerLat))) survey.gridTile.centerLat = null;
     if (survey.gridTile.centerLon !== null && !isFinite(Number(survey.gridTile.centerLon))) survey.gridTile.centerLon = null;
+    if (typeof survey.gridTile.rotationDeg !== 'number' || !isFinite(survey.gridTile.rotationDeg)) {
+        survey.gridTile.rotationDeg = 0;
+    }
+}
+
+// Rotate a local offset (dx,dy) INTO the grid frame (counter-rotate by deg)
+function rotatePtIntoGrid(dx, dy, deg) {
+    if (!deg) return { x: dx, y: dy };
+    const r = -deg * Math.PI / 180;
+    return { x: dx * Math.cos(r) - dy * Math.sin(r),
+             y: dx * Math.sin(r) + dy * Math.cos(r) };
+}
+// Rotate a grid-frame offset (x,y) back to real-world
+function rotatePtFromGrid(x, y, deg) {
+    if (!deg) return { x, y };
+    const r = deg * Math.PI / 180;
+    return { x: x * Math.cos(r) - y * Math.sin(r),
+             y: x * Math.sin(r) + y * Math.cos(r) };
 }
 
 function getBestLiveGpsCoordsOrNull() {
@@ -1890,6 +1908,41 @@ function _doTilePan(dir) {
     if (dir === 'W') moveGridTileByMeters(-TILE_PAN_STEP_M, 0);
 }
 
+// Hold-to-repeat tile rotation
+let _tileRotTimer = null;
+
+function startTileRotate(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    stopTileRotate();
+    _doTileRotate(dir);
+    _tileRotTimer = setTimeout(() => {
+        _tileRotTimer = setInterval(() => _doTileRotate(dir), 80);
+    }, 350);
+}
+
+function stopTileRotate() {
+    if (_tileRotTimer !== null) {
+        clearTimeout(_tileRotTimer);
+        clearInterval(_tileRotTimer);
+        _tileRotTimer = null;
+    }
+}
+
+function _doTileRotate(dir) {
+    const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
+    if (!survey || !survey.gridTile) return;
+    ensureSurveyGridTileDefaults(survey);
+    let rot = (Number(survey.gridTile.rotationDeg) || 0) + (dir === 'cw' ? 1 : -1);
+    rot = ((rot % 360) + 360) % 360;
+    survey.gridTile.rotationDeg = rot;
+    survey.dateLastChanged = Date.now();
+    if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
+    if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
+    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else if (typeof render === 'function') render();
+}
+
 let tileGridModalIsOpen = false;
 
 let tileGridDrawTimer = null;
@@ -1962,11 +2015,13 @@ function rebuildCoverageFromGps(tile) {
     const M_PER_DEG_LAT = 111320;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
+    const rotDeg = Number(tile.rotationDeg) || 0;
     for (const pt of tile.coverageGps) {
         const dx = (pt.lon - lon0) * mPerDegLon;
         const dy = (pt.lat - lat0) * M_PER_DEG_LAT;
-        const localX = dx + (sizeM / 2);
-        const localY = (sizeM / 2) - dy;
+        const rp = rotatePtIntoGrid(dx, dy, rotDeg);
+        const localX = rp.x + (sizeM / 2);
+        const localY = (sizeM / 2) - rp.y;
         if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) continue;
         const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
         const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
@@ -2252,11 +2307,13 @@ function paintTileCellUnderUserWithColour(colourName) {
     const M_PER_DEG_LAT = 111320;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    const dx = (user.lon - lon0) * mPerDegLon;
-    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+    const rotDeg = Number(tile.rotationDeg) || 0;
+    const rawDx = (user.lon - lon0) * mPerDegLon;
+    const rawDy = (user.lat - lat0) * M_PER_DEG_LAT;
+    const rp = rotatePtIntoGrid(rawDx, rawDy, rotDeg);
 
-    const localX = dx + (sizeM / 2);
-    const localY = (sizeM / 2) - dy;
+    const localX = rp.x + (sizeM / 2);
+    const localY = (sizeM / 2) - rp.y;
 
     // Only paint if user is actually inside the grid bounds
     if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) return false;
@@ -2264,18 +2321,20 @@ function paintTileCellUnderUserWithColour(colourName) {
     const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
     const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
 
-    // Store coverage as GPS coordinates (grid-position-independent)
+    // Cell centre in grid frame → rotate back to real-world offset
     if (!Array.isArray(tile.coverageGps)) tile.coverageGps = [];
-    const cellCentreX = (col + 0.5) / cells * sizeM - (sizeM / 2);
-    const cellCentreY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
-    const cellLat = lat0 + cellCentreY / M_PER_DEG_LAT;
-    const cellLon = lon0 + cellCentreX / mPerDegLon;
+    const cellCentreGridX = (col + 0.5) / cells * sizeM - (sizeM / 2);
+    const cellCentreGridY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
+    const cellRW = rotatePtFromGrid(cellCentreGridX, cellCentreGridY, rotDeg);
+    const cellLat = lat0 + cellRW.y / M_PER_DEG_LAT;
+    const cellLon = lon0 + cellRW.x / mPerDegLon;
     const cellColor = colourNameToTileFill(colourName);
     const existingIdx = tile.coverageGps.findIndex(p => {
-        const pdx = (p.lon - lon0) * mPerDegLon + (sizeM / 2);
-        const pdy = (sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT;
-        const pc = Math.min(cells-1, Math.max(0, Math.floor((pdx/sizeM)*cells)));
-        const pr = Math.min(cells-1, Math.max(0, Math.floor((pdy/sizeM)*cells)));
+        const pdx = (p.lon - lon0) * mPerDegLon;
+        const pdy = (p.lat - lat0) * M_PER_DEG_LAT;
+        const prp = rotatePtIntoGrid(pdx, pdy, rotDeg);
+        const pc = Math.min(cells-1, Math.max(0, Math.floor(((prp.x+sizeM/2)/sizeM)*cells)));
+        const pr = Math.min(cells-1, Math.max(0, Math.floor(((sizeM/2-prp.y)/sizeM)*cells)));
         return pc === col && pr === row;
     });
     if (existingIdx >= 0) {
@@ -2403,6 +2462,7 @@ function markTileGridComplete() {
             centerLat: Number(tile.centerLat),
             centerLon: Number(tile.centerLon),
             sizeM: sizeM,
+            rotationDeg: Number(tile.rotationDeg) || 0,
             completedAt: Date.now()
         });
     }
@@ -2440,9 +2500,16 @@ function drawTileGrid() {
     const sizeM = Number(tile.sizeM) || 15;
     const cells = Math.round(sizeM);
     const total = cells * cells;
+    const rotDeg = Number(tile.rotationDeg) || 0;
+    const rotRad = rotDeg * Math.PI / 180;
 
+    // Canvas must be large enough to contain the rotated square at any angle
+    // Worst case (45°): diagonal = sizeM * sqrt(2). Add 10% padding.
     const cssMax = Math.min(window.innerWidth - 48, 520);
-    const px = Math.max(240, cssMax);
+    const gridPx = Math.max(180, Math.round(cssMax * 0.72)); // grid square size in pixels
+    const canvasPx = Math.round(gridPx * Math.SQRT2 * 1.05); // canvas = diagonal + 5% padding
+    const px = canvasPx;
+    const cx = px / 2, cy = px / 2; // canvas centre
 
     const dpr = window.devicePixelRatio || 1;
     canvas.style.width = px + 'px';
@@ -2454,10 +2521,24 @@ function drawTileGrid() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, px, px);
 
-    const cellPx = px / cells;
+    const cellPx = gridPx / cells;
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#f9fafb';
     ctx.fillRect(0, 0, px, px);
+
+    // ── Rotated grid frame ────────────────────────────────────────────────
+    // Offset so grid square is centred in the (larger) canvas
+    const gridOffX = cx - gridPx / 2;
+    const gridOffY = cy - gridPx / 2;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotRad);
+    ctx.translate(-cx, -cy);
+
+    // White background for the grid square
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(gridOffX, gridOffY, gridPx, gridPx);
 
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
         for (let i = 0; i < total; i++) {
@@ -2467,32 +2548,42 @@ function drawTileGrid() {
             const key = `${r},${c}`;
             const fill = (tile.coverageColors && tile.coverageColors[key]) ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
             ctx.fillStyle = fill;
-            ctx.fillRect(c * cellPx, r * cellPx, cellPx, cellPx);
+            ctx.fillRect(gridOffX + c * cellPx, gridOffY + r * cellPx, cellPx, cellPx);
         }
     }
 
     ctx.strokeStyle = 'rgba(0,0,0,0.10)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= cells; i++) {
-        const x = i * cellPx;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, px); ctx.stroke();
-        const y = i * cellPx;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
+        const x = gridOffX + i * cellPx;
+        ctx.beginPath(); ctx.moveTo(x, gridOffY); ctx.lineTo(x, gridOffY + gridPx); ctx.stroke();
+        const y = gridOffY + i * cellPx;
+        ctx.beginPath(); ctx.moveTo(gridOffX, y); ctx.lineTo(gridOffX + gridPx, y); ctx.stroke();
     }
 
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, px - 2, px - 2);
+    ctx.strokeRect(gridOffX + 1, gridOffY + 1, gridPx - 2, gridPx - 2);
 
+    ctx.restore(); // end rotated frame
+
+    // ── Fixed labels (always aligned with screen / North up) ─────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('N', px / 2, 14);
     ctx.fillText('S', px / 2, px - 6);
     ctx.textAlign = 'left';
-    ctx.fillText('W', 6, px / 2);
+    ctx.fillText('W', 6, px / 2 + 4);
     ctx.textAlign = 'right';
-    ctx.fillText('E', px - 6, px / 2);
+    ctx.fillText('E', px - 6, px / 2 + 4);
+    // Show rotation angle when non-zero
+    if (rotDeg !== 0) {
+        ctx.textAlign = 'center';
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'rgba(220,38,38,0.85)';
+        ctx.fillText(rotDeg + '°', px / 2, px / 2 + 4);
+    }
 
     const centreEl = document.getElementById('tile-grid-centre-text');
     if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
@@ -2514,11 +2605,11 @@ function drawTileGrid() {
     const M_PER_DEG_LAT = 110574;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    // Painting and user dot require a GPS fix — tracks/targets/finds draw regardless
-    const localX = user ? (user.lon - lon0) * mPerDegLon + (sizeM / 2) : null;
-    const localY = user ? (sizeM / 2) - (user.lat - lat0) * M_PER_DEG_LAT : null;
+    // Rotate user position into grid frame
+    const localX = user ? (() => { const rp = rotatePtIntoGrid((user.lon-lon0)*mPerDegLon, (user.lat-lat0)*M_PER_DEG_LAT, rotDeg); return rp.x + sizeM/2; })() : null;
+    const localY = user ? (() => { const rp = rotatePtIntoGrid((user.lon-lon0)*mPerDegLon, (user.lat-lat0)*M_PER_DEG_LAT, rotDeg); return sizeM/2 - rp.y; })() : null;
 
-    // Only paint if user is actually inside the grid bounds (not just clamped to edge)
+    // Only paint if user is actually inside the grid bounds
     if (user && tile.paintingEnabled && localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
         const col0 = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
         const row0 = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
@@ -2535,12 +2626,15 @@ function drawTileGrid() {
 
                     const __k = `${row},${col}`;
                     const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
+                    // Draw in rotated frame
+                    ctx.save();
+                    ctx.translate(cx, cy); ctx.rotate(rotRad); ctx.translate(-cx, -cy);
                     ctx.fillStyle = __fill;
-                    ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-
+                    ctx.fillRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
                     ctx.strokeStyle = 'rgba(0,0,0,0.10)';
                     ctx.lineWidth = 1;
-                    ctx.strokeRect(col * cellPx, row * cellPx, cellPx, cellPx);
+                    ctx.strokeRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
+                    ctx.restore();
                 }
             }
         }
@@ -2583,11 +2677,12 @@ function drawTileGrid() {
 
     function drawGridPin(itemLat, itemLon, color, isStakePin) {
         if (!isFinite(itemLat) || !isFinite(itemLon)) return;
-        const idx = (itemLon - lon0) * mPerDegLon + (sizeM / 2);
-        const idy = (sizeM / 2) - (itemLat - lat0) * M_PER_DEG_LAT;
+        const rp = rotatePtIntoGrid((itemLon - lon0) * mPerDegLon, (itemLat - lat0) * M_PER_DEG_LAT, rotDeg);
+        const idx = rp.x + (sizeM / 2);
+        const idy = (sizeM / 2) - rp.y;
         if (idx < -1 || idx > sizeM + 1 || idy < -1 || idy > sizeM + 1) return;
-        const px2x = (idx / sizeM) * px;
-        const px2y = (idy / sizeM) * px;
+        const px2x = gridOffX + (idx / sizeM) * gridPx;
+        const px2y = gridOffY + (idy / sizeM) * gridPx;
         const r = 4;
         ctx.beginPath();
         ctx.fillStyle = color;
@@ -2633,8 +2728,9 @@ function drawTileGrid() {
         let started = false;
         for (const p of track.points) {
             if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
-            const tx = ((p.lon - lon0) * mPerDegLon + (sizeM / 2)) / sizeM * px;
-            const ty = ((sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * px;
+            const trp = rotatePtIntoGrid((p.lon - lon0) * mPerDegLon, (p.lat - lat0) * M_PER_DEG_LAT, rotDeg);
+            const tx = gridOffX + (trp.x + sizeM / 2) / sizeM * gridPx;
+            const ty = gridOffY + (sizeM / 2 - trp.y) / sizeM * gridPx;
             if (!started) { ctx.moveTo(tx, ty); started = true; }
             else ctx.lineTo(tx, ty);
         }
@@ -2678,17 +2774,22 @@ function drawTileGrid() {
         drawGridPin(c.lat, c.lon, color, false);
     }
 
-    // Draw user dot only if we have a GPS fix and are within the tile
+    // Draw user dot — position is already in rotated grid frame, map to canvas coords
     if (localX !== null && localY !== null &&
         localX >= -1 && localX <= sizeM + 1 &&
         localY >= -1 && localY <= sizeM + 1) {
 
-        const pxX = (localX / sizeM) * px;
-        const pxY = (localY / sizeM) * px;
+        // gridPx coords of user in the rotated frame
+        const gx = gridOffX + (localX / sizeM) * gridPx;
+        const gy = gridOffY + (localY / sizeM) * gridPx;
+        // Rotate back to screen coords
+        const cosR = Math.cos(rotRad), sinR = Math.sin(rotRad);
+        const screenX = cx + (gx - cx) * cosR - (gy - cy) * sinR;
+        const screenY = cy + (gx - cx) * sinR + (gy - cy) * cosR;
 
         ctx.beginPath();
         ctx.fillStyle = 'rgba(29,78,216,0.95)';
-        ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, 5, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.lineWidth = 2;
@@ -12958,39 +13059,39 @@ const toPercent = (x, y) => {
         const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
         const tile = survey && survey.gridTile ? survey.gridTile : null;
 
-        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText) => {
-            const half = sizeM / 2;
-            const cx = Number(centerLon) * mPerDegLon;
-            const cy = Number(centerLat) * M_PER_DEG_LAT;
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, rotationDeg) => {
+            const half    = sizeM / 2;
+            const rotR    = ((rotationDeg || 0) * Math.PI / 180);
+            const cosR    = Math.cos(rotR), sinR = Math.sin(rotR);
+            const cLon    = Number(centerLon) * mPerDegLon;
+            const cLat    = Number(centerLat) * M_PER_DEG_LAT;
 
-            const minTx = cx - half, maxTx = cx + half;
-            const minTy = cy - half, maxTy = cy + half;
+            // Four corners in grid frame, rotated to real-world metric offsets
+            const corners = [
+                { x: -half,  y:  half },
+                { x:  half,  y:  half },
+                { x:  half,  y: -half },
+                { x: -half,  y: -half },
+            ].map(({ x, y }) => {
+                const rx = x * cosR - y * sinR;
+                const ry = x * sinR + y * cosR;
+                return toPercent(cLon + rx, cLat + ry);
+            });
 
-            const pTL = toPercent(minTx, maxTy);
-            const pBR = toPercent(maxTx, minTy);
-
-            const left = pTL.xPct;
-            const top = pTL.yPct;
-            const width = (pBR.xPct - pTL.xPct);
-            const height = (pBR.yPct - pTL.yPct);
-
-            const fontPx = (10 * invZoom);
+            const pointsStr = corners.map(p => `${p.xPct.toFixed(3)},${p.yPct.toFixed(3)}`).join(' ');
+            const cPct      = toPercent(cLon, cLat);
+            const strokeColor = style.includes('34,197,94') ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
+            const fillColor   = style.includes('34,197,94') ? 'rgba(34,197,94,0.12)'  : 'rgba(239,68,68,0.06)';
 
             return `
-                <div class="absolute pointer-events-none"
-                     style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
-                            ${style}; border-radius: 6px;">
-                    ${labelText ? `
-                    <div class="absolute"
-                         style="left:50%; top:-10px; transform:translateX(-50%);
-                                font-size:${fontPx.toFixed(2)}px;
-                                padding:2px 6px; border-radius:999px;
-                                background: rgba(255,255,255,0.92);
-                                border: 1px solid rgba(34,197,94,0.35);
-                                color: rgba(20,83,45,0.95);">
-                        ${labelText}
-                    </div>` : ''}
-                </div>
+                <svg class="absolute inset-0 w-full h-full pointer-events-none"
+                     viewBox="0 0 100 100" preserveAspectRatio="none"
+                     style="z-index:8; overflow:visible;">
+                    <polygon points="${pointsStr}"
+                        style="fill:${fillColor}; stroke:${strokeColor}; stroke-width:0.3; vector-effect:non-scaling-stroke;" />
+                    ${labelText ? `<text x="${cPct.xPct.toFixed(3)}" y="${cPct.yPct.toFixed(3)}"
+                        text-anchor="middle" font-size="2" fill="rgba(20,83,45,0.95)">${labelText}</text>` : ''}
+                </svg>
             `;
         };
 
@@ -13002,7 +13103,7 @@ const toPercent = (x, y) => {
                     const sizeM = Number(a.sizeM) || 15;
                     const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
                     const label = '';
-                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label, Number(a.rotationDeg) || 0);
                 })
                 .join('');
         }
@@ -13012,7 +13113,7 @@ const toPercent = (x, y) => {
             const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, Number(tile.rotationDeg) || 0);
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -13187,6 +13288,28 @@ const toPercent = (x, y) => {
                     onmousedown="startTilePan('E',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
                     ontouchstart="startTilePan('E',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
                 >E</button>
+              </div>
+
+              <!-- Row 4: ROT label + rotate buttons -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">ROT</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 font-extrabold text-lg shadow select-none"
+                    onmousedown="startTileRotate('ccw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
+                    ontouchstart="startTileRotate('ccw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
+                >&#8634;</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 font-extrabold text-lg shadow select-none"
+                    onmousedown="startTileRotate('cw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
+                    ontouchstart="startTileRotate('cw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
+                >&#8635;</button>
+                <span id="tile-rotation-display" class="w-11 h-11 flex items-center justify-center text-xs font-bold text-gray-500">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const d = (s && s.gridTile && s.gridTile.rotationDeg) ? Math.round(s.gridTile.rotationDeg) : 0;
+                      return d === 0 ? '0°' : d + '°';
+                    })()}
+                </span>
               </div>
 
             </div>
