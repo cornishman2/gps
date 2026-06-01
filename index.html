@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -16839,7 +16839,8 @@ function attachPageEventListeners() {
 
     const gpsBtn = document.getElementById('toggle-gps-btn');
 if (gpsBtn) {
-    gpsBtn.addEventListener('click', () => {
+    // Use onclick (assignment) not addEventListener so re-renders don't stack listeners
+    gpsBtn.onclick = () => {
         showUserPosition = !showUserPosition;
 
         if (!needsGpsNow()) {
@@ -16853,11 +16854,15 @@ if (gpsBtn) {
         if (currentPage === 'Compass') {
             const appContent = document.getElementById('app-content');
             if (appContent) {
+                const _compassOpen = !!(document.getElementById('compass-direction-details') || {}).open;
+                const _layersOpen  = !!(document.getElementById('map-layers-details') || {}).open;
                 appContent.innerHTML = renderCompassPage(true);
                 attachPageEventListeners();
+                if (_compassOpen) { const e = document.getElementById('compass-direction-details'); if (e) e.open = true; }
+                if (_layersOpen)  { const e = document.getElementById('map-layers-details');        if (e) e.open = true; }
             }
         }
-    });
+    };
 }
 
     // gridtile size buttons use inline onclick — no separate listener needed
@@ -16915,82 +16920,82 @@ if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
 
 const mapTargetsCb = document.getElementById('map-show-targets-cb');
 if (mapTargetsCb) {
-    mapTargetsCb.addEventListener('change', (e) => {
+    mapTargetsCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTargets = !!mapTargetsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapStakesCb = document.getElementById('map-show-stakes-cb');
 if (mapStakesCb) {
-    mapStakesCb.addEventListener('change', (e) => {
+    mapStakesCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapStakes = !!mapStakesCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapFindsCb = document.getElementById('map-show-finds-cb');
 if (mapFindsCb) {
-    mapFindsCb.addEventListener('change', (e) => {
+    mapFindsCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapFinds = !!mapFindsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapTracksCb = document.getElementById('map-show-tracks-cb');
 if (mapTracksCb) {
-    mapTracksCb.addEventListener('change', (e) => {
+    mapTracksCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTracks = !!mapTracksCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapTargetLabelsCb = document.getElementById('map-show-target-labels-cb');
 if (mapTargetLabelsCb) {
-    mapTargetLabelsCb.addEventListener('change', (e) => {
+    mapTargetLabelsCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTargetLabels = !!mapTargetLabelsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapFindLabelsCb = document.getElementById('map-show-find-labels-cb');
 if (mapFindLabelsCb) {
-    mapFindLabelsCb.addEventListener('change', (e) => {
+    mapFindLabelsCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapFindLabels = !!mapFindLabelsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapStakeLabelsCb = document.getElementById('map-show-stake-labels-cb');
 if (mapStakeLabelsCb) {
-    mapStakeLabelsCb.addEventListener('change', (e) => {
+    mapStakeLabelsCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapStakeLabels = !!mapStakeLabelsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapTrackLabelsCb = document.getElementById('map-show-track-labels-cb');
 if (mapTrackLabelsCb) {
-    mapTrackLabelsCb.addEventListener('change', (e) => {
+    mapTrackLabelsCb.onchange = (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTrackLabels = !!mapTrackLabelsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
+        if (currentPage === 'Compass') rerenderCompassIfActive();
+    };
 }
 
 const mapLayersDetails = document.getElementById('map-layers-details');
