@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12988,6 +12988,7 @@ const toPercent = (x, y) => {
         console.warn('Grid tile render error:', e);
     }
 
+    let trackLabelsHtml = '';
     if (drawTracks.length) {
         const polylines = drawTracks.map(track => {
             const pts = track.points
@@ -13000,18 +13001,7 @@ const toPercent = (x, y) => {
                 .join(' ');
 
             const stroke = track.color || '#2563eb';
-            let labelSvg = '';
-            if (showMapTrackLabels && track.name) {
-                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
-                if (midPts.length > 0) {
-                    const mid = midPts[Math.floor(midPts.length / 2)];
-                    const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
-                    labelSvg = `<text x="${mp.xPct.toFixed(3)}" y="${mp.yPct.toFixed(3)}"
-                        font-size="1.8" fill="${stroke}" font-family="Arial"
-                        text-anchor="middle" dy="-0.5">${track.name}</text>`;
-                }
-            }
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />${labelSvg}`;
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />`;
         }).join('');
 
         trackSvgHtml = `
@@ -13024,6 +13014,25 @@ const toPercent = (x, y) => {
                 ${polylines}
             </svg>
         `;
+
+        // Track labels as HTML divs — same style as target/find labels
+        if (showMapTrackLabels) {
+            trackLabelsHtml = drawTracks.map(track => {
+                if (!track.name) return '';
+                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
+                if (!midPts.length) return '';
+                const mid = midPts[Math.floor(midPts.length / 2)];
+                const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
+                const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                return `<div class="absolute pointer-events-none"
+                    style="left:${mp.xPct.toFixed(2)}%; top:${mp.yPct.toFixed(2)}%; z-index:13; transform:translate(-50%,-100%);">
+                    <span class="whitespace-nowrap text-xs font-semibold bg-white px-1 py-0.5 rounded-sm shadow border border-gray-300"
+                          style="color:${track.color || '#2563eb'}; transform:scale(${invZoom}); transform-origin:center bottom; display:block;">
+                        ${safe}
+                    </span>
+                </div>`;
+            }).join('');
+        }
     }
 
     let navLineHtml = '';
@@ -13089,6 +13098,7 @@ const toPercent = (x, y) => {
                 ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
+                ${trackLabelsHtml}
                 ${userHtml}
             </div>
 </div>
@@ -13307,6 +13317,7 @@ const toPercent = (x, y) => {
     }
 
     let trackSvgHtml = '';
+    let trackLabelsHtml = '';
     if (drawTracks.length) {
         const polylines = drawTracks.map(track => {
             const pts = track.points
@@ -13319,18 +13330,7 @@ const toPercent = (x, y) => {
                 .join(' ');
 
             const stroke = track.color || '#2563eb';
-            let labelSvg = '';
-            if (showMapTrackLabels && track.name) {
-                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
-                if (midPts.length > 0) {
-                    const mid = midPts[Math.floor(midPts.length / 2)];
-                    const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
-                    labelSvg = `<text x="${mp.xPct.toFixed(3)}" y="${mp.yPct.toFixed(3)}"
-                        font-size="1.8" fill="${stroke}" font-family="Arial"
-                        text-anchor="middle" dy="-0.5">${track.name}</text>`;
-                }
-            }
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />${labelSvg}`;
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />`;
         }).join('');
 
         trackSvgHtml = `
@@ -13343,6 +13343,25 @@ const toPercent = (x, y) => {
                 ${polylines}
             </svg>
         `;
+
+        // Track labels as HTML divs — same style as target/find labels
+        if (showMapTrackLabels) {
+            trackLabelsHtml = drawTracks.map(track => {
+                if (!track.name) return '';
+                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
+                if (!midPts.length) return '';
+                const mid = midPts[Math.floor(midPts.length / 2)];
+                const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
+                const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                return `<div class="absolute pointer-events-none"
+                    style="left:${mp.xPct.toFixed(2)}%; top:${mp.yPct.toFixed(2)}%; z-index:13; transform:translate(-50%,-100%);">
+                    <span class="whitespace-nowrap text-xs font-semibold bg-white px-1 py-0.5 rounded-sm shadow border border-gray-300"
+                          style="color:${track.color || '#2563eb'}; transform:scale(${invZoom}); transform-origin:center bottom; display:block;">
+                        ${safe}
+                    </span>
+                </div>`;
+            }).join('');
+        }
     }
 
     let navLineHtml = '';
@@ -13407,6 +13426,7 @@ const toPercent = (x, y) => {
                 ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
+                ${trackLabelsHtml}
                 ${userHtml}
             </div>
 </div>
