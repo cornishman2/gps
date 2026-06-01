@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1019,6 +1019,48 @@ summary {
           required></textarea>
       </div>
 
+            <!-- NEW: Find photograph controls -->
+      <div>
+        <label class="dtk-label-xs">
+          Find Photograph
+        </label>
+
+        <!-- Hidden file input (camera / gallery) -->
+       <input
+  type="file"
+  id="edit-find-photo-input"
+  accept="image/*;capture=camera"
+  multiple
+  class="hidden"
+  onchange="handleEditFindPhotoSelected(event)">
+
+        <!-- Hidden field to store the Base64 photo data -->
+        <input
+          type="hidden"
+          id="edit-find-photo-data"
+          name="findPhotoData">
+
+        <div class="flex items-center space-x-3 mt-1">
+          <button
+            type="button"
+            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
+            onclick="triggerEditFindPhotoInput()">
+            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+          </button>
+          <span id="edit-find-photo-status" class="text-xs text-gray-500">
+            No photo captured yet.
+          </span>
+        </div>
+
+        <div id="edit-find-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
+          <img
+            id="edit-find-photo-preview"
+            class="w-11/12 h-auto rounded-md border border-gray-300 object-cover"
+            alt="Find photo preview">
+        </div>
+      </div>
+      <!-- END NEW: Find photograph controls -->
+
       <!-- Type -->
       <div>
         <label class="dtk-label-xs" for="edit-find-type">
@@ -1202,48 +1244,6 @@ summary {
           name="findAccuracy"
           class="dtk-input-sm">
       </div>
-
-      <!-- NEW: Find photograph controls -->
-      <div>
-        <label class="dtk-label-xs">
-          Find Photograph
-        </label>
-
-        <!-- Hidden file input (camera / gallery) -->
-       <input
-  type="file"
-  id="edit-find-photo-input"
-  accept="image/*;capture=camera"
-  multiple
-  class="hidden"
-  onchange="handleEditFindPhotoSelected(event)">
-
-        <!-- Hidden field to store the Base64 photo data -->
-        <input
-          type="hidden"
-          id="edit-find-photo-data"
-          name="findPhotoData">
-
-        <div class="flex items-center space-x-3 mt-1">
-          <button
-            type="button"
-            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
-            onclick="triggerEditFindPhotoInput()">
-            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
-          </button>
-          <span id="edit-find-photo-status" class="text-xs text-gray-500">
-            No photo captured yet.
-          </span>
-        </div>
-
-        <div id="edit-find-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
-          <img
-            id="edit-find-photo-preview"
-            class="w-11/12 h-auto rounded-md border border-gray-300 object-cover"
-            alt="Find photo preview">
-        </div>
-      </div>
-      <!-- END NEW: Find photograph controls -->
 
       <!-- Footer buttons -->
       <div class="pt-2 flex justify-end gap-2">
@@ -1443,33 +1443,7 @@ summary {
                         <input type="text" id="edit-target-description" name="targetDescription" required
                                class="dtk-input">
                     </div>
-                    <div class="mb-4">
-                        <label for="edit-target-vdi" class="block text-sm font-medium text-gray-700">Target ID</label>
-                        <input type="text" id="edit-target-vdi" name="targetVDI" placeholder="e.g., 28"
-                               class="dtk-input">
-                    </div>
-                    <div class="mb-4">
-                        <label for="edit-target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
-                        <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
-                               class="dtk-input">
-                    </div>
- <div class="mb-4 col-span-2">
-    <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
-    <select id="edit-target-type" name="targetType" required
-            class="dtk-input bg-white">
-      <option value="Unidentified" selected>Unidentified</option>
-        <option value="Iron Junk">Iron Junk</option>
-        <option value="Modern Junk">Modern Junk</option>
-         <option value="Button">Button</option>
-         <option value="Coin">Coin</option>
-        <option value="Ring">Ring</option>
-        <option value="Jewelry">Jewelry</option>
-        <option value="Relic">Relic</option>
-        <option value="Something else">Something else</option>
-            </select>
-
-</div>
-<div class="mb-4 col-span-2">
+                    <div class="mb-4 col-span-2">
     <label class="dtk-label">
         Target Photographs
     </label>
@@ -1504,6 +1478,32 @@ summary {
 
     <!-- Thumbnails (stacked, nearly full width) -->
     <div id="edit-target-photo-preview-wrapper" class="mt-2 hidden w-full"></div>
+</div>
+                    <div class="mb-4">
+                        <label for="edit-target-vdi" class="block text-sm font-medium text-gray-700">Target ID</label>
+                        <input type="text" id="edit-target-vdi" name="targetVDI" placeholder="e.g., 28"
+                               class="dtk-input">
+                    </div>
+                    <div class="mb-4">
+                        <label for="edit-target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                        <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
+                               class="dtk-input">
+                    </div>
+ <div class="mb-4 col-span-2">
+    <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
+    <select id="edit-target-type" name="targetType" required
+            class="dtk-input bg-white">
+      <option value="Unidentified" selected>Unidentified</option>
+        <option value="Iron Junk">Iron Junk</option>
+        <option value="Modern Junk">Modern Junk</option>
+         <option value="Button">Button</option>
+         <option value="Coin">Coin</option>
+        <option value="Ring">Ring</option>
+        <option value="Jewelry">Jewelry</option>
+        <option value="Relic">Relic</option>
+        <option value="Something else">Something else</option>
+            </select>
+
 </div>
 
 <div class="mb-4 col-span-2">
@@ -11570,7 +11570,7 @@ function renderHomePage() {
         </div>
     </div>
 
-    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
+    <h2 class="text-3xl font-bold text-primary mb-6">Surveys</h2>
 
 
     <!-- Open Survey (rendered like any other card, just highlighted) -->
