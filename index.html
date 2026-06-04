@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3859,6 +3859,16 @@ function renderHelpPage() {
           <h3 class="${H}"><i class="fas fa-shield-alt"></i> Data &amp; Privacy</h3>
           <p class="${P}">Detekta does not collect or transmit any personal data. All data is stored locally
           on your device. Nothing is shared unless you choose to export it.</p>
+        </div>
+
+        <!-- CONTACT -->
+        <div class="${S}">
+          <h3 class="${H}"><i class="fas fa-envelope"></i> Contact &amp; Support</h3>
+          <p class="${P}">Limited support is available. If you have a question or have found a problem,
+          please email:</p>
+          <p class="text-sm font-semibold text-primary">
+            <a href="mailto:support.detekta@gmail.com">support.detekta@gmail.com</a>
+          </p>
         </div>
 
       </div>
@@ -10782,12 +10792,19 @@ case 'edit': {
 
     showMessage('Navigation target selected on map.', 'info');
 
+    // Defer re-render — replacing innerHTML mid-click crashes some mobile browsers
     if (currentPage === 'Compass') {
-        const appContent = document.getElementById('app-content');
-        if (appContent) {
-            appContent.innerHTML = renderCompassPage(true);
-            attachPageEventListeners();
-        }
+        setTimeout(() => {
+            const appContent = document.getElementById('app-content');
+            if (appContent) {
+                const _compassOpen = !!(document.getElementById('compass-direction-details') || {}).open;
+                const _layersOpen  = !!(document.getElementById('map-layers-details') || {}).open;
+                appContent.innerHTML = renderCompassPage(true);
+                attachPageEventListeners();
+                if (_compassOpen) { const e = document.getElementById('compass-direction-details'); if (e) e.open = true; }
+                if (_layersOpen)  { const e = document.getElementById('map-layers-details');        if (e) e.open = true; }
+            }
+        }, 0);
     }
 }
 
@@ -13118,7 +13135,9 @@ const toPercent = (x, y) => {
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
-      <div class="font-semibold text-gray-700">Current GPS</div>
+      <div class="font-semibold text-gray-700">Current GPS
+        ${!showUserPosition ? '<span class="text-xs font-normal text-amber-600 ml-1">— not shown on map</span>' : ''}
+      </div>
       <div class="text-xs text-gray-600">
         ${(() => {
           const c = getBestLiveGpsCoordsOrNull();
