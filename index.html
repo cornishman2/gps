@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2708,6 +2708,7 @@ let userProfile = {
 
         let autoRefreshIntervalId = null;
         let currentUserCoords = null;
+        let lastKnownMapCoords = null;  // persists after watch stops, for display only
         let currentUserAccuracy = null;
         let bestLiveAccuracy = Infinity;
         let liveMapWatchId = null;
@@ -8200,6 +8201,9 @@ function stopLiveMapLocationWatch() {
         bestLiveAccuracy = Infinity;
     }
 
+    // Preserve last known position for display even after watch stops
+    if (currentUserCoords) lastKnownMapCoords = { ...currentUserCoords };
+    else if (smoothedUserCoords) lastKnownMapCoords = { ...smoothedUserCoords };
     currentUserCoords = null;
     currentUserAccuracy = null;
     smoothedUserCoords = null;
@@ -8243,6 +8247,7 @@ liveMapWatchId = navigator.geolocation.watchPosition(
                 lat: position.coords.latitude,
                 lon: position.coords.longitude
             };
+            lastKnownMapCoords = { ...currentUserCoords };
             currentUserAccuracy = accuracy;
 
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
@@ -13136,14 +13141,15 @@ const toPercent = (x, y) => {
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
       <div class="font-semibold text-gray-700">Current GPS
-        ${!showUserPosition ? '<span class="text-xs font-normal text-amber-600 ml-1">— not shown on map</span>' : ''}
+        ${!showUserPosition ? '<span class="text-xs font-normal text-gray-500 ml-1">— not shown on map</span>' : ''}
       </div>
       <div class="text-xs text-gray-600">
         ${(() => {
-          const c = getBestLiveGpsCoordsOrNull();
+          const c = getBestLiveGpsCoordsOrNull() || lastKnownMapCoords;
           const acc = (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy : 0;
           if (!c) return 'No GPS fix yet';
-          return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} (±${acc.toFixed(1)}m)`;
+          const suffix = showUserPosition ? `(±${acc.toFixed(1)}m)` : '(last known)';
+          return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} ${suffix}`;
         })()}
       </div>
     </div>
