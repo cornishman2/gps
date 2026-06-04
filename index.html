@@ -130,7 +130,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13529,7 +13529,9 @@ function toggleTrackVisibility(trackId, isVisible) {
     saveSurveysToLocalStorage();
 
     if (currentPage === 'Compass') {
-        render();
+        rerenderCompassIfActive();
+        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
+            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
     }
 }
 
@@ -13593,6 +13595,7 @@ function renderTracksPanel(openSurvey) {
                             data-track-id="${track.id}"
                             title="Edit track name & description"
                             aria-label="Edit track"
+                            onclick="openEditTrackModal('${track.id}')"
                         >
                             <i class="fas fa-pen"></i>
                         </button>
@@ -13603,6 +13606,7 @@ function renderTracksPanel(openSurvey) {
                             data-track-id="${track.id}"
                             title="Delete track"
                             aria-label="Delete track"
+                            onclick="deleteTrack('${track.id}')"
                         >
                             <i class="fas fa-trash"></i>
                         </button>
@@ -16244,12 +16248,12 @@ if (privacyBtn) {
 const trackVisibilityToggles = document.querySelectorAll('.track-visibility-toggle');
 if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
     trackVisibilityToggles.forEach(cb => {
-        cb.addEventListener('change', (e) => {
+        cb.onchange = (e) => {
             e.preventDefault();
             e.stopPropagation();
             const trackId = cb.getAttribute('data-track-id');
             toggleTrackVisibility(trackId, cb.checked);
-        });
+        };
     });
 }
 
@@ -16374,35 +16378,12 @@ if (tracksPanelDetails) {
 }
 
     const startTrackBtn = document.getElementById('start-track-btn');
-    if (startTrackBtn) {
-        startTrackBtn.addEventListener('click', handleStartTrackClick);
-    }
+    if (startTrackBtn) startTrackBtn.onclick = handleStartTrackClick;
 
     const stopTrackBtn = document.getElementById('stop-track-btn');
-    if (stopTrackBtn) {
-        stopTrackBtn.addEventListener('click', handleStopTrackClick);
-    }
+    if (stopTrackBtn) stopTrackBtn.onclick = handleStopTrackClick;
 
-document.querySelectorAll('.track-edit-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const trackId = e.currentTarget.getAttribute('data-track-id');
-        promptEditTrackMeta(trackId);
-    });
-});
-
-const trackEditButtons = document.querySelectorAll('.track-edit-btn');
-if (trackEditButtons && trackEditButtons.length > 0) {
-    trackEditButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const trackId = btn.getAttribute('data-track-id');
-            openEditTrackModal(trackId);
-        });
-    });
-}
+// track-edit-btn uses inline onclick in renderTracksPanel
 
     const newSurveyBtn = document.getElementById('new-survey-btn');
     if (newSurveyBtn) newSurveyBtn.addEventListener('click', showNewSurveyModal);
