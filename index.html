@@ -130,7 +130,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13033,7 +13033,8 @@ const toPercent = (x, y) => {
                         onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
                     }).join('')}
                 <button id="gridtile-toggle-btn" type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
+                    onclick="try{toggleGridTileEnabled();}catch(e){console.error(e);}">
                     ${(() => {
                       const s = getCompassOpenSurvey();
                       const t = s && s.gridTile ? s.gridTile : null;
@@ -13568,6 +13569,7 @@ function renderTracksPanel(openSurvey) {
                             class="track-visibility-toggle h-4 w-4 text-primary flex-shrink-0"
                             data-track-id="${track.id}"
                             ${isVisible ? 'checked' : ''}
+                            onchange="toggleTrackVisibility('${track.id}', this.checked)"
                         >
                         <div class="flex flex-col min-w-0">
                             <span class="text-sm font-medium text-gray-700 truncate">
@@ -13804,7 +13806,8 @@ ${(() => {
                 <button
                     id="stake-target-btn"
                     type="button"
-                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700 mb-2">
+                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700 mb-2"
+                    onclick="(function(){const r=canCreate('targets');if(!r.ok){showMessage(r.reason,'error');return;}quickLogTargetByVDI(-100,'STAKE',{description:'STAKE',type:'Something else'});})()">
                     STAKE
                 </button>
                 <div class="grid grid-cols-5 gap-2 mb-2">
@@ -16206,12 +16209,7 @@ if (gpsBtn) {
 
     // gridtile size buttons use inline onclick — no separate listener needed
 
-    const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
-    if (gridToggleBtn) {
-        gridToggleBtn.addEventListener('click', () => {
-            try { toggleGridTileEnabled(); } catch (e) { console.error(e); }
-        });
-    }
+    // gridtile-toggle-btn uses inline onclick
 
     const inlineTileCanvas = document.getElementById('tile-grid-canvas');
     if (inlineTileCanvas) {
@@ -16245,17 +16243,7 @@ if (privacyBtn) {
         });
     }
 
-const trackVisibilityToggles = document.querySelectorAll('.track-visibility-toggle');
-if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
-    trackVisibilityToggles.forEach(cb => {
-        cb.onchange = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const trackId = cb.getAttribute('data-track-id');
-            toggleTrackVisibility(trackId, cb.checked);
-        };
-    });
-}
+// track-visibility-toggle uses inline onchange in renderTracksPanel
 
 const mapTargetsCb = document.getElementById('map-show-targets-cb');
 if (mapTargetsCb) {
@@ -16467,19 +16455,7 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
     });
 }
 
-const stakeBtn = document.getElementById('stake-target-btn');
-if (stakeBtn) {
-    stakeBtn.addEventListener('click', () => {
-
-        const r = canCreate('targets');
-        if (!r.ok) {
-            showMessage(r.reason, 'error');
-            return;
-        }
-
-        quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Something else' });
-    });
-}
+// stake-target-btn uses inline onclick
 
     const findsSearchInput = document.getElementById('finds-search-input');
     const findsTypeSelect = document.getElementById('finds-type-select');
@@ -16562,21 +16538,22 @@ if (stakeBtn) {
 // ── Compass photo buttons ──────────────────────────────────────────
 let _compassPhotoPendingRange = null;
 
-document.querySelectorAll('.compass-photo-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const min   = btn.getAttribute('data-min');
-        const max   = btn.getAttribute('data-max');
-        const tid   = btn.getAttribute('data-targetid');
-        const color = btn.getAttribute('data-color');
-        _compassPhotoPendingRange = { min, max, targetId: tid, color };
-        const inp = document.getElementById('compass-photo-capture-input');
-        if (inp) { inp.value = ''; inp.click(); }
-    });
-});
+// Called by inline onclick on compass-photo-btn
+function _compassPhotoBtnClick(btn) {
+    const min   = btn.getAttribute('data-min');
+    const max   = btn.getAttribute('data-max');
+    const tid   = btn.getAttribute('data-targetid');
+    const color = btn.getAttribute('data-color');
+    _compassPhotoPendingRange = { min, max, targetId: tid, color };
+    const inp = document.getElementById('compass-photo-capture-input');
+    if (inp) { inp.value = ''; inp.click(); }
+}
 
-const compassPhotoInput = document.getElementById('compass-photo-capture-input');
-if (compassPhotoInput) {
-    compassPhotoInput.addEventListener('change', async (e) => {
+// File input uses event delegation on appContent (survives re-renders)
+document.getElementById('app-content').addEventListener('change', async (e) => {
+    const inp = e.target.closest('#compass-photo-capture-input');
+    if (!inp) return;
+    {
         const file = e.target.files && e.target.files[0];
         if (!file || !_compassPhotoPendingRange) return;
         const r = _compassPhotoPendingRange;
@@ -16617,33 +16594,23 @@ if (compassPhotoInput) {
             console.error('Compass photo capture error:', err);
             showMessage('Photo could not be saved, but target was logged.', 'error');
         }
-    });
-}
-
-// Guard: only attach once — these buttons are static DOM, not re-rendered
-if (!window._compassRangeBtnsAttached) {
-    window._compassRangeBtnsAttached = true;
-document.querySelectorAll('.compass-range-btn').forEach(btn => {
-    if (btn.classList.contains('tile-grid-range-btn')) return;
-    btn.addEventListener('click', () => {
-        const min = Number(btn.getAttribute('data-min'));
-        const max = Number(btn.getAttribute('data-max'));
-        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
-        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
-
-        {
-            let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
-
-            if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
-                if (vdi < min) vdi = min;
-                if (vdi > max) vdi = max;
-            }
-
-            quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
-        }
-    });
+    }
 });
-} // end _compassRangeBtnsAttached guard
+
+// Called by inline onclick on compass-range-btn
+function _compassRangeBtnClick(btn) {
+    if (btn.classList.contains('tile-grid-range-btn')) return;
+    const min = Number(btn.getAttribute('data-min'));
+    const max = Number(btn.getAttribute('data-max'));
+    const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+    const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+    let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+    if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+        if (vdi < min) vdi = min;
+        if (vdi > max) vdi = max;
+    }
+    quickLogTargetByVDI(vdi, `${btn.getAttribute('data-color')} ${min}→${max}`, { type: 'Unidentified' });
+}
 
     try { attachLiveQuickTargetSettingsListeners(); } catch (e) {}
 
@@ -16989,7 +16956,8 @@ function buildCompassPhotoBtnsRow(ranges) {
         return `<button type="button"
             class="compass-photo-btn py-3 rounded-lg text-white font-extrabold text-sm shadow ${classes}"
             data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
-            title="Photo + target (${color} range ${min}→${max})">
+            title="Photo + target (${color} range ${min}→${max})"
+            onclick="_compassPhotoBtnClick(this)">
             <i class="fas fa-camera"></i>
         </button>`;
     }).join('');
@@ -17013,7 +16981,8 @@ function buildCompassRangeButtonsRow(ranges) {
         const classes = cls[color] || 'bg-gray-500 hover:bg-gray-600';
         return `<button type="button"
             class="compass-range-btn py-3 rounded-lg text-white font-extrabold text-xs shadow ${classes}"
-            data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}">
+            data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
+            onclick="_compassRangeBtnClick(this)">
             ${rangeLabel}
         </button>`;
     }).join('');
@@ -17040,7 +17009,8 @@ function buildCompassRangeButtonsHtml(ranges) {
         return `
             <button type="button"
                 class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow ${classes}"
-                data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}">
+                data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
+                onclick="_compassRangeBtnClick(this)">
                 ${rangeLabel}
             </button>
         `;
