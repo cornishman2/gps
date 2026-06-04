@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12964,31 +12964,28 @@ const toPercent = (x, y) => {
             </div>
 </div>
 
+            <!-- Zoom controls -->
+            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapIn(event)">+</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapOut(event)">−</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
+                    onclick="resetMapView(event)">Reset</button>
+                <button id="toggle-gps-btn" type="button"
+                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
+                    style="background-color: rgb(var(--color-secondary));"
+                >${showUserPosition ? 'Hide' : 'Show'}</button>
+            </div>
+
             <!-- Tile size + MAP + GRID button rows — all w-11 h-11 for alignment -->
-            <div class="mt-2 mb-1 flex flex-col gap-1">
+            <div class="mt-1 mb-1 flex flex-col gap-1">
 
-              <!-- Row 1: TILE label + size buttons + show/hide -->
-              <div class="flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
-                    ${[10, 20, 30].map(sz => {
-                      const s = getCompassOpenSurvey();
-                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
-                      const active = cur === sz;
-                      return `<button type="button"
-                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
-                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
-                    }).join('')}
-                <button id="gridtile-toggle-btn" type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
-                    ${(() => {
-                      const s = getCompassOpenSurvey();
-                      const t = s && s.gridTile ? s.gridTile : null;
-                      return (t && t.enabled) ? 'Hide' : 'Show';
-                    })()}
-                </button>
-              </div>
-
-              <!-- Row 2: MAP label + directional pan buttons -->
+              <!-- Row 1: MAP label + directional pan buttons -->
               <div class="flex gap-2 justify-center items-center">
                 <span class="text-xs font-bold text-gray-500 w-10 text-center">MAP</span>
                 <button type="button"
@@ -13011,6 +13008,27 @@ const toPercent = (x, y) => {
                     onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
                     ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
                 >▶</button>
+              </div>
+
+              <!-- Row 2: TILE label + size buttons + show/hide -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
+                    ${[10, 20, 30].map(sz => {
+                      const s = getCompassOpenSurvey();
+                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
+                      const active = cur === sz;
+                      return `<button type="button"
+                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
+                    }).join('')}
+                <button id="gridtile-toggle-btn" type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const t = s && s.gridTile ? s.gridTile : null;
+                      return (t && t.enabled) ? 'Hide' : 'Show';
+                    })()}
+                </button>
               </div>
 
               <!-- Row 3: GRID label + tile pan buttons -->
@@ -13057,24 +13075,6 @@ const toPercent = (x, y) => {
                 >0°</button>
               </div>
 
-            </div>
-
-            <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapIn(event)">+</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapOut(event)">−</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
-                    onclick="resetMapView(event)">Reset</button>
-                <button id="toggle-gps-btn" type="button"
-                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
-                    style="background-color: rgb(var(--color-secondary));"
-                >${showUserPosition ? 'Hide' : 'Show'}</button>
             </div>
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
