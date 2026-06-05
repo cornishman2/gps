@@ -106,7 +106,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2_Track cancel
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 track labels
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1717,6 +1717,8 @@ let showMapTracks  = true;
 // Map label toggles (Compass/Map page)
 let showMapTargetLabels = true;
 let showMapFindLabels   = true;
+let showMapTrackLabels  = true;
+let showMapStakeLabels  = true;
 
 // Map layers panel (Compass/Map page) expand/collapse state
 let mapLayersExpanded = true;
@@ -12973,9 +12975,9 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         return String(t.findType || t.findCategory || t.type || 'Find');
     }
 
-    // Stakes: keep your existing behaviour (no label)
     const desc = String(t.description || '').trim();
-    if (desc && desc.toUpperCase() === 'STAKE') return '';
+    // Stakes: show label only if showMapStakeLabels
+    if (isStakeTarget(t)) return showMapStakeLabels ? 'Stake' : '';
 
     // Get VDI / Target ID (prefer t.vdi)
     const v = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
@@ -13403,7 +13405,21 @@ const toPercent = (x, y) => {
                 .join(' ');
 
             const stroke = track.color || '#2563eb';
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />`;
+            let trackLabelHtml = '';
+            if (showMapTrackLabels && track.name) {
+                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
+                if (midPts.length > 0) {
+                    const mid = midPts[Math.floor(midPts.length / 2)];
+                    const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
+                    const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    trackLabelHtml = `<text x="${mp.xPct.toFixed(3)}" y="${mp.yPct.toFixed(3)}"
+                        font-size="3" fill="${stroke}" font-family="Arial" font-weight="bold"
+                        text-anchor="middle" dy="-0.8"
+                        style="paint-order:stroke;stroke:white;stroke-width:1;stroke-linejoin:round;"
+                        >${safe}</text>`;
+                }
+            }
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />${trackLabelHtml}`;
         }).join('');
 
         trackSvgHtml = `
@@ -13571,31 +13587,39 @@ const toPercent = (x, y) => {
  
   <span>Map layers</span>
 </summary>
-  <div class="mt-2 flex flex-wrap gap-4 text-sm">
+  <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
+            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTracks=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTracks ? 'checked' : ''}>
+            <span>Show Tracks</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-track-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTrackLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTrackLabels ? 'checked' : ''}>
+            <span>Track Labels</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTargets=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTargets ? 'checked' : ''}>
             <span>Show Targets</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
-            <span>Show Stakes</span>
+            <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTargetLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTargetLabels ? 'checked' : ''}>
+            <span>Target Labels</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
+            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapFinds=cb.checked;rerenderCompassIfActive();})(this)" ${showMapFinds ? 'checked' : ''}>
             <span>Show Finds</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
-            <span>Show Tracks</span>
+            <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapFindLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapFindLabels ? 'checked' : ''}>
+            <span>Find Labels</span>
         </label>
-<label class="flex items-center gap-2 select-none">
-    <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
-    <span>Show Target Labels</span>
-</label>
-<label class="flex items-center gap-2 select-none">
-    <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
-    <span>Show Find Labels</span>
-</label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakes=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakes ? 'checked' : ''}>
+            <span>Show Stakes</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakeLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakeLabels ? 'checked' : ''}>
+            <span>Stake Labels</span>
+        </label>
   </div>
 </details>
 </div>
@@ -13725,7 +13749,21 @@ const toPercent = (x, y) => {
                 .join(' ');
 
             const stroke = track.color || '#2563eb';
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />`;
+            let trackLabelHtml = '';
+            if (showMapTrackLabels && track.name) {
+                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
+                if (midPts.length > 0) {
+                    const mid = midPts[Math.floor(midPts.length / 2)];
+                    const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
+                    const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    trackLabelHtml = `<text x="${mp.xPct.toFixed(3)}" y="${mp.yPct.toFixed(3)}"
+                        font-size="3" fill="${stroke}" font-family="Arial" font-weight="bold"
+                        text-anchor="middle" dy="-0.8"
+                        style="paint-order:stroke;stroke:white;stroke-width:1;stroke-linejoin:round;"
+                        >${safe}</text>`;
+                }
+            }
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />${trackLabelHtml}`;
         }).join('');
 
         trackSvgHtml = `
@@ -13814,32 +13852,40 @@ const toPercent = (x, y) => {
 <!-- Map layer toggles (draw only; bounds still include all) -->
 <div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
     <div class="text-sm font-semibold text-gray-700 mb-2">Map layers</div>
-    <div class="flex flex-wrap gap-4 text-sm">
+  <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
+            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTracks=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTracks ? 'checked' : ''}>
+            <span>Show Tracks</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-track-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTrackLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTrackLabels ? 'checked' : ''}>
+            <span>Track Labels</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTargets=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTargets ? 'checked' : ''}>
             <span>Show Targets</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
-            <span>Show Stakes</span>
+            <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTargetLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTargetLabels ? 'checked' : ''}>
+            <span>Target Labels</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
+            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapFinds=cb.checked;rerenderCompassIfActive();})(this)" ${showMapFinds ? 'checked' : ''}>
             <span>Show Finds</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
-            <span>Show Tracks</span>
+            <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapFindLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapFindLabels ? 'checked' : ''}>
+            <span>Find Labels</span>
         </label>
-<label class="flex items-center gap-2 select-none">
-    <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
-    <span>Show Target Labels</span>
-</label>
-<label class="flex items-center gap-2 select-none">
-    <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
-    <span>Show Find Labels</span>
-</label>
-    </div>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakes=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakes ? 'checked' : ''}>
+            <span>Show Stakes</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakeLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakeLabels ? 'checked' : ''}>
+            <span>Stake Labels</span>
+        </label>
+  </div>
 </div>
 
 
@@ -16955,66 +17001,7 @@ if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
 }
 
 
-// --- Map layer toggles (Compass/Map page) ---
-const mapTargetsCb = document.getElementById('map-show-targets-cb');
-if (mapTargetsCb) {
-    mapTargetsCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapTargets = !!mapTargetsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
-
-const mapStakesCb = document.getElementById('map-show-stakes-cb');
-if (mapStakesCb) {
-    mapStakesCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapStakes = !!mapStakesCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
-
-const mapFindsCb = document.getElementById('map-show-finds-cb');
-if (mapFindsCb) {
-    mapFindsCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapFinds = !!mapFindsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
-
-const mapTracksCb = document.getElementById('map-show-tracks-cb');
-if (mapTracksCb) {
-    mapTracksCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapTracks = !!mapTracksCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
-
-const mapTargetLabelsCb = document.getElementById('map-show-target-labels-cb');
-if (mapTargetLabelsCb) {
-    mapTargetLabelsCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapTargetLabels = !!mapTargetLabelsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
-
-const mapFindLabelsCb = document.getElementById('map-show-find-labels-cb');
-if (mapFindLabelsCb) {
-    mapFindLabelsCb.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapFindLabels = !!mapFindLabelsCb.checked;
-        if (currentPage === 'Compass') render();
-    });
-}
+// map layer toggles use inline onchange
 
 
 
@@ -18098,7 +18085,7 @@ document.addEventListener('click', function(e) {
     <option value="Rutus Alter 71">
     <option value="Rutus Argo">
     <option value="Teknetics Eurotek Pro">
-    <option value="Teknetics T2">
+    <option value="2Teknetics T2">
     <option value="White's MXT Pro">
     <option value="White's Spectra V3i">
     <option value="XP Deus II">
