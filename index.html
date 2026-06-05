@@ -2712,7 +2712,6 @@ let userProfile = {
         let bestLiveAccuracy = Infinity;
         let liveMapWatchId = null;
         let navigationTargetId = null;
-        window.navigationTargetId = null;
         let isTrackingActive = false;
 
         let movementHistory = [];
@@ -10727,8 +10726,6 @@ case 'edit': {
     }
 
     navigationTargetId = targetId;
-    window.navigationTargetId = targetId;
-    alert("handleMapTargetClick IS running. id=" + targetId);
 
     if (!navSession) {
         navSession = {};
@@ -10744,13 +10741,7 @@ case 'edit': {
     showMessage('Navigation target selected on map.', 'info');
 
     if (currentPage === 'Compass') {
-        const appContent = document.getElementById('app-content');
-        if (appContent) {
-            appContent.innerHTML = renderCompassPage(true);
-            attachPageEventListeners();
-        }
-        // Ensure GPS watch and auto-refresh are both running so the nav line
-        // appears as soon as a GPS fix arrives.
+        render();
         if (typeof startLiveMapLocationWatch === 'function') startLiveMapLocationWatch();
         if (typeof startCompassAutoRefresh === 'function') startCompassAutoRefresh();
     }
@@ -12715,7 +12706,7 @@ const toPercent = (x, y) => {
                     class="absolute map-pin"
                     style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${(t.description || '').replace(/"/g,'&quot;')} (${(t.type || '').toLowerCase()==='find' || t.isFind ? 'Find' : 'Target'} ID: ${t.vdi || ''})"
-                    onclick="alert('onclick fired id=${t.id || ''}'); handleMapTargetClick(event, '${t.id || ''}');" 
+                    onclick="handleMapTargetClick(event, '${t.id || ''}')" 
                 >
                     <div class="relative">
                         ${extraRing}
@@ -13799,10 +13790,6 @@ function renderTurnGuidanceSimple(a, b, c) {
 }
 
  function renderNavigationPanel(openSurvey) {
-    // Use window.navigationTargetId as authoritative source in case of scope issues
-    if (window.navigationTargetId && !navigationTargetId) {
-        navigationTargetId = window.navigationTargetId;
-    }
     if (!navigationTargetId) {
         return `
             <div class="bg-white p-4 rounded-xl shadow-md border border-dashed border-gray-300 mb-6">
@@ -13813,7 +13800,6 @@ function renderTurnGuidanceSimple(a, b, c) {
                     Tap a target (or find) pin on the plot to select it for navigation.
                     Once selected, distance and bearing from your GPS position will appear here.
                 </p>
-                <p class="text-xs text-red-600 mt-1">DEBUG: local=${navigationTargetId} window=${window.navigationTargetId}</p>
             </div>
         `;
     }
@@ -13833,7 +13819,6 @@ function renderTurnGuidanceSimple(a, b, c) {
                 <p class="text-sm text-gray-600">
                     The selected navigation item could not be found (it may have been deleted).
                 </p>
-                <p class="text-xs text-red-600">DEBUG2: id=${navigationTargetId} targets=${openSurvey.targets.length} finds=${finds.length}</p>
                 <button
                     class="mt-3 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
                     onclick="clearNavigationTarget()"
@@ -14502,7 +14487,6 @@ ${(() => {
             ${renderTracksPanel(openSurvey)}
 
             <!-- Navigation (moved to bottom) -->
-            ${(function(){ alert("about to call renderNavigationPanel. navigationTargetId=" + navigationTargetId + " window=" + window.navigationTargetId); return ""; })()}
             ${renderNavigationPanel(openSurvey)}
 
         </div>
