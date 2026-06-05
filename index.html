@@ -101,7 +101,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V10_2_stable version
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta Vinline_tilegrid(20)
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1546,12 +1546,22 @@ summary {
                 <label for="profile-detector" class="block text-sm font-medium text-gray-700">
                     Detector Used
                 </label>
-                <input
-                    type="text"
-                    id="profile-detector"
-                    name="profileDetector"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
-                >
+                <div class="relative mt-1" id="detector-combo-wrapper">
+                    <input
+                        type="text"
+                        id="profile-detector"
+                        name="profileDetector"
+                        autocomplete="off"
+                        placeholder="Type or select your detector…"
+                        class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                        oninput="filterDetectorList(this.value)"
+                        onfocus="showDetectorDropdown()"
+                    >
+                    <div id="detector-dropdown"
+                         class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-56 overflow-y-auto"
+                         style="display:none;">
+                    </div>
+                </div>
             </div>
 
             <div class="flex justify-end space-x-3 mt-6">
@@ -1589,13 +1599,13 @@ summary {
       <i class="fas fa-times text-sm"></i>
     </button>
 
-    <h3 class="text-lg font-bold text-primary mb-1">Tile Grid (30 × 30)</h3>
+    <h3 class="text-lg font-bold text-primary mb-1">Tile Grid (15 × 15)</h3>
     <p id="tile-grid-subtitle" class="text-xs text-gray-600 mb-3">
       1m squares. Your position is shown as a dot. (Coverage marking is ON in Step 3.) • Step 3c build 2026-02-08
     </p>
 
     <div class="w-full flex justify-center">
-      <canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none;"></canvas>
+      <!-- canvas moved to inline tile grid on Compass page -->
     </div>
 
     
@@ -1722,14 +1732,14 @@ function getCompassOpenSurvey() {
 function ensureSurveyGridTileDefaults(survey) {
     if (!survey) return;
     if (!survey.gridTile || typeof survey.gridTile !== 'object') {
-        survey.gridTile = { enabled: false, sizeM: 30, centerLat: null, centerLon: null };
+        survey.gridTile = { enabled: false, sizeM: 15, centerLat: null, centerLon: null };
     }
     // Completed tile history: fixed areas that stay on the map even when you move the active tile
     if (!Array.isArray(survey.gridTileCompletedAreas)) {
         survey.gridTileCompletedAreas = [];
     }
     if (typeof survey.gridTile.sizeM !== 'number' || !isFinite(survey.gridTile.sizeM) || survey.gridTile.sizeM <= 0) {
-        survey.gridTile.sizeM = 30;
+        survey.gridTile.sizeM = 15;
     }
     if (typeof survey.gridTile.enabled !== 'boolean') {
         survey.gridTile.enabled = !!survey.gridTile.enabled;
@@ -1821,7 +1831,7 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 }
 
 // ------------------------------------------------------
-//  TILE GRID VIEW (Step 2/3: 30×30 grid, show dot, paint coverage)
+//  TILE GRID VIEW (Step 2/3: 15×15 grid, show dot, paint coverage)
 // ------------------------------------------------------
 let tileGridModalIsOpen = false;
 
@@ -1867,7 +1877,7 @@ function stopTileGridLocationWatch() {
 
 function ensureTileCoverageStorage(tile) {
     if (!tile) return;
-    const cells = Math.round(Number(tile.sizeM) || 30);
+    const cells = Math.round(Number(tile.sizeM) || 15);
     const total = cells * cells;
 
     if (typeof tile.coverageBits !== 'string' || tile.coverageBits.length !== total) {
@@ -1915,7 +1925,7 @@ function openTileGridModal() {
     ensureTileCoverageStorage(survey.gridTile);
 
     // NEW: Reset the grid every time it is opened (start unpainted)
-    const __cells = Math.round(Number(survey.gridTile.sizeM) || 30);
+    const __cells = Math.round(Number(survey.gridTile.sizeM) || 15);
     survey.gridTile.coverageBits = '0'.repeat(__cells * __cells);
         survey.gridTile.coverageColors = {};
 survey.gridTile.paintingEnabled = true;
@@ -1984,6 +1994,66 @@ window.addEventListener('click', (e) => {
     if (modal && e.target === modal) closeTileGridModal();
 });
 
+/**
+ * Initialise the permanently-embedded tile grid on the Compass page.
+ * Called from attachPageEventListeners() whenever tile-grid-canvas exists in the DOM.
+ */
+function initInlineTileGrid() {
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+
+    ensureSurveyGridTileDefaults(survey);
+    ensureTileCoverageStorage(survey.gridTile);
+
+    // If tile is already set but painting not yet enabled, enable it
+    if (survey.gridTile.enabled && !survey.gridTile.completed) {
+        survey.gridTile.paintingEnabled = true;
+    }
+
+    // Mark the inline grid as "open" so the GPS watch knows to repaint
+    tileGridModalIsOpen = true;
+
+    // Sync quick-target range buttons inside the inline grid
+    try { applyQuickTargetRangesToCompassButtons(getQuickTargetRangesEffective()); } catch (e) {}
+    try { attachTileGridRainbowButtonsOnce(); } catch (e) { console.error(e); }
+
+    syncTileGridButtons();
+    startTileGridLocationWatch();
+    drawTileGrid();
+
+    // Periodic redraw (same as modal version)
+    if (tileGridDrawTimer) clearInterval(tileGridDrawTimer);
+    tileGridDrawTimer = setInterval(() => {
+        // Stop if we navigated away from Compass page
+        if (currentPage !== 'Compass') {
+            clearInterval(tileGridDrawTimer);
+            tileGridDrawTimer = null;
+            tileGridModalIsOpen = false;
+            stopTileGridLocationWatch();
+            return;
+        }
+        drawTileGrid();
+
+        // Fallback GPS poll when watchPosition is slow
+        const surveyNow = getCompassOpenSurvey();
+        const tileNow = surveyNow && surveyNow.gridTile ? surveyNow.gridTile : null;
+        if (tileNow && tileNow.paintingEnabled) {
+            const age = Date.now() - (tileGridLastFixTs || 0);
+            if (age > 1500 && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        tileGridLastCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                        tileGridLastFixTs = Date.now();
+                        drawTileGrid();
+                    },
+                    () => {},
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 2000 }
+                );
+            }
+        }
+    }, 600);
+}
+
 function syncTileGridButtons() {
     const survey = getCompassOpenSurvey();
     if (!survey || !survey.gridTile) return;
@@ -2030,7 +2100,7 @@ function clearTileCoverage() {
     const survey = getCompassOpenSurvey();
     if (!survey || !survey.gridTile) return;
     ensureTileCoverageStorage(survey.gridTile);
-    const cells = Math.round(Number(survey.gridTile.sizeM) || 30);
+    const cells = Math.round(Number(survey.gridTile.sizeM) || 15);
     survey.gridTile.coverageBits = '0'.repeat(cells * cells);
         survey.gridTile.coverageColors = {};
 survey.gridTile.paintingEnabled = true;
@@ -2073,7 +2143,7 @@ function paintTileCellUnderUserWithColour(colourName) {
     const lon0 = Number(tile.centerLon);
     if (!isFinite(lat0) || !isFinite(lon0)) return false;
 
-    const sizeM = Number(tile.sizeM) || 30;
+    const sizeM = Number(tile.sizeM) || 15;
     const cells = Math.round(sizeM);
 
     const M_PER_DEG_LAT = 111320;
@@ -2159,7 +2229,7 @@ function markTileGridComplete() {
     }
 
     // Record a fixed snapshot of the current tile location/size so it stays on the map even if the active tile is moved.
-    const sizeM = Number(tile.sizeM) || 30;
+    const sizeM = Number(tile.sizeM) || 15;
 
     if (isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
         survey.gridTileCompletedAreas.unshift({
@@ -2172,7 +2242,7 @@ function markTileGridComplete() {
     }
 
     // Reset the active tile coverage so the next area starts blank (the completed snapshot remains).
-    const cells = Math.round(Number(sizeM) || 30);
+    const cells = Math.round(Number(sizeM) || 15);
     tile.coverageBits = '0'.repeat(cells * cells);
     tile.paintingEnabled = false;
     tile.completed = false;
@@ -2201,7 +2271,7 @@ function drawTileGrid() {
     const tile = survey.gridTile;
     ensureTileCoverageStorage(tile);
 
-    const sizeM = Number(tile.sizeM) || 30;
+    const sizeM = Number(tile.sizeM) || 15;
     const cells = Math.round(sizeM);
     const total = cells * cells;
 
@@ -3351,12 +3421,12 @@ function renderHelpPage() {
     return `
       <div class="p-4 space-y-4">
         <h2 class="text-2xl font-bold text-primary mb-4">
-          Help & Getting Started
+          Help &amp; Getting Started
         </h2>
 
         <pre class="whitespace-pre-wrap text-sm bg-white p-4 rounded-xl shadow border border-gray-200">
 Detekta – A Metal Detecting App
-Help & Getting Started
+Help &amp; Getting Started
 
 Detekta is a field logging and navigation app designed for metal detectorists.
 It works fully offline and stores all data locally on your device.
@@ -3365,58 +3435,139 @@ It works fully offline and stores all data locally on your device.
 OVERVIEW
 --------------------------------
 
-On your screen you will see a row of icons.
-These icons are buttons that allow you to select the different pages in the app.
-
-Home icon  
-Takes you to the Home page where you can create, open, close, and delete surveys.
-Only one survey can be open at a time.
-The Targets and Finds pages always show data for the currently open survey.
-
-Compass icon  
-This page is used while detecting.
-Here you can record tracks, place stakes, and log target signals.
-
-As you survey an area, a small map is drawn showing:
-• Tracks
-• Stakes
+On your screen you will see a row of icons at the top.
+These are the navigation buttons for the five pages of the app:
+• Home
+• Map (Compass)
 • Targets
 • Finds
+• Export
 
-North is always at the top of the map.
+A second row of icons appears at the bottom on mobile devices.
 
-The “Start Tracking” button records where you have walked.
-As you move, a track is drawn on the map.
+--------------------------------
+HOME PAGE
+--------------------------------
 
-There are five coloured buttons, ranging from blue on the left to red on the right.
-Each button records a target with a preset Target ID (VDI).
+Home icon
+Takes you to the Survey Dashboard.
+Here you can see totals for all your surveys, targets, finds,
+tracks, stakes, and photos.
+Storage used and available is also shown.
 
-• Blue buttons are for low or negative Target IDs, often indicating iron.
-• Red buttons are for higher-value signals that you may want to dig immediately.
+From the Home page you can:
+• Create a new survey
+• Open an existing survey
+• Close or archive a survey
+• Delete a survey
 
-When a target is saved, it is recorded with GPS coordinates.
+Only one survey can be open at a time.
+The Targets page always shows data for the currently open survey.
 
-If you tap a target on the map, you will receive guidance on how to navigate back to it.
-It is important to understand that GPS accuracy varies.
+--------------------------------
+MAP PAGE (COMPASS)
+--------------------------------
 
-GPS will only get you into the approximate area.
-Errors of over one metre (3 feet) are common.
-There will be error in both the recorded target position and your current position.
+This is the main field page, used while detecting.
 
-If you wish to return precisely to a target, it is recommended that you place a visible marker
-(biodegradable if possible) directly above the target.
-Use the app to get close, then locate the marker visually.
+SURVEY MAP
+The map shows all targets, finds, stakes, and tracks for the
+open survey. North is always at the top.
+
+Pins are colour coded:
+
+  Targets (by dig status):
+  • Blue       – Not dug
+  • Amber      – Dug
+  • Green      – Refilled
+  • Grey       – Ignored
+
+  Finds (by find type):
+  • Yellow     – Coin
+  • Brown      – Button
+  • Red        – Relic
+  • Pink       – Jewelry
+  • Dark grey  – Iron Junk
+  • Light grey – Modern Junk
+  • Purple     – Unidentified
+  • Teal       – Other
+
+  Stakes are shown as small black squares.
+
+MAP CONTROLS
+Four directional buttons (◀ ▲ ▼ ▶) pan the map left, up, down,
+and right. Hold a button down to pan continuously.
+The + and – buttons zoom in and out.
+Reset returns the map to its default view.
+Show/Hide toggles your GPS position dot on the map.
+
+Tap any target or find pin to open navigation guidance back
+to that point.
+
+MAP LAYERS
+Use the Map Layers section to toggle which items are visible:
+• Show Targets
+• Show Stakes
+• Show Finds
+• Show Tracks
+• Show Target Labels
+• Show Find Labels
+
+QUICK TARGET BUTTONS
+Five coloured buttons (Blue, Sky, Green, Amber, Red) let you
+log a target instantly with a single tap.
+Each button logs a target using the VDI range configured for
+that colour in Settings.
+The label on each button shows the VDI range it covers.
+
+TRACKING
+Tap "Start Tracking" to record your path as you detect.
+Your track appears on the map as you move.
+Tap "Stop Tracking" when you finish.
+If you forget to stop, your journey home will be recorded.
+You can delete unwanted tracks from the Tracks section below
+the map.
+
+STAKE BUTTON
+The STAKE button places a black square marker at your current
+GPS position. Use stakes to mark field boundaries, gates, or
+reference points.
+
+TILE GRID (15×15 metres)
+The Tile Grid divides your survey area into a 15×15 metre
+square. It helps you track which parts of the field you have
+covered systematically.
+
+To use the tile grid:
+1. Stand at the centre of the area you want to cover.
+2. Tap "Set Centre Here" (in the GPS section above the map).
+   This places the 15×15 metre grid centred on your position.
+3. The grid appears on the map as a red outline.
+4. As you move within the grid, cells are shaded automatically
+   to show which areas you have walked over.
+5. Tap "Complete" when you have finished that square.
+   The completed area is saved and shown in green on the map.
+6. Move to an adjacent area and repeat.
+
+The Tile Grid panel also shows:
+• The grid centre coordinates
+• Your current position within the grid
+• Your coverage percentage for the current tile
+
+Use "Clear" to reset the coverage for the current tile without
+marking it as complete.
 
 --------------------------------
 TARGETS PAGE
 --------------------------------
 
-Bullseye (target) icon  
-This opens the Targets page, which lists all targets and stakes for the open survey.
+Bullseye (target) icon
+This opens the Targets page, which lists all targets and stakes
+for the open survey.
 
 Each target can be edited and can have multiple photos added.
 
-Use “Log New Target” to record detected signals.
+Use "Log New Target" to record detected signals manually.
 You can record:
 • Description
 • Target ID (VDI)
@@ -3426,111 +3577,209 @@ You can record:
 
 For each target there are three rows of buttons:
 
-Row 1 – Hole status  
-• Not Dug  
-• Dug  
-• Refilled  
-• Ignored  
+Row 1 – Hole status
+• Not Dug
+• Dug
+• Refilled
+• Ignored
 
-Row 2 – Actions  
-• QR Code – generates a QR code containing the target details  
-  This can be scanned by a friend to import the target on another device.
-• Navigate – provides guidance back to the target (same as tapping it on the map)
-• Centre Map – centres the map on this target
+Row 2 – Actions
+• QR Code   – generates a QR code containing the target details.
+  A friend can scan this to import the target on their device.
+• Navigate  – provides guidance back to the target
+• Centre Map – centres the survey map on this target
 
-Row 3 – Management  
-• Edit details – change information and manage photos  
-• Copy to Finds – use this once you have dug the target and found something worth recording  
-• Delete – permanently removes the target
+Row 3 – Management
+• Edit details   – change information and manage photos
+• Copy to Finds  – use this once you have dug and identified a
+  find worth recording permanently
+• Delete         – permanently removes the target
 
-When copying to Finds, the target is duplicated and relabelled as a Find.
+When copying to Finds, the target is promoted to your Finds
+library and removed from the Targets list.
 
 --------------------------------
 FINDS PAGE
 --------------------------------
 
-Trophy icon  
-This opens the Finds page, which lists all finds across all surveys.
+Trophy icon
+This opens the Finds page, which lists all finds across all
+surveys.
 
-Finds can be filtered in three ways:
-• By typing into the search box
-• By find type (for example, coins only)
-• By survey name
+Finds can be filtered by:
+• Typing into the search box (searches description, VDI,
+  type, and survey name)
+• Find type (Coin, Button, Relic, Jewelry, etc.)
+• Survey name
+• Date logged
 
-If a find has photos, you can tap the photo to step through them.
+Each find is shown with its type, description, VDI, depth,
+and photos. If a find has photos, tap the photo to step
+through them.
 
 Each find has buttons allowing you to edit or delete it.
-Deleted finds can only be restored by copying the original target again.
+Deleted finds can only be restored by copying the original
+target again.
 
 --------------------------------
-EXPORT & IMPORT
+EXPORT &amp; IMPORT PAGE
 --------------------------------
 
-Export icon  
-This opens the Export / Import page, used for backup and sharing.
+Export icon
+This opens the Export / Import page, used for backup and
+sharing.
 
-Export Open Survey as ZIP  
-Creates a ZIP file containing the survey and all photographs.
-The ZIP file is saved to your Downloads folder.
+Export Open Survey as ZIP
+Creates a ZIP file containing the survey, all targets, finds,
+and photographs.
+The ZIP is saved to your Downloads folder.
 
-Export Photo Gallery  
-Creates a small self-contained website in your Downloads folder.
-It contains an HTML file that others can open in a web browser to view your photos.
-You can choose which photos to include using the checkboxes.
-Most people will only want to see finds rather than all targets.
+Export Photo Gallery
+Creates a self-contained HTML website in your Downloads folder.
+Others can open the HTML file in any browser to view your
+photos. Use the checkboxes to choose which surveys and photo
+types to include. Most people will only want to include finds.
 
-Export Open Survey as GPX  
+Export Open Survey as GPX
 Exports survey data (without photos) in GPX format.
-GPX files can be imported into many mapping applications.
+GPX files can be imported into mapping applications such as
+Google Maps, OsmAnd, and others.
 
-Select File and Import  
-Allows you to import a survey previously exported as a ZIP file.
+Select File and Import
+Imports a survey previously exported as a ZIP file.
+Use this to restore a backup or move data between devices.
 
-Select GPX and Import  
-Creates a survey from a GPX file exported from another mapping app.
+Select GPX and Import
+Creates a survey from a GPX file exported from another
+mapping app.
 
-Import Target (QR Code)  
-Creates a new target by scanning a QR code displayed on another device.
+Import Target (QR Code)
+Creates a new target by scanning a QR code shown on another
+device.
+
+--------------------------------
+SETTINGS PAGE
+--------------------------------
+
+Settings icon (cog)
+Opens the Settings page.
+
+YOUR PROFILE
+Shows your name, NCMD membership number, and detector.
+Tap "Edit Profile" to update any of these.
+
+When you change your detector to a recognised model, Detekta
+will automatically apply the correct VDI ranges for your
+machine (see Quick Target Buttons below).
+
+PHOTO SETTINGS
+Sets the maximum width photos are resized to before saving.
+Smaller values reduce storage and export file sizes.
+Set to 0 to disable resizing.
+
+QUICK TARGET BUTTONS
+Configures the five coloured buttons on the Map page.
+Each row sets a VDI range and a default saved Target ID for
+that colour band.
+
+Tap "Apply preset for my detector" to automatically load VDI
+ranges scaled to your machine. Three presets are available:
+
+• Minelab (-10 to +40)
+  All Minelab models (Equinox, Vanquish, Manticore, etc.)
+
+• Nokta Legend (0 to 60)
+  The Legend only (different scale to other Nokta models)
+
+• Standard (0 to 99)
+  Garrett, Fisher, Nokta (other models), Teknetics,
+  Bounty Hunter, White's, Rutus, XP
+
+Tap Save to keep your changes permanently.
+Tap Reset to restore the original Minelab defaults.
+
+Changes to ranges are reflected immediately on the Map page
+buttons without needing to save first.
+
+APP LIMITS
+Displays any active limits on surveys, targets, and finds,
+and the expiry date of this build if applicable.
+
+DANGER ZONE
+Allows you to reset all app data. This cannot be undone.
 
 --------------------------------
 GETTING STARTED
 --------------------------------
 
-1. Create a Survey  
-A survey represents a detecting session or location.
-You must give the survey a name.
-You may optionally add a description and a photo.
+1. Set Up Your Profile
+   Go to Settings and tap "Edit Profile".
+   Enter your name, NCMD number, and detector model.
+   Detekta will automatically set up the correct VDI ranges
+   for your machine.
 
-2. Start Detecting and Logging Targets  
-Go to the Compass page and select “Start Tracking”.
-As you move around the area, log targets as you find them.
-It is usually best to dig high-value targets immediately.
+2. Create a Survey
+   A survey represents a detecting session or location.
+   Go to Home and tap "Create New Survey".
+   Give the survey a name. You may optionally add a
+   description and a photo.
 
-You may also place stakes to help orient yourself on the map.
-Tracks help you see which areas you have already covered.
+3. Start Detecting and Logging Targets
+   Go to the Map page and tap "Start Tracking".
+   Log targets using the coloured quick buttons or the
+   "Log New Target" button on the Targets page.
+   Dig high-value (red/amber) signals promptly.
 
-When you finish detecting, remember to select “Stop Tracking”.
-If you forget, your journey home may be recorded, causing targets to appear clustered.
+   Place stakes to mark field boundaries or reference points.
+   Tracks help you see which areas you have already covered.
 
-This can be corrected by deleting the track or by using “Hide My Position” on the map.
+   When you finish, tap "Stop Tracking".
+   Delete any unwanted tracks from the Tracks section.
 
-3. Reviewing Finds  
-After recording finds, you should update the information.
-In particular, you may wish to replace target photos with photos of the actual find.
+4. Use the Tile Grid for Thorough Coverage
+   Stand at the centre of an area you want to cover.
+   Tap "Set Centre Here" to place the 15×15 metre grid.
+   Walk the grid systematically — cells paint as you move.
+   Tap "Complete" and move on to the next square.
 
-4. Backup and Share  
-Detekta provides several ways to back up and share your data.
-All exports are saved to the Downloads folder.
-From there they can be copied, emailed, or stored elsewhere.
+5. Record Your Finds
+   Once you have dug a target and identified a find, go to
+   the Targets page and tap "Copy to Finds".
+   Update the find type, description, and photos.
+   The find will appear in the Finds page across all surveys.
 
-It is your responsibility to make regular backups.
+6. Back Up Your Data
+   Detekta stores all data locally on your device.
+   Regularly export your surveys as ZIP files.
+   Exports are saved to your Downloads folder — copy them
+   to cloud storage, email them, or transfer to another
+   device.
+
+   It is your responsibility to make regular backups.
 
 --------------------------------
-DATA & PRIVACY
+GPS ACCURACY
 --------------------------------
 
-Detekta does not collect or transmit personal data.
-All data is stored locally on your device unless you choose to export it.
+GPS will only get you into the approximate area of a target.
+Errors of more than one metre (3 feet) are common.
+There will be error in both the recorded position and your
+current position.
+
+If you need to return precisely to a buried target, place a
+visible marker (biodegradable if possible) directly above it.
+Use the app to get close, then locate the marker visually.
+
+The GPS accuracy reading is shown next to your coordinates
+on the Map page.
+
+--------------------------------
+DATA &amp; PRIVACY
+--------------------------------
+
+Detekta does not collect or transmit any personal data.
+All data is stored locally on your device.
+Nothing is shared unless you choose to export it.
 
 --------------------------------
 END
@@ -10738,6 +10987,7 @@ function handleEditProfileSubmit(event) {
 
     // Capture old values BEFORE changing anything (used only for updating target.user)
     const oldName = userProfile.name;
+    const oldDetector = userProfile.detector;
 
     // All fields are OPTIONAL
     const newName = (form['profileName']?.value || '').trim();
@@ -10759,6 +11009,18 @@ function handleEditProfileSubmit(event) {
                 }
             });
         });
+    }
+
+    // If detector changed and a preset exists for the new one, apply it automatically
+    if (newDetector && newDetector !== oldDetector) {
+        const applied = applyDetectorPreset(newDetector, true);
+        if (applied) {
+            const key = getPresetKeyForDetector(newDetector);
+            const label = key === 'minelab' ? 'Minelab (-10→40)' :
+                          key === 'legend'  ? 'Nokta Legend (0→60)' :
+                                             'Standard (0→99)';
+            showMessage(`Profile saved. VDI preset applied for ${newDetector}: ${label}. Check Quick Target Buttons in Settings.`, 'success');
+        }
     }
 
     // Save and re-render
@@ -12644,8 +12906,7 @@ try {
     }
 } catch (_) {}
 
-let isMapDragging = false;
-let mapDragStartX = 0;
+let mapDragStartX = 0; // kept for legacy safety — no longer used by drag
 let mapDragStartY = 0;
 let mapDragStartOffsetX = 0;
 let mapDragStartOffsetY = 0;
@@ -12699,70 +12960,48 @@ function resetMapView(event) {
     showMessage('Map view reset (centre target cleared).', 'success');
 }
 
-/** Start dragging the map to pan it. */
-function startMapDrag(event) {
-    // Don't start a drag when clicking on zoom controls or a pin
-    if (
-        event.target.closest &&
-        (event.target.closest('.map-zoom-controls') ||
-         event.target.closest('.map-pin'))
-    ) {
-        return;
-    }
+// ─── Map pan (directional buttons) ───────────────────────────────────────────
+// Step size as % of map container — feels right at normal zoom; shrinks when
+// zoomed in so fine-positioning remains possible.
+const MAP_PAN_STEP_BASE = 8; // percent per tap / per repeat tick
+let _mapPanTimer = null;     // hold-to-repeat interval
 
-    const e = event.touches ? event.touches[0] : event;
-    event.preventDefault();
+function panMap(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const step = MAP_PAN_STEP_BASE / (mapZoom || 1);
+    if (dir === 'up')    mapOffsetY -= step;
+    if (dir === 'down')  mapOffsetY += step;
+    if (dir === 'left')  mapOffsetX -= step;
+    if (dir === 'right') mapOffsetX += step;
 
-    isMapDragging = true;
-    mapDragStartX = e.clientX;
-    mapDragStartY = e.clientY;
-    mapDragStartOffsetX = mapOffsetX;
-    mapDragStartOffsetY = mapOffsetY;
-
-    document.addEventListener('mousemove', onMapDrag, { passive: false });
-    document.addEventListener('mouseup', endMapDrag);
-    document.addEventListener('touchmove', onMapDrag, { passive: false });
-    document.addEventListener('touchend', endMapDrag);
-}
-
-function onMapDrag(event) {
-    if (!isMapDragging) return;
-
-    const e = event.touches ? event.touches[0] : event;
-    event.preventDefault();
-
+    // Live-update transform without a full re-render (same technique as old drag)
     const container = document.getElementById('target-map-container');
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-
-    const dx = e.clientX - mapDragStartX;
-    const dy = e.clientY - mapDragStartY;
-
-    const dxPercent = (dx / rect.width) * 100;
-    const dyPercent = (dy / rect.height) * 100;
-
-    mapOffsetX = mapDragStartOffsetX + dxPercent;
-    mapOffsetY = mapDragStartOffsetY + dyPercent;
-
-    // Update transform live without a full re-render
-    const inner = container.querySelector('.map-inner-layer');
-    if (inner) {
-        inner.style.transform =
+    if (container) {
+        const inner = container.querySelector('.map-inner-layer');
+        if (inner) inner.style.transform =
             `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
     }
 }
 
-function endMapDrag() {
-    if (!isMapDragging) return;
-    isMapDragging = false;
-
-    document.removeEventListener('mousemove', onMapDrag);
-    document.removeEventListener('mouseup', endMapDrag);
-    document.removeEventListener('touchmove', onMapDrag);
-    document.removeEventListener('touchend', endMapDrag);
+function startMapPan(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    stopMapPan();            // clear any previous hold
+    panMap(dir);             // immediate first step
+    // After a short delay, repeat rapidly while held
+    _mapPanTimer = setTimeout(() => {
+        _mapPanTimer = setInterval(() => panMap(dir), 80);
+    }, 350);
 }
+
+function stopMapPan() {
+    if (_mapPanTimer !== null) {
+        clearTimeout(_mapPanTimer);
+        clearInterval(_mapPanTimer);
+        _mapPanTimer = null;
+    }
+}
+
+// ─── Drag (removed — replaced by directional buttons) ────────────────────────
         
 function renderTargetPlot(targets, userCoordsOrNull = null) {
     // Haversine approximation constants
@@ -13018,14 +13257,26 @@ const toPercent = (x, y) => {
             const isFind = !!t.isFind || (String(t.type || '').toLowerCase() === 'find');
             const st = (t.status || (isFind ? 'find' : 'Not dug')).toLowerCase();
 
-            // Default = targets
+            // Default = targets (status-based)
             let pinColor = 'bg-blue-500';      // Not dug
             if (st === 'dug')      pinColor = 'bg-amber-500';
             if (st === 'refilled') pinColor = 'bg-green-500';
             if (st === 'ignore')   pinColor = 'bg-gray-500';
 
-            // Finds get their own colour
-            if (isFind || st === 'find') pinColor = 'bg-purple-600';
+            // Finds: colour by find type
+            if (isFind || st === 'find') {
+                const findTypeColors = {
+                    'Coin':         'bg-yellow-500',
+                    'Button':       'bg-amber-600',
+                    'Relic':        'bg-red-500',
+                    'Jewelry':      'bg-pink-500',
+                    'Iron Junk':    'bg-gray-600',
+                    'Modern Junk':  'bg-gray-400',
+                    'Unidentified': 'bg-purple-500',
+                };
+                const findTypeName = t.findType || t.type || '';
+                pinColor = findTypeColors[findTypeName] || 'bg-teal-500';
+            }
 
             const isStake = (!isFind) && (String(t.vdi).trim() === '-100');
             const pinSize = 'w-4 h-4';
@@ -13076,11 +13327,11 @@ const toPercent = (x, y) => {
                         const safe = String(lbl).replace(/</g,'&lt;').replace(/>/g,'&gt;');
                         return `
                     <span
-                        class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300"
+                        class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300 pointer-events-none"
                         style="
-                            left: 100%;
+                            left: 75%;
                             top: 50%;
-                            transform: translate(6px, -50%) scale(${invZoom});
+                            transform: translate(4px, -50%) scale(${invZoom});
                             transform-origin: left center;
                             z-index: 12;
                         "
@@ -13099,7 +13350,7 @@ const toPercent = (x, y) => {
 
         userHtml = `
             <div
-                class="absolute"
+                class="absolute pointer-events-none"
                 style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
                 title="You"
             >
@@ -13165,7 +13416,7 @@ const toPercent = (x, y) => {
             completedHtml = completed
                 .filter(a => a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)) && isFinite(Number(a.sizeM)))
                 .map(a => {
-                    const sizeM = Number(a.sizeM) || 30;
+                    const sizeM = Number(a.sizeM) || 15;
                     const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
                     const label = '';
                     return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
@@ -13176,7 +13427,7 @@ const toPercent = (x, y) => {
         // 2) Active tile (movable) — always red outline so you can position the next square
         let activeHtml = '';
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
-            const sizeM = Number(tile.sizeM) || 30;
+            const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
@@ -13275,8 +13526,6 @@ const toPercent = (x, y) => {
              style="height: ${heightStyle};"
              onclick="toggleMapFullscreen(event)"
              id="target-map-container"
-             onmousedown="startMapDrag(event)"
-             ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
                 ${gridTileHtml}
@@ -13291,8 +13540,32 @@ const toPercent = (x, y) => {
 
 
 
+            <!-- Directional pan buttons -->
+            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >◀</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▲</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▼</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▶</button>
+            </div>
+
             <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-2 mb-2 flex gap-2 justify-center">
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
                 <button
                     type="button"
                     class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
@@ -13440,13 +13713,6 @@ const toPercent = (x, y) => {
 
 
 
-  <div class="mt-3 flex justify-center">
-    <button id="open-tile-grid-btn" type="button"
-      class="w-full px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm" style="background-color: rgb(var(--color-secondary));">
-      Open Tile Grid (30×30)
-    </button>
-  </div>
-
       </div>
     </details>
 </div>
@@ -13477,7 +13743,7 @@ const toPercent = (x, y) => {
 
         userHtml = `
             <div
-                class="absolute"
+                class="absolute pointer-events-none"
                 style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
                 title="You"
             >
@@ -13578,8 +13844,6 @@ const toPercent = (x, y) => {
              style="height: ${heightStyle};"
              onclick="toggleMapFullscreen(event)"
              id="target-map-container"
-             onmousedown="startMapDrag(event)"
-             ontouchstart="startMapDrag(event)"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
                 ${trackSvgHtml}
@@ -14742,6 +15006,77 @@ ${(() => {
                 ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
             </div>
 
+            <!-- Inline Tile Grid (permanently embedded) -->
+            ${(() => {
+                const _survey = openSurvey;
+                ensureSurveyGridTileDefaults(_survey);
+                const _tile = _survey.gridTile;
+                const _tileEnabled = _tile && _tile.enabled && _tile.centerLat != null && _tile.centerLon != null;
+                const _coveragePct = _tileEnabled ? getCoveragePercent(_tile).toFixed(1) : '0.0';
+                const _ranges = (typeof getQuickTargetRangesEffective === 'function') ? getQuickTargetRangesEffective() : [];
+
+                const _colorCls = {
+                    BLUE:  'bg-blue-600 hover:bg-blue-700',
+                    SKY:   'bg-sky-500 hover:bg-sky-600',
+                    GREEN: 'bg-emerald-600 hover:bg-emerald-700',
+                    AMBER: 'bg-amber-500 hover:bg-amber-600',
+                    RED:   'bg-red-600 hover:bg-red-700'
+                };
+                const _rainbowButtons = _ranges.map(function(r) {
+                    const color = String(r && r.color || '').toUpperCase();
+                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+                    const rangeLabel = (min !== '' && max !== '') ? (min + '&rarr;' + max) : '&mdash;';
+                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
+                    return '<button type="button"'
+                        + ' class="compass-range-btn tile-grid-range-btn px-2 py-2 rounded-lg text-white font-bold text-xs shadow ' + cls + '"'
+                        + ' data-min="' + min + '"'
+                        + ' data-max="' + max + '"'
+                        + ' data-targetid="' + tid + '"'
+                        + ' data-color="' + color + '"'
+                        + '>' + rangeLabel + '</button>';
+                }).join('');
+
+                const _centreTxt = _tileEnabled
+                    ? (Number(_tile.centerLat).toFixed(6) + ', ' + Number(_tile.centerLon).toFixed(6))
+                    : 'Not set';
+
+                const _rainbowHtml = _rainbowButtons
+                    ? '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
+                    : '<div id="tile-grid-rainbow-buttons"></div>';
+
+                return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
+                    + '<details id="tile-grid-inline-details" ' + (tileGridExpanded ? 'open' : '') + '>'
+                    + '<summary class="cursor-pointer select-none flex items-center gap-2 justify-start">'
+                    + '<span class="caret text-lg">&#9658;</span>'
+                    + '<span class="text-xl font-semibold text-gray-700 flex items-center gap-2">'
+                    + '<i class="fas fa-th text-primary"></i> Tile Grid (15&times;15)'
+                    + '</span></summary>'
+                    + '<div class="mt-3">'
+                    + '<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 mb-2">'
+                    + '<div><span class="font-semibold">Tile centre:</span> <span id="tile-grid-centre-text">' + _centreTxt + '</span></div>'
+                    + '<div><span class="font-semibold">You:</span> <span id="tile-grid-user-text">No GPS fix</span></div>'
+                    + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
+                    + '</div>'
+                    + '<div class="w-full flex justify-center mb-3">'
+                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none; max-width: 100%;"></canvas>'
+                    + '</div>'
+                    + _rainbowHtml
+                    + '<div class="flex gap-2">'
+                    + '<button id="tile-grid-complete-btn" type="button"'
+                    + ' class="flex-1 px-4 py-2 rounded-xl text-white font-bold shadow hover:opacity-90 text-sm"'
+                    + ' style="background-color: rgb(var(--color-primary));"'
+                    + ' onclick="markTileGridComplete()">Complete</button>'
+                    + '<button id="tile-grid-clear-btn" type="button"'
+                    + ' class="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"'
+                    + ' onclick="clearTileCoverage()">Clear</button>'
+                    + '</div>'
+                    + '</div>'
+                    + '</details>'
+                    + '</div>';
+            })()}
+
             <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
 
@@ -14954,7 +15289,7 @@ return `
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
   <h4 class="text-lg font-bold text-gray-800 mb-2">Quick Target Buttons</h4>
   <p class="text-sm text-gray-600 mb-3">
-    Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour.
+    Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour. Use <b>Apply preset for my detector</b> to load ranges scaled to your machine's VDI scale.
   </p>
 
   <div class="overflow-x-auto">
@@ -14984,6 +15319,12 @@ return `
             id="quick-target-reset-btn" onclick="resetQuickTargetSettingsToDefaults()"
             class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow hover:bg-gray-300 transition">
       Reset
+    </button>
+
+    <button type="button"
+            id="quick-target-preset-btn" onclick="applyDetectorPreset(userProfile && userProfile.detector)"
+            class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-teal-700 transition">
+      Apply preset for my detector
     </button>
   </div>
 
@@ -17155,11 +17496,10 @@ if (gpsBtn) {
     }
 
     
-    const openTileGridBtn = document.getElementById('open-tile-grid-btn');
-    if (openTileGridBtn) {
-        openTileGridBtn.addEventListener('click', () => {
-            try { openTileGridModal(); } catch (e) { console.error(e); }
-});
+    // Inline tile grid: initialise whenever the canvas is present in the DOM (Compass page)
+    const inlineTileCanvas = document.getElementById('tile-grid-canvas');
+    if (inlineTileCanvas) {
+        try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
 document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
@@ -17314,6 +17654,14 @@ if (tileGridDetails) {
     tileGridDetails.open = !!tileGridExpanded;
     tileGridDetails.addEventListener('toggle', () => {
         tileGridExpanded = tileGridDetails.open;
+    });
+}
+
+// --- Inline Tile Grid panel expand/collapse ---
+const tileGridInlineDetails = document.getElementById('tile-grid-inline-details');
+if (tileGridInlineDetails) {
+    tileGridInlineDetails.addEventListener('toggle', () => {
+        tileGridExpanded = tileGridInlineDetails.open;
     });
 }
 
@@ -17739,6 +18087,78 @@ function loadQuickTargetRanges() {
 
 function saveQuickTargetRanges(ranges) {
     localStorage.setItem(QUICK_TARGET_RANGES_STORAGE_KEY, JSON.stringify(ranges));
+}
+
+// ─── Detector VDI presets ─────────────────────────────────────────────────────
+// Three scale families, five bands each (Blue → Sky → Green → Amber → Red)
+const DETECTOR_VDI_PRESETS = {
+    // Minelab: -10 to +40
+    minelab: [
+        { color: 'BLUE',  min: -10, max:   3, targetId:  -2 },
+        { color: 'SKY',   min:   4, max:  11, targetId:   7 },
+        { color: 'GREEN', min:  12, max:  18, targetId:  15 },
+        { color: 'AMBER', min:  19, max:  26, targetId:  22 },
+        { color: 'RED',   min:  27, max:  40, targetId:  33 },
+    ],
+    // Standard 0-99: Garrett, Fisher, Nokta (non-Legend), Teknetics,
+    //                Bounty Hunter, White's, Rutus, XP
+    standard99: [
+        { color: 'BLUE',  min:  0, max: 19, targetId:  9 },
+        { color: 'SKY',   min: 20, max: 39, targetId: 29 },
+        { color: 'GREEN', min: 40, max: 59, targetId: 49 },
+        { color: 'AMBER', min: 60, max: 79, targetId: 69 },
+        { color: 'RED',   min: 80, max: 99, targetId: 89 },
+    ],
+    // Nokta Legend: 0-60
+    legend: [
+        { color: 'BLUE',  min:  0, max: 11, targetId:  5 },
+        { color: 'SKY',   min: 12, max: 23, targetId: 17 },
+        { color: 'GREEN', min: 24, max: 35, targetId: 29 },
+        { color: 'AMBER', min: 36, max: 47, targetId: 41 },
+        { color: 'RED',   min: 48, max: 60, targetId: 54 },
+    ],
+};
+
+// Map detector name keywords → preset key
+function getPresetKeyForDetector(detectorName) {
+    const d = (detectorName || '').toLowerCase();
+    if (d.includes('minelab'))                          return 'minelab';
+    if (d.includes('nokta legend') || d === 'legend')  return 'legend';
+    if (d.includes('garrett') || d.includes('fisher') ||
+        d.includes('nokta')   || d.includes('teknetics') ||
+        d.includes('bounty hunter') || d.includes("white's") ||
+        d.includes('whites')  || d.includes('rutus') ||
+        d.includes('xp'))                              return 'standard99';
+    return null;
+}
+
+function getPresetRangesForDetector(detectorName) {
+    const key = getPresetKeyForDetector(detectorName);
+    return key ? DETECTOR_VDI_PRESETS[key] : null;
+}
+
+function applyDetectorPreset(detectorName, silent) {
+    const ranges = getPresetRangesForDetector(detectorName);
+    if (!ranges) {
+        if (!silent) showMessage('No VDI preset found for this detector — ranges unchanged.', 'info');
+        return false;
+    }
+    saveQuickTargetRanges(ranges);
+    quickTargetRangesDraft = null;
+    try { applyQuickTargetRangesToCompassButtons(ranges); } catch (e) {}
+    // Refresh the settings table if it's visible
+    try {
+        const tbody = document.getElementById('quick-target-ranges-tbody');
+        if (tbody) {
+            const key = getPresetKeyForDetector(detectorName);
+            const label = key === 'minelab' ? 'Minelab (-10→40)' :
+                          key === 'legend'  ? 'Nokta Legend (0→60)' :
+                                             'Standard (0→99)';
+            if (!silent) showMessage(`VDI preset applied: ${label}. Tap Save to keep it.`, 'success');
+            render();
+        }
+    } catch (e) {}
+    return true;
 }
 
 // =====================================
@@ -18182,6 +18602,124 @@ try {
   try { if (typeof updateActiveNavButtons === 'function') updateActiveNavButtons(); } catch (e) {}
 </script>
 
-          
+<!-- Detector combo box logic -->
+<script>
+const DETECTOR_LIST = [
+    'Bounty Hunter Land Ranger Pro',
+    'Bounty Hunter Time Ranger Pro',
+    'Fisher F22',
+    'Fisher F44',
+    'Fisher F75',
+    'Garrett Ace 400',
+    'Garrett Ace Apex',
+    'Garrett AT Gold',
+    'Garrett AT Max',
+    'Garrett AT Pro',
+    'Minelab CTX 3030',
+    'Minelab Equinox 600',
+    'Minelab Equinox 800',
+    'Minelab Equinox 900',
+    'Minelab Manticore',
+    'Minelab Safari',
+    'Minelab Vanquish 340',
+    'Minelab Vanquish 340 Pro',
+    'Minelab Vanquish 440',
+    'Minelab Vanquish 540',
+    'Minelab Vanquish 540 Pro',
+    'Minelab X-Terra Pro',
+    'Nokta Anfibio Multi',
+    'Nokta Kruzer',
+    'Nokta Legend',
+    'Nokta Pulse Dive',
+    'Nokta Simplex Ultra',
+    'Nokta Simplex+',
+    'Rutus Alter 71',
+    'Rutus Argo',
+    'Teknetics Eurotek Pro',
+    'Teknetics T2',
+    "White's MXT Pro",
+    "White's Spectra V3i",
+    'XP Deus II',
+    'XP ORX'
+];
+
+function renderDetectorDropdown(items) {
+    const dd = document.getElementById('detector-dropdown');
+    if (!dd) return;
+    if (!items.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = items.map(d =>
+        `<div class="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
+              onmousedown="selectDetector('${d.replace(/'/g, "\\'")}')">${d}</div>`
+    ).join('');
+    dd.style.display = 'block';
+}
+
+function showDetectorDropdown() {
+    renderDetectorDropdown(DETECTOR_LIST);
+}
+
+function filterDetectorList(val) {
+    const q = (val || '').toLowerCase().trim();
+    const filtered = q ? DETECTOR_LIST.filter(d => d.toLowerCase().includes(q)) : DETECTOR_LIST;
+    renderDetectorDropdown(filtered);
+}
+
+function selectDetector(val) {
+    const input = document.getElementById('profile-detector');
+    if (input) input.value = val;
+    const dd = document.getElementById('detector-dropdown');
+    if (dd) dd.style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('detector-combo-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        const dd = document.getElementById('detector-dropdown');
+        if (dd) dd.style.display = 'none';
+    }
+});
+</script>
+
+<!-- Detector datalist: must be at top level so it works when modal is hidden -->
+<datalist id="detector-list">
+    <option value="Bounty Hunter Land Ranger Pro">
+    <option value="Bounty Hunter Time Ranger Pro">
+    <option value="Fisher F22">
+    <option value="Fisher F44">
+    <option value="Fisher F75">
+    <option value="Garrett Ace 400">
+    <option value="Garrett Ace Apex">
+    <option value="Garrett AT Gold">
+    <option value="Garrett AT Max">
+    <option value="Garrett AT Pro">
+    <option value="Minelab CTX 3030">
+    <option value="Minelab Equinox 600">
+    <option value="Minelab Equinox 800">
+    <option value="Minelab Equinox 900">
+    <option value="Minelab Manticore">
+    <option value="Minelab Safari">
+    <option value="Minelab Vanquish 340">
+    <option value="Minelab Vanquish 340 Pro">
+    <option value="Minelab Vanquish 440">
+    <option value="Minelab Vanquish 540">
+    <option value="Minelab Vanquish 540 Pro">
+    <option value="Minelab X-Terra Pro">
+    <option value="Nokta Anfibio Multi">
+    <option value="Nokta Kruzer">
+    <option value="Nokta Legend">
+    <option value="Nokta Pulse Dive">
+    <option value="Nokta Simplex Ultra">
+    <option value="Nokta Simplex+">
+    <option value="Rutus Alter 71">
+    <option value="Rutus Argo">
+    <option value="Teknetics Eurotek Pro">
+    <option value="Teknetics T2">
+    <option value="White's MXT Pro">
+    <option value="White's Spectra V3i">
+    <option value="XP Deus II">
+    <option value="XP ORX">
+</datalist>
+
 </body>
 </html>
