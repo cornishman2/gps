@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1773,6 +1773,24 @@ function ensureSurveyGridTileDefaults(survey) {
     }
     if (survey.gridTile.centerLat !== null && !isFinite(Number(survey.gridTile.centerLat))) survey.gridTile.centerLat = null;
     if (survey.gridTile.centerLon !== null && !isFinite(Number(survey.gridTile.centerLon))) survey.gridTile.centerLon = null;
+    if (typeof survey.gridTile.rotationDeg !== 'number' || !isFinite(survey.gridTile.rotationDeg)) {
+        survey.gridTile.rotationDeg = 0;
+    }
+}
+
+// Rotate a local offset (dx,dy) INTO the grid frame (counter-rotate by deg)
+function rotatePtIntoGrid(dx, dy, deg) {
+    if (!deg) return { x: dx, y: dy };
+    const r = -deg * Math.PI / 180;
+    return { x: dx * Math.cos(r) - dy * Math.sin(r),
+             y: dx * Math.sin(r) + dy * Math.cos(r) };
+}
+// Rotate a grid-frame offset (x,y) back to real-world
+function rotatePtFromGrid(x, y, deg) {
+    if (!deg) return { x, y };
+    const r = deg * Math.PI / 180;
+    return { x: x * Math.cos(r) - y * Math.sin(r),
+             y: x * Math.sin(r) + y * Math.cos(r) };
 }
 
 function getBestLiveGpsCoordsOrNull() {
@@ -1784,7 +1802,7 @@ function getBestLiveGpsCoordsOrNull() {
     return { lat, lon };
 }
 
-function setGridTileToCurrentGps() {
+function setGridTileToCurrentGps(sizeM) {
     const survey = getCompassOpenSurvey();
     if (!survey) {
         showMessage('No open survey.', 'error');
@@ -1800,11 +1818,12 @@ function setGridTileToCurrentGps() {
     survey.gridTile.centerLat = c.lat;
     survey.gridTile.centerLon = c.lon;
     survey.gridTile.enabled = true;
+    if (sizeM && Number.isFinite(+sizeM)) survey.gridTile.sizeM = +sizeM;
     survey.dateLastChanged = Date.now();
     if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
     saveSurveysToLocalStorage();
 
-    showMessage('Grid tile set to current GPS position.', 'success');
+    showMessage(`Grid tile set to current GPS position (${survey.gridTile.sizeM}m).`, 'success');
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
 }
@@ -1835,7 +1854,7 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
     ensureSurveyGridTileDefaults(survey);
 
     if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Grid tile is not set yet. Tap "Set Tile to GPS" first.', 'warning');
+        showMessage('Grid tile is not set yet. Tap a size button to place the tile.', 'warning');
         return;
     }
 
@@ -1859,6 +1878,87 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
+}
+
+// Hold-to-repeat tile pan — mirrors startMapPan/stopMapPan
+const TILE_PAN_STEP_M = 1; // metres per tick
+let _tilePanTimer = null;
+
+function startTilePan(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    stopTilePan();
+    _doTilePan(dir);  // immediate first step
+    _tilePanTimer = setTimeout(() => {
+        _tilePanTimer = setInterval(() => _doTilePan(dir), 80);
+    }, 350);
+}
+
+function stopTilePan() {
+    if (_tilePanTimer !== null) {
+        clearTimeout(_tilePanTimer);
+        clearInterval(_tilePanTimer);
+        _tilePanTimer = null;
+    }
+}
+
+function _doTilePan(dir) {
+    if (dir === 'N') moveGridTileByMeters(0,  TILE_PAN_STEP_M);
+    if (dir === 'S') moveGridTileByMeters(0, -TILE_PAN_STEP_M);
+    if (dir === 'E') moveGridTileByMeters( TILE_PAN_STEP_M, 0);
+    if (dir === 'W') moveGridTileByMeters(-TILE_PAN_STEP_M, 0);
+}
+
+// Hold-to-repeat tile rotation
+let _tileRotTimer = null;
+
+function startTileRotate(dir, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    stopTileRotate();
+    _doTileRotate(dir);
+    _tileRotTimer = setTimeout(() => {
+        _tileRotTimer = setInterval(() => _doTileRotate(dir), 60);
+    }, 250);
+}
+
+function stopTileRotate() {
+    if (_tileRotTimer !== null) {
+        clearTimeout(_tileRotTimer);
+        clearInterval(_tileRotTimer);
+        _tileRotTimer = null;
+        // Rebuild coverage and sync survey map once rotation stops
+        const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
+        if (survey && survey.gridTile) {
+            if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
+            if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
+            if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+        }
+    }
+}
+
+function _doTileRotateReset() {
+    const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
+    if (!survey || !survey.gridTile) return;
+    ensureSurveyGridTileDefaults(survey);
+    survey.gridTile.rotationDeg = 0;
+    survey.dateLastChanged = Date.now();
+    if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
+    if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
+    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    else if (typeof render === 'function') render();
+}
+
+function _doTileRotate(dir) {
+    const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
+    if (!survey || !survey.gridTile) return;
+    ensureSurveyGridTileDefaults(survey);
+    let rot = (Number(survey.gridTile.rotationDeg) || 0) + (dir === 'cw' ? 3 : -3);
+    rot = ((rot % 360) + 360) % 360;
+    survey.gridTile.rotationDeg = rot;
+    survey.dateLastChanged = Date.now();
+    if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
+    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
+    // Survey map updates on next normal GPS cycle — no full re-render during rotation
 }
 
 let tileGridModalIsOpen = false;
@@ -1933,11 +2033,13 @@ function rebuildCoverageFromGps(tile) {
     const M_PER_DEG_LAT = 111320;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
+    const rotDeg = Number(tile.rotationDeg) || 0;
     for (const pt of tile.coverageGps) {
         const dx = (pt.lon - lon0) * mPerDegLon;
         const dy = (pt.lat - lat0) * M_PER_DEG_LAT;
-        const localX = dx + (sizeM / 2);
-        const localY = (sizeM / 2) - dy;
+        const rp = rotatePtIntoGrid(dx, dy, rotDeg);
+        const localX = rp.x + (sizeM / 2);
+        const localY = (sizeM / 2) - rp.y;
         if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) continue;
         const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
         const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
@@ -2006,7 +2108,7 @@ function openTileGridModal() {
     ensureSurveyGridTileDefaults(survey);
 
     if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Set the tile first (tap "Set Tile to GPS").', 'warning');
+        showMessage('Set the tile first — tap a size button.', 'warning');
         return;
     }
 
@@ -2223,30 +2325,34 @@ function paintTileCellUnderUserWithColour(colourName) {
     const M_PER_DEG_LAT = 111320;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    const dx = (user.lon - lon0) * mPerDegLon;
-    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+    const rotDeg = Number(tile.rotationDeg) || 0;
+    const rawDx = (user.lon - lon0) * mPerDegLon;
+    const rawDy = (user.lat - lat0) * M_PER_DEG_LAT;
+    const rp = rotatePtIntoGrid(rawDx, rawDy, rotDeg);
 
-    const localX = dx + (sizeM / 2);
-    const localY = (sizeM / 2) - dy;
+    const localX = rp.x + (sizeM / 2);
+    const localY = (sizeM / 2) - rp.y;
 
-    const clampedX = Math.min(Math.max(localX, 0), sizeM);
-    const clampedY = Math.min(Math.max(localY, 0), sizeM);
+    // Only paint if user is actually inside the grid bounds
+    if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) return false;
 
-    const col = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
-    const row = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
+    const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
+    const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
 
-    // Store coverage as GPS coordinates (grid-position-independent)
+    // Cell centre in grid frame → rotate back to real-world offset
     if (!Array.isArray(tile.coverageGps)) tile.coverageGps = [];
-    const cellCentreX = (col + 0.5) / cells * sizeM - (sizeM / 2);
-    const cellCentreY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
-    const cellLat = lat0 + cellCentreY / M_PER_DEG_LAT;
-    const cellLon = lon0 + cellCentreX / mPerDegLon;
+    const cellCentreGridX = (col + 0.5) / cells * sizeM - (sizeM / 2);
+    const cellCentreGridY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
+    const cellRW = rotatePtFromGrid(cellCentreGridX, cellCentreGridY, rotDeg);
+    const cellLat = lat0 + cellRW.y / M_PER_DEG_LAT;
+    const cellLon = lon0 + cellRW.x / mPerDegLon;
     const cellColor = colourNameToTileFill(colourName);
     const existingIdx = tile.coverageGps.findIndex(p => {
-        const pdx = (p.lon - lon0) * mPerDegLon + (sizeM / 2);
-        const pdy = (sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT;
-        const pc = Math.min(cells-1, Math.max(0, Math.floor((pdx/sizeM)*cells)));
-        const pr = Math.min(cells-1, Math.max(0, Math.floor((pdy/sizeM)*cells)));
+        const pdx = (p.lon - lon0) * mPerDegLon;
+        const pdy = (p.lat - lat0) * M_PER_DEG_LAT;
+        const prp = rotatePtIntoGrid(pdx, pdy, rotDeg);
+        const pc = Math.min(cells-1, Math.max(0, Math.floor(((prp.x+sizeM/2)/sizeM)*cells)));
+        const pr = Math.min(cells-1, Math.max(0, Math.floor(((sizeM/2-prp.y)/sizeM)*cells)));
         return pc === col && pr === row;
     });
     if (existingIdx >= 0) {
@@ -2374,6 +2480,7 @@ function markTileGridComplete() {
             centerLat: Number(tile.centerLat),
             centerLon: Number(tile.centerLon),
             sizeM: sizeM,
+            rotationDeg: Number(tile.rotationDeg) || 0,
             completedAt: Date.now()
         });
     }
@@ -2408,98 +2515,130 @@ function drawTileGrid() {
     const tile = survey.gridTile;
     ensureTileCoverageStorage(tile);
 
-    const sizeM = Number(tile.sizeM) || 15;
-    const cells = Math.round(sizeM);
-    const total = cells * cells;
+    const sizeM  = Number(tile.sizeM) || 15;
+    const cells  = Math.round(sizeM);
+    const total  = cells * cells;
+    const rotDeg = Number(tile.rotationDeg) || 0;
+    const rotRad = rotDeg * Math.PI / 180;
 
-    const cssMax = Math.min(window.innerWidth - 48, 520);
-    const px = Math.max(240, cssMax);
+    // Canvas sized to the diagonal so the rotated red square always fits
+    const cssMax  = Math.min(window.innerWidth - 48, 520);
+    const gridPx  = Math.max(180, Math.round(cssMax * 0.72));
+    const px      = Math.round(gridPx * Math.SQRT2 * 1.05);
+    const cx = px / 2, cy = px / 2;
+    const gridOffX = cx - gridPx / 2;
+    const gridOffY = cy - gridPx / 2;
+    const cellPx   = gridPx / cells;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.style.width = px + 'px';
-    canvas.style.height = px + 'px';
-    canvas.width = Math.floor(px * dpr);
+    canvas.style.width     = px + 'px';
+    canvas.style.height    = px + 'px';
+    canvas.style.minWidth  = px + 'px';
+    canvas.style.minHeight = px + 'px';
+    canvas.width  = Math.floor(px * dpr);
     canvas.height = Math.floor(px * dpr);
 
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, px, px);
 
-    const cellPx = px / cells;
-
-    ctx.fillStyle = '#ffffff';
+    // ── Background ────────────────────────────────────────────────────────
+    ctx.fillStyle = '#f9fafb';
     ctx.fillRect(0, 0, px, px);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(gridOffX, gridOffY, gridPx, gridPx);
 
+    // ── Coverage cells — drawn in North-up grid frame, no rotation ────────
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
         for (let i = 0; i < total; i++) {
             if (tile.coverageBits[i] !== '1') continue;
-            const r = Math.floor(i / cells);
-            const c = i - r * cells;
+            const r   = Math.floor(i / cells);
+            const c   = i - r * cells;
             const key = `${r},${c}`;
-            const fill = (tile.coverageColors && tile.coverageColors[key]) ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
+            const fill = (tile.coverageColors && tile.coverageColors[key])
+                ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
             ctx.fillStyle = fill;
-            ctx.fillRect(c * cellPx, r * cellPx, cellPx, cellPx);
+            ctx.fillRect(gridOffX + c * cellPx, gridOffY + r * cellPx, cellPx, cellPx);
         }
     }
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    // ── Grid lines — North-up, no rotation ───────────────────────────────
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= cells; i++) {
-        const x = i * cellPx;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, px); ctx.stroke();
-        const y = i * cellPx;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
+        const x = gridOffX + i * cellPx;
+        ctx.beginPath(); ctx.moveTo(x, gridOffY); ctx.lineTo(x, gridOffY + gridPx); ctx.stroke();
+        const y = gridOffY + i * cellPx;
+        ctx.beginPath(); ctx.moveTo(gridOffX, y); ctx.lineTo(gridOffX + gridPx, y); ctx.stroke();
     }
 
+    // ── Red border square — ONLY this rotates ────────────────────────────
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotRad);
+    ctx.translate(-cx, -cy);
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, px - 2, px - 2);
+    ctx.strokeRect(gridOffX + 1, gridOffY + 1, gridPx - 2, gridPx - 2);
+    ctx.restore();
 
+    // ── N/S/E/W labels — fixed to canvas edges ────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('N', px / 2, 14);
     ctx.fillText('S', px / 2, px - 6);
     ctx.textAlign = 'left';
-    ctx.fillText('W', 6, px / 2);
+    ctx.fillText('W', 6, px / 2 + 4);
     ctx.textAlign = 'right';
-    ctx.fillText('E', px - 6, px / 2);
+    ctx.fillText('E', px - 6, px / 2 + 4);
+    if (rotDeg !== 0) {
+        ctx.textAlign = 'center';
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'rgba(220,38,38,0.85)';
+        ctx.fillText(rotDeg + '°', px / 2, px / 2 + 4);
+    }
 
+    // ── Update text displays ──────────────────────────────────────────────
     const centreEl = document.getElementById('tile-grid-centre-text');
-    if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
+    if (centreEl) centreEl.textContent =
+        `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
 
-    const live = getBestLiveGpsCoordsOrNull();
+    const live    = getBestLiveGpsCoordsOrNull();
     const tileAge = Date.now() - (tileGridLastFixTs || 0);
-    const user = (tileGridLastCoords && tileAge <= 2000) ? tileGridLastCoords : (live || tileGridLastCoords);
+    const user    = (tileGridLastCoords && tileAge <= 2000)
+        ? tileGridLastCoords : (live || tileGridLastCoords);
 
     const userEl = document.getElementById('tile-grid-user-text');
-    if (userEl) userEl.textContent = user ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
+    if (userEl) userEl.textContent = user
+        ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
 
     const covEl = document.getElementById('tile-grid-coverage-text');
     if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
-
-    if (!user) return;
 
     const lat0 = Number(tile.centerLat);
     const lon0 = Number(tile.centerLon);
     if (!isFinite(lat0) || !isFinite(lon0)) return;
 
     const M_PER_DEG_LAT = 110574;
-    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const mPerDegLon    = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    const dx = (user.lon - lon0) * mPerDegLon;
-    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
+    // ── Helper: GPS → canvas pixel (no rotation) ─────────────────────────
+    const gpsToPx = (lat, lon) => ({
+        x: gridOffX + ((lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * gridPx,
+        y: gridOffY + (sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT) / sizeM * gridPx
+    });
 
-    const localX = dx + (sizeM / 2);
-    const localY = (sizeM / 2) - dy;
+    // ── User position ─────────────────────────────────────────────────────
+    const localX = user ? (user.lon - lon0) * mPerDegLon + sizeM / 2 : null;
+    const localY = user ? sizeM / 2 - (user.lat - lat0) * M_PER_DEG_LAT : null;
 
-    if (tile.paintingEnabled) {
-        const clampedX = Math.min(Math.max(localX, 0), sizeM);
-        const clampedY = Math.min(Math.max(localY, 0), sizeM);
+    // ── Paint cells under user (auto-paint) ───────────────────────────────
+    if (user && tile.paintingEnabled &&
+        localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
 
-        const col0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
-        const row0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
-
+        const col0 = Math.min(cells-1, Math.max(0, Math.floor((localX / sizeM) * cells)));
+        const row0 = Math.min(cells-1, Math.max(0, Math.floor((localY / sizeM) * cells)));
         let paintedAny = false;
 
         for (let dr = -1; dr <= 1; dr++) {
@@ -2509,34 +2648,28 @@ function drawTileGrid() {
                 const did = setTileCellVisited(tile, col, row, cells);
                 if (did) {
                     paintedAny = true;
-
-                    const __k = `${row},${col}`;
-                    const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
+                    const __k    = `${row},${col}`;
+                    const __fill = (tile.coverageColors && tile.coverageColors[__k])
+                        ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
                     ctx.fillStyle = __fill;
-                    ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-
-                    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(col * cellPx, row * cellPx, cellPx, cellPx);
+                    ctx.fillRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+                    ctx.strokeRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
                 }
             }
         }
-
         if (paintedAny) {
             tile.coverageLastPainted = Date.now();
-            survey.dateLastChanged = Date.now();
+            survey.dateLastChanged   = Date.now();
             saveSurveysToLocalStorage();
         }
     }
 
-    // ── Draw targets, stakes, and finds within the tile ──
-    const openSurveyForGrid = survey;
-    const allTargets = Array.isArray(openSurveyForGrid.targets)
-        ? openSurveyForGrid.targets.filter(t => t && !t.deleted)
-        : [];
+    // ── Targets, stakes, finds ────────────────────────────────────────────
+    const allTargets     = Array.isArray(survey.targets)
+        ? survey.targets.filter(t => t && !t.deleted) : [];
     const allFindsForGrid = Array.isArray(finds)
-        ? finds.filter(f => f && !f.deleted && f.surveyId === openSurveyForGrid.id)
-        : [];
+        ? finds.filter(f => f && !f.deleted && f.surveyId === survey.id) : [];
 
     const PIN_COLORS = {
         target: {
@@ -2560,66 +2693,53 @@ function drawTileGrid() {
 
     function drawGridPin(itemLat, itemLon, color, isStakePin) {
         if (!isFinite(itemLat) || !isFinite(itemLon)) return;
-        const idx = (itemLon - lon0) * mPerDegLon + (sizeM / 2);
-        const idy = (sizeM / 2) - (itemLat - lat0) * M_PER_DEG_LAT;
-        if (idx < -1 || idx > sizeM + 1 || idy < -1 || idy > sizeM + 1) return;
-        const px2x = (idx / sizeM) * px;
-        const px2y = (idy / sizeM) * px;
-        const r = 4;
+        const p = gpsToPx(itemLat, itemLon);
+        if (p.x < gridOffX - 5 || p.x > gridOffX + gridPx + 5) return;
+        if (p.y < gridOffY - 5 || p.y > gridOffY + gridPx + 5) return;
         ctx.beginPath();
         ctx.fillStyle = color;
-        if (isStakePin) {
-            ctx.arc(px2x, px2y, 3, 0, Math.PI * 2);
-        } else {
-            ctx.arc(px2x, px2y, r, 0, Math.PI * 2);
-        }
+        ctx.arc(p.x, p.y, isStakePin ? 3 : 4, 0, Math.PI * 2);
         ctx.fill();
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.stroke();
     }
 
-    // Helper: parse lat/lon from either direct fields or coordinates string
     function parseItemCoords(item) {
         if (!item) return null;
-        // Direct lat/lon fields
         let lat = Number(item.lat ?? item.latitude);
         let lon = Number(item.lon ?? item.longitude);
         if (isFinite(lat) && isFinite(lon)) return { lat, lon };
-        // Coordinates string "lat, lon"
         const coordStr = String(item.coordinates || item.coords || '');
         if (coordStr) {
             const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
-            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1]))
                 return { lat: parts[0], lon: parts[1] };
-            }
         }
         return null;
     }
 
-    // Draw tracks
-    const visibleTracksForGrid = Array.isArray(survey.tracks)
-        ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
-        : [];
-    for (const track of visibleTracksForGrid) {
-        const trackColor = track.color || '#000000';
+    // ── Draw tracks ───────────────────────────────────────────────────────
+    const visibleTracks = Array.isArray(survey.tracks)
+        ? survey.tracks.filter(t => t && t.isVisible !== false &&
+            Array.isArray(t.points) && t.points.length > 1) : [];
+    for (const track of visibleTracks) {
         ctx.beginPath();
-        ctx.strokeStyle = trackColor;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = track.color || '#000000';
+        ctx.lineWidth   = 2;
         ctx.globalAlpha = 0.75;
         let started = false;
         for (const p of track.points) {
             if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
-            const tx = ((p.lon - lon0) * mPerDegLon + (sizeM / 2)) / sizeM * px;
-            const ty = ((sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * px;
-            if (!started) { ctx.moveTo(tx, ty); started = true; }
-            else ctx.lineTo(tx, ty);
+            const tp = gpsToPx(p.lat, p.lon);
+            if (!started) { ctx.moveTo(tp.x, tp.y); started = true; }
+            else ctx.lineTo(tp.x, tp.y);
         }
         ctx.stroke();
         ctx.globalAlpha = 1;
     }
 
-    // Draw targets
+    // ── Draw targets ──────────────────────────────────────────────────────
     for (const t of allTargets) {
         const c = parseItemCoords(t);
         if (!c) continue;
@@ -2647,7 +2767,7 @@ function drawTileGrid() {
         }
     }
 
-    // Draw finds
+    // ── Draw finds ────────────────────────────────────────────────────────
     for (const f of allFindsForGrid) {
         const c = parseItemCoords(f);
         if (!c) continue;
@@ -2655,19 +2775,18 @@ function drawTileGrid() {
         drawGridPin(c.lat, c.lon, color, false);
     }
 
-if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
-
-    const pxX = (localX / sizeM) * px;
-    const pxY = (localY / sizeM) * px;
-
-    ctx.beginPath();
-    ctx.fillStyle = 'rgba(29,78,216,0.95)';
-    ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.stroke();
+    // ── User dot ──────────────────────────────────────────────────────────
+    if (localX !== null && localY !== null &&
+        localX >= -1 && localX <= sizeM + 1 && localY >= -1 && localY <= sizeM + 1) {
+        const up = gpsToPx(user.lat, user.lon);
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(29,78,216,0.95)';
+        ctx.arc(up.x, up.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.stroke();
+    }
 }
 
 let targetSortMode = 'date'; // 'date' | 'id'
@@ -2923,7 +3042,10 @@ async function deleteFindPermanently(findId) {
         }
     }
 
+    const deletedFind = finds[idx];
     finds.splice(idx, 1);
+    const delFindSurvey = deletedFind && surveys.find(s => s.id === deletedFind.surveyId);
+    if (delFindSurvey) { delFindSurvey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
     saveFindsToLocalStorage();
 
     showMessage('Find deleted (including photos).', 'success');
@@ -3468,7 +3590,7 @@ function getDefaultAppLimits() {
         maxSurveys: 3,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-06-01' // ISO YYYY-MM-DD
+        expiryDate: '2027-06-01' // ISO YYYY-MM-DD
     };
 }
 
@@ -3632,11 +3754,17 @@ Storage used and available is also shown.
 From the Home page you can:
 • Create a new survey
 • Open an existing survey
-• Close or archive a survey
+• Export the open survey directly with the Export Now button
+• Close a survey
 • Delete a survey
 
 Only one survey can be open at a time.
 The Targets page always shows data for the currently open survey.
+
+Each survey card shows:
+• Last change — date and time of the most recent edit
+• Last export — date and time of the last ZIP export
+  (shown in red if changes have been made since the last export)
 
 --------------------------------
 MAP PAGE (COMPASS)
@@ -3666,14 +3794,30 @@ Pins are colour coded:
   • Purple     – Unidentified
   • Teal       – Other
 
-  Stakes are shown as small black squares.
+  Stakes are shown as small black circles.
 
 MAP CONTROLS
-Four directional buttons (◀ ▲ ▼ ▶) pan the map left, up, down,
-and right. Hold a button down to pan continuously.
-The + and – buttons zoom in and out.
-Reset returns the map to its default view.
-Show/Hide toggles your GPS position dot on the map.
+Below the map there are four rows of buttons:
+
+TILE  [10m] [20m] [30m] [Hide]
+  Tap a size button to place the tile grid centred on your
+  current GPS position at that size.
+  Hide/Show toggles the grid overlay on the map.
+
+MAP   [◀] [▲] [▼] [▶]
+  Pan the map. Hold a button to pan continuously.
+
+GRID  [W] [N] [S] [E]
+  Move the tile grid. Hold a button to move continuously.
+
+ROT   [↺] [↻] [0°]
+  Rotate the tile grid anticlockwise or clockwise.
+  Hold a button to rotate continuously (3° per step).
+  Tap 0° to reset rotation to North-aligned.
+
+ZOOM  [+] [−] [Reset] [Hide]
+  Zoom the map in/out. Reset returns to default view.
+  Hide/Show toggles your GPS position dot.
 
 Tap any target or find pin to open navigation guidance back
 to that point.
@@ -3722,33 +3866,43 @@ The first track (Perimeter) is always black by default.
 You can change any track colour using the pencil icon.
 
 STAKE BUTTON
-The STAKE button places a black square marker at your current
-GPS position. Use stakes to mark field boundaries, gates, or
-reference points.
+The STAKE button places a small black circle marker at your
+current GPS position. Use stakes to mark field boundaries,
+gates, or reference points.
 
-TILE GRID (15×15 metres)
-The Tile Grid divides your survey area into a 15×15 metre
-square. It helps you track which parts of the field you have
-covered systematically.
+TILE GRID
+The Tile Grid overlays a square grid on the survey area to
+help you cover it systematically. Choose a size with the
+TILE buttons (10m, 20m, or 30m) — this places the grid
+centred on your current GPS position.
+
+The grid can be rotated to align with a field boundary using
+the ROT buttons. The red square on the survey map rotates
+to match. The Tile Grid canvas always shows North at the top
+but the red square rotates within it to show the true angle.
 
 To use the tile grid:
-1. Stand at the centre of the area you want to cover.
-2. Tap "Set Centre Here" (in the GPS section above the map).
-   This places the 15×15 metre grid centred on your position.
-3. The grid appears on the map as a red outline.
-4. As you move within the grid, cells are shaded automatically
-   to show which areas you have walked over.
-5. Tap "Complete" when you have finished that square.
-   The completed area is saved and shown in green on the map.
-6. Move to an adjacent area and repeat.
+1. Tap a TILE size button to place the grid at your position.
+2. The red grid outline appears on the survey map.
+3. Open the Tile Grid section below the map controls.
+4. As you move within the grid, cells are shaded green
+   automatically. Green cells persist until you Clear or
+   move the grid.
+5. Rotate with the ROT buttons to align with boundaries.
+   Use GRID buttons to nudge the grid position.
+6. Tap "Complete" when finished. The area is saved on the map.
+7. Move to an adjacent area and repeat.
 
-The Tile Grid panel also shows:
+The Tile Grid section shows:
 • The grid centre coordinates
-• Your current position within the grid
+• Your current position
 • Your coverage percentage for the current tile
 
-Use "Clear" to reset the coverage for the current tile without
-marking it as complete.
+Use "Clear" to reset coverage without marking as complete.
+
+The coloured quick buttons inside the Tile Grid section let
+you log a target and paint the cell at the same time. The
+camera button alongside each colour attaches a photo.
 
 --------------------------------
 TARGETS PAGE
@@ -3840,8 +3994,10 @@ GPX files can be imported into mapping applications such as
 Google Maps, OsmAnd, and others.
 
 Select File and Import
-Imports a survey previously exported as a ZIP file.
+Imports a survey previously exported as a ZIP or JSON file.
 Use this to restore a backup or move data between devices.
+Imported surveys always arrive as Active status and appear
+immediately on the Home page.
 
 Select GPX and Import
 Creates a survey from a GPX file exported from another
@@ -3928,8 +4084,10 @@ GETTING STARTED
    Delete any unwanted tracks from the Tracks section.
 
 4. Use the Tile Grid for Thorough Coverage
-   Stand at the centre of an area you want to cover.
-   Tap "Set Centre Here" to place the 15×15 metre grid.
+   Tap a TILE size button (10m / 20m / 30m) to place the
+   grid centred on your GPS position.
+   Rotate the grid with the ROT buttons to align with
+   field boundaries if needed.
    Walk the grid systematically — cells paint as you move.
    Tap "Complete" and move on to the next square.
 
@@ -3942,9 +4100,15 @@ GETTING STARTED
 6. Back Up Your Data
    Detekta stores all data locally on your device.
    Regularly export your surveys as ZIP files.
+   The quickest way is the Export Now button on the open
+   survey card on the Home page.
    Exports are saved to your Downloads folder — copy them
    to cloud storage, email them, or transfer to another
    device.
+
+   Each survey card shows the date of the last change and
+   the date of the last export. The export date turns red
+   when there are unsaved changes — do not ignore this.
 
    It is your responsibility to make regular backups.
 
@@ -7151,6 +7315,10 @@ importedSurvey.surveyPhotoData = '';
 
     saveFindsToLocalStorage();
 
+    // Mark survey as changed when a find is edited
+    const editFindSurvey = surveys.find(s => s.id === find.surveyId);
+    if (editFindSurvey) { editFindSurvey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
+
     closeEditFindModal();
     showMessage('Find updated.', 'success');
     render();
@@ -8148,6 +8316,7 @@ function renderExportPage() {
 
         survey.tracks = (survey.tracks || []).filter(t => t.id !== track.id);
 
+        survey.dateLastChanged = Date.now();
         saveSurveysToLocalStorage();
         showMessage(`Track deleted: ${trackName}.`, 'success');
 
@@ -9183,7 +9352,8 @@ async function handleNewSurveySubmit(event) {
     surveys.forEach(s => {
         if (s.status === 'Open') {
             s.status = 'Active';
-            s.dateLastChanged = now;
+            s.dateClosed = now;
+            // Don't update dateLastChanged — closing to make way for new survey is not a data change
         }
     });
 
@@ -10787,12 +10957,13 @@ async function handleSurveyAction(button) {
                 surveys.forEach(s => {
                     if (s.status === 'Open') {
                         s.status = 'Active';
-                        s.dateLastChanged = now;
+                        // Don't update dateLastChanged — status change is not a data change
                     }
                 });
 
                 survey.status = 'Open';
-                survey.dateLastChanged = now;
+                survey.dateOpened = now;
+                // Don't update dateLastChanged — opening is not a data change
 
                 saveSurveysToLocalStorage();
                 showMessage(`Survey '${name}' is now OPEN.`, 'success');
@@ -12931,39 +13102,39 @@ const toPercent = (x, y) => {
         const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
         const tile = survey && survey.gridTile ? survey.gridTile : null;
 
-        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText) => {
-            const half = sizeM / 2;
-            const cx = Number(centerLon) * mPerDegLon;
-            const cy = Number(centerLat) * M_PER_DEG_LAT;
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, rotationDeg) => {
+            const half    = sizeM / 2;
+            const rotR    = -((rotationDeg || 0) * Math.PI / 180);
+            const cosR    = Math.cos(rotR), sinR = Math.sin(rotR);
+            const cLon    = Number(centerLon) * mPerDegLon;
+            const cLat    = Number(centerLat) * M_PER_DEG_LAT;
 
-            const minTx = cx - half, maxTx = cx + half;
-            const minTy = cy - half, maxTy = cy + half;
+            // Four corners in grid frame, rotated to real-world metric offsets
+            const corners = [
+                { x: -half,  y:  half },
+                { x:  half,  y:  half },
+                { x:  half,  y: -half },
+                { x: -half,  y: -half },
+            ].map(({ x, y }) => {
+                const rx = x * cosR - y * sinR;
+                const ry = x * sinR + y * cosR;
+                return toPercent(cLon + rx, cLat + ry);
+            });
 
-            const pTL = toPercent(minTx, maxTy);
-            const pBR = toPercent(maxTx, minTy);
-
-            const left = pTL.xPct;
-            const top = pTL.yPct;
-            const width = (pBR.xPct - pTL.xPct);
-            const height = (pBR.yPct - pTL.yPct);
-
-            const fontPx = (10 * invZoom);
+            const pointsStr = corners.map(p => `${p.xPct.toFixed(3)},${p.yPct.toFixed(3)}`).join(' ');
+            const cPct      = toPercent(cLon, cLat);
+            const strokeColor = style.includes('34,197,94') ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
+            const fillColor   = style.includes('34,197,94') ? 'rgba(34,197,94,0.35)'  : 'rgba(239,68,68,0.25)';
 
             return `
-                <div class="absolute pointer-events-none"
-                     style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
-                            ${style}; border-radius: 6px;">
-                    ${labelText ? `
-                    <div class="absolute"
-                         style="left:50%; top:-10px; transform:translateX(-50%);
-                                font-size:${fontPx.toFixed(2)}px;
-                                padding:2px 6px; border-radius:999px;
-                                background: rgba(255,255,255,0.92);
-                                border: 1px solid rgba(34,197,94,0.35);
-                                color: rgba(20,83,45,0.95);">
-                        ${labelText}
-                    </div>` : ''}
-                </div>
+                <svg class="absolute inset-0 w-full h-full pointer-events-none"
+                     viewBox="0 0 100 100" preserveAspectRatio="none"
+                     style="z-index:8; overflow:visible;">
+                    <polygon points="${pointsStr}"
+                        style="fill:${fillColor}; stroke:${strokeColor}; stroke-width:0.3; vector-effect:non-scaling-stroke;" />
+                    ${labelText ? `<text x="${cPct.xPct.toFixed(3)}" y="${cPct.yPct.toFixed(3)}"
+                        text-anchor="middle" font-size="2" fill="rgba(20,83,45,0.95)">${labelText}</text>` : ''}
+                </svg>
             `;
         };
 
@@ -12975,7 +13146,7 @@ const toPercent = (x, y) => {
                     const sizeM = Number(a.sizeM) || 15;
                     const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
                     const label = '';
-                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label, Number(a.rotationDeg) || 0);
                 })
                 .join('');
         }
@@ -12985,7 +13156,7 @@ const toPercent = (x, y) => {
             const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, Number(tile.rotationDeg) || 0);
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -13088,58 +13259,118 @@ const toPercent = (x, y) => {
             </div>
 </div>
 
-            <!-- Directional pan buttons -->
-            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >◀</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >▲</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >▼</button>
-                    <button type="button"
-                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                        onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                        ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                    >▶</button>
+            <!-- Tile size + MAP + GRID button rows — all w-11 h-11 for alignment -->
+            <div class="mt-2 mb-1 flex flex-col gap-1">
+
+              <!-- Row 1: TILE label + size buttons + show/hide -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
+                    ${[10, 20, 30].map(sz => {
+                      const s = getCompassOpenSurvey();
+                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
+                      const active = cur === sz;
+                      return `<button type="button"
+                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
+                    }).join('')}
+                <button id="gridtile-toggle-btn" type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const t = s && s.gridTile ? s.gridTile : null;
+                      return (t && t.enabled) ? 'Hide' : 'Show';
+                    })()}
+                </button>
+              </div>
+
+              <!-- Row 2: MAP label + directional pan buttons -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">MAP</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >◀</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >▲</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >▼</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                >▶</button>
+              </div>
+
+              <!-- Row 3: GRID label + tile pan buttons -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">GRID</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('W',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('W',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >W</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('N',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('N',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >N</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('S',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('S',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >S</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
+                    onmousedown="startTilePan('E',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
+                    ontouchstart="startTilePan('E',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
+                >E</button>
+              </div>
+
+              <!-- Row 4: ROT label + rotate buttons + reset -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">ROT</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 font-extrabold text-lg shadow select-none"
+                    onmousedown="startTileRotate('ccw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
+                    ontouchstart="startTileRotate('ccw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
+                >&#8634;</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 font-extrabold text-lg shadow select-none"
+                    onmousedown="startTileRotate('cw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
+                    ontouchstart="startTileRotate('cw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
+                >&#8635;</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-amber-50 hover:bg-amber-100 font-bold text-xs shadow select-none"
+                    onclick="_doTileRotateReset()"
+                >0°</button>
+              </div>
+
             </div>
 
             <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                <button
-                    type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapIn(event)"
-                >+</button>
-
-                <button
-                    type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapOut(event)"
-                >−</button>
-
-                <button
-                    type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
-                    onclick="resetMapView(event)"
-                >Reset</button>
-
-                <button
-                    id="toggle-gps-btn"
-                    type="button"
-                    class="px-5 py-2 rounded-xl font-bold text-white shadow hover:opacity-90 text-base"
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapIn(event)">+</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapOut(event)">−</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
+                    onclick="resetMapView(event)">Reset</button>
+                <button id="toggle-gps-btn" type="button"
+                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
                     style="background-color: rgb(var(--color-secondary));"
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
-
-</div>
+            </div>
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -13191,74 +13422,7 @@ const toPercent = (x, y) => {
   </div>
 </details>
 </div>
-<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4 mt-3">
-  <details id="tile-grid-details" class="w-full">
-  <summary class="cursor-pointer select-none flex items-center gap-2 justify-start">
-  <span class="caret text-lg">▸</span>
 
-  <span>Tile / Grid</span>
-</summary>
-  <div class="mt-2">
-<div class="flex gap-2">
-      <button id="gridtile-set-gps-btn" type="button"
-        class="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm">
-        Set Tile to GPS
-      </button>
-
-      <button id="gridtile-toggle-btn" type="button"
-        class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">
-        ${(() => {
-          const s = getCompassOpenSurvey();
-          const t = s && s.gridTile ? s.gridTile : null;
-          return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
-        })()}
-      </button>
-    </div>
-  </div>
-
-  <div class="mt-3 text-xs text-gray-600">Move tile (buttons):</div>
-
-  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
-    <div></div>
-    <button data-gridtile-move="N" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">N</button>
-    <div></div>
-
-    <button data-gridtile-move="W" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">W</button>
-    <button type="button" disabled
-      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
-    <button data-gridtile-move="E" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">E</button>
-
-    <div></div>
-    <button data-gridtile-move="S" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">S</button>
-    <div></div>
-  </div>
-
-  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
-    <div></div>
-    <button data-gridtile-move="N" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">N 5m</button>
-    <div></div>
-
-    <button data-gridtile-move="W" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">W 5m</button>
-    <button type="button" disabled
-      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
-    <button data-gridtile-move="E" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">E 5m</button>
-
-    <div></div>
-    <button data-gridtile-move="S" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">S 5m</button>
-    <div></div>
-  </div>
-
-      </div>
-    </details>
-</div>
 
     `;
 }
@@ -14133,6 +14297,7 @@ function handleStartTrackClick() {
     activeTrackSurveyId = openSurvey.id;
     activeTrackId = newTrack.id;
 
+    openSurvey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
     showMessage(`Started recording ${name}.`, 'success');
     render();
@@ -14151,6 +14316,8 @@ function handleStopTrackClick() {
     }
 
     active.track.isRecording = false;
+    const activeSurvey = surveys.find(s => s.id === active.surveyId || (Array.isArray(s.tracks) && s.tracks.some(t => t.id === active.track.id)));
+    if (activeSurvey) activeSurvey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     const name = active.track.name || 'track';
@@ -14178,6 +14345,7 @@ function toggleTrackVisibility(trackId, isVisible) {
     if (!found) return;
 
     found.track.isVisible = !!isVisible;
+    if (found.survey) found.survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     if (currentPage === 'Compass') {
@@ -14545,7 +14713,7 @@ ${(() => {
                     + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
                     + '</div>'
                     + '<div class="w-full flex justify-center mb-3">'
-                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="max-width: 100%;"></canvas>'
+                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="display:block;"></canvas>'
                     + '</div>'
                     + _rainbowHtml
                     + '<div class="flex gap-2">'
@@ -14605,7 +14773,7 @@ function renderSettingsPage() {
         maxSurveys: 3,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-06-01'
+        expiryDate: '2027-06-01'
     };
 
     const valOrBlank = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
@@ -14755,70 +14923,53 @@ return `
     </div>
 </div>
 
-<!-- APP LIMITS (TESTER BUILD) - READ ONLY -->
+<!-- APP LIMITS (TESTER BUILD) -->
+${(() => {
+  const isAdmin = (userProfile && typeof userProfile.name === 'string' && userProfile.name.trim() === 'Laurence Wright');
+  const inputClass = isAdmin
+    ? 'w-full border border-emerald-300 rounded-lg p-2 bg-white text-gray-800'
+    : 'w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700';
+  const readonlyAttr = isAdmin ? '' : 'readonly';
+  return `
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
   <div class="flex items-start justify-between gap-3">
     <div>
       <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits (Tester Build)</h4>
       <p class="text-sm text-gray-600">
         These limits are set by the build. Blank means <strong>unlimited</strong>.
+        ${isAdmin ? '<span class="text-emerald-600 font-semibold">Changes save immediately.</span>' : ''}
       </p>
     </div>
-    ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
+    ${expired ? '<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>' : ''}
   </div>
 
   <div class="mt-4 space-y-3">
     <div>
-      <label class="dtk-label" for="limits-max-surveys">
-        Max number of surveys
-      </label>
-      <input id="limits-max-surveys"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayMaxSurveys}"
-             placeholder="Unlimited" />
+      <label class="dtk-label" for="limits-max-surveys">Max number of surveys</label>
+      <input id="limits-max-surveys" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayMaxSurveys}" placeholder="Unlimited" />
     </div>
-
     <div>
-      <label class="dtk-label" for="limits-max-targets">
-        Max number of targets
-      </label>
-      <input id="limits-max-targets"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayMaxTargets}"
-             placeholder="Unlimited" />
+      <label class="dtk-label" for="limits-max-targets">Max number of targets</label>
+      <input id="limits-max-targets" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayMaxTargets}" placeholder="Unlimited" />
     </div>
-
     <div>
-      <label class="dtk-label" for="limits-max-finds">
-        Max number of finds
-      </label>
-      <input id="limits-max-finds"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayMaxFinds}"
-             placeholder="Unlimited" />
+      <label class="dtk-label" for="limits-max-finds">Max number of finds</label>
+      <input id="limits-max-finds" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayMaxFinds}" placeholder="Unlimited" />
     </div>
-<div>
-      <label class="dtk-label" for="limits-expiry-date">
-        Expiration date
-      </label>
-      <input id="limits-expiry-date"
-             type="text"
-             readonly
-             class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700"
-             value="${displayExpiryDate}"
-             placeholder="No expiry" />
+    <div>
+      <label class="dtk-label" for="limits-expiry-date">Expiration date</label>
+      <input id="limits-expiry-date" type="text" ${readonlyAttr}
+             class="${inputClass}" value="${displayExpiryDate}" placeholder="No expiry" />
       <p class="text-xs text-gray-500 mt-1">
         If expired, no new surveys, targets, or finds can be created.
       </p>
     </div>
   </div>
-</div>
+</div>`;
+})()}
 
 
 <!-- Danger Zone: Reset All Data -->
@@ -16865,12 +17016,7 @@ if (gpsBtn) {
     });
 }
 
-    const gridSetBtn = document.getElementById('gridtile-set-gps-btn');
-    if (gridSetBtn) {
-        gridSetBtn.addEventListener('click', () => {
-            try { setGridTileToCurrentGps(); } catch (e) { console.error(e); }
-        });
-    }
+    // gridtile size buttons use inline onclick — no separate listener needed
 
     const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
     if (gridToggleBtn) {
@@ -16884,19 +17030,7 @@ if (gpsBtn) {
         try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
-document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const dir = btn.getAttribute('data-gridtile-move') || '';
-            const step = Number(btn.getAttribute('data-gridtile-step') || '1');
-            if (!isFinite(step)) return;
-
-            const d = step;
-            if (dir === 'N') moveGridTileByMeters(0, d);
-            if (dir === 'S') moveGridTileByMeters(0, -d);
-            if (dir === 'E') moveGridTileByMeters(d, 0);
-            if (dir === 'W') moveGridTileByMeters(-d, 0);
-        });
-    });
+// tile pan now uses startTilePan/stopTilePan via inline handlers
 
 const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
@@ -17004,14 +17138,6 @@ if (mapLayersDetails) {
     });
 }
 
-const tileGridDetails = document.getElementById('tile-grid-details');
-if (tileGridDetails) {
-    tileGridDetails.open = !!tileGridControlsExpanded;
-    tileGridDetails.addEventListener('toggle', () => {
-        tileGridControlsExpanded = tileGridDetails.open;
-    });
-}
-
 const tileGridInlineDetails = document.getElementById('tile-grid-inline-details');
 if (tileGridInlineDetails) {
     tileGridInlineDetails.addEventListener('toggle', () => {
@@ -17074,6 +17200,28 @@ if (trackEditButtons && trackEditButtons.length > 0) {
     if (resetBtn) resetBtn.addEventListener('click', resetAllAppData);
 
     const maxWidthInput = document.getElementById('max-photo-width-input');
+    // App Limits auto-save (only active for Laurence Wright)
+    const isAdmin = (typeof userProfile !== 'undefined' &&
+                     userProfile && typeof userProfile.name === 'string' &&
+                     userProfile.name.trim() === 'Laurence Wright');
+    if (isAdmin) {
+        const limitInputIds = ['limits-max-surveys', 'limits-max-targets', 'limits-max-finds', 'limits-expiry-date'];
+        limitInputIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', () => {
+                const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {};
+                const v = el.value.trim();
+                if (id === 'limits-max-surveys') limits.maxSurveys = v === '' ? null : (Number.isFinite(+v) ? +v : limits.maxSurveys);
+                if (id === 'limits-max-targets') limits.maxTargets = v === '' ? null : (Number.isFinite(+v) ? +v : limits.maxTargets);
+                if (id === 'limits-max-finds')   limits.maxFinds   = v === '' ? null : (Number.isFinite(+v) ? +v : limits.maxFinds);
+                if (id === 'limits-expiry-date') limits.expiryDate = v === '' ? null : v;
+                if (typeof saveAppLimits === 'function') saveAppLimits(limits);
+                showMessage('Limits saved.', 'success');
+            });
+        });
+    }
+
     const savePhotoBtn = document.getElementById('save-photo-settings-btn');
     if (maxWidthInput) maxWidthInput.value = String(getMaxPhotoWidth() || 0);
     if (savePhotoBtn && maxWidthInput) {
@@ -17972,7 +18120,7 @@ function bootstrapAppLimitsIfMissing() {
         maxSurveys: 3,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-06-01'
+        expiryDate: '2027-06-01'
     };
 
     localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(testerDefaults));
