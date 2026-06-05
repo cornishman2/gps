@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2j
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2w
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3210,35 +3210,61 @@ function getAppTotals() {
 }
 
 async function updateHomeStorageStats() {
-    const usedEl = document.getElementById('home-storage-used');
-    const freeEl = document.getElementById('home-storage-free');
+    const usedEl      = document.getElementById('home-storage-used');
+    const freeEl      = document.getElementById('home-storage-free');
+    const quotaEl     = document.getElementById('home-storage-quota');
+    const breakdownEl = document.getElementById('home-storage-breakdown');
     if (!usedEl || !freeEl) return;
 
-    usedEl.textContent = '—';
-    freeEl.textContent = '—';
+    const bytesToNice = (bytes) => {
+        if (!Number.isFinite(bytes) || bytes < 0) return '—';
+        const kb = 1024, mb = kb * 1024, gb = mb * 1024;
+        if (bytes >= gb) return (bytes / gb).toFixed(2) + ' GB';
+        if (bytes >= mb) return (bytes / mb).toFixed(1) + ' MB';
+        return (bytes / kb).toFixed(0) + ' KB';
+    };
 
+    // Calculate localStorage usage (surveys + finds + settings)
+    let lsBytes = 0;
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            const v = localStorage.getItem(k) || '';
+            lsBytes += (k.length + v.length) * 2; // UTF-16 chars = 2 bytes each
+        }
+    } catch(e) {}
+
+    // Rough breakdown: photos are the bulk of survey/finds data
+    let photoBytes = 0;
+    try {
+        const surveyRaw = localStorage.getItem('geoFindSurveys') || '[]';
+        const findsRaw  = localStorage.getItem('geoFindFinds')   || '[]';
+        // Count base64 photo data (data:image/... strings)
+        const photoMatches = (surveyRaw + findsRaw).match(/data:image\/[^"]+/g) || [];
+        photoBytes = photoMatches.reduce((sum, s) => sum + s.length * 0.75, 0); // base64 → bytes
+    } catch(e) {}
+
+    usedEl.textContent = bytesToNice(lsBytes);
+
+    if (breakdownEl && photoBytes > 0) {
+        const otherBytes = Math.max(0, lsBytes - photoBytes);
+        breakdownEl.textContent =
+            `Photos: ${bytesToNice(photoBytes)}  ·  Survey/Find data: ${bytesToNice(otherBytes)}`;
+    }
+
+    // Browser quota via Storage API
     try {
         if (!navigator.storage || !navigator.storage.estimate) return;
-
         const est = await navigator.storage.estimate();
-        const usage = est && typeof est.usage === 'number' ? est.usage : null;
         const quota = est && typeof est.quota === 'number' ? est.quota : null;
-        if (usage == null || quota == null || quota <= 0) return;
-
-        const bytesToNice = (bytes) => {
-            if (!Number.isFinite(bytes) || bytes < 0) return '—';
-            const kb = 1024;
-            const mb = kb * 1024;
-            const gb = mb * 1024;
-            if (bytes >= gb) return (bytes / gb).toFixed(2) + ' GB';
-            if (bytes >= mb) return (bytes / mb).toFixed(0) + ' MB';
-            return (bytes / kb).toFixed(0) + ' KB';
-        };
-
-        usedEl.textContent = bytesToNice(usage);
-        freeEl.textContent = bytesToNice(Math.max(0, quota - usage));
-    } catch (e) {
-    }
+        const apiUsage = est && typeof est.usage === 'number' ? est.usage : null;
+        if (quota && quota > 0) {
+            if (quotaEl) quotaEl.textContent = bytesToNice(quota);
+            // Use API usage for free calc (more accurate than localStorage estimate)
+            const used = apiUsage != null ? apiUsage : lsBytes;
+            freeEl.textContent = bytesToNice(Math.max(0, quota - used));
+        }
+    } catch(e) {}
 }
 
     function updateActiveNavButtons() {
@@ -5339,11 +5365,11 @@ async function resizeDataUrlToMaxWidth(dataUrl, maxWidth) {
  * Full pipeline: File -> dataUrl -> resized dataUrl (based on Settings)
  */
 async function fileToResizedDataUrl(file) {
-    const maxW = getMaxPhotoWidth();
-    if (!maxW || maxW < 1) {
-        return await fileToDataUrl(file);
-    }
-    // Use createObjectURL to avoid holding two copies of image data in memory
+    // Hard cap to protect against very large photos exhausting browser memory
+    const MAX_CANVAS_PX = 1600;
+    const rawMaxW = getMaxPhotoWidth();
+    const maxW = (rawMaxW && rawMaxW > 0) ? Math.min(rawMaxW, MAX_CANVAS_PX) : MAX_CANVAS_PX;
+
     const objUrl = URL.createObjectURL(file);
     try {
         const img = await new Promise((resolve, reject) => {
@@ -5352,33 +5378,43 @@ async function fileToResizedDataUrl(file) {
             im.onerror = () => reject(new Error('Image decode failed'));
             im.src = objUrl;
         });
+        // Revoke immediately after decode — no longer needed
+        URL.revokeObjectURL(objUrl);
+
         const srcW = img.naturalWidth || img.width;
         const srcH = img.naturalHeight || img.height;
-        if (!srcW || !srcH) return await fileToDataUrl(file);
+        if (!srcW || !srcH) throw new Error('Zero-size image');
+
         const scale = srcW > maxW ? maxW / srcW : 1;
         const dstW = Math.round(srcW * scale);
         const dstH = Math.round(srcH * scale);
+
         const canvas = document.createElement('canvas');
-        canvas.width = dstW;
+        canvas.width  = dstW;
         canvas.height = dstH;
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, dstW, dstH);
-        // Release the object URL before toDataURL to free memory
-        URL.revokeObjectURL(objUrl);
-        canvas.width; // force layout
-        return await new Promise(resolve => canvas.toBlob(
-            blob => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.readAsDataURL(blob);
-            },
-            'image/jpeg', 0.85
-        ));
+
+        // Encode to JPEG blob, then convert to dataURL via FileReader
+        const blob = await new Promise(resolve =>
+            canvas.toBlob(resolve, 'image/jpeg', 0.82)
+        );
+        // Release canvas pixel buffer before reading blob
+        canvas.width = 0;
+        canvas.height = 0;
+
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('FileReader failed'));
+            reader.readAsDataURL(blob);
+        });
     } catch(e) {
-        URL.revokeObjectURL(objUrl);
+        try { URL.revokeObjectURL(objUrl); } catch(_) {}
         console.error('fileToResizedDataUrl failed:', e);
+        // Final fallback — read file directly (no resize)
         return await fileToDataUrl(file);
     }
 }
@@ -7259,7 +7295,7 @@ switch (currentPage) {
 }
             appContent.innerHTML = contentHtml;
             attachPageEventListeners();
-            if (currentPage === 'Home') { setTimeout(() => { updateHomeStorageStats(); }, 0); }
+            if (currentPage === 'Home' || currentPage === 'Settings') { setTimeout(() => { updateHomeStorageStats(); }, 0); }
             updateActiveNavButtons();
 
 }
@@ -11168,59 +11204,6 @@ function renderHomePage() {
 
     <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
 
-    <!-- Totals -->
-    <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
-        <h3 class="text-lg font-bold text-indigo-700 mb-3">Totals (All Surveys)</h3>
-
-        <!-- NEW layout: 2 rows x 3 columns -->
-        <div class="grid grid-cols-3 gap-3">
-            <!-- Row 1: Surveys / Targets / Finds -->
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Surveys</div>
-                <div class="text-2xl font-bold text-gray-800">${totals.totalSurveys}</div>
-            </div>
-
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Targets</div>
-                <div class="text-2xl font-bold text-gray-800">${totals.totalTargets}</div>
-            </div>
-
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Finds</div>
-                <div class="text-2xl font-bold text-gray-800">${totals.totalFinds}</div>
-            </div>
-
-            <!-- Row 2: Tracks / Stakes / Photos -->
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Tracks</div>
-                <div class="text-2xl font-bold text-gray-800">${totalTracks}</div>
-            </div>
-
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Stakes</div>
-                <div class="text-2xl font-bold text-gray-800">${totals.totalStakes}</div>
-            </div>
-
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Photos</div>
-                <div class="text-2xl font-bold text-gray-800">${totalPhotos}</div>
-            </div>
-
-            <!-- Row 3: Storage (browser-managed) -->
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Storage Used</div>
-                <div id="home-storage-used" class="text-2xl font-bold text-gray-800">—</div>
-            </div>
-
-            <div class="dtk-info-box">
-                <div class="dtk-label-upper">Storage Free</div>
-                <div id="home-storage-free" class="text-2xl font-bold text-gray-800">—</div>
-            </div>
-
-            <!-- Spacer to keep the 3-column grid aligned -->
-            <div class="p-3 rounded-lg bg-transparent border border-transparent text-center"></div>
-        </div>
-    </div>
 
     <!-- Open Survey (rendered like any other card, just highlighted) -->
     ${openSurvey
@@ -11635,6 +11618,12 @@ function renderFindsPage() {
         .map(([key, label]) => ({ key, label }))
         .sort((a, b) => (a.key < b.key ? 1 : -1)); // newest first
 
+    // Apply date default only on fresh navigation to Finds
+    if (findsFilter._applyDateDefault) {
+        delete findsFilter._applyDateDefault;
+        if (dateOptions.length > 0) findsFilter.date = dateOptions[0].key;
+    }
+
     const filteredFinds = finds.filter(f => {
         if (findsFilter.query) {
             const q = findsFilter.query.toLowerCase();
@@ -11806,6 +11795,18 @@ function renderFindsPage() {
                         Delete Find
                     </button>
                 </div>
+
+                <!-- New Photo row -->
+                <div class="mt-2">
+                    <button type="button"
+                        class="find-new-photo-btn w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm font-semibold"
+                        data-find-id="${find.id}">
+                        <i class="fas fa-camera mr-2"></i> New Photo
+                    </button>
+                    <input type="file" accept="image/*" capture="environment"
+                        class="find-photo-file-input hidden"
+                        data-find-id="${find.id}">
+                </div>
             </div>
         `;
     }).join('');
@@ -11858,6 +11859,17 @@ function renderFindsPage() {
                         />
                     </div>
                     <div class="flex-1">
+                        <label class="dtk-label-xs" for="finds-survey-select">
+                            Filter by survey
+                        </label>
+                        <select
+                            id="finds-survey-select"
+                            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        >
+                            ${surveyOptionsHtml}
+                        </select>
+                    </div>
+                    <div class="flex-1">
                         <label class="dtk-label-xs" for="finds-type-select">
                             Filter by type
                         </label>
@@ -11869,16 +11881,6 @@ function renderFindsPage() {
                         </select>
                     </div>
                     <div class="flex-1">
-                        <label class="dtk-label-xs" for="finds-survey-select">
-                            Filter by survey
-                        </label>
-                        <select
-                            id="finds-survey-select"
-                            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                        >
-                            ${surveyOptionsHtml}
-                        </select>
-                    <div class="flex-1">
                         <label class="dtk-label-xs" for="finds-date-select">
                             Filter by date
                         </label>
@@ -11888,8 +11890,6 @@ function renderFindsPage() {
                         >
                             ${dateOptionsHtml}
                         </select>
-                    </div>
-
                     </div>
                 </div>
                 <div class="mt-3 flex justify-end">
@@ -12225,6 +12225,18 @@ switch (s) {
             class="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 text-xs sm:text-sm font-semibold">
         Delete
     </button>              </div>
+
+                <!-- Row 4: New Photo -->
+                <div class="mt-2">
+                    <button type="button"
+                        class="target-new-photo-btn w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm font-semibold"
+                        data-target-id="${target.id}" data-survey-id="${surveyId}">
+                        <i class="fas fa-camera mr-2"></i> New Photo
+                    </button>
+                    <input type="file" accept="image/*" capture="environment"
+                        class="target-photo-file-input hidden"
+                        data-target-id="${target.id}" data-survey-id="${surveyId}">
+                </div>
             </div>
         </div>
     `;
@@ -14206,17 +14218,21 @@ ${(() => {
     `;
 })()}
 
-                    ${buildCompassRangeButtonsHtml(getQuickTargetRangesEffective())}
-
-            <!-- STAKE button (creates a marker target with VDI -100) -->
-            <div class="mt-3">
-                  <button
+            <!-- STAKE + Quick Target buttons immediately above the map -->
+            <div class="bg-white p-3 rounded-xl shadow-lg border border-gray-100 mb-2">
+                <button
                     id="stake-target-btn"
                     type="button"
-                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700"
-                    >
+                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700 mb-2">
                     STAKE
-                  </button>
+                </button>
+                <div class="grid grid-cols-5 gap-2 mb-2">
+                    ${buildCompassPhotoBtnsRow(getQuickTargetRangesEffective())}
+                </div>
+                <div class="grid grid-cols-5 gap-2">
+                    ${buildCompassRangeButtonsRow(getQuickTargetRangesEffective())}
+                </div>
+                <input type="file" id="compass-photo-capture-input" accept="image/*" capture="environment" class="hidden">
             </div>
 
             <!-- Map -->
@@ -14311,6 +14327,32 @@ ${(() => {
 function renderSettingsPage() {
     const secondaryColor = 'rgb(var(--color-secondary))';
 
+    // Compute totals for the Totals section
+    const totals = (typeof getAppTotals === 'function') ? getAppTotals() : {};
+    const allSurveysForTotals = Array.isArray(surveys) ? surveys : [];
+    totals.totalTracks = allSurveysForTotals.reduce((sum, s) =>
+        sum + (Array.isArray(s?.tracks) ? s.tracks.length : 0), 0);
+    totals.totalPhotos = (() => {
+        let n = 0;
+        for (const s of allSurveysForTotals) {
+            if (!s) continue;
+            if (Array.isArray(s.photos) && s.photos.length) n += s.photos.length;
+            else if (s.surveyPhotoData) n += 1;
+            for (const t of (Array.isArray(s.targets) ? s.targets : [])) {
+                if (!t || t.deleted) continue;
+                if (Array.isArray(t.photos) && t.photos.length) n += t.photos.length;
+                else if (t.targetPhotoRef || t.targetPhotoData) n += 1;
+            }
+        }
+        const findsArr = Array.isArray(finds) ? finds : [];
+        for (const f of findsArr) {
+            if (!f || f.deleted) continue;
+            if (Array.isArray(f.photos) && f.photos.length) n += f.photos.length;
+            else if (f.findPhotoRef || f.targetPhotoData || f.photoData) n += 1;
+        }
+        return n;
+    })();
+
     const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {
         maxSurveys: 3,
         maxTargets: 50,
@@ -14326,27 +14368,7 @@ function renderSettingsPage() {
     const displayMaxFinds   = valOrBlank(limits.maxFinds);
     const displayExpiryDate = valOrBlank(limits.expiryDate);
 
-    const quickRanges = (typeof loadQuickTargetRanges === 'function') ? loadQuickTargetRanges() : [];
-    const quickTargetRowsHtml = Array.isArray(quickRanges) ? quickRanges.map((r, idx) => {
-        const color = String(r.color || '').toUpperCase();
-        const min = Number(r.min);
-        const max = Number(r.max);
-        const tid = Number(r.targetId);
-        return `
-            <tr class="border-b last:border-b-0">
-                <td class="p-2 font-extrabold whitespace-nowrap"><span class="inline-block w-3 h-3 rounded-full mr-2 align-middle ${getQuickTargetSwatchClass(color)}"></span>${color}</td>
-                <td class="p-2">
-                    <input type="number" id="qtr-min-${idx}" class="w-24 px-2 py-1 border rounded" value="${isFinite(min) ? min : ''}">
-                </td>
-                <td class="p-2">
-                    <input type="number" id="qtr-max-${idx}" class="w-24 px-2 py-1 border rounded" value="${isFinite(max) ? max : ''}">
-                </td>
-                <td class="p-2">
-                    <input type="number" id="qtr-id-${idx}" class="w-28 px-2 py-1 border rounded" value="${isFinite(tid) ? tid : ''}">
-                </td>
-            </tr>
-        `;
-    }).join('') : '';
+
 return `
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-6">Settings & Local Data Management</h2>
@@ -14433,6 +14455,58 @@ return `
   </p>
 </div>
 
+<!-- TOTALS (ALL SURVEYS) -->
+<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
+    <h4 class="text-lg font-semibold text-indigo-700 mb-3">Totals (All Surveys)</h4>
+    <div class="grid grid-cols-3 gap-3">
+        <div class="dtk-info-box">
+            <div class="dtk-label-upper">Surveys</div>
+            <div class="text-2xl font-bold text-gray-800">${totals.totalSurveys}</div>
+        </div>
+        <div class="dtk-info-box">
+            <div class="dtk-label-upper">Targets</div>
+            <div class="text-2xl font-bold text-gray-800">${totals.totalTargets}</div>
+        </div>
+        <div class="dtk-info-box">
+            <div class="dtk-label-upper">Finds</div>
+            <div class="text-2xl font-bold text-gray-800">${totals.totalFinds}</div>
+        </div>
+        <div class="dtk-info-box">
+            <div class="dtk-label-upper">Tracks</div>
+            <div class="text-2xl font-bold text-gray-800">${totals.totalTracks}</div>
+        </div>
+        <div class="dtk-info-box">
+            <div class="dtk-label-upper">Stakes</div>
+            <div class="text-2xl font-bold text-gray-800">${totals.totalStakes}</div>
+        </div>
+        <div class="dtk-info-box">
+            <div class="dtk-label-upper">Photos</div>
+            <div class="text-2xl font-bold text-gray-800">${totals.totalPhotos}</div>
+        </div>
+    </div>
+    <div class="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+        <div class="dtk-label-upper mb-2">App Storage</div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+            <div>
+                <div class="text-xs text-gray-500 mb-1">Used by Detekta</div>
+                <div id="home-storage-used" class="text-lg font-bold text-gray-800">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-gray-500 mb-1">Available</div>
+                <div id="home-storage-free" class="text-lg font-bold text-green-700">—</div>
+            </div>
+            <div>
+                <div class="text-xs text-gray-500 mb-1">Browser Quota</div>
+                <div id="home-storage-quota" class="text-lg font-bold text-gray-500">—</div>
+            </div>
+        </div>
+        <div class="mt-2 text-xs text-gray-500 text-center" id="home-storage-breakdown"></div>
+        <div class="mt-1 text-xs text-gray-400 text-center">
+            Browser quota is a portion of device storage allocated to this app by Android.
+        </div>
+    </div>
+</div>
+
 <!-- APP LIMITS (TESTER BUILD) - READ ONLY -->
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
   <div class="flex items-start justify-between gap-3">
@@ -14498,54 +14572,6 @@ return `
   </div>
 </div>
 
-<!-- QUICK TARGET RANGE SETTINGS -->
-<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
-  <h4 class="text-lg font-bold text-gray-800 mb-2">Quick Target Buttons</h4>
-  <p class="text-sm text-gray-600 mb-3">
-    Configure the five rainbow buttons on the Map screen. Each row sets a VDI range and a saved Target ID for that colour. Use <b>Apply preset for my detector</b> to load ranges scaled to your machine's VDI scale.
-  </p>
-
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="text-left p-2 border-b">Colour</th>
-          <th class="text-left p-2 border-b">Min ID</th>
-          <th class="text-left p-2 border-b">Max ID</th>
-          <th class="text-left p-2 border-b">Saved Target ID</th>
-        </tr>
-      </thead>
-      <tbody id="quick-target-ranges-tbody">
-        ${quickTargetRowsHtml || ''}
-      </tbody>
-    </table>
-  </div>
-
-<div class="flex flex-wrap gap-2 mt-3">
-    <button type="button"
-            id="quick-target-save-btn" onclick="saveQuickTargetSettingsFromUI()"
-            class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-indigo-700 transition">
-      Save
-    </button>
-
-    <button type="button"
-            id="quick-target-reset-btn" onclick="resetQuickTargetSettingsToDefaults()"
-            class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg shadow hover:bg-gray-300 transition">
-      Reset
-    </button>
-
-    <button type="button"
-            id="quick-target-preset-btn" onclick="applyDetectorPreset(userProfile && userProfile.detector)"
-            class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow hover:bg-teal-700 transition">
-      Apply preset for my detector
-    </button>
-  </div>
-
-  <p id="quick-target-validation-msg" class="text-xs text-red-600 mt-2 hidden"></p>
-  <p class="text-xs text-gray-500 mt-2">
-    Edits apply instantly to the Map rainbow buttons. Tap <b>Save</b> to keep them permanently.
-  </p>
-</div>
 
 <!-- Danger Zone: Reset All Data -->
             <div class="mt-8 border-t border-gray-300 pt-6">
@@ -16477,6 +16503,30 @@ function attachNavDelegationOnce() {
 
         const targetPage = btn.dataset.page;
         if (targetPage && targetPage !== currentPage) {
+            if (targetPage === 'Finds') {
+                // Apply smart defaults each time user navigates to Finds
+                const openSurveyForFinds = surveys.find(s => s.status === 'Open');
+                if (openSurveyForFinds) {
+                    findsFilter.surveyId = openSurveyForFinds.id;
+                    // Find the most recent date for finds in the open survey only
+                    const openSurveyFinds = finds.filter(f => f && !f.deleted && f.surveyId === openSurveyForFinds.id);
+                    const getTs = f => f?.dateCreated ?? f?.createdAt ?? f?.time ?? f?.dateLastChanged ?? 0;
+                    const latestTs = openSurveyFinds.reduce((best, f) => Math.max(best, getTs(f) || 0), 0);
+                    if (latestTs > 0) {
+                        const d = new Date(latestTs);
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        findsFilter.date = `${y}-${m}-${day}`;
+                    } else {
+                        findsFilter.date = 'All';
+                    }
+                    findsFilter._applyDateDefault = false;
+                } else {
+                    findsFilter.date = 'All';
+                    findsFilter._applyDateDefault = true;
+                }
+            }
             currentPage = targetPage;
             render();
         }
@@ -16863,6 +16913,101 @@ if (stakeBtn) {
     document.querySelectorAll('.find-card-delete-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteFind(btn.getAttribute('data-find-id')));
     });
+    document.querySelectorAll('.find-new-photo-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const findId = btn.getAttribute('data-find-id');
+            const inp = document.querySelector(`.find-photo-file-input[data-find-id="${findId}"]`);
+            if (inp) { inp.value = ''; inp.click(); }
+        });
+    });
+    document.querySelectorAll('.find-photo-file-input').forEach(inp => {
+        inp.addEventListener('change', async (e) => {
+            const file = inp.files && inp.files[0];
+            if (!file) return;
+            const findId = inp.getAttribute('data-find-id');
+            inp.value = '';
+            const find = finds.find(f => f.id === findId);
+            if (!find) { showMessage('Find not found.', 'error'); return; }
+            try {
+                showMessage('Processing photo…', 'info');
+                const resized = await fileToResizedDataUrl(file);
+                if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                    if (!Array.isArray(find.photos)) find.photos = [];
+                    find.photos.push(resized);
+                    find.targetPhotoRef  = resized;
+                    find.targetPhotoData = resized;
+                    find.dateLastChanged = Date.now();
+                    saveFindsToLocalStorage();
+                    showMessage('Photo added to find.', 'success');
+                    render();
+                }
+            } catch(err) {
+                console.error('Find new photo error:', err);
+                showMessage('Photo could not be saved.', 'error');
+            }
+        });
+    });
+
+// ── Compass photo buttons ──────────────────────────────────────────
+let _compassPhotoPendingRange = null;
+
+document.querySelectorAll('.compass-photo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const min   = btn.getAttribute('data-min');
+        const max   = btn.getAttribute('data-max');
+        const tid   = btn.getAttribute('data-targetid');
+        const color = btn.getAttribute('data-color');
+        _compassPhotoPendingRange = { min, max, targetId: tid, color };
+        const inp = document.getElementById('compass-photo-capture-input');
+        if (inp) { inp.value = ''; inp.click(); }
+    });
+});
+
+const compassPhotoInput = document.getElementById('compass-photo-capture-input');
+if (compassPhotoInput) {
+    compassPhotoInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file || !_compassPhotoPendingRange) return;
+        const r = _compassPhotoPendingRange;
+        _compassPhotoPendingRange = null;
+
+        // Determine VDI
+        const tid = Number(r.targetId);
+        const min = Number(r.min);
+        const max = Number(r.max);
+        let vdi = isFinite(tid) && tid !== '' ? tid
+                : (isFinite(min) && isFinite(max) ? randomIntInclusive(min, max) : 0);
+
+        // Create the target first
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        if (!openSurvey) { showMessage('No open survey to log a target.', 'error'); return; }
+
+        const ok = quickLogTargetByVDI(vdi, `${r.color} camera`, { type: 'Unidentified' });
+        if (!ok) return;
+
+        // Attach photo to the just-created target (it was unshifted to index 0)
+        const target = openSurvey.targets[0];
+        if (!target) return;
+
+        try {
+            showMessage('Processing photo…', 'info');
+            const resized = await fileToResizedDataUrl(file);
+            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                if (!Array.isArray(target.photos)) target.photos = [];
+                target.photos.push(resized);
+                target.targetPhotoRef  = resized;
+                target.targetPhotoData = resized;
+                openSurvey.dateLastChanged = Date.now();
+                saveSurveysToLocalStorage();
+                showMessage(`Target logged with photo (${r.color} ${min}→${max})`, 'success');
+                updateMapWithUserLocationAndRender();
+            }
+        } catch(err) {
+            console.error('Compass photo capture error:', err);
+            showMessage('Photo could not be saved, but target was logged.', 'error');
+        }
+    });
+}
 
 document.querySelectorAll('.compass-range-btn').forEach(btn => {
     if (btn.classList.contains('tile-grid-range-btn')) return;
@@ -16906,7 +17051,50 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
             if (btn && typeof handleTargetAction === 'function') {
                 handleTargetAction(btn);
             }
+
+            // New Photo button on target cards
+            const photoBtn = e.target.closest('.target-new-photo-btn');
+            if (photoBtn) {
+                const targetId = photoBtn.getAttribute('data-target-id');
+                const inp = appContent.querySelector(
+                    `.target-photo-file-input[data-target-id="${targetId}"]`
+                );
+                if (inp) { inp.value = ''; inp.click(); }
+            }
         };
+
+        // Handle photo file selected for a target card
+        appContent.addEventListener('change', async (e) => {
+            const inp = e.target.closest('.target-photo-file-input');
+            if (!inp) return;
+            const file = inp.files && inp.files[0];
+            if (!file) return;
+            const targetId  = inp.getAttribute('data-target-id');
+            const surveyId  = inp.getAttribute('data-survey-id');
+            inp.value = '';
+            const survey = surveys.find(s => s.id === surveyId);
+            if (!survey) { showMessage('Survey not found.', 'error'); return; }
+            const target = Array.isArray(survey.targets)
+                ? survey.targets.find(t => t.id === targetId) : null;
+            if (!target) { showMessage('Target not found.', 'error'); return; }
+            try {
+                showMessage('Processing photo…', 'info');
+                const resized = await fileToResizedDataUrl(file);
+                if (typeof resized === 'string' && resized.startsWith('data:image/')) {
+                    if (!Array.isArray(target.photos)) target.photos = [];
+                    target.photos.push(resized);
+                    target.targetPhotoRef  = resized;
+                    target.targetPhotoData = resized;
+                    survey.dateLastChanged = Date.now();
+                    saveSurveysToLocalStorage();
+                    showMessage('Photo added to target.', 'success');
+                    render();
+                }
+            } catch(err) {
+                console.error('Target new photo error:', err);
+                showMessage('Photo could not be saved.', 'error');
+            }
+        });
     }
 
         const scanTargetQrBtn = document.getElementById('scan-target-qr-btn');
@@ -17165,6 +17353,54 @@ function getQuickTargetRangesEffective() {
         if (Array.isArray(quickTargetRangesDraft) && quickTargetRangesDraft.length) return quickTargetRangesDraft;
     } catch (e) {}
     return loadQuickTargetRanges();
+}
+
+function buildCompassPhotoBtnsRow(ranges) {
+    const safe = Array.isArray(ranges) ? ranges.slice(0, 5) : [];
+    const cls = {
+        BLUE:  'bg-blue-600 hover:bg-blue-700 active:bg-blue-800',
+        SKY:   'bg-sky-500 hover:bg-sky-600 active:bg-sky-700',
+        GREEN: 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800',
+        AMBER: 'bg-amber-500 hover:bg-amber-600 active:bg-amber-700',
+        RED:   'bg-red-600 hover:bg-red-700 active:bg-red-800'
+    };
+    return safe.map(r => {
+        const color = String(r?.color || '').toUpperCase();
+        const min   = isFinite(Number(r?.min)) ? Number(r.min) : '';
+        const max   = isFinite(Number(r?.max)) ? Number(r.max) : '';
+        const tid   = isFinite(Number(r?.targetId)) ? Number(r.targetId) : '';
+        const classes = cls[color] || 'bg-gray-500 hover:bg-gray-600';
+        return `<button type="button"
+            class="compass-photo-btn py-3 rounded-lg text-white font-extrabold text-sm shadow ${classes}"
+            data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
+            title="Photo + target (${color} range ${min}→${max})">
+            <i class="fas fa-camera"></i>
+        </button>`;
+    }).join('');
+}
+
+function buildCompassRangeButtonsRow(ranges) {
+    const safe = Array.isArray(ranges) ? ranges.slice(0, 5) : [];
+    const cls = {
+        BLUE:  'bg-blue-600 hover:bg-blue-700',
+        SKY:   'bg-sky-500 hover:bg-sky-600',
+        GREEN: 'bg-emerald-600 hover:bg-emerald-700',
+        AMBER: 'bg-amber-500 hover:bg-amber-600',
+        RED:   'bg-red-600 hover:bg-red-700'
+    };
+    return safe.map(r => {
+        const color = String(r?.color || '').toUpperCase();
+        const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+        const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+        const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+        const rangeLabel = (min !== '' && max !== '') ? `${min}→${max}` : '—';
+        const classes = cls[color] || 'bg-gray-500 hover:bg-gray-600';
+        return `<button type="button"
+            class="compass-range-btn py-3 rounded-lg text-white font-extrabold text-xs shadow ${classes}"
+            data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}">
+            ${rangeLabel}
+        </button>`;
+    }).join('');
 }
 
 function buildCompassRangeButtonsHtml(ranges) {
