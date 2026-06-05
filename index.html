@@ -2232,87 +2232,32 @@ function paintTileCellUnderUserWithColour(colourName) {
 
 function attachTileGridRainbowButtonsOnce() {
     if (tileGridRainbowButtonsAttached) return;
+    const btns = Array.from(document.querySelectorAll('.tile-grid-range-btn'));
+    if (!btns.length) return;
 
-    // Use event delegation on appContent so it survives page re-renders
-    const appContent = document.getElementById('app-content');
-    if (!appContent) return;
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const min = Number(btn.getAttribute('data-min'));
+            const max = Number(btn.getAttribute('data-max'));
+            const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+            const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+            const colour = (btn.getAttribute('data-color') || '').toString().trim();
 
-    appContent.addEventListener('click', (e) => {
-        const btn = e.target.closest('.tile-grid-range-btn');
-        if (!btn) return;
-        const min = Number(btn.getAttribute('data-min'));
-        const max = Number(btn.getAttribute('data-max'));
-        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
-        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
-        const colour = (btn.getAttribute('data-color') || '').toString().trim();
+            {
+                let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
 
-        let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
-        if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
-            if (vdi < min) vdi = min;
-            if (vdi > max) vdi = max;
-        }
+                if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+                    if (vdi < min) vdi = min;
+                    if (vdi > max) vdi = max;
+                }
 
-        quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
-        paintTileCellUnderUserWithColour(colour);
-        try { drawTileGrid(); } catch (e) {}
-    });
+                quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
 
-    // Tile grid camera buttons
-    let _tileGridPhotoPendingRange = null;
-    appContent.addEventListener('click', (e) => {
-        const btn = e.target.closest('.tile-grid-camera-btn');
-        if (!btn) return;
-        const min    = btn.getAttribute('data-min');
-        const max    = btn.getAttribute('data-max');
-        const tid    = btn.getAttribute('data-targetid');
-        const color  = btn.getAttribute('data-color');
-        _tileGridPhotoPendingRange = { min, max, targetId: tid, color };
-        const inp = document.getElementById('tile-grid-photo-input');
-        if (inp) { inp.value = ''; inp.click(); }
-    });
+                paintTileCellUnderUserWithColour(colour);
 
-    appContent.addEventListener('change', async (e) => {
-        const inp = e.target.closest('#tile-grid-photo-input');
-        if (!inp) return;
-        const file = inp.files && inp.files[0];
-        if (!file || !_tileGridPhotoPendingRange) return;
-        const r = _tileGridPhotoPendingRange;
-        _tileGridPhotoPendingRange = null;
-
-        const tid = Number(r.targetId);
-        const min = Number(r.min);
-        const max = Number(r.max);
-        let vdi = isFinite(tid) && r.targetId !== '' ? tid
-                : (isFinite(min) && isFinite(max) ? randomIntInclusive(min, max) : 0);
-
-        const openSurvey = surveys.find(s => s.status === 'Open');
-        if (!openSurvey) { showMessage('No open survey.', 'error'); return; }
-
-        const ok = quickLogTargetByVDI(vdi, `${r.color} camera`, { type: 'Unidentified' });
-        if (!ok) return;
-
-        paintTileCellUnderUserWithColour(r.color);
-        try { drawTileGrid(); } catch(err) {}
-
-        const target = openSurvey.targets[0];
-        if (!target) return;
-        try {
-            showMessage('Processing photo…', 'info');
-            const resized = await fileToResizedDataUrl(file);
-            if (typeof resized === 'string' && resized.startsWith('data:image/')) {
-                if (!Array.isArray(target.photos)) target.photos = [];
-                target.photos.push(resized);
-                target.targetPhotoRef  = resized;
-                target.targetPhotoData = resized;
-                openSurvey.dateLastChanged = Date.now();
-                saveSurveysToLocalStorage();
-                showMessage(`Target logged with photo (${r.color} ${min}→${max})`, 'success');
-                updateMapWithUserLocationAndRender();
+                try { drawTileGrid(); } catch (e) {}
             }
-        } catch(err) {
-            console.error('Tile grid photo error:', err);
-            showMessage('Photo could not be saved, but target was logged.', 'error');
-        }
+        });
     });
 
     tileGridRainbowButtonsAttached = true;
@@ -2545,58 +2490,20 @@ function drawTileGrid() {
         ctx.stroke();
     }
 
-    // Helper: parse lat/lon from either direct fields or coordinates string
-    function parseItemCoords(item) {
-        if (!item) return null;
-        // Direct lat/lon fields
-        let lat = Number(item.lat ?? item.latitude);
-        let lon = Number(item.lon ?? item.longitude);
-        if (isFinite(lat) && isFinite(lon)) return { lat, lon };
-        // Coordinates string "lat, lon"
-        const coordStr = String(item.coordinates || item.coords || '');
-        if (coordStr) {
-            const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
-            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
-                return { lat: parts[0], lon: parts[1] };
-            }
-        }
-        return null;
-    }
-
-    // Draw tracks
-    const visibleTracksForGrid = Array.isArray(survey.tracks)
-        ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
-        : [];
-    for (const track of visibleTracksForGrid) {
-        const trackColor = track.color || '#000000';
-        ctx.beginPath();
-        ctx.strokeStyle = trackColor;
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.75;
-        let started = false;
-        for (const p of track.points) {
-            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
-            const tx = ((p.lon - lon0) * mPerDegLon + (sizeM / 2)) / sizeM * px;
-            const ty = ((sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * px;
-            if (!started) { ctx.moveTo(tx, ty); started = true; }
-            else ctx.lineTo(tx, ty);
-        }
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-    }
-
     // Draw targets
     for (const t of allTargets) {
-        const c = parseItemCoords(t);
-        if (!c) continue;
+        const lat = Number(t.lat ?? t.latitude);
+        const lon = Number(t.lon ?? t.longitude);
+        if (!isFinite(lat) || !isFinite(lon)) continue;
         const isStakePin = String(t.vdi).trim() === '-100';
         if (isStakePin) {
-            drawGridPin(c.lat, c.lon, PIN_COLORS.stake, true);
+            drawGridPin(lat, lon, PIN_COLORS.stake, true);
         } else {
             const st = (t.status || 'not dug').toLowerCase();
             if (st === 'ignore') {
-                drawGridPin(c.lat, c.lon, PIN_COLORS.target['ignore'], false);
+                drawGridPin(lat, lon, PIN_COLORS.target['ignore'], false);
             } else {
+                // Use VDI range colour, fall back to dig-status colour
                 const vdiColorClass = (typeof getVdiPinColor === 'function') ? getVdiPinColor(t.vdi) : null;
                 const vdiColorMap = {
                     'bg-blue-600':    'rgba(37,99,235,0.95)',
@@ -2608,17 +2515,18 @@ function drawTileGrid() {
                 const color = vdiColorClass
                     ? (vdiColorMap[vdiColorClass] || PIN_COLORS.target[st] || PIN_COLORS.target['not dug'])
                     : (PIN_COLORS.target[st] || PIN_COLORS.target['not dug']);
-                drawGridPin(c.lat, c.lon, color, false);
+                drawGridPin(lat, lon, color, false);
             }
         }
     }
 
     // Draw finds
     for (const f of allFindsForGrid) {
-        const c = parseItemCoords(f);
-        if (!c) continue;
+        const lat = Number(f.lat ?? f.latitude);
+        const lon = Number(f.lon ?? f.longitude);
+        if (!isFinite(lat) || !isFinite(lon)) continue;
         const color = PIN_COLORS.find[f.findType || f.type] || PIN_COLORS.findDefault;
-        drawGridPin(c.lat, c.lon, color, false);
+        drawGridPin(lat, lon, color, false);
     }
 
 if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
@@ -14422,27 +14330,8 @@ ${(() => {
                     ? (Number(_tile.centerLat).toFixed(6) + ', ' + Number(_tile.centerLon).toFixed(6))
                     : 'Not set';
 
-                // Camera buttons (same colours, same order)
-                const _cameraButtons = _ranges.map(function(r) {
-                    const color = String(r && r.color || '').toUpperCase();
-                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
-                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
-                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
-                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
-                    return '<button type="button"'
-                        + ' class="tile-grid-camera-btn dtk-rainbow-btn ' + cls + '"'
-                        + ' data-min="' + min + '"'
-                        + ' data-max="' + max + '"'
-                        + ' data-targetid="' + tid + '"'
-                        + ' data-color="' + color + '"'
-                        + ' title="Photo + target (' + color + ' ' + min + '→' + max + ')">'
-                        + '<i class="fas fa-camera"></i></button>';
-                }).join('');
-
                 const _rainbowHtml = _rainbowButtons
-                    ? '<div class="grid grid-cols-5 gap-2 mb-2" id="tile-grid-camera-buttons">' + _cameraButtons + '</div>'
-                    + '<input type="file" id="tile-grid-photo-input" accept="image/*" capture="environment" class="hidden">'
-                    + '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
+                    ? '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
                     : '<div id="tile-grid-rainbow-buttons"></div>';
 
                 return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
@@ -17171,9 +17060,6 @@ if (compassPhotoInput) {
     });
 }
 
-// Guard: only attach once — these buttons are static DOM, not re-rendered
-if (!window._compassRangeBtnsAttached) {
-    window._compassRangeBtnsAttached = true;
 document.querySelectorAll('.compass-range-btn').forEach(btn => {
     if (btn.classList.contains('tile-grid-range-btn')) return;
     btn.addEventListener('click', () => {
@@ -17194,7 +17080,6 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
         }
     });
 });
-} // end _compassRangeBtnsAttached guard
 
     try { attachLiveQuickTargetSettingsListeners(); } catch (e) {}
 
@@ -17230,8 +17115,7 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
         };
 
         // Handle photo file selected for a target card
-        // Use .onchange (assignment) not addEventListener so re-renders replace rather than stack
-        appContent.onchange = async (e) => {
+        appContent.addEventListener('change', async (e) => {
             const inp = e.target.closest('.target-photo-file-input');
             if (!inp) return;
             const file = inp.files && inp.files[0];
@@ -17261,7 +17145,7 @@ document.querySelectorAll('.compass-range-btn').forEach(btn => {
                 console.error('Target new photo error:', err);
                 showMessage('Photo could not be saved.', 'error');
             }
-        };
+        });
     }
 
         const scanTargetQrBtn = document.getElementById('scan-target-qr-btn');
