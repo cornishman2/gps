@@ -10726,7 +10726,6 @@ case 'edit': {
     }
 
     navigationTargetId = targetId;
-    alert('handleMapTargetClick running. navigationTargetId = ' + navigationTargetId);
 
     if (!navSession) {
         navSession = {};
@@ -12713,7 +12712,7 @@ const toPercent = (x, y) => {
                     class="absolute map-pin"
                     style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${(t.description || '').replace(/"/g,'&quot;')} (${(t.type || '').toLowerCase()==='find' || t.isFind ? 'Find' : 'Target'} ID: ${t.vdi || ''})"
-                    onclick="alert('pin clicked id=[' + '${t.id || ''}' + ']'); handleMapTargetClick(event, '${t.id || ''}');"
+                    onclick="handleMapTargetClick(event, '${t.id || ''}')" 
                 >
                     <div class="relative">
                         ${extraRing}
@@ -13352,12 +13351,7 @@ const toPercent = (x, y) => {
 
 function toggleMapFullscreen(event) {
     if (event && event.target && event.target.closest) {
-        const pin = event.target.closest('.map-pin');
-        if (pin) {
-            alert('Map tapped. Hit a .map-pin div. id on pin: ' + pin.getAttribute('onclick'));
-            return;
-        }
-        if (event.target.closest('.map-zoom-controls') || event.target.closest('button')) {
+        if (event.target.closest('.map-zoom-controls') || event.target.closest('.map-pin') || event.target.closest('button')) {
             return;
         }
     }
@@ -13802,7 +13796,6 @@ function renderTurnGuidanceSimple(a, b, c) {
 }
 
  function renderNavigationPanel(openSurvey) {
-    alert('renderNavigationPanel: navigationTargetId = ' + navigationTargetId);
     if (!navigationTargetId) {
         return `
             <div class="bg-white p-4 rounded-xl shadow-md border border-dashed border-gray-300 mb-6">
@@ -13820,9 +13813,7 @@ function renderTurnGuidanceSimple(a, b, c) {
     const target =
         openSurvey.targets.find(t => String(t.id) === String(navigationTargetId))
         || (Array.isArray(finds) ? finds : []).find(f =>
-            f &&
-            String(f.id) === String(navigationTargetId) &&
-            String(f.surveyId) === String(openSurvey.id)
+            f && String(f.id) === String(navigationTargetId)
         );
 
     if (!target) {
