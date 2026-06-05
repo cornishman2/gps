@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12906,16 +12906,7 @@ const toPercent = (x, y) => {
 
     if (navigationTargetId) {
         const navTarget = parsedCoords.find(t => t.id === navigationTargetId);
-        alert(
-            'NAV LINE DIAGNOSTICS\n' +
-            'navigationTargetId: ' + navigationTargetId + '\n' +
-            'parsedCoords count: ' + parsedCoords.length + '\n' +
-            'navTarget found: ' + !!navTarget + '\n' +
-            'userCoord: ' + JSON.stringify(userCoord) + '\n' +
-            'navCoordsOrNull: ' + JSON.stringify(navCoordsOrNull) + '\n' +
-            'smoothedUserCoords: ' + JSON.stringify(smoothedUserCoords) + '\n' +
-            'currentUserCoords: ' + JSON.stringify(currentUserCoords)
-        );
+
         if (navTarget) {
             navTargetLat = navTarget.lat;
             navTargetLon = navTarget.lon;
@@ -12950,14 +12941,17 @@ const toPercent = (x, y) => {
         const linePct = toPercent(lineMeters.x, lineMeters.y);
 
         navLineHtml = `
-            <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 15;">
+            <svg class="absolute inset-0 w-full h-full pointer-events-none"
+                 viewBox="0 0 100 100" preserveAspectRatio="none"
+                 style="z-index: 15;">
                 <line
-                    x1="${linePct.xPct.toFixed(2)}%"
-                    y1="${linePct.yPct.toFixed(2)}%"
-                    x2="${navTargetXPercent.toFixed(2)}%"
-                    y2="${navTargetYPercent.toFixed(2)}%"
+                    x1="${linePct.xPct.toFixed(2)}"
+                    y1="${linePct.yPct.toFixed(2)}"
+                    x2="${navTargetXPercent.toFixed(2)}"
+                    y2="${navTargetYPercent.toFixed(2)}"
                     stroke="rgba(239, 68, 68, 0.9)"
-                    stroke-width="2"
+                    stroke-width="0.8"
+                    vector-effect="non-scaling-stroke"
                 />
             </svg>
         `;
