@@ -106,7 +106,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 track labels
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 - photo buttons
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -7647,7 +7647,7 @@ function quickLogTargetByVDI(raw, sourceLabel = '', opts = {}) {
 
         photos: [],
         targetPhotoRef: '',
-        targetPhotoData: ''
+        targetPhotoData: opts.targetPhotoData || ''
     };
 
     if (!Array.isArray(openSurvey.targets)) openSurvey.targets = [];
@@ -8165,6 +8165,7 @@ function renderExportPage() {
                 </p>
                 <div class="mb-3">
                     <input type="file" id="import-survey-with-photos-input" accept=".zip,.json" class="hidden" onchange="handleSurveyWithPhotosImport(event)">
+    <input type="file" id="quick-photo-target-input" accept="image/*" capture="environment" class="hidden" onchange="handleQuickPhotoTargetSelected(event)">
                     <button onclick="document.getElementById('import-survey-with-photos-input').click()"
                             class="w-full bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-emerald-700 transition">
                         <i class="fas fa-upload mr-1"></i> Select File & Import
@@ -14355,6 +14356,7 @@ ${(() => {
 })()}
 
   
+                    ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
                     ${buildCompassRangeButtonsHtml(getQuickTargetRangesEffective())}
 
             <!-- STAKE button (creates a marker target with VDI -100) -->
@@ -17547,6 +17549,105 @@ function getQuickTargetRangesEffective() {
     return loadQuickTargetRanges();
 }
 
+function buildCompassPhotoBtnsHtml(ranges) {
+    const safe = Array.isArray(ranges) ? ranges.slice(0, 5) : [];
+    const cls = {
+        BLUE:  'bg-blue-600 hover:bg-blue-700',
+        SKY:   'bg-sky-500 hover:bg-sky-600',
+        GREEN: 'bg-emerald-600 hover:bg-emerald-700',
+        AMBER: 'bg-amber-500 hover:bg-amber-600',
+        RED:   'bg-red-600 hover:bg-red-700'
+    };
+
+    const btns = safe.map((r, idx) => {
+        const color = String(r?.color || '').toUpperCase();
+        const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+        const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+        const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+        const classes = cls[color] || 'bg-gray-500 hover:bg-gray-600';
+
+        return `
+            <button type="button"
+                class="compass-photo-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow ${classes}"
+                data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
+                onclick="triggerQuickPhotoTarget(this)">
+                <i class="fas fa-camera"></i>
+            </button>
+        `;
+    }).join('');
+
+    return `
+        <!-- Quick photo+target buttons -->
+        <div class="bg-white px-3 pt-3 pb-1 rounded-t-xl shadow-lg border border-gray-100 border-b-0 mb-0">
+            <div class="grid grid-cols-5 gap-2">
+                ${btns}
+            </div>
+        </div>
+    `;
+}
+
+let _quickPhotoTargetPending = null;
+
+function triggerQuickPhotoTarget(btn) {
+    const min   = btn.getAttribute('data-min');
+    const max   = btn.getAttribute('data-max');
+    const tid   = btn.getAttribute('data-targetid');
+    const color = btn.getAttribute('data-color');
+    _quickPhotoTargetPending = { min, max, targetId: tid, color };
+    const inp = document.getElementById('quick-photo-target-input');
+    if (inp) { inp.value = ''; inp.click(); }
+}
+
+async function handleQuickPhotoTargetSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !_quickPhotoTargetPending) return;
+
+    const p = _quickPhotoTargetPending;
+    _quickPhotoTargetPending = null;
+
+    const min = Number(p.min);
+    const max = Number(p.max);
+    const preferred = isFinite(Number(p.targetId)) ? Number(p.targetId) : NaN;
+    let vdi = isFinite(preferred) ? preferred : (typeof randomIntInclusive === 'function' ? randomIntInclusive(min, max) : min);
+    if (isFinite(min) && isFinite(max)) {
+        if (vdi < min) vdi = min;
+        if (vdi > max) vdi = max;
+    }
+
+    // Resize and convert photo to base64
+    let photoData = '';
+    try {
+        photoData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxW = 1200;
+                    const scale = Math.min(1, maxW / img.width);
+                    const canvas = document.createElement('canvas');
+                    canvas.width  = Math.round(img.width  * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.82));
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    } catch(err) {
+        showMessage('Photo could not be read.', 'error');
+        return;
+    }
+
+    // Log the target with the photo
+    quickLogTargetByVDI(vdi, `${p.color} ${min}→${max}`, {
+        type: 'Unidentified',
+        targetPhotoData: photoData
+    });
+}
+
 function buildCompassRangeButtonsHtml(ranges) {
     const safe = Array.isArray(ranges) ? ranges.slice(0, 5) : [];
     const cls = {
@@ -17576,7 +17677,7 @@ function buildCompassRangeButtonsHtml(ranges) {
 
     return `
         <!-- Quick range buttons (rainbow) -->
-        <div class="bg-white p-3 rounded-xl shadow-lg border border-gray-100 mb-4">
+        <div class="bg-white px-3 pb-3 pt-2 rounded-b-xl shadow-lg border border-gray-100 border-t-0 mb-4">
             <div class="grid grid-cols-5 gap-2">
                 ${btns}
             </div>
@@ -18085,7 +18186,7 @@ document.addEventListener('click', function(e) {
     <option value="Rutus Alter 71">
     <option value="Rutus Argo">
     <option value="Teknetics Eurotek Pro">
-    <option value="2Teknetics T2">
+    <option value="Teknetics T2">
     <option value="White's MXT Pro">
     <option value="White's Spectra V3i">
     <option value="XP Deus II">
