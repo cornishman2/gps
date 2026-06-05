@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -297,211 +297,292 @@ summary {
         <div class="modal-content bg-white p-6 shadow-2xl">
             <h3 class="text-xl font-bold text-primary mb-4">Create New Survey</h3>
             <form id="new-survey-form">
+                <div class="mb-4">
+                    <label for="survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
+                    <input type="text" id="survey-name" name="surveyName" required
+                           class="dtk-input">
+                </div>
+                <div class="mb-4">
+                    <label for="survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
+                    <textarea id="survey-description" name="surveyDescription" rows="3"
+                              class="dtk-input"></textarea>
+                </div>
 
-                <!-- ── Section 1: Survey Details ── -->
-                <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Survey Details</h4>
-                    <div class="mb-3">
-                        <label for="survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
-                        <input type="text" id="survey-name" name="surveyName" required class="dtk-input">
-                    </div>
-                    <div class="mb-3">
-                        <label for="survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
-                        <textarea id="survey-description" name="surveyDescription" rows="3" class="dtk-input"></textarea>
-                    </div>
-                    <!-- Survey Photo -->
+            <!-- Additional Survey Details (all optional) -->
+            <div class="mt-6 border-t pt-4">
+                <h4 class="text-lg font-semibold text-gray-800 mb-3">Permission &amp; Site Details (optional)</h4>
+
+                <!-- 1) Permission & Legality -->
+                <div class="mb-4">
+                    <label for="survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
+                    <input type="text" id="survey-permission-from" name="permissionFrom"
+                           class="dtk-input"
+                           placeholder="e.g. Farmer Smith, National Trust, Council" />
+                </div>
+
+                <div class="mb-4">
+                    <label for="survey-permission-type" class="block text-sm font-medium text-gray-700">Permission Type</label>
+                    <select id="survey-permission-type" name="permissionType"
+                            class="dtk-input">
+                        <option value="">(blank)</option>
+                        <option>Written</option>
+                        <option>Verbal</option>
+                        <option>Club / Rally</option>
+                        <option>Open access</option>
+                    </select>
+                </div>
+
+                <div class="dtk-grid-2col">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Survey Photo (optional)</label>
-                        <p id="new-survey-photo-status" class="text-xs text-gray-500 mt-1">No photo captured yet.</p>
-                        <div id="new-survey-photo-preview-wrapper" class="mt-2 hidden">
-                            <img id="new-survey-photo-preview" alt="Survey photo preview"
-                                 class="w-full max-h-48 object-cover rounded-lg border border-gray-200"/>
-                        </div>
-                        <input type="hidden" id="new-survey-photo-data" name="surveyPhotoData">
-                        <input type="file" id="new-survey-photo-input" accept="image/*" class="hidden"
-                               onchange="handleNewSurveyPhotoSelected(event)">
-                        <button type="button" onclick="triggerNewSurveyPhotoInput()"
-                                class="mt-2 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100">
-                            <i class="fas fa-camera mr-2"></i> Take / Choose Photo
-                        </button>
+                        <label for="survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Permission Date Granted</label>
+                        <input type="text" id="survey-permission-date-granted" name="permissionDateGranted"
+                               class="dtk-input" placeholder="dd/mm/yy" inputmode="numeric" />
+                    </div>
+                    <div>
+                        <label for="survey-permission-expiry" class="block text-sm font-medium text-gray-700">Permission Expiry / Review Date</label>
+                        <input type="text" id="survey-permission-expiry" name="permissionExpiry"
+                               class="dtk-input" placeholder="dd/mm/yy" inputmode="numeric" />
                     </div>
                 </div>
 
-                <!-- ── Section 2: Permission ── -->
-                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Permission</h4>
-                    <div class="mb-3">
-                        <label for="survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
-                        <input type="text" id="survey-permission-from" name="permissionFrom" class="dtk-input"
-                               placeholder="e.g. Farmer Smith, National Trust, Council"/>
-                    </div>
-                    <div class="mb-3">
-                        <label for="survey-permission-type" class="block text-sm font-medium text-gray-700">Permission Type</label>
-                        <select id="survey-permission-type" name="permissionType" class="dtk-input">
+                <div class="mb-6">
+                    <label for="survey-permission-notes" class="block text-sm font-medium text-gray-700">Permission Notes</label>
+                    <textarea id="survey-permission-notes" name="permissionNotes" rows="2"
+                              class="dtk-input"
+                              placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
+                </div>
+
+                <!-- 2) Area / Site Type -->
+                <h5 class="dtk-section-h">Area / Site</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
+                        <select id="survey-area-type" name="areaType"
+                                class="dtk-input">
                             <option value="">(blank)</option>
-                            <option>Written</option><option>Verbal</option>
-                            <option>Club / Rally</option><option>Open access</option>
+                            <option>Field (Pasture)</option>
+                            <option>Field (Ploughed)</option>
+                            <option>Beach (Dry)</option>
+                            <option>Beach (Wet / Tidal)</option>
+                            <option>Woods</option>
+                            <option>Park</option>
+                            <option>Moor / Heath</option>
+                            <option>Riverbank / Foreshore</option>
+                            <option>Other</option>
                         </select>
                     </div>
-                    <div class="dtk-grid-2col mb-3">
-                        <div>
-                            <label for="survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Date Granted</label>
-                            <input type="text" id="survey-permission-date-granted" name="permissionDateGranted"
-                                   class="dtk-input" placeholder="dd/mm/yy" inputmode="numeric"/>
-                        </div>
-                        <div>
-                            <label for="survey-permission-expiry" class="block text-sm font-medium text-gray-700">Expiry / Review Date</label>
-                            <input type="text" id="survey-permission-expiry" name="permissionExpiry"
-                                   class="dtk-input" placeholder="dd/mm/yy" inputmode="numeric"/>
-                        </div>
-                    </div>
                     <div>
-                        <label for="survey-permission-notes" class="block text-sm font-medium text-gray-700">Permission Notes</label>
-                        <textarea id="survey-permission-notes" name="permissionNotes" rows="2" class="dtk-input"
-                                  placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
+                        <label for="survey-land-use-current" class="block text-sm font-medium text-gray-700">Land Use (Current)</label>
+                        <select id="survey-land-use-current" name="landUseCurrent"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Agricultural</option>
+                            <option>Recreational</option>
+                            <option>Woodland</option>
+                            <option>Coastal</option>
+                            <option>Urban fringe</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- ── Section 3: Site Characteristics ── -->
-                <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Site Characteristics</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <label for="survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
-                            <select id="survey-area-type" name="areaType" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Field (Pasture)</option><option>Field (Ploughed)</option>
-                                <option>Beach (Dry)</option><option>Beach (Wet / Tidal)</option>
-                                <option>Woods</option><option>Park</option>
-                                <option>Moor / Heath</option><option>Riverbank / Foreshore</option>
-                                <option>Other</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="survey-land-use-current" class="block text-sm font-medium text-gray-700">Land Use</label>
-                            <select id="survey-land-use-current" name="landUseCurrent" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Agricultural</option><option>Recreational</option>
-                                <option>Woodland</option><option>Coastal</option><option>Urban fringe</option>
-                            </select>
-                        </div>
+                <!-- 3) Soil & Ground -->
+                <h5 class="dtk-section-h">Soil &amp; Ground</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label for="survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
+                        <select id="survey-soil-type" name="soilType"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Clay</option>
+                            <option>Loam</option>
+                            <option>Sand</option>
+                            <option>Chalk</option>
+                            <option>Peat</option>
+                            <option>Mixed / Unknown</option>
+                        </select>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                        <div>
-                            <label for="survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
-                            <select id="survey-soil-type" name="soilType" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Clay</option><option>Loam</option><option>Sand</option>
-                                <option>Chalk</option><option>Peat</option><option>Mixed / Unknown</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="survey-ground-condition" class="block text-sm font-medium text-gray-700">Ground Condition</label>
-                            <select id="survey-ground-condition" name="groundCondition" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Dry</option><option>Damp</option><option>Wet</option>
-                                <option>Waterlogged</option><option>Frozen</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="survey-mineralisation-level" class="block text-sm font-medium text-gray-700">Mineralisation</label>
-                            <select id="survey-mineralisation-level" name="mineralisationLevel" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Low</option><option>Medium</option><option>High</option><option>Unknown</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label for="survey-ground-condition" class="block text-sm font-medium text-gray-700">Ground Condition</label>
+                        <select id="survey-ground-condition" name="groundCondition"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Dry</option>
+                            <option>Damp</option>
+                            <option>Wet</option>
+                            <option>Waterlogged</option>
+                            <option>Frozen</option>
+                        </select>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                            <label for="survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
-                            <select id="survey-weather" name="weather" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Sunny</option><option>Overcast</option><option>Rain</option>
-                                <option>Windy</option><option>Mixed</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="survey-recent-rain" class="block text-sm font-medium text-gray-700">Recent Rain</label>
-                            <select id="survey-recent-rain" name="recentRain" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>None</option><option>Light</option><option>Heavy (24–48h)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="survey-temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
-                            <input type="text" id="survey-temperature" name="temperature"
-                                   class="dtk-input" placeholder="e.g. 8°C"/>
-                        </div>
+                    <div>
+                        <label for="survey-mineralisation-level" class="block text-sm font-medium text-gray-700">Mineralisation</label>
+                        <select id="survey-mineralisation-level" name="mineralisationLevel"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Low</option>
+                            <option>Medium</option>
+                            <option>High</option>
+                            <option>Unknown</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- ── Section 4: Context ── -->
-                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Context</h4>
-                    <div class="dtk-grid-2col mb-3">
-                        <div>
-                            <label class="dtk-label">Purpose (multi-select)</label>
-                            <div class="space-y-1 text-sm text-gray-700">
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="General detecting"> <span>General detecting</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Coin shooting"> <span>Coin shooting</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Relic hunting"> <span>Relic hunting</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Beach recovery"> <span>Beach recovery</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Scouting / Recon"> <span>Scouting / Recon</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Follow-up visit"> <span>Follow-up visit</span></label>
-                            </div>
-                        </div>
-                        <div>
-                            <label for="survey-expected-period" class="block text-sm font-medium text-gray-700">Expected Period</label>
-                            <select id="survey-expected-period" name="expectedPeriod" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Roman</option><option>Medieval</option><option>Post-Medieval</option>
-                                <option>Modern</option><option>Unknown / Mixed</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
-                        <textarea id="survey-access-notes" name="accessNotes" rows="2" class="dtk-input"
-                                  placeholder="Parking, gates, paths, tides, livestock..."></textarea>
+                <!-- 4) Environment -->
+                <h5 class="dtk-section-h">Environment</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label for="survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
+                        <select id="survey-weather" name="weather"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Sunny</option>
+                            <option>Overcast</option>
+                            <option>Rain</option>
+                            <option>Windy</option>
+                            <option>Mixed</option>
+                        </select>
                     </div>
                     <div>
-                        <label class="dtk-label">Hazards (multi-select)</label>
-                        <div class="grid grid-cols-2 gap-1 text-sm text-gray-700">
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Livestock"> <span>Livestock</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Barbed wire"> <span>Barbed wire</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Glass"> <span>Glass</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Steep slopes"> <span>Steep slopes</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Tides"> <span>Tides</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
-                        </div>
+                        <label for="survey-recent-rain" class="block text-sm font-medium text-gray-700">Recent Rain</label>
+                        <select id="survey-recent-rain" name="recentRain"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>None</option>
+                            <option>Light</option>
+                            <option>Heavy (24–48h)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="survey-temperature" class="block text-sm font-medium text-gray-700">Temperature (approx.)</label>
+                        <input type="text" id="survey-temperature" name="temperature"
+                               class="dtk-input"
+                               placeholder="e.g. 8°C" />
                     </div>
                 </div>
 
-                <!-- ── Section 5: Outcome ── -->
-                <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Outcome</h4>
-                    <div class="dtk-grid-2col mb-3">
-                        <div>
-                            <label for="survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
-                            <select id="survey-overall-productivity" name="overallProductivity" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Poor</option><option>Fair</option><option>Good</option><option>Excellent</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="survey-would-detect-again" class="block text-sm font-medium text-gray-700">Would Detect Again?</label>
-                            <select id="survey-would-detect-again" name="wouldDetectAgain" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Yes</option><option>No</option><option>Maybe</option>
-                            </select>
+                <!-- 5) Intent & Context -->
+                <h5 class="dtk-section-h">Intent &amp; Context</h5>
+                <div class="dtk-grid-2col">
+                    <div>
+                        <label class="dtk-label">Purpose of Survey (multi-select)</label>
+                        <div class="space-y-1 text-sm text-gray-700">
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="General detecting"> <span>General detecting</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Coin shooting"> <span>Coin shooting</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Relic hunting"> <span>Relic hunting</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Beach recovery"> <span>Beach recovery</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Scouting / Recon"> <span>Scouting / Recon</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Follow-up visit"> <span>Follow-up visit</span></label>
                         </div>
                     </div>
                     <div>
-                        <label for="survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
-                        <textarea id="survey-observations" name="surveyObservations" rows="3" class="dtk-input"
-                                  placeholder="Anything useful you noticed..."></textarea>
+                        <label for="survey-expected-period" class="block text-sm font-medium text-gray-700">Expected Period</label>
+                        <select id="survey-expected-period" name="expectedPeriod"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Roman</option>
+                            <option>Medieval</option>
+                            <option>Post-Medieval</option>
+                            <option>Modern</option>
+                            <option>Unknown / Mixed</option>
+                        </select>
                     </div>
                 </div>
+
+                <!-- 6) Access & Practical -->
+                <h5 class="dtk-section-h">Access &amp; Practical</h5>
+                <div class="mb-4">
+                    <label for="survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
+                    <textarea id="survey-access-notes" name="accessNotes" rows="2"
+                              class="dtk-input"
+                              placeholder="Parking, gates, paths, tides, livestock..."></textarea>
+                </div>
+
+                <div class="mb-6">
+                    <label class="dtk-label">Hazards / Warnings (multi-select)</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm text-gray-700">
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Livestock"> <span>Livestock</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Barbed wire"> <span>Barbed wire</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Glass"> <span>Glass</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Steep slopes"> <span>Steep slopes</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Tides"> <span>Tides</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
+                    </div>
+                </div>
+
+                <!-- 7) Outcome Summary -->
+                <h5 class="dtk-section-h">Outcome Summary</h5>
+                <div class="dtk-grid-2col">
+                    <div>
+                        <label for="survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
+                        <select id="survey-overall-productivity" name="overallProductivity"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Poor</option>
+                            <option>Fair</option>
+                            <option>Good</option>
+                            <option>Excellent</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="survey-would-detect-again" class="block text-sm font-medium text-gray-700">Would Detect Again?</label>
+                        <select id="survey-would-detect-again" name="wouldDetectAgain"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Yes</option>
+                            <option>No</option>
+                            <option>Maybe</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label for="survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
+                    <textarea id="survey-observations" name="surveyObservations" rows="3"
+                              class="dtk-input"
+                              placeholder="Anything useful you noticed..."></textarea>
+                </div>
+            </div>
+                            <!-- Survey photo (optional) -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">
+                    Survey Photo (optional)
+                </label>
+                <p id="new-survey-photo-status" class="text-xs text-gray-500 mt-1">
+                    No photo captured yet.
+                </p>
+
+                <div
+                    id="new-survey-photo-preview-wrapper"
+                    class="mt-2 hidden"
+                >
+                    <img
+                        id="new-survey-photo-preview"
+                        alt="Survey photo preview"
+                        class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                </div>
+
+                <input
+                    type="hidden"
+                    id="new-survey-photo-data"
+                    name="surveyPhotoData"
+                >
+
+                <input
+                type="file"
+                id="new-survey-photo-input"
+                accept="image/*"
+                class="hidden"
+                onchange="handleNewSurveyPhotoSelected(event)">
+
+                <button
+                    type="button"
+                    onclick="triggerNewSurveyPhotoInput()"
+                    class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100"
+                >
+                    <i class="fas fa-camera mr-2"></i>
+                    Take / Choose Photo
+                </button>
+            </div>
 
                 <div class="flex justify-end space-x-3 mt-6">
                     <button type="button" onclick="closeNewSurveyModal()" class="dtk-btn-cancel">Cancel</button>
@@ -586,209 +667,308 @@ summary {
         <form id="edit-survey-form">
             <input type="hidden" id="edit-survey-id" name="surveyId">
 
-            <!-- ── Section 1: Survey Details ── -->
-            <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Survey Details</h4>
-                <div class="mb-3">
-                    <label for="edit-survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
-                    <input type="text" id="edit-survey-name" name="surveyName" required class="dtk-input">
-                </div>
-                <div class="mb-3">
-                    <label for="edit-survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
-                    <textarea id="edit-survey-description" name="surveyDescription" rows="3" class="dtk-input"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Survey Photo (optional)</label>
-                    <p id="edit-survey-photo-status" class="text-xs text-gray-500 mt-1">No photo captured yet.</p>
-                    <div id="edit-survey-photo-preview-wrapper" class="mt-2 hidden">
-                        <img id="edit-survey-photo-preview" alt="Survey photo preview"
-                             class="w-full max-h-48 object-cover rounded-lg border border-gray-200"/>
-                    </div>
-                    <input type="hidden" id="edit-survey-photo-data" name="surveyPhotoData">
-                    <input type="file" id="edit-survey-photo-input" accept="image/*" class="hidden"
-                           onchange="handleEditSurveyPhotoSelected(event)">
-                    <button type="button" onclick="triggerEditSurveyPhotoInput()"
-                            class="mt-2 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100">
-                        <i class="fas fa-camera mr-2"></i> Take / Choose Photo
-                    </button>
-                </div>
+            <div class="mb-4">
+                <label for="edit-survey-name" class="block text-sm font-medium text-gray-700">
+                    Survey Name *
+                </label>
+                <input
+                    type="text"
+                    id="edit-survey-name"
+                    name="surveyName"
+                    required
+                    class="dtk-input"
+                >
             </div>
 
-            <!-- ── Section 2: Permission ── -->
-                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Permission</h4>
-                    <div class="mb-3">
-                        <label for="edit-survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
-                        <input type="text" id="edit-survey-permission-from" name="permissionFrom" class="dtk-input"
-                               placeholder="e.g. Farmer Smith, National Trust, Council"/>
+            <div class="mb-4">
+                <label for="edit-survey-description" class="block text-sm font-medium text-gray-700">
+                    Description / Location
+                </label>
+                <textarea
+                    id="edit-survey-description"
+                    name="surveyDescription"
+                    rows="3"
+                    class="dtk-input"
+                ></textarea>
+            </div>
+
+            <!-- Additional Survey Details (all optional) -->
+            <div class="mt-6 border-t pt-4">
+                <h4 class="text-lg font-semibold text-gray-800 mb-3">Permission &amp; Site Details (optional)</h4>
+
+                <!-- 1) Permission & Legality -->
+                <div class="mb-4">
+                    <label for="edit-survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
+                    <input type="text" id="edit-survey-permission-from" name="permissionFrom"
+                           class="dtk-input"
+                           placeholder="e.g. Farmer Smith, National Trust, Council" />
+                </div>
+
+                <div class="mb-4">
+                    <label for="edit-survey-permission-type" class="block text-sm font-medium text-gray-700">Permission Type</label>
+                    <select id="edit-survey-permission-type" name="permissionType"
+                            class="dtk-input">
+                        <option value="">(blank)</option>
+                        <option>Written</option>
+                        <option>Verbal</option>
+                        <option>Club / Rally</option>
+                        <option>Open access</option>
+                    </select>
+                </div>
+
+                <div class="dtk-grid-2col">
+                    <div>
+                        <label for="edit-survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Permission Date Granted</label>
+                        <input type="text" id="edit-survey-permission-date-granted" name="permissionDateGranted"
+                               class="dtk-input" placeholder="dd/mm/yy">
                     </div>
-                    <div class="mb-3">
-                        <label for="edit-survey-permission-type" class="block text-sm font-medium text-gray-700">Permission Type</label>
-                        <select id="edit-survey-permission-type" name="permissionType" class="dtk-input">
+                    <div>
+                        <label for="edit-survey-permission-expiry" class="block text-sm font-medium text-gray-700">Permission Expiry / Review Date</label>
+                        <input type="text" id="edit-survey-permission-expiry" name="permissionExpiry"
+                               class="dtk-input" placeholder="dd/mm/yy">
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <label for="edit-survey-permission-notes" class="block text-sm font-medium text-gray-700">Permission Notes</label>
+                    <textarea id="edit-survey-permission-notes" name="permissionNotes" rows="2"
+                              class="dtk-input"
+                              placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
+                </div>
+
+                <!-- 2) Area / Site Type -->
+                <h5 class="dtk-section-h">Area / Site</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="edit-survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
+                        <select id="edit-survey-area-type" name="areaType"
+                                class="dtk-input">
                             <option value="">(blank)</option>
-                            <option>Written</option><option>Verbal</option>
-                            <option>Club / Rally</option><option>Open access</option>
+                            <option>Field (Pasture)</option>
+                            <option>Field (Ploughed)</option>
+                            <option>Beach (Dry)</option>
+                            <option>Beach (Wet / Tidal)</option>
+                            <option>Woods</option>
+                            <option>Park</option>
+                            <option>Moor / Heath</option>
+                            <option>Riverbank / Foreshore</option>
+                            <option>Other</option>
                         </select>
                     </div>
-                    <div class="dtk-grid-2col mb-3">
-                        <div>
-                            <label for="edit-survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Date Granted</label>
-                            <input type="text" id="edit-survey-permission-date-granted" name="permissionDateGranted"
-                                   class="dtk-input" placeholder="dd/mm/yy"/>
-                        </div>
-                        <div>
-                            <label for="edit-survey-permission-expiry" class="block text-sm font-medium text-gray-700">Expiry / Review Date</label>
-                            <input type="text" id="edit-survey-permission-expiry" name="permissionExpiry"
-                                   class="dtk-input" placeholder="dd/mm/yy"/>
-                        </div>
-                    </div>
                     <div>
-                        <label for="edit-survey-permission-notes" class="block text-sm font-medium text-gray-700">Permission Notes</label>
-                        <textarea id="edit-survey-permission-notes" name="permissionNotes" rows="2" class="dtk-input"
-                                  placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
+                        <label for="edit-survey-land-use-current" class="block text-sm font-medium text-gray-700">Land Use (Current)</label>
+                        <select id="edit-survey-land-use-current" name="landUseCurrent"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Agricultural</option>
+                            <option>Recreational</option>
+                            <option>Woodland</option>
+                            <option>Coastal</option>
+                            <option>Urban fringe</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- ── Section 3: Site Characteristics ── -->
-                <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Site Characteristics</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <label for="edit-survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
-                            <select id="edit-survey-area-type" name="areaType" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Field (Pasture)</option><option>Field (Ploughed)</option>
-                                <option>Beach (Dry)</option><option>Beach (Wet / Tidal)</option>
-                                <option>Woods</option><option>Park</option>
-                                <option>Moor / Heath</option><option>Riverbank / Foreshore</option>
-                                <option>Other</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="edit-survey-land-use-current" class="block text-sm font-medium text-gray-700">Land Use</label>
-                            <select id="edit-survey-land-use-current" name="landUseCurrent" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Agricultural</option><option>Recreational</option>
-                                <option>Woodland</option><option>Coastal</option><option>Urban fringe</option>
-                            </select>
-                        </div>
+                <!-- 3) Soil & Ground -->
+                <h5 class="dtk-section-h">Soil &amp; Ground</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label for="edit-survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
+                        <select id="edit-survey-soil-type" name="soilType"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Clay</option>
+                            <option>Loam</option>
+                            <option>Sand</option>
+                            <option>Chalk</option>
+                            <option>Peat</option>
+                            <option>Mixed / Unknown</option>
+                        </select>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                        <div>
-                            <label for="edit-survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
-                            <select id="edit-survey-soil-type" name="soilType" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Clay</option><option>Loam</option><option>Sand</option>
-                                <option>Chalk</option><option>Peat</option><option>Mixed / Unknown</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="edit-survey-ground-condition" class="block text-sm font-medium text-gray-700">Ground Condition</label>
-                            <select id="edit-survey-ground-condition" name="groundCondition" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Dry</option><option>Damp</option><option>Wet</option>
-                                <option>Waterlogged</option><option>Frozen</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="edit-survey-mineralisation-level" class="block text-sm font-medium text-gray-700">Mineralisation</label>
-                            <select id="edit-survey-mineralisation-level" name="mineralisationLevel" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Low</option><option>Medium</option><option>High</option><option>Unknown</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label for="edit-survey-ground-condition" class="block text-sm font-medium text-gray-700">Ground Condition</label>
+                        <select id="edit-survey-ground-condition" name="groundCondition"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Dry</option>
+                            <option>Damp</option>
+                            <option>Wet</option>
+                            <option>Waterlogged</option>
+                            <option>Frozen</option>
+                        </select>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                            <label for="edit-survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
-                            <select id="edit-survey-weather" name="weather" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Sunny</option><option>Overcast</option><option>Rain</option>
-                                <option>Windy</option><option>Mixed</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="edit-survey-recent-rain" class="block text-sm font-medium text-gray-700">Recent Rain</label>
-                            <select id="edit-survey-recent-rain" name="recentRain" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>None</option><option>Light</option><option>Heavy (24–48h)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="edit-survey-temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
-                            <input type="text" id="edit-survey-temperature" name="temperature"
-                                   class="dtk-input" placeholder="e.g. 8°C"/>
-                        </div>
+                    <div>
+                        <label for="edit-survey-mineralisation-level" class="block text-sm font-medium text-gray-700">Mineralisation</label>
+                        <select id="edit-survey-mineralisation-level" name="mineralisationLevel"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Low</option>
+                            <option>Medium</option>
+                            <option>High</option>
+                            <option>Unknown</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- ── Section 4: Context ── -->
-                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Context</h4>
-                    <div class="dtk-grid-2col mb-3">
-                        <div>
-                            <label class="dtk-label">Purpose (multi-select)</label>
-                            <div class="space-y-1 text-sm text-gray-700">
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="General detecting"> <span>General detecting</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Coin shooting"> <span>Coin shooting</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Relic hunting"> <span>Relic hunting</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Beach recovery"> <span>Beach recovery</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Scouting / Recon"> <span>Scouting / Recon</span></label>
-                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Follow-up visit"> <span>Follow-up visit</span></label>
-                            </div>
-                        </div>
-                        <div>
-                            <label for="edit-survey-expected-period" class="block text-sm font-medium text-gray-700">Expected Period</label>
-                            <select id="edit-survey-expected-period" name="expectedPeriod" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Roman</option><option>Medieval</option><option>Post-Medieval</option>
-                                <option>Modern</option><option>Unknown / Mixed</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
-                        <textarea id="edit-survey-access-notes" name="accessNotes" rows="2" class="dtk-input"
-                                  placeholder="Parking, gates, paths, tides, livestock..."></textarea>
+                <!-- 4) Environment -->
+                <h5 class="dtk-section-h">Environment</h5>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label for="edit-survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
+                        <select id="edit-survey-weather" name="weather"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Sunny</option>
+                            <option>Overcast</option>
+                            <option>Rain</option>
+                            <option>Windy</option>
+                            <option>Mixed</option>
+                        </select>
                     </div>
                     <div>
-                        <label class="dtk-label">Hazards (multi-select)</label>
-                        <div class="grid grid-cols-2 gap-1 text-sm text-gray-700">
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Livestock"> <span>Livestock</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Barbed wire"> <span>Barbed wire</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Glass"> <span>Glass</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Steep slopes"> <span>Steep slopes</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Tides"> <span>Tides</span></label>
-                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
-                        </div>
+                        <label for="edit-survey-recent-rain" class="block text-sm font-medium text-gray-700">Recent Rain</label>
+                        <select id="edit-survey-recent-rain" name="recentRain"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>None</option>
+                            <option>Light</option>
+                            <option>Heavy (24–48h)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="edit-survey-temperature" class="block text-sm font-medium text-gray-700">Temperature (approx.)</label>
+                        <input type="text" id="edit-survey-temperature" name="temperature"
+                               class="dtk-input"
+                               placeholder="e.g. 8°C" />
                     </div>
                 </div>
 
-                <!-- ── Section 5: Outcome ── -->
-                <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                    <h4 class="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">Outcome</h4>
-                    <div class="dtk-grid-2col mb-3">
-                        <div>
-                            <label for="edit-survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
-                            <select id="edit-survey-overall-productivity" name="overallProductivity" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Poor</option><option>Fair</option><option>Good</option><option>Excellent</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="edit-survey-would-detect-again" class="block text-sm font-medium text-gray-700">Would Detect Again?</label>
-                            <select id="edit-survey-would-detect-again" name="wouldDetectAgain" class="dtk-input">
-                                <option value="">(blank)</option>
-                                <option>Yes</option><option>No</option><option>Maybe</option>
-                            </select>
+                <!-- 5) Intent & Context -->
+                <h5 class="dtk-section-h">Intent &amp; Context</h5>
+                <div class="dtk-grid-2col">
+                    <div>
+                        <label class="dtk-label">Purpose of Survey (multi-select)</label>
+                        <div class="space-y-1 text-sm text-gray-700">
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="General detecting"> <span>General detecting</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Coin shooting"> <span>Coin shooting</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Relic hunting"> <span>Relic hunting</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Beach recovery"> <span>Beach recovery</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Scouting / Recon"> <span>Scouting / Recon</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Follow-up visit"> <span>Follow-up visit</span></label>
                         </div>
                     </div>
                     <div>
-                        <label for="edit-survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
-                        <textarea id="edit-survey-observations" name="surveyObservations" rows="3" class="dtk-input"
-                                  placeholder="Anything useful you noticed..."></textarea>
+                        <label for="edit-survey-expected-period" class="block text-sm font-medium text-gray-700">Expected Period</label>
+                        <select id="edit-survey-expected-period" name="expectedPeriod"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Roman</option>
+                            <option>Medieval</option>
+                            <option>Post-Medieval</option>
+                            <option>Modern</option>
+                            <option>Unknown / Mixed</option>
+                        </select>
                     </div>
                 </div>
+
+                <!-- 6) Access & Practical -->
+                <h5 class="dtk-section-h">Access &amp; Practical</h5>
+                <div class="mb-4">
+                    <label for="edit-survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
+                    <textarea id="edit-survey-access-notes" name="accessNotes" rows="2"
+                              class="dtk-input"
+                              placeholder="Parking, gates, paths, tides, livestock..."></textarea>
+                </div>
+
+                <div class="mb-6">
+                    <label class="dtk-label">Hazards / Warnings (multi-select)</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm text-gray-700">
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Livestock"> <span>Livestock</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Barbed wire"> <span>Barbed wire</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Glass"> <span>Glass</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Steep slopes"> <span>Steep slopes</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Tides"> <span>Tides</span></label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
+                    </div>
+                </div>
+
+                <!-- 7) Outcome Summary -->
+                <h5 class="dtk-section-h">Outcome Summary</h5>
+                <div class="dtk-grid-2col">
+                    <div>
+                        <label for="edit-survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
+                        <select id="edit-survey-overall-productivity" name="overallProductivity"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Poor</option>
+                            <option>Fair</option>
+                            <option>Good</option>
+                            <option>Excellent</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="edit-survey-would-detect-again" class="block text-sm font-medium text-gray-700">Would Detect Again?</label>
+                        <select id="edit-survey-would-detect-again" name="wouldDetectAgain"
+                                class="dtk-input">
+                            <option value="">(blank)</option>
+                            <option>Yes</option>
+                            <option>No</option>
+                            <option>Maybe</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label for="edit-survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
+                    <textarea id="edit-survey-observations" name="surveyObservations" rows="3"
+                              class="dtk-input"
+                              placeholder="Anything useful you noticed..."></textarea>
+                </div>
+            </div>
+            <!-- Survey Photo -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">
+                    Survey Photo (optional)
+                </label>
+                <p id="edit-survey-photo-status" class="text-xs text-gray-500 mt-1">
+                    No photo captured yet.
+                </p>
+
+                <div
+                    id="edit-survey-photo-preview-wrapper"
+                    class="mt-2 hidden"
+                >
+                    <img
+                        id="edit-survey-photo-preview"
+                        alt="Survey photo preview"
+                        class="w-full max-h-48 object-cover rounded-lg border border-gray-200"
+                    />
+                </div>
+
+                <input
+                    type="hidden"
+                    id="edit-survey-photo-data"
+                    name="surveyPhotoData"
+                >
+
+                <input
+                type="file"
+                id="edit-survey-photo-input"
+                accept="image/*"
+                class="hidden"
+                onchange="handleEditSurveyPhotoSelected(event)"
+                >
+
+                <button
+                    type="button"
+                    onclick="triggerEditSurveyPhotoInput()"
+                    class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100"
+                >
+                    <i class="fas fa-camera mr-2"></i>
+                    Take / Choose Photo
+                </button>
+            </div>
+
             <div class="flex justify-end space-x-3 mt-6">
                 <button
                     type="button"
@@ -838,48 +1018,6 @@ summary {
           class="dtk-input-sm"
           required></textarea>
       </div>
-
-            <!-- NEW: Find photograph controls -->
-      <div>
-        <label class="dtk-label-xs">
-          Find Photograph
-        </label>
-
-        <!-- Hidden file input (camera / gallery) -->
-       <input
-  type="file"
-  id="edit-find-photo-input"
-  accept="image/*;capture=camera"
-  multiple
-  class="hidden"
-  onchange="handleEditFindPhotoSelected(event)">
-
-        <!-- Hidden field to store the Base64 photo data -->
-        <input
-          type="hidden"
-          id="edit-find-photo-data"
-          name="findPhotoData">
-
-        <div class="flex items-center space-x-3 mt-1">
-          <button
-            type="button"
-            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
-            onclick="triggerEditFindPhotoInput()">
-            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
-          </button>
-          <span id="edit-find-photo-status" class="text-xs text-gray-500">
-            No photo captured yet.
-          </span>
-        </div>
-
-        <div id="edit-find-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
-          <img
-            id="edit-find-photo-preview"
-            class="w-11/12 h-auto rounded-md border border-gray-300 object-cover"
-            alt="Find photo preview">
-        </div>
-      </div>
-      <!-- END NEW: Find photograph controls -->
 
       <!-- Type -->
       <div>
@@ -1065,6 +1203,48 @@ summary {
           class="dtk-input-sm">
       </div>
 
+      <!-- NEW: Find photograph controls -->
+      <div>
+        <label class="dtk-label-xs">
+          Find Photograph
+        </label>
+
+        <!-- Hidden file input (camera / gallery) -->
+       <input
+  type="file"
+  id="edit-find-photo-input"
+  accept="image/*;capture=camera"
+  multiple
+  class="hidden"
+  onchange="handleEditFindPhotoSelected(event)">
+
+        <!-- Hidden field to store the Base64 photo data -->
+        <input
+          type="hidden"
+          id="edit-find-photo-data"
+          name="findPhotoData">
+
+        <div class="flex items-center space-x-3 mt-1">
+          <button
+            type="button"
+            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
+            onclick="triggerEditFindPhotoInput()">
+            <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+          </button>
+          <span id="edit-find-photo-status" class="text-xs text-gray-500">
+            No photo captured yet.
+          </span>
+        </div>
+
+        <div id="edit-find-photo-preview-wrapper" class="mt-2 hidden flex justify-center">
+          <img
+            id="edit-find-photo-preview"
+            class="w-11/12 h-auto rounded-md border border-gray-300 object-cover"
+            alt="Find photo preview">
+        </div>
+      </div>
+      <!-- END NEW: Find photograph controls -->
+
       <!-- Footer buttons -->
       <div class="pt-2 flex justify-end gap-2">
         <button
@@ -1110,44 +1290,6 @@ summary {
                    required
                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2
                           focus:ring-primary focus:border-primary">
-        </div>
-
-                <!-- Photo section -->
-        <div class="mb-4 col-span-2">
-            <label class="dtk-label">
-                Target Photo
-            </label>
-
-            <p id="new-target-photo-status"
-               class="text-xs text-gray-600 mb-2">
-                No photo captured yet.
-            </p>
-
-            <div id="new-target-photo-preview-wrapper"
-                 class="hidden mb-2">
-                <img id="new-target-photo-preview"
-                     alt="Target preview"
-                     class="w-full max-h-64 object-contain rounded-lg border border-gray-300" />
-            </div>
-
-            <input type="hidden"
-                   id="target-photo-data"
-                   name="targetPhotoData">
-
-            <input type="file"
-                   id="new-target-photo-input"
-                   accept="image/*"
-                   capture="environment"
-                   class="hidden"
-                   onchange="handleNewTargetPhotoSelected(event)">
-
-            <button type="button"
-                    class="px-3 py-2 text-sm font-semibold rounded-lg shadow
-                           text-white"
-                    style="background-color: rgb(var(--color-secondary));"
-                    onclick="triggerNewTargetPhotoInput()">
-                Take / Choose Photo
-            </button>
         </div>
 
         <!-- VDI -->
@@ -1222,6 +1364,43 @@ summary {
             </p>
         </div>
 
+        <!-- Photo section (current single-photo UI) -->
+        <div class="mb-4 col-span-2">
+            <label class="dtk-label">
+                Target Photo
+            </label>
+
+            <p id="new-target-photo-status"
+               class="text-xs text-gray-600 mb-2">
+                No photo captured yet.
+            </p>
+
+            <div id="new-target-photo-preview-wrapper"
+                 class="hidden mb-2">
+                <img id="new-target-photo-preview"
+                     alt="Target preview"
+                     class="w-full max-h-64 object-contain rounded-lg border border-gray-300" />
+            </div>
+
+            <input type="hidden"
+                   id="target-photo-data"
+                   name="targetPhotoData">
+
+            <input type="file"
+                   id="new-target-photo-input"
+                   accept="image/*"
+                   capture="environment"
+                   class="hidden"
+                   onchange="handleNewTargetPhotoSelected(event)">
+
+            <button type="button"
+                    class="px-3 py-2 text-sm font-semibold rounded-lg shadow
+                           text-white"
+                    style="background-color: rgb(var(--color-secondary));"
+                    onclick="triggerNewTargetPhotoInput()">
+                Take / Choose Photo
+            </button>
+        </div>
     </div>
 
     <!-- Button bar: force white background -->
@@ -1264,7 +1443,33 @@ summary {
                         <input type="text" id="edit-target-description" name="targetDescription" required
                                class="dtk-input">
                     </div>
-                    <div class="mb-4 col-span-2">
+                    <div class="mb-4">
+                        <label for="edit-target-vdi" class="block text-sm font-medium text-gray-700">Target ID</label>
+                        <input type="text" id="edit-target-vdi" name="targetVDI" placeholder="e.g., 28"
+                               class="dtk-input">
+                    </div>
+                    <div class="mb-4">
+                        <label for="edit-target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                        <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
+                               class="dtk-input">
+                    </div>
+ <div class="mb-4 col-span-2">
+    <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
+    <select id="edit-target-type" name="targetType" required
+            class="dtk-input bg-white">
+      <option value="Unidentified" selected>Unidentified</option>
+        <option value="Iron Junk">Iron Junk</option>
+        <option value="Modern Junk">Modern Junk</option>
+         <option value="Button">Button</option>
+         <option value="Coin">Coin</option>
+        <option value="Ring">Ring</option>
+        <option value="Jewelry">Jewelry</option>
+        <option value="Relic">Relic</option>
+        <option value="Something else">Something else</option>
+            </select>
+
+</div>
+<div class="mb-4 col-span-2">
     <label class="dtk-label">
         Target Photographs
     </label>
@@ -1299,32 +1504,6 @@ summary {
 
     <!-- Thumbnails (stacked, nearly full width) -->
     <div id="edit-target-photo-preview-wrapper" class="mt-2 hidden w-full"></div>
-</div>
-                    <div class="mb-4">
-                        <label for="edit-target-vdi" class="block text-sm font-medium text-gray-700">Target ID</label>
-                        <input type="text" id="edit-target-vdi" name="targetVDI" placeholder="e.g., 28"
-                               class="dtk-input">
-                    </div>
-                    <div class="mb-4">
-                        <label for="edit-target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
-                        <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
-                               class="dtk-input">
-                    </div>
- <div class="mb-4 col-span-2">
-    <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
-    <select id="edit-target-type" name="targetType" required
-            class="dtk-input bg-white">
-      <option value="Unidentified" selected>Unidentified</option>
-        <option value="Iron Junk">Iron Junk</option>
-        <option value="Modern Junk">Modern Junk</option>
-         <option value="Button">Button</option>
-         <option value="Coin">Coin</option>
-        <option value="Ring">Ring</option>
-        <option value="Jewelry">Jewelry</option>
-        <option value="Relic">Relic</option>
-        <option value="Something else">Something else</option>
-            </select>
-
 </div>
 
 <div class="mb-4 col-span-2">
@@ -1550,8 +1729,6 @@ let showMapTracks  = true;
 
 let showMapTargetLabels = true;
 let showMapFindLabels   = true;
-let showMapTrackLabels  = true;
-let showMapStakeLabels  = true;
 
 let mapLayersExpanded = true;
 let tileGridExpanded = true;
@@ -1596,24 +1773,6 @@ function ensureSurveyGridTileDefaults(survey) {
     }
     if (survey.gridTile.centerLat !== null && !isFinite(Number(survey.gridTile.centerLat))) survey.gridTile.centerLat = null;
     if (survey.gridTile.centerLon !== null && !isFinite(Number(survey.gridTile.centerLon))) survey.gridTile.centerLon = null;
-    if (typeof survey.gridTile.rotationDeg !== 'number' || !isFinite(survey.gridTile.rotationDeg)) {
-        survey.gridTile.rotationDeg = 0;
-    }
-}
-
-// Rotate a local offset (dx,dy) INTO the grid frame (counter-rotate by deg)
-function rotatePtIntoGrid(dx, dy, deg) {
-    if (!deg) return { x: dx, y: dy };
-    const r = -deg * Math.PI / 180;
-    return { x: dx * Math.cos(r) - dy * Math.sin(r),
-             y: dx * Math.sin(r) + dy * Math.cos(r) };
-}
-// Rotate a grid-frame offset (x,y) back to real-world
-function rotatePtFromGrid(x, y, deg) {
-    if (!deg) return { x, y };
-    const r = deg * Math.PI / 180;
-    return { x: x * Math.cos(r) - y * Math.sin(r),
-             y: x * Math.sin(r) + y * Math.cos(r) };
 }
 
 function getBestLiveGpsCoordsOrNull() {
@@ -1625,7 +1784,7 @@ function getBestLiveGpsCoordsOrNull() {
     return { lat, lon };
 }
 
-function setGridTileToCurrentGps(sizeM) {
+function setGridTileToCurrentGps() {
     const survey = getCompassOpenSurvey();
     if (!survey) {
         showMessage('No open survey.', 'error');
@@ -1641,12 +1800,11 @@ function setGridTileToCurrentGps(sizeM) {
     survey.gridTile.centerLat = c.lat;
     survey.gridTile.centerLon = c.lon;
     survey.gridTile.enabled = true;
-    if (sizeM && Number.isFinite(+sizeM)) survey.gridTile.sizeM = +sizeM;
     survey.dateLastChanged = Date.now();
     if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
     saveSurveysToLocalStorage();
 
-    showMessage(`Grid tile set to current GPS position (${survey.gridTile.sizeM}m).`, 'success');
+    showMessage('Grid tile set to current GPS position.', 'success');
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
 }
@@ -1677,7 +1835,7 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
     ensureSurveyGridTileDefaults(survey);
 
     if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Grid tile is not set yet. Tap a size button to place the tile.', 'warning');
+        showMessage('Grid tile is not set yet. Tap "Set Tile to GPS" first.', 'warning');
         return;
     }
 
@@ -1701,87 +1859,6 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
-}
-
-// Hold-to-repeat tile pan — mirrors startMapPan/stopMapPan
-const TILE_PAN_STEP_M = 1; // metres per tick
-let _tilePanTimer = null;
-
-function startTilePan(dir, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    stopTilePan();
-    _doTilePan(dir);  // immediate first step
-    _tilePanTimer = setTimeout(() => {
-        _tilePanTimer = setInterval(() => _doTilePan(dir), 80);
-    }, 350);
-}
-
-function stopTilePan() {
-    if (_tilePanTimer !== null) {
-        clearTimeout(_tilePanTimer);
-        clearInterval(_tilePanTimer);
-        _tilePanTimer = null;
-    }
-}
-
-function _doTilePan(dir) {
-    if (dir === 'N') moveGridTileByMeters(0,  TILE_PAN_STEP_M);
-    if (dir === 'S') moveGridTileByMeters(0, -TILE_PAN_STEP_M);
-    if (dir === 'E') moveGridTileByMeters( TILE_PAN_STEP_M, 0);
-    if (dir === 'W') moveGridTileByMeters(-TILE_PAN_STEP_M, 0);
-}
-
-// Hold-to-repeat tile rotation
-let _tileRotTimer = null;
-
-function startTileRotate(dir, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    stopTileRotate();
-    _doTileRotate(dir);
-    _tileRotTimer = setTimeout(() => {
-        _tileRotTimer = setInterval(() => _doTileRotate(dir), 60);
-    }, 250);
-}
-
-function stopTileRotate() {
-    if (_tileRotTimer !== null) {
-        clearTimeout(_tileRotTimer);
-        clearInterval(_tileRotTimer);
-        _tileRotTimer = null;
-        // Rebuild coverage and sync survey map once rotation stops
-        const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
-        if (survey && survey.gridTile) {
-            if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
-            if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
-            if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-        }
-    }
-}
-
-function _doTileRotateReset() {
-    const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
-    if (!survey || !survey.gridTile) return;
-    ensureSurveyGridTileDefaults(survey);
-    survey.gridTile.rotationDeg = 0;
-    survey.dateLastChanged = Date.now();
-    if (typeof rebuildCoverageFromGps === 'function') rebuildCoverageFromGps(survey.gridTile);
-    if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
-    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
-    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-    else if (typeof render === 'function') render();
-}
-
-function _doTileRotate(dir) {
-    const survey = (typeof getCompassOpenSurvey === 'function') ? getCompassOpenSurvey() : null;
-    if (!survey || !survey.gridTile) return;
-    ensureSurveyGridTileDefaults(survey);
-    let rot = (Number(survey.gridTile.rotationDeg) || 0) + (dir === 'cw' ? 3 : -3);
-    rot = ((rot % 360) + 360) % 360;
-    survey.gridTile.rotationDeg = rot;
-    survey.dateLastChanged = Date.now();
-    if (typeof saveSurveysToLocalStorage === 'function') saveSurveysToLocalStorage();
-    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch (_) {} }
-    // Survey map updates on next normal GPS cycle — no full re-render during rotation
 }
 
 let tileGridModalIsOpen = false;
@@ -1856,13 +1933,11 @@ function rebuildCoverageFromGps(tile) {
     const M_PER_DEG_LAT = 111320;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    const rotDeg = Number(tile.rotationDeg) || 0;
     for (const pt of tile.coverageGps) {
         const dx = (pt.lon - lon0) * mPerDegLon;
         const dy = (pt.lat - lat0) * M_PER_DEG_LAT;
-        const rp = rotatePtIntoGrid(dx, dy, rotDeg);
-        const localX = rp.x + (sizeM / 2);
-        const localY = (sizeM / 2) - rp.y;
+        const localX = dx + (sizeM / 2);
+        const localY = (sizeM / 2) - dy;
         if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) continue;
         const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
         const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
@@ -1931,7 +2006,7 @@ function openTileGridModal() {
     ensureSurveyGridTileDefaults(survey);
 
     if (!survey.gridTile.enabled || survey.gridTile.centerLat == null || survey.gridTile.centerLon == null) {
-        showMessage('Set the tile first — tap a size button.', 'warning');
+        showMessage('Set the tile first (tap "Set Tile to GPS").', 'warning');
         return;
     }
 
@@ -2148,34 +2223,30 @@ function paintTileCellUnderUserWithColour(colourName) {
     const M_PER_DEG_LAT = 111320;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    const rotDeg = Number(tile.rotationDeg) || 0;
-    const rawDx = (user.lon - lon0) * mPerDegLon;
-    const rawDy = (user.lat - lat0) * M_PER_DEG_LAT;
-    const rp = rotatePtIntoGrid(rawDx, rawDy, rotDeg);
+    const dx = (user.lon - lon0) * mPerDegLon;
+    const dy = (user.lat - lat0) * M_PER_DEG_LAT;
 
-    const localX = rp.x + (sizeM / 2);
-    const localY = (sizeM / 2) - rp.y;
+    const localX = dx + (sizeM / 2);
+    const localY = (sizeM / 2) - dy;
 
-    // Only paint if user is actually inside the grid bounds
-    if (localX < 0 || localX > sizeM || localY < 0 || localY > sizeM) return false;
+    const clampedX = Math.min(Math.max(localX, 0), sizeM);
+    const clampedY = Math.min(Math.max(localY, 0), sizeM);
 
-    const col = Math.min(cells - 1, Math.max(0, Math.floor((localX / sizeM) * cells)));
-    const row = Math.min(cells - 1, Math.max(0, Math.floor((localY / sizeM) * cells)));
+    const col = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
+    const row = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
 
-    // Cell centre in grid frame → rotate back to real-world offset
+    // Store coverage as GPS coordinates (grid-position-independent)
     if (!Array.isArray(tile.coverageGps)) tile.coverageGps = [];
-    const cellCentreGridX = (col + 0.5) / cells * sizeM - (sizeM / 2);
-    const cellCentreGridY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
-    const cellRW = rotatePtFromGrid(cellCentreGridX, cellCentreGridY, rotDeg);
-    const cellLat = lat0 + cellRW.y / M_PER_DEG_LAT;
-    const cellLon = lon0 + cellRW.x / mPerDegLon;
+    const cellCentreX = (col + 0.5) / cells * sizeM - (sizeM / 2);
+    const cellCentreY = (sizeM / 2) - (row + 0.5) / cells * sizeM;
+    const cellLat = lat0 + cellCentreY / M_PER_DEG_LAT;
+    const cellLon = lon0 + cellCentreX / mPerDegLon;
     const cellColor = colourNameToTileFill(colourName);
     const existingIdx = tile.coverageGps.findIndex(p => {
-        const pdx = (p.lon - lon0) * mPerDegLon;
-        const pdy = (p.lat - lat0) * M_PER_DEG_LAT;
-        const prp = rotatePtIntoGrid(pdx, pdy, rotDeg);
-        const pc = Math.min(cells-1, Math.max(0, Math.floor(((prp.x+sizeM/2)/sizeM)*cells)));
-        const pr = Math.min(cells-1, Math.max(0, Math.floor(((sizeM/2-prp.y)/sizeM)*cells)));
+        const pdx = (p.lon - lon0) * mPerDegLon + (sizeM / 2);
+        const pdy = (sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT;
+        const pc = Math.min(cells-1, Math.max(0, Math.floor((pdx/sizeM)*cells)));
+        const pr = Math.min(cells-1, Math.max(0, Math.floor((pdy/sizeM)*cells)));
         return pc === col && pr === row;
     });
     if (existingIdx >= 0) {
@@ -2303,7 +2374,6 @@ function markTileGridComplete() {
             centerLat: Number(tile.centerLat),
             centerLon: Number(tile.centerLon),
             sizeM: sizeM,
-            rotationDeg: Number(tile.rotationDeg) || 0,
             completedAt: Date.now()
         });
     }
@@ -2338,103 +2408,72 @@ function drawTileGrid() {
     const tile = survey.gridTile;
     ensureTileCoverageStorage(tile);
 
-    const sizeM  = Number(tile.sizeM) || 15;
-    const cells  = Math.round(sizeM);
-    const total  = cells * cells;
-    const rotDeg = Number(tile.rotationDeg) || 0;
-    const rotRad = rotDeg * Math.PI / 180;
+    const sizeM = Number(tile.sizeM) || 15;
+    const cells = Math.round(sizeM);
+    const total = cells * cells;
 
-    // Canvas sized to the diagonal so the rotated red square always fits
-    const cssMax  = Math.min(window.innerWidth - 48, 520);
-    const gridPx  = Math.max(180, Math.round(cssMax * 0.72));
-    const px      = Math.round(gridPx * Math.SQRT2 * 1.05);
-    const cx = px / 2, cy = px / 2;
-    const gridOffX = cx - gridPx / 2;
-    const gridOffY = cy - gridPx / 2;
-    const cellPx   = gridPx / cells;
+    const cssMax = Math.min(window.innerWidth - 48, 520);
+    const px = Math.max(240, cssMax);
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.style.width     = px + 'px';
-    canvas.style.height    = px + 'px';
-    canvas.style.minWidth  = px + 'px';
-    canvas.style.minHeight = px + 'px';
-    canvas.width  = Math.floor(px * dpr);
+    canvas.style.width = px + 'px';
+    canvas.style.height = px + 'px';
+    canvas.width = Math.floor(px * dpr);
     canvas.height = Math.floor(px * dpr);
 
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, px, px);
 
-    // ── Background ────────────────────────────────────────────────────────
-    ctx.fillStyle = '#f9fafb';
-    ctx.fillRect(0, 0, px, px);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(gridOffX, gridOffY, gridPx, gridPx);
+    const cellPx = px / cells;
 
-    // ── Coverage cells — drawn in North-up grid frame, no rotation ────────
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, px, px);
+
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total) {
         for (let i = 0; i < total; i++) {
             if (tile.coverageBits[i] !== '1') continue;
-            const r   = Math.floor(i / cells);
-            const c   = i - r * cells;
+            const r = Math.floor(i / cells);
+            const c = i - r * cells;
             const key = `${r},${c}`;
-            const fill = (tile.coverageColors && tile.coverageColors[key])
-                ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
+            const fill = (tile.coverageColors && tile.coverageColors[key]) ? tile.coverageColors[key] : 'rgba(34,197,94,0.18)';
             ctx.fillStyle = fill;
-            ctx.fillRect(gridOffX + c * cellPx, gridOffY + r * cellPx, cellPx, cellPx);
+            ctx.fillRect(c * cellPx, r * cellPx, cellPx, cellPx);
         }
     }
 
-    // ── Grid lines — North-up, no rotation ───────────────────────────────
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= cells; i++) {
-        const x = gridOffX + i * cellPx;
-        ctx.beginPath(); ctx.moveTo(x, gridOffY); ctx.lineTo(x, gridOffY + gridPx); ctx.stroke();
-        const y = gridOffY + i * cellPx;
-        ctx.beginPath(); ctx.moveTo(gridOffX, y); ctx.lineTo(gridOffX + gridPx, y); ctx.stroke();
+        const x = i * cellPx;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, px); ctx.stroke();
+        const y = i * cellPx;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
     }
 
-    // ── Red border square — ONLY this rotates ────────────────────────────
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(rotRad);
-    ctx.translate(-cx, -cy);
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(gridOffX + 1, gridOffY + 1, gridPx - 2, gridPx - 2);
-    ctx.restore();
+    ctx.strokeRect(1, 1, px - 2, px - 2);
 
-    // ── N/S/E/W labels — fixed to canvas edges ────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('N', px / 2, 14);
     ctx.fillText('S', px / 2, px - 6);
     ctx.textAlign = 'left';
-    ctx.fillText('W', 6, px / 2 + 4);
+    ctx.fillText('W', 6, px / 2);
     ctx.textAlign = 'right';
-    ctx.fillText('E', px - 6, px / 2 + 4);
-    if (rotDeg !== 0) {
-        ctx.textAlign = 'center';
-        ctx.font = '10px Arial';
-        ctx.fillStyle = 'rgba(220,38,38,0.85)';
-        ctx.fillText(rotDeg + '°', px / 2, px / 2 + 4);
-    }
+    ctx.fillText('E', px - 6, px / 2);
 
-    // ── Update text displays ──────────────────────────────────────────────
     const centreEl = document.getElementById('tile-grid-centre-text');
-    if (centreEl) centreEl.textContent =
-        `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
+    if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
 
-    const live    = getBestLiveGpsCoordsOrNull();
+    const live = getBestLiveGpsCoordsOrNull();
     const tileAge = Date.now() - (tileGridLastFixTs || 0);
-    const user    = (tileGridLastCoords && tileAge <= 2000)
-        ? tileGridLastCoords : (live || tileGridLastCoords);
+    const user = (tileGridLastCoords && tileAge <= 2000) ? tileGridLastCoords : (live || tileGridLastCoords);
 
     const userEl = document.getElementById('tile-grid-user-text');
-    if (userEl) userEl.textContent = user
-        ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
+    if (userEl) userEl.textContent = user ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
 
     const covEl = document.getElementById('tile-grid-coverage-text');
     if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
@@ -2444,24 +2483,19 @@ function drawTileGrid() {
     if (!isFinite(lat0) || !isFinite(lon0)) return;
 
     const M_PER_DEG_LAT = 110574;
-    const mPerDegLon    = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    // ── Helper: GPS → canvas pixel (no rotation) ─────────────────────────
-    const gpsToPx = (lat, lon) => ({
-        x: gridOffX + ((lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * gridPx,
-        y: gridOffY + (sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT) / sizeM * gridPx
-    });
+    // Painting and user dot require a GPS fix — tracks/targets/finds draw regardless
+    const localX = user ? (user.lon - lon0) * mPerDegLon + (sizeM / 2) : null;
+    const localY = user ? (sizeM / 2) - (user.lat - lat0) * M_PER_DEG_LAT : null;
 
-    // ── User position ─────────────────────────────────────────────────────
-    const localX = user ? (user.lon - lon0) * mPerDegLon + sizeM / 2 : null;
-    const localY = user ? sizeM / 2 - (user.lat - lat0) * M_PER_DEG_LAT : null;
+    if (user && tile.paintingEnabled) {
+        const clampedX = Math.min(Math.max(localX, 0), sizeM);
+        const clampedY = Math.min(Math.max(localY, 0), sizeM);
 
-    // ── Paint cells under user (auto-paint) ───────────────────────────────
-    if (user && tile.paintingEnabled &&
-        localX >= 0 && localX <= sizeM && localY >= 0 && localY <= sizeM) {
+        const col0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedX / sizeM) * cells)));
+        const row0 = Math.min(cells - 1, Math.max(0, Math.floor((clampedY / sizeM) * cells)));
 
-        const col0 = Math.min(cells-1, Math.max(0, Math.floor((localX / sizeM) * cells)));
-        const row0 = Math.min(cells-1, Math.max(0, Math.floor((localY / sizeM) * cells)));
         let paintedAny = false;
 
         for (let dr = -1; dr <= 1; dr++) {
@@ -2471,32 +2505,34 @@ function drawTileGrid() {
                 const did = setTileCellVisited(tile, col, row, cells);
                 if (did) {
                     paintedAny = true;
-                    const __k    = `${row},${col}`;
-                    const __fill = (tile.coverageColors && tile.coverageColors[__k])
-                        ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
+
+                    const __k = `${row},${col}`;
+                    const __fill = (tile.coverageColors && tile.coverageColors[__k]) ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
                     ctx.fillStyle = __fill;
-                    ctx.fillRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
-                    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
-                    ctx.strokeRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
+                    ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
+
+                    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(col * cellPx, row * cellPx, cellPx, cellPx);
                 }
             }
         }
+
         if (paintedAny) {
             tile.coverageLastPainted = Date.now();
-            survey.dateLastChanged   = Date.now();
+            survey.dateLastChanged = Date.now();
             saveSurveysToLocalStorage();
         }
     }
 
-    // ── Targets, stakes, finds ────────────────────────────────────────────
-    const allTargets = Array.isArray(survey.targets)
-        ? survey.targets.filter(t => {
-            if (!t || t.deleted) return false;
-            if (String(t.vdi).trim() === '-100') return !!showMapStakes;
-            return !!showMapTargets;
-          }) : [];
-    const allFindsForGrid = showMapFinds ? (Array.isArray(finds)
-        ? finds.filter(f => f && !f.deleted && f.surveyId === survey.id) : []) : [];
+    // ── Draw targets, stakes, and finds within the tile ──
+    const openSurveyForGrid = survey;
+    const allTargets = Array.isArray(openSurveyForGrid.targets)
+        ? openSurveyForGrid.targets.filter(t => t && !t.deleted)
+        : [];
+    const allFindsForGrid = Array.isArray(finds)
+        ? finds.filter(f => f && !f.deleted && f.surveyId === openSurveyForGrid.id)
+        : [];
 
     const PIN_COLORS = {
         target: {
@@ -2520,85 +2556,72 @@ function drawTileGrid() {
 
     function drawGridPin(itemLat, itemLon, color, isStakePin) {
         if (!isFinite(itemLat) || !isFinite(itemLon)) return;
-        const p = gpsToPx(itemLat, itemLon);
-        if (p.x < gridOffX - 5 || p.x > gridOffX + gridPx + 5) return;
-        if (p.y < gridOffY - 5 || p.y > gridOffY + gridPx + 5) return;
+        const idx = (itemLon - lon0) * mPerDegLon + (sizeM / 2);
+        const idy = (sizeM / 2) - (itemLat - lat0) * M_PER_DEG_LAT;
+        if (idx < -1 || idx > sizeM + 1 || idy < -1 || idy > sizeM + 1) return;
+        const px2x = (idx / sizeM) * px;
+        const px2y = (idy / sizeM) * px;
+        const r = 4;
         ctx.beginPath();
         ctx.fillStyle = color;
-        ctx.arc(p.x, p.y, isStakePin ? 4 : 7, 0, Math.PI * 2);
+        if (isStakePin) {
+            ctx.arc(px2x, px2y, 3, 0, Math.PI * 2);
+        } else {
+            ctx.arc(px2x, px2y, r, 0, Math.PI * 2);
+        }
         ctx.fill();
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.stroke();
     }
 
+    // Helper: parse lat/lon from either direct fields or coordinates string
     function parseItemCoords(item) {
         if (!item) return null;
+        // Direct lat/lon fields
         let lat = Number(item.lat ?? item.latitude);
         let lon = Number(item.lon ?? item.longitude);
         if (isFinite(lat) && isFinite(lon)) return { lat, lon };
+        // Coordinates string "lat, lon"
         const coordStr = String(item.coordinates || item.coords || '');
         if (coordStr) {
             const parts = coordStr.split(',').map(s => parseFloat(s.trim()));
-            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1]))
+            if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
                 return { lat: parts[0], lon: parts[1] };
+            }
         }
         return null;
     }
 
-    // ── Draw tracks ───────────────────────────────────────────────────────
-    const visibleTracks = showMapTracks ? (Array.isArray(survey.tracks)
-        ? survey.tracks.filter(t => t && t.isVisible !== false &&
-            Array.isArray(t.points) && t.points.length > 1) : []) : [];
-    for (const track of visibleTracks) {
+    // Draw tracks
+    const visibleTracksForGrid = Array.isArray(survey.tracks)
+        ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
+        : [];
+    for (const track of visibleTracksForGrid) {
+        const trackColor = track.color || '#000000';
         ctx.beginPath();
-        ctx.strokeStyle = track.color || '#000000';
-        ctx.lineWidth   = 2;
+        ctx.strokeStyle = trackColor;
+        ctx.lineWidth = 2;
         ctx.globalAlpha = 0.75;
         let started = false;
         for (const p of track.points) {
             if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
-            const tp = gpsToPx(p.lat, p.lon);
-            if (!started) { ctx.moveTo(tp.x, tp.y); started = true; }
-            else ctx.lineTo(tp.x, tp.y);
+            const tx = ((p.lon - lon0) * mPerDegLon + (sizeM / 2)) / sizeM * px;
+            const ty = ((sizeM / 2) - (p.lat - lat0) * M_PER_DEG_LAT) / sizeM * px;
+            if (!started) { ctx.moveTo(tx, ty); started = true; }
+            else ctx.lineTo(tx, ty);
         }
         ctx.stroke();
         ctx.globalAlpha = 1;
-
-        // Track label at midpoint
-        if (showMapTrackLabels && track.name) {
-            const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
-            if (midPts.length > 0) {
-                const mid = midPts[Math.floor(midPts.length / 2)];
-                const tp = gpsToPx(mid.lat, mid.lon);
-                ctx.font = 'bold 12px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom';
-                // White outline for readability
-                ctx.strokeStyle = 'white';
-                ctx.lineWidth = 3;
-                ctx.lineJoin = 'round';
-                ctx.strokeText(track.name, tp.x, tp.y - 6);
-                ctx.fillStyle = track.color || '#000000';
-                ctx.fillText(track.name, tp.x, tp.y - 6);
-            }
-        }
     }
 
-    // ── Draw targets ──────────────────────────────────────────────────────
+    // Draw targets
     for (const t of allTargets) {
         const c = parseItemCoords(t);
         if (!c) continue;
         const isStakePin = String(t.vdi).trim() === '-100';
         if (isStakePin) {
             drawGridPin(c.lat, c.lon, PIN_COLORS.stake, true);
-            if (showMapStakeLabels) {
-                const sp = gpsToPx(c.lat, c.lon);
-                ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-                ctx.strokeText('Stake', sp.x, sp.y - 6);
-                ctx.fillStyle = PIN_COLORS.stake; ctx.fillText('Stake', sp.x, sp.y - 6);
-            }
         } else {
             const st = (t.status || 'not dug').toLowerCase();
             if (st === 'ignore') {
@@ -2616,44 +2639,31 @@ function drawTileGrid() {
                     ? (vdiColorMap[vdiColorClass] || PIN_COLORS.target[st] || PIN_COLORS.target['not dug'])
                     : (PIN_COLORS.target[st] || PIN_COLORS.target['not dug']);
                 drawGridPin(c.lat, c.lon, color, false);
-                if (showMapTargetLabels && (t.description || t.vdi)) {
-                    const lbl = [String(t.vdi||'').trim(), String(t.description||'').trim()].filter(Boolean).join(', ');
-                    const tp2 = gpsToPx(c.lat, c.lon);
-                    ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-                    ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-                    ctx.strokeText(lbl, tp2.x, tp2.y - 6);
-                    ctx.fillStyle = color; ctx.fillText(lbl, tp2.x, tp2.y - 6);
-                }
             }
         }
     }
 
-    // ── Draw finds ────────────────────────────────────────────────────────
+    // Draw finds
     for (const f of allFindsForGrid) {
         const c = parseItemCoords(f);
         if (!c) continue;
         const color = PIN_COLORS.find[f.findType || f.type] || PIN_COLORS.findDefault;
         drawGridPin(c.lat, c.lon, color, false);
-        if (showMapFindLabels && (f.findType || f.type || f.description)) {
-            const lbl = String(f.findType || f.type || f.description || '').trim();
-            if (lbl) {
-                const fp = gpsToPx(c.lat, c.lon);
-                ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-                ctx.strokeText(lbl, fp.x, fp.y - 6);
-                ctx.fillStyle = color; ctx.fillText(lbl, fp.x, fp.y - 6);
-            }
-        }
     }
 
-    // ── User dot ──────────────────────────────────────────────────────────
+    // Draw user dot only if we have a GPS fix and are within the tile
     if (localX !== null && localY !== null &&
-        localX >= -1 && localX <= sizeM + 1 && localY >= -1 && localY <= sizeM + 1) {
-        const up = gpsToPx(user.lat, user.lon);
+        localX >= -1 && localX <= sizeM + 1 &&
+        localY >= -1 && localY <= sizeM + 1) {
+
+        const pxX = (localX / sizeM) * px;
+        const pxY = (localY / sizeM) * px;
+
         ctx.beginPath();
         ctx.fillStyle = 'rgba(29,78,216,0.95)';
-        ctx.arc(up.x, up.y, 5, 0, Math.PI * 2);
+        ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
         ctx.fill();
+
         ctx.lineWidth = 2;
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
         ctx.stroke();
@@ -2913,10 +2923,7 @@ async function deleteFindPermanently(findId) {
         }
     }
 
-    const deletedFind = finds[idx];
     finds.splice(idx, 1);
-    const delFindSurvey = deletedFind && surveys.find(s => s.id === deletedFind.surveyId);
-    if (delFindSurvey) { delFindSurvey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
     saveFindsToLocalStorage();
 
     showMessage('Find deleted (including photos).', 'success');
@@ -3585,238 +3592,394 @@ function enforceCanCreateOrWarn(type) {
 }
 
 function renderHelpPage() {
-    const S = 'bg-white rounded-xl shadow border border-gray-100 p-5 mb-4';
-    const H = 'text-base font-bold text-primary uppercase tracking-wide mb-3 flex items-center gap-2';
-    const H2 = 'text-sm font-bold text-gray-700 mt-4 mb-1';
-    const P = 'text-sm text-gray-700 leading-relaxed mb-2';
-    const UL = 'list-disc list-inside text-sm text-gray-700 space-y-1 mb-2';
     return `
-      <div class="p-4 max-w-2xl mx-auto">
-        <h2 class="text-2xl font-bold text-primary mb-1">Help &amp; Getting Started</h2>
-        <p class="text-sm text-gray-500 mb-4">Detekta — A Metal Detecting App</p>
+      <div class="p-4 space-y-4">
+        <h2 class="text-2xl font-bold text-primary mb-4">
+          Help &amp; Getting Started
+        </h2>
 
-        <!-- OVERVIEW -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-info-circle"></i> Overview</h3>
-          <p class="${P}">Detekta is a field logging and mapping app designed for metal detectorists.
-          It works fully offline and stores all data locally on your device.</p>
-          <p class="${P}">Navigate between the five pages using the buttons at the top and bottom of the screen:</p>
-          <ul class="${UL}">
-            <li><strong>Home</strong> — survey list and summary</li>
-            <li><strong>Map</strong> — survey map, tile grid, tracks</li>
-            <li><strong>Targets</strong> — logged signals for the open survey</li>
-            <li><strong>Finds</strong> — identified finds across all surveys</li>
-            <li><strong>Export</strong> — backup, share, and import</li>
-          </ul>
-        </div>
+        <pre class="whitespace-pre-wrap text-sm bg-white p-4 rounded-xl shadow border border-gray-200">
+Detekta – A Metal Detecting App
+Help &amp; Getting Started
 
-        <!-- HOME PAGE -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-home"></i> Home Page</h3>
-          <p class="${P}">The Home page shows all your surveys. Each survey card displays the last change date
-          and last export date. The export date turns <span class="text-red-600 font-semibold">red</span>
-          if changes have been made since the last export — do not ignore this warning.</p>
-          <p class="${P}">From the Home page you can:</p>
-          <ul class="${UL}">
-            <li>Create a new survey</li>
-            <li>Open an existing survey</li>
-            <li>Export the open survey instantly with the <strong>Export Now</strong> button</li>
-            <li>Edit or close the open survey</li>
-            <li>Delete a survey</li>
-          </ul>
-          <p class="${P}">Only one survey can be open at a time. The Targets page always shows data for the currently open survey.</p>
-        </div>
+Detekta is a field logging and navigation app designed for metal detectorists.
+It works fully offline and stores all data locally on your device.
 
-        <!-- SURVEY FORMS -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-clipboard-list"></i> Survey Forms</h3>
-          <p class="${P}">Create Survey and Edit Survey are divided into five sections:</p>
-          <ul class="${UL}">
-            <li><strong>Survey Details</strong> — name, description, and photo</li>
-            <li><strong>Permission</strong> — who gave permission, type, dates, notes</li>
-            <li><strong>Site Characteristics</strong> — area type, land use, soil, weather</li>
-            <li><strong>Context</strong> — purpose, expected period, access notes, hazards</li>
-            <li><strong>Outcome</strong> — productivity, would detect again, general notes</li>
-          </ul>
-          <p class="${P}">The photo button appears just below the Description field in all forms
-          (Create/Edit Survey, Create/Edit Target, Edit Find) for quick access in the field.
-          All sections except Survey Details are optional.</p>
-        </div>
+--------------------------------
+OVERVIEW
+--------------------------------
 
-        <!-- MAP PAGE -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-map"></i> Map Page</h3>
-          <p class="${P}">The Map page shows the survey map with all targets, finds, stakes, and tracks plotted.</p>
+On your screen you will see a row of icons at the top.
+These are the navigation buttons for the five pages of the app:
+• Home
+• Map (Compass)
+• Targets
+• Finds
+• Export
 
-          <h4 class="${H2}">Survey Map</h4>
-          <p class="${P}">The map plots all items with GPS coordinates. Tap a pin to navigate back to it.
-          The map adjusts its bounds automatically to show all data.</p>
+A second row of icons appears at the bottom on mobile devices.
 
-          <h4 class="${H2}">Map Controls</h4>
-          <p class="${P}">Below the map are four rows of buttons:</p>
-          <ul class="${UL}">
-            <li><strong>TILE</strong> [10m] [20m] [30m] [Hide/Show] — place the tile grid centred on your GPS position at that size</li>
-            <li><strong>MAP</strong> [◀] [▲] [▼] [▶] — pan the survey map (hold to pan continuously)</li>
-            <li><strong>GRID</strong> [W] [N] [S] [E] — move the tile grid (hold to move continuously)</li>
-            <li><strong>ROT</strong> [↺] [↻] [0°] — rotate the tile grid to align with field boundaries</li>
-            <li><strong>ZOOM</strong> [+] [−] [Reset] [Hide/Show] — zoom and reset the map view</li>
-          </ul>
+--------------------------------
+HOME PAGE
+--------------------------------
 
-          <h4 class="${H2}">Map Layers</h4>
-          <p class="${P}">The Map Layers section controls what is shown on both the Survey Map and the Tile Grid.
-          Options are arranged in pairs — each item and its label:</p>
-          <ul class="${UL}">
-            <li><strong>Targets / Target Labels</strong> — target pins and VDI/description</li>
-            <li><strong>Finds / Find Labels</strong> — find pins and find type</li>
-            <li><strong>Stakes / Stake Labels</strong> — stake pins and “Stake” label</li>
-            <li><strong>Tracks / Track Labels</strong> — track lines and track name at midpoint</li>
-          </ul>
+Home icon
+Takes you to the Survey Dashboard.
+Here you can see totals for all your surveys, targets, finds,
+tracks, stakes, and photos.
+Storage used and available is also shown.
 
-          <h4 class="${H2}">Quick Target Buttons</h4>
-          <p class="${P}">Five coloured buttons (Blue, Sky, Green, Amber, Red) log a target instantly with a single tap,
-          using the VDI range set for that colour in your Profile.</p>
+From the Home page you can:
+• Create a new survey
+• Open an existing survey
+• Close or archive a survey
+• Delete a survey
 
-          <h4 class="${H2}">Tracks</h4>
-          <p class="${P}">The Tracks section lists all recorded tracks. Use the checkbox to show/hide each track,
-          the pencil icon to rename or recolour it, and the bin icon to delete it.</p>
-          <p class="${P}">Tap <strong>Start Tracking</strong> to record your path. Tap <strong>Stop Tracking</strong> when you finish.
-          The first track is named Perimeter by default.</p>
+Only one survey can be open at a time.
+The Targets page always shows data for the currently open survey.
 
-          <h4 class="${H2}">Stake Button</h4>
-          <p class="${P}">Places a small black circle marker at your current GPS position. Use stakes to mark
-          field boundaries, gates, or reference points.</p>
+--------------------------------
+MAP PAGE (COMPASS)
+--------------------------------
 
-          <h4 class="${H2}">Tile Grid</h4>
-          <p class="${P}">The Tile Grid helps you cover an area systematically. Tap a TILE size button to place
-          the grid centred on your position. Choose from 10m, 20m, or 30m.</p>
-          <p class="${P}">To use the tile grid:</p>
-          <ul class="${UL}">
-            <li>Tap a size button — the red grid outline appears on the survey map</li>
-            <li>Rotate with the ROT buttons to align with field boundaries</li>
-            <li>Use the GRID buttons to fine-tune the position</li>
-            <li>As you walk within the grid, cells shade green automatically</li>
-            <li>Tap <strong>Complete</strong> when done — the area is saved on the map</li>
-            <li>Move to an adjacent area and repeat</li>
-          </ul>
-          <p class="${P}">The coloured quick buttons inside the Tile Grid section log a target and paint the
-          cell simultaneously. The camera button attaches a photo to the target.</p>
-          <p class="${P}">Use <strong>Clear</strong> to reset coverage without marking as complete.</p>
-        </div>
+This is the main field page, used while detecting.
 
-        <!-- TARGETS PAGE -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-bullseye"></i> Targets Page</h3>
-          <p class="${P}">Lists all targets and stakes for the open survey. Use <strong>Log New Target</strong>
-          to record a signal. The photo button appears below the description for quick capture in the field.</p>
-          <p class="${P}">Each target has three rows of buttons:</p>
-          <ul class="${UL}">
-            <li><strong>Status</strong> — Not Dug, Dug, Refilled, Ignored</li>
-            <li><strong>Actions</strong> — QR Code, Navigate, Centre Map</li>
-            <li><strong>Management</strong> — Edit, Copy to Finds, Delete</li>
-          </ul>
-          <p class="${P}">Use <strong>Copy to Finds</strong> once you have dug and identified something worth recording.
-          The target is promoted to your Finds library and removed from Targets.</p>
-        </div>
+SURVEY MAP
+The map shows all targets, finds, stakes, and tracks for the
+open survey. North is always at the top.
 
-        <!-- FINDS PAGE -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-trophy"></i> Finds Page</h3>
-          <p class="${P}">Lists all finds across all surveys. Filter by type, survey, date, or search text.
-          Each find can be edited or deleted. The photo button appears below the description in the Edit Find form.</p>
-        </div>
+Pins are colour coded:
 
-        <!-- EXPORT & IMPORT -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-file-export"></i> Export &amp; Import</h3>
+  Targets (by dig status):
+  • Blue       – Not dug
+  • Amber      – Dug
+  • Green      – Refilled
+  • Grey       – Ignored
 
-          <h4 class="${H2}">Export Open Survey as ZIP</h4>
-          <p class="${P}">Creates a ZIP file with the survey, all targets, finds, and photos. Saved to Downloads.
-          The quickest way to export is the <strong>Export Now</strong> button on the open survey card on the Home page.</p>
+  Finds (by find type):
+  • Yellow     – Coin
+  • Brown      – Button
+  • Red        – Relic
+  • Pink       – Jewelry
+  • Dark grey  – Iron Junk
+  • Light grey – Modern Junk
+  • Purple     – Unidentified
+  • Teal       – Other
 
-          <h4 class="${H2}">Export Photo Gallery</h4>
-          <p class="${P}">Creates a self-contained HTML website with your photos. Others can open it in any browser.</p>
+  Stakes are shown as small black squares.
 
-          <h4 class="${H2}">Export as GPX</h4>
-          <p class="${P}">Exports survey data (without photos) in GPX format for use in mapping apps such as Google Maps or OsmAnd.</p>
+MAP CONTROLS
+Four directional buttons (◀ ▲ ▼ ▶) pan the map left, up, down,
+and right. Hold a button down to pan continuously.
+The + and – buttons zoom in and out.
+Reset returns the map to its default view.
+Show/Hide toggles your GPS position dot on the map.
 
-          <h4 class="${H2}">Import Survey</h4>
-          <p class="${P}">Imports a ZIP or JSON file previously exported from Detekta. Imported surveys always arrive
-          as Active status and appear immediately on the Home page.</p>
+Tap any target or find pin to open navigation guidance back
+to that point.
 
-          <h4 class="${H2}">Import GPX</h4>
-          <p class="${P}">Creates a survey from a GPX file exported from another mapping app.</p>
+MAP LAYERS
+Use the Map Layers section to toggle which items are visible:
+• Show Targets
+• Show Stakes
+• Show Finds
+• Show Tracks
+• Show Target Labels
+• Show Find Labels
 
-          <h4 class="${H2}">Import Target via QR Code</h4>
-          <p class="${P}">Creates a new target by scanning a QR code shown on another device.</p>
-        </div>
+QUICK TARGET BUTTONS
+Five coloured buttons (Blue, Sky, Green, Amber, Red) let you
+log a target instantly with a single tap.
+Each button logs a target using the VDI range configured for
+that colour in your Profile settings.
+The label on each button shows the VDI range it covers.
 
-        <!-- SETTINGS -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-cog"></i> Settings</h3>
+TRACKS
+The Tracks section lists all tracks recorded for the open
+survey. Each track shows a coloured circle indicating its
+colour on the map, followed by the track name, point count,
+and time recorded.
 
-          <h4 class="${H2}">Your Profile</h4>
-          <p class="${P}">Set your name, NCMD number, and detector model. Changing the detector automatically
-          updates the Quick Target Button VDI ranges to match your machine.</p>
+Use the checkbox beside each track to show or hide it on
+the map. Use the pencil icon to edit the track name,
+description, and colour. Use the bin icon to delete a track.
 
-          <h4 class="${H2}">Quick Target Buttons</h4>
-          <p class="${P}">Configures the five coloured buttons on the Map page. Three presets available:</p>
-          <ul class="${UL}">
-            <li><strong>Minelab</strong> (−10 to +40) — Equinox, Vanquish, Manticore etc.</li>
-            <li><strong>Nokta Legend</strong> (0 to 60)</li>
-            <li><strong>Standard</strong> (0 to 99) — Garrett, Fisher, Nokta (other models), XP etc.</li>
-          </ul>
+Deleting a track in the middle of the list automatically
+moves the remaining tracks up.
 
-          <h4 class="${H2}">Photo Settings</h4>
-          <p class="${P}">Sets the maximum width photos are resized to before saving. Set to 0 to disable resizing.</p>
+TRACKING
+Tap "Start Tracking" to record your path as you detect.
+Your track appears on the map as you move.
+Tap "Stop Tracking" when you finish.
+If you forget to stop, your journey home will be recorded.
 
-          <h4 class="${H2}">App Limits</h4>
-          <p class="${P}">Displays any active limits on surveys, targets, and finds, and the expiry date of this build.</p>
-        </div>
+The first track created for a survey is named Perimeter
+by default. Subsequent tracks are named Track 2, Track 3,
+and so on. You can rename any track using the pencil icon.
 
-        <!-- GETTING STARTED -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-play-circle"></i> Getting Started</h3>
-          <ol class="list-decimal list-inside text-sm text-gray-700 space-y-3">
-            <li><strong>Set Up Your Profile</strong><br>
-              <span class="text-gray-600 ml-5">Go to Settings → Edit Profile. Enter your name and detector.
-              Detekta sets the correct VDI ranges automatically.</span></li>
-            <li><strong>Create a Survey</strong><br>
-              <span class="text-gray-600 ml-5">Tap Create New Survey on the Home page. Give it a name and optional photo.</span></li>
-            <li><strong>Start Detecting</strong><br>
-              <span class="text-gray-600 ml-5">Go to the Map page and tap Start Tracking. Log targets with the coloured
-              quick buttons or the Log New Target button. Place stakes to mark boundaries.</span></li>
-            <li><strong>Use the Tile Grid</strong><br>
-              <span class="text-gray-600 ml-5">Tap a TILE size button to place the grid. Rotate to align with
-              field boundaries. Walk systematically — cells paint as you move.</span></li>
-            <li><strong>Record Your Finds</strong><br>
-              <span class="text-gray-600 ml-5">Once you have identified a find, tap Copy to Finds on the Targets page.
-              Update the type, description, and photos.</span></li>
-            <li><strong>Back Up Your Data</strong><br>
-              <span class="text-gray-600 ml-5">Export regularly using the Export Now button on the Home page.
-              The export date turns red when there are unsaved changes — do not ignore it.</span></li>
-          </ol>
-        </div>
+Track colours cycle through a palette of 16 colours.
+The first track (Perimeter) is always black by default.
+You can change any track colour using the pencil icon.
 
-        <!-- GPS ACCURACY -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-satellite"></i> GPS Accuracy</h3>
-          <p class="${P}">GPS will only get you into the approximate area of a target. Errors of more than one metre
-          are common. If you need to return precisely to a buried target, place a visible marker directly above it
-          and use the app to get close, then locate the marker visually.</p>
-          <p class="${P}">The GPS accuracy reading is shown next to your coordinates on the Map page.</p>
-        </div>
+STAKE BUTTON
+The STAKE button places a black square marker at your current
+GPS position. Use stakes to mark field boundaries, gates, or
+reference points.
 
-        <!-- DATA & PRIVACY -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-shield-alt"></i> Data &amp; Privacy</h3>
-          <p class="${P}">Detekta does not collect or transmit any personal data. All data is stored locally
-          on your device. Nothing is shared unless you choose to export it.</p>
-        </div>
+TILE GRID (15×15 metres)
+The Tile Grid divides your survey area into a 15×15 metre
+square. It helps you track which parts of the field you have
+covered systematically.
 
+To use the tile grid:
+1. Stand at the centre of the area you want to cover.
+2. Tap "Set Centre Here" (in the GPS section above the map).
+   This places the 15×15 metre grid centred on your position.
+3. The grid appears on the map as a red outline.
+4. As you move within the grid, cells are shaded automatically
+   to show which areas you have walked over.
+5. Tap "Complete" when you have finished that square.
+   The completed area is saved and shown in green on the map.
+6. Move to an adjacent area and repeat.
+
+The Tile Grid panel also shows:
+• The grid centre coordinates
+• Your current position within the grid
+• Your coverage percentage for the current tile
+
+Use "Clear" to reset the coverage for the current tile without
+marking it as complete.
+
+--------------------------------
+TARGETS PAGE
+--------------------------------
+
+Bullseye (target) icon
+This opens the Targets page, which lists all targets and stakes
+for the open survey.
+
+Each target can be edited and can have multiple photos added.
+
+Use "Log New Target" to record detected signals manually.
+You can record:
+• Description
+• Target ID (VDI)
+• Depth
+• GPS location and accuracy
+• Photos
+
+For each target there are three rows of buttons:
+
+Row 1 – Hole status
+• Not Dug
+• Dug
+• Refilled
+• Ignored
+
+Row 2 – Actions
+• QR Code   – generates a QR code containing the target details.
+  A friend can scan this to import the target on their device.
+• Navigate  – provides guidance back to the target
+• Centre Map – centres the survey map on this target
+
+Row 3 – Management
+• Edit details   – change information and manage photos
+• Copy to Finds  – use this once you have dug and identified a
+  find worth recording permanently
+• Delete         – permanently removes the target and any photos
+  linked only to it. You will be asked to confirm first.
+
+When copying to Finds, the target is promoted to your Finds
+library and removed from the Targets list.
+
+--------------------------------
+FINDS PAGE
+--------------------------------
+
+Trophy icon
+This opens the Finds page, which lists all finds across all
+surveys.
+
+Finds can be filtered by:
+• Typing into the search box (searches description, VDI,
+  type, and survey name)
+• Find type (Coin, Button, Relic, Jewelry, etc.)
+• Survey name
+• Date logged
+
+Each find is shown with its type, description, VDI, depth,
+and photos. If a find has photos, tap the photo to step
+through them.
+
+Each find has buttons allowing you to edit or delete it.
+Deleting a find is permanent and will also remove any photos
+linked only to that find. You will be asked to confirm first.
+
+--------------------------------
+EXPORT &amp; IMPORT PAGE
+--------------------------------
+
+Export icon
+This opens the Export / Import page, used for backup and
+sharing.
+
+Export Open Survey as ZIP
+Creates a ZIP file containing the survey, all targets, finds,
+and photographs.
+The ZIP is saved to your Downloads folder.
+
+Export Photo Gallery
+Creates a self-contained HTML website in your Downloads folder.
+Others can open the HTML file in any browser to view your
+photos. Use the checkboxes to choose which surveys and photo
+types to include. Most people will only want to include finds.
+
+Export Open Survey as GPX
+Exports survey data (without photos) in GPX format.
+GPX files can be imported into mapping applications such as
+Google Maps, OsmAnd, and others.
+
+Select File and Import
+Imports a survey previously exported as a ZIP file.
+Use this to restore a backup or move data between devices.
+
+Select GPX and Import
+Creates a survey from a GPX file exported from another
+mapping app.
+
+Import Target (QR Code)
+Creates a new target by scanning a QR code shown on another
+device.
+
+--------------------------------
+SETTINGS PAGE
+--------------------------------
+
+Settings icon (cog)
+Opens the Settings page.
+
+YOUR PROFILE
+Shows your name, NCMD membership number, and detector.
+Tap "Edit Profile" to update any of these.
+
+The Edit Profile screen also contains the Quick Target Button
+range settings. When you change your detector to a recognised
+model, the VDI ranges update automatically to match your
+machine. Tap Save Changes to save your profile and ranges
+together.
+
+PHOTO SETTINGS
+Sets the maximum width photos are resized to before saving.
+Smaller values reduce storage and export file sizes.
+Set to 0 to disable resizing.
+
+QUICK TARGET BUTTONS (inside Edit Profile)
+Configures the five coloured buttons on the Map page.
+Each row sets a VDI range and a default saved Target ID for
+that colour band.
+
+Changing the detector in Edit Profile automatically updates
+the ranges to the correct preset for that machine.
+Three presets are available:
+
+• Minelab (-10 to +40)
+  All Minelab models (Equinox, Vanquish, Manticore, etc.)
+
+• Nokta Legend (0 to 60)
+  The Legend only (different scale to other Nokta models)
+
+• Standard (0 to 99)
+  Garrett, Fisher, Nokta (other models), Teknetics,
+  Bounty Hunter, White's, Rutus, XP
+
+APP LIMITS
+Displays any active limits on surveys, targets, and finds,
+and the expiry date of this build if applicable.
+
+DANGER ZONE
+Allows you to reset all app data. This cannot be undone.
+
+--------------------------------
+GETTING STARTED
+--------------------------------
+
+1. Set Up Your Profile
+   Go to Settings and tap "Edit Profile".
+   Enter your name, NCMD number, and detector model.
+   Detekta will automatically set up the correct VDI ranges
+   for your machine. Tap Save Changes.
+
+2. Create a Survey
+   A survey represents a detecting session or location.
+   Go to Home and tap "Create New Survey".
+   Give the survey a name. You may optionally add a
+   description and a photo.
+
+3. Start Detecting and Logging Targets
+   Go to the Map page and tap "Start Tracking".
+   Log targets using the coloured quick buttons or the
+   "Log New Target" button on the Targets page.
+   Dig high-value (red/amber) signals promptly.
+
+   Place stakes to mark field boundaries or reference points.
+   Tracks help you see which areas you have already covered.
+
+   When you finish, tap "Stop Tracking".
+   Delete any unwanted tracks from the Tracks section.
+
+4. Use the Tile Grid for Thorough Coverage
+   Stand at the centre of an area you want to cover.
+   Tap "Set Centre Here" to place the 15×15 metre grid.
+   Walk the grid systematically — cells paint as you move.
+   Tap "Complete" and move on to the next square.
+
+5. Record Your Finds
+   Once you have dug a target and identified a find, go to
+   the Targets page and tap "Copy to Finds".
+   Update the find type, description, and photos.
+   The find will appear in the Finds page across all surveys.
+
+6. Back Up Your Data
+   Detekta stores all data locally on your device.
+   Regularly export your surveys as ZIP files.
+   Exports are saved to your Downloads folder — copy them
+   to cloud storage, email them, or transfer to another
+   device.
+
+   It is your responsibility to make regular backups.
+
+--------------------------------
+GPS ACCURACY
+--------------------------------
+
+GPS will only get you into the approximate area of a target.
+Errors of more than one metre (3 feet) are common.
+There will be error in both the recorded position and your
+current position.
+
+If you need to return precisely to a buried target, place a
+visible marker (biodegradable if possible) directly above it.
+Use the app to get close, then locate the marker visually.
+
+The GPS accuracy reading is shown next to your coordinates
+on the Map page.
+
+--------------------------------
+DATA &amp; PRIVACY
+--------------------------------
+
+Detekta does not collect or transmit any personal data.
+All data is stored locally on your device.
+Nothing is shared unless you choose to export it.
+
+--------------------------------
+END
+--------------------------------
+
+        </pre>
       </div>
     `;
 }
-
 
 async function exportPhotoGallery_Download() {
     const logBox = document.getElementById('export-photo-gallery-log');
@@ -6988,10 +7151,6 @@ importedSurvey.surveyPhotoData = '';
 
     saveFindsToLocalStorage();
 
-    // Mark survey as changed when a find is edited
-    const editFindSurvey = surveys.find(s => s.id === find.surveyId);
-    if (editFindSurvey) { editFindSurvey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
-
     closeEditFindModal();
     showMessage('Find updated.', 'success');
     render();
@@ -7989,7 +8148,6 @@ function renderExportPage() {
 
         survey.tracks = (survey.tracks || []).filter(t => t.id !== track.id);
 
-        survey.dateLastChanged = Date.now();
         saveSurveysToLocalStorage();
         showMessage(`Track deleted: ${trackName}.`, 'success');
 
@@ -8160,13 +8318,6 @@ function stopLiveMapLocationWatch() {
         currentUserAccuracy = null;
         smoothedUserCoords = null;
         showMessage('Geolocation is not supported on this device.', 'error');
-        return;
-    }
-
-    // If a watch is already running, do not reset the coordinates.
-    // Resetting smoothedUserCoords while the user has a GPS fix causes the
-    // navigation line to vanish until the next GPS callback arrives.
-    if (liveMapWatchId !== null) {
         return;
     }
 
@@ -9032,8 +9183,7 @@ async function handleNewSurveySubmit(event) {
     surveys.forEach(s => {
         if (s.status === 'Open') {
             s.status = 'Active';
-            s.dateClosed = now;
-            // Don't update dateLastChanged — closing to make way for new survey is not a data change
+            s.dateLastChanged = now;
         }
     });
 
@@ -10637,13 +10787,12 @@ async function handleSurveyAction(button) {
                 surveys.forEach(s => {
                     if (s.status === 'Open') {
                         s.status = 'Active';
-                        // Don't update dateLastChanged — status change is not a data change
+                        s.dateLastChanged = now;
                     }
                 });
 
                 survey.status = 'Open';
-                survey.dateOpened = now;
-                // Don't update dateLastChanged — opening is not a data change
+                survey.dateLastChanged = now;
 
                 saveSurveysToLocalStorage();
                 showMessage(`Survey '${name}' is now OPEN.`, 'success');
@@ -10726,6 +10875,7 @@ case 'edit': {
     }
 
     navigationTargetId = targetId;
+    console.log('Navigation target selected from map:', navigationTargetId);
 
     if (!navSession) {
         navSession = {};
@@ -10741,9 +10891,11 @@ case 'edit': {
     showMessage('Navigation target selected on map.', 'info');
 
     if (currentPage === 'Compass') {
-        render();
-        if (typeof startLiveMapLocationWatch === 'function') startLiveMapLocationWatch();
-        if (typeof startCompassAutoRefresh === 'function') startCompassAutoRefresh();
+        const appContent = document.getElementById('app-content');
+        if (appContent) {
+            appContent.innerHTML = renderCompassPage(true);
+            attachPageEventListeners();
+        }
     }
 }
 
@@ -11247,7 +11399,7 @@ function renderHomePage() {
         </div>
     </div>
 
-    <h2 class="text-3xl font-bold text-primary mb-6">Surveys</h2>
+    <h2 class="text-3xl font-bold text-primary mb-6">Survey Dashboard</h2>
 
 
     <!-- Open Survey (rendered like any other card, just highlighted) -->
@@ -12445,7 +12597,7 @@ function stopMapPan() {
     }
 }
 
-function renderTargetPlot(targets, userCoordsOrNull = null, navCoordsOrNull = null) {
+function renderTargetPlot(targets, userCoordsOrNull = null) {
     const M_PER_DEG_LAT = 110574; // meters per degree latitude (relatively constant)
     const M_PER_DEG_LON_AT_EQUATOR = 111320; // meters per degree longitude (at equator)
 
@@ -12460,7 +12612,7 @@ function renderTargetPlot(targets, userCoordsOrNull = null, navCoordsOrNull = nu
     }
 
     const desc = String(t.description || '').trim();
-    if (isStakeTarget(t)) return showMapStakeLabels ? 'Stake' : '';
+    if (desc && desc.toUpperCase() === 'STAKE') return '';
 
     const v = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
         ? t.vdi
@@ -12706,7 +12858,7 @@ const toPercent = (x, y) => {
                     class="absolute map-pin"
                     style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${(t.description || '').replace(/"/g,'&quot;')} (${(t.type || '').toLowerCase()==='find' || t.isFind ? 'Find' : 'Target'} ID: ${t.vdi || ''})"
-                    onclick="handleMapTargetClick(event, '${t.id || ''}')" 
+                    onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
                     <div class="relative">
                         ${extraRing}
@@ -12779,39 +12931,39 @@ const toPercent = (x, y) => {
         const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
         const tile = survey && survey.gridTile ? survey.gridTile : null;
 
-        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, rotationDeg) => {
-            const half    = sizeM / 2;
-            const rotR    = -((rotationDeg || 0) * Math.PI / 180);
-            const cosR    = Math.cos(rotR), sinR = Math.sin(rotR);
-            const cLon    = Number(centerLon) * mPerDegLon;
-            const cLat    = Number(centerLat) * M_PER_DEG_LAT;
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText) => {
+            const half = sizeM / 2;
+            const cx = Number(centerLon) * mPerDegLon;
+            const cy = Number(centerLat) * M_PER_DEG_LAT;
 
-            // Four corners in grid frame, rotated to real-world metric offsets
-            const corners = [
-                { x: -half,  y:  half },
-                { x:  half,  y:  half },
-                { x:  half,  y: -half },
-                { x: -half,  y: -half },
-            ].map(({ x, y }) => {
-                const rx = x * cosR - y * sinR;
-                const ry = x * sinR + y * cosR;
-                return toPercent(cLon + rx, cLat + ry);
-            });
+            const minTx = cx - half, maxTx = cx + half;
+            const minTy = cy - half, maxTy = cy + half;
 
-            const pointsStr = corners.map(p => `${p.xPct.toFixed(3)},${p.yPct.toFixed(3)}`).join(' ');
-            const cPct      = toPercent(cLon, cLat);
-            const strokeColor = style.includes('34,197,94') ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
-            const fillColor   = style.includes('34,197,94') ? 'rgba(34,197,94,0.35)'  : 'rgba(239,68,68,0.25)';
+            const pTL = toPercent(minTx, maxTy);
+            const pBR = toPercent(maxTx, minTy);
+
+            const left = pTL.xPct;
+            const top = pTL.yPct;
+            const width = (pBR.xPct - pTL.xPct);
+            const height = (pBR.yPct - pTL.yPct);
+
+            const fontPx = (10 * invZoom);
 
             return `
-                <svg class="absolute inset-0 w-full h-full pointer-events-none"
-                     viewBox="0 0 100 100" preserveAspectRatio="none"
-                     style="z-index:8; overflow:visible;">
-                    <polygon points="${pointsStr}"
-                        style="fill:${fillColor}; stroke:${strokeColor}; stroke-width:0.3; vector-effect:non-scaling-stroke;" />
-                    ${labelText ? `<text x="${cPct.xPct.toFixed(3)}" y="${cPct.yPct.toFixed(3)}"
-                        text-anchor="middle" font-size="2" fill="rgba(20,83,45,0.95)">${labelText}</text>` : ''}
-                </svg>
+                <div class="absolute pointer-events-none"
+                     style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
+                            ${style}; border-radius: 6px;">
+                    ${labelText ? `
+                    <div class="absolute"
+                         style="left:50%; top:-10px; transform:translateX(-50%);
+                                font-size:${fontPx.toFixed(2)}px;
+                                padding:2px 6px; border-radius:999px;
+                                background: rgba(255,255,255,0.92);
+                                border: 1px solid rgba(34,197,94,0.35);
+                                color: rgba(20,83,45,0.95);">
+                        ${labelText}
+                    </div>` : ''}
+                </div>
             `;
         };
 
@@ -12823,7 +12975,7 @@ const toPercent = (x, y) => {
                     const sizeM = Number(a.sizeM) || 15;
                     const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
                     const label = '';
-                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label, Number(a.rotationDeg) || 0);
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label);
                 })
                 .join('');
         }
@@ -12833,7 +12985,7 @@ const toPercent = (x, y) => {
             const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, Number(tile.rotationDeg) || 0);
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -12842,7 +12994,6 @@ const toPercent = (x, y) => {
         console.warn('Grid tile render error:', e);
     }
 
-    let trackLabelsHtml = '';
     if (drawTracks.length) {
         const polylines = drawTracks.map(track => {
             const pts = track.points
@@ -12868,25 +13019,6 @@ const toPercent = (x, y) => {
                 ${polylines}
             </svg>
         `;
-
-        // Track labels as HTML divs — same style as target/find labels
-        if (showMapTrackLabels) {
-            trackLabelsHtml = drawTracks.map(track => {
-                if (!track.name) return '';
-                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
-                if (!midPts.length) return '';
-                const mid = midPts[Math.floor(midPts.length / 2)];
-                const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
-                const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                return `<div class="absolute pointer-events-none"
-                    style="left:${mp.xPct.toFixed(2)}%; top:${mp.yPct.toFixed(2)}%; z-index:13; transform:translate(-50%,-100%);">
-                    <span class="whitespace-nowrap text-xs font-semibold bg-white px-1 py-0.5 rounded-sm shadow border border-gray-300"
-                          style="color:${track.color || '#2563eb'}; transform:scale(${invZoom}); transform-origin:center bottom; display:block;">
-                        ${safe}
-                    </span>
-                </div>`;
-            }).join('');
-        }
     }
 
     let navLineHtml = '';
@@ -12899,7 +13031,6 @@ const toPercent = (x, y) => {
 
     if (navigationTargetId) {
         const navTarget = parsedCoords.find(t => t.id === navigationTargetId);
-
         if (navTarget) {
             navTargetLat = navTarget.lat;
             navTargetLon = navTarget.lon;
@@ -12912,39 +13043,24 @@ const toPercent = (x, y) => {
         }
     }
 
-    // Use userCoord if available (GPS dot visible), otherwise fall back to navCoordsOrNull
-    // so the red navigation line is drawn even when the user dot is hidden.
-    const navLineSourceCoord = userCoord || (
-        navCoordsOrNull &&
-        typeof navCoordsOrNull.lat === 'number' &&
-        typeof navCoordsOrNull.lon === 'number' &&
-        !isNaN(navCoordsOrNull.lat) &&
-        !isNaN(navCoordsOrNull.lon)
-            ? navCoordsOrNull
-            : null
-    );
-
     if (
         navigationTargetId &&
-        navLineSourceCoord &&
+        userCoord &&
         navTargetXPercent !== null &&
         navTargetYPercent !== null
     ) {
-        const lineMeters = { x: navLineSourceCoord.lon * mPerDegLon, y: navLineSourceCoord.lat * M_PER_DEG_LAT };
-        const linePct = toPercent(lineMeters.x, lineMeters.y);
+        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
+        const userPct = toPercent(userMeters.x, userMeters.y);
 
         navLineHtml = `
-            <svg class="absolute inset-0 w-full h-full pointer-events-none"
-                 viewBox="0 0 100 100" preserveAspectRatio="none"
-                 style="z-index: 15;">
+            <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 15;">
                 <line
-                    x1="${linePct.xPct.toFixed(2)}"
-                    y1="${linePct.yPct.toFixed(2)}"
-                    x2="${navTargetXPercent.toFixed(2)}"
-                    y2="${navTargetYPercent.toFixed(2)}"
+                    x1="${userPct.xPct.toFixed(2)}%"
+                    y1="${userPct.yPct.toFixed(2)}%"
+                    x2="${navTargetXPercent.toFixed(2)}%"
+                    y2="${navTargetYPercent.toFixed(2)}%"
                     stroke="rgba(239, 68, 68, 0.9)"
-                    stroke-width="0.8"
-                    vector-effect="non-scaling-stroke"
+                    stroke-width="2"
                 />
             </svg>
         `;
@@ -12968,123 +13084,62 @@ const toPercent = (x, y) => {
                 ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
-                ${trackLabelsHtml}
                 ${userHtml}
             </div>
 </div>
 
-            <!-- Tile size + MAP + GRID button rows — all w-11 h-11 for alignment -->
-            <div class="mt-2 mb-1 flex flex-col gap-1">
-
-              <!-- Row 1: TILE label + size buttons + show/hide -->
-              <div class="flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
-                    ${[10, 20, 30].map(sz => {
-                      const s = getCompassOpenSurvey();
-                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
-                      const active = cur === sz;
-                      return `<button type="button"
-                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
-                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
-                    }).join('')}
-                <button id="gridtile-toggle-btn" type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
-                    ${(() => {
-                      const s = getCompassOpenSurvey();
-                      const t = s && s.gridTile ? s.gridTile : null;
-                      return (t && t.enabled) ? 'Hide' : 'Show';
-                    })()}
-                </button>
-              </div>
-
-              <!-- Row 2: MAP label + directional pan buttons -->
-              <div class="flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">MAP</span>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >◀</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >▲</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >▼</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >▶</button>
-              </div>
-
-              <!-- Row 3: GRID label + tile pan buttons -->
-              <div class="flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">GRID</span>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                    onmousedown="startTilePan('W',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                    ontouchstart="startTilePan('W',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                >W</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                    onmousedown="startTilePan('N',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                    ontouchstart="startTilePan('N',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                >N</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                    onmousedown="startTilePan('S',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                    ontouchstart="startTilePan('S',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                >S</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 font-extrabold text-sm shadow select-none"
-                    onmousedown="startTilePan('E',event)" onmouseup="stopTilePan()" onmouseleave="stopTilePan()"
-                    ontouchstart="startTilePan('E',event)" ontouchend="stopTilePan()" ontouchcancel="stopTilePan()"
-                >E</button>
-              </div>
-
-              <!-- Row 4: ROT label + rotate buttons + reset -->
-              <div class="flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">ROT</span>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 font-extrabold text-lg shadow select-none"
-                    onmousedown="startTileRotate('ccw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
-                    ontouchstart="startTileRotate('ccw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
-                >&#8634;</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 font-extrabold text-lg shadow select-none"
-                    onmousedown="startTileRotate('cw',event)" onmouseup="stopTileRotate()" onmouseleave="stopTileRotate()"
-                    ontouchstart="startTileRotate('cw',event)" ontouchend="stopTileRotate()" ontouchcancel="stopTileRotate()"
-                >&#8635;</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-amber-50 hover:bg-amber-100 font-bold text-xs shadow select-none"
-                    onclick="_doTileRotateReset()"
-                >0°</button>
-              </div>
-
+            <!-- Directional pan buttons -->
+            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >◀</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▲</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▼</button>
+                    <button type="button"
+                        class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
+                        onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                        ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
+                    >▶</button>
             </div>
 
             <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapIn(event)">+</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapOut(event)">−</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
-                    onclick="resetMapView(event)">Reset</button>
-                <button id="toggle-gps-btn" type="button"
-                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
+                <button
+                    type="button"
+                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapIn(event)"
+                >+</button>
+
+                <button
+                    type="button"
+                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapOut(event)"
+                >−</button>
+
+                <button
+                    type="button"
+                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
+                    onclick="resetMapView(event)"
+                >Reset</button>
+
+                <button
+                    id="toggle-gps-btn"
+                    type="button"
+                    class="px-5 py-2 rounded-xl font-bold text-white shadow hover:opacity-90 text-base"
                     style="background-color: rgb(var(--color-secondary));"
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
-            </div>
+
+</div>
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -13100,56 +13155,110 @@ const toPercent = (x, y) => {
         })()}
       </div>
     </div>
-  </div>
-</div>
 
 <!-- Map layer toggles (draw only; bounds still include all) -->
-<details id="map-layers-details" class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm" ${mapLayersExpanded ? 'open' : ''}>
+<details id="map-layers-details" class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <summary class="cursor-pointer select-none flex items-center gap-2 justify-start">
   <span class="caret text-lg">▸</span>
 
   <span>Map layers</span>
 </summary>
-  <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-    <!-- Row 1: Targets + Target Labels -->
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
-        <span>Targets</span>
-    </label>
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
-        <span>Target Labels</span>
-    </label>
-    <!-- Row 2: Finds + Find Labels -->
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
-        <span>Finds</span>
-    </label>
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
-        <span>Find Labels</span>
-    </label>
-    <!-- Row 3: Stakes + Stake Labels -->
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
-        <span>Stakes</span>
-    </label>
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" ${showMapStakeLabels ? 'checked' : ''}>
-        <span>Stake Labels</span>
-    </label>
-    <!-- Row 4: Tracks + Track Labels -->
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
-        <span>Tracks</span>
-    </label>
-    <label class="flex items-center gap-2 select-none">
-        <input id="map-show-track-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTrackLabels ? 'checked' : ''}>
-        <span>Track Labels</span>
-    </label>
+  <div class="mt-2 flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
+            <span>Show Targets</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
+            <span>Show Stakes</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
+            <span>Show Finds</span>
+        </label>
+        <label class="flex items-center gap-2 select-none">
+            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
+            <span>Show Tracks</span>
+        </label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
+    <span>Show Target Labels</span>
+</label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
+    <span>Show Find Labels</span>
+</label>
   </div>
 </details>
+</div>
+<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4 mt-3">
+  <details id="tile-grid-details" class="w-full">
+  <summary class="cursor-pointer select-none flex items-center gap-2 justify-start">
+  <span class="caret text-lg">▸</span>
 
+  <span>Tile / Grid</span>
+</summary>
+  <div class="mt-2">
+<div class="flex gap-2">
+      <button id="gridtile-set-gps-btn" type="button"
+        class="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm">
+        Set Tile to GPS
+      </button>
+
+      <button id="gridtile-toggle-btn" type="button"
+        class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">
+        ${(() => {
+          const s = getCompassOpenSurvey();
+          const t = s && s.gridTile ? s.gridTile : null;
+          return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
+        })()}
+      </button>
+    </div>
+  </div>
+
+  <div class="mt-3 text-xs text-gray-600">Move tile (buttons):</div>
+
+  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
+    <div></div>
+    <button data-gridtile-move="N" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">N</button>
+    <div></div>
+
+    <button data-gridtile-move="W" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">W</button>
+    <button type="button" disabled
+      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
+    <button data-gridtile-move="E" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">E</button>
+
+    <div></div>
+    <button data-gridtile-move="S" data-gridtile-step="1"
+      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">S</button>
+    <div></div>
+  </div>
+
+  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
+    <div></div>
+    <button data-gridtile-move="N" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">N 5m</button>
+    <div></div>
+
+    <button data-gridtile-move="W" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">W 5m</button>
+    <button type="button" disabled
+      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
+    <button data-gridtile-move="E" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">E 5m</button>
+
+    <div></div>
+    <button data-gridtile-move="S" data-gridtile-step="5"
+      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">S 5m</button>
+    <div></div>
+  </div>
+
+      </div>
+    </details>
+</div>
 
     `;
 }
@@ -13187,7 +13296,6 @@ const toPercent = (x, y) => {
     }
 
     let trackSvgHtml = '';
-    let trackLabelsHtml = '';
     if (drawTracks.length) {
         const polylines = drawTracks.map(track => {
             const pts = track.points
@@ -13213,25 +13321,6 @@ const toPercent = (x, y) => {
                 ${polylines}
             </svg>
         `;
-
-        // Track labels as HTML divs — same style as target/find labels
-        if (showMapTrackLabels) {
-            trackLabelsHtml = drawTracks.map(track => {
-                if (!track.name) return '';
-                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
-                if (!midPts.length) return '';
-                const mid = midPts[Math.floor(midPts.length / 2)];
-                const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
-                const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                return `<div class="absolute pointer-events-none"
-                    style="left:${mp.xPct.toFixed(2)}%; top:${mp.yPct.toFixed(2)}%; z-index:13; transform:translate(-50%,-100%);">
-                    <span class="whitespace-nowrap text-xs font-semibold bg-white px-1 py-0.5 rounded-sm shadow border border-gray-300"
-                          style="color:${track.color || '#2563eb'}; transform:scale(${invZoom}); transform-origin:center bottom; display:block;">
-                        ${safe}
-                    </span>
-                </div>`;
-            }).join('');
-        }
     }
 
     let navLineHtml = '';
@@ -13296,7 +13385,6 @@ const toPercent = (x, y) => {
                 ${trackSvgHtml}
                 ${navLineHtml}
                 ${pinsHtml}
-                ${trackLabelsHtml}
                 ${userHtml}
             </div>
 </div>
@@ -13304,39 +13392,31 @@ const toPercent = (x, y) => {
 <!-- Map layer toggles (draw only; bounds still include all) -->
 <div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
     <div class="text-sm font-semibold text-gray-700 mb-2">Map layers</div>
-    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+    <div class="flex flex-wrap gap-4 text-sm">
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" ${showMapTargets ? 'checked' : ''}>
-            <span>Targets</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
-            <span>Target Labels</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
-            <span>Finds</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
-            <span>Find Labels</span>
+            <span>Show Targets</span>
         </label>
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" ${showMapStakes ? 'checked' : ''}>
-            <span>Stakes</span>
+            <span>Show Stakes</span>
         </label>
         <label class="flex items-center gap-2 select-none">
-            <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" ${showMapStakeLabels ? 'checked' : ''}>
-            <span>Stake Labels</span>
+            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" ${showMapFinds ? 'checked' : ''}>
+            <span>Show Finds</span>
         </label>
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" ${showMapTracks ? 'checked' : ''}>
-            <span>Tracks</span>
+            <span>Show Tracks</span>
         </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-track-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTrackLabels ? 'checked' : ''}>
-            <span>Track Labels</span>
-        </label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" ${showMapTargetLabels ? 'checked' : ''}>
+    <span>Show Target Labels</span>
+</label>
+<label class="flex items-center gap-2 select-none">
+    <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" ${showMapFindLabels ? 'checked' : ''}>
+    <span>Show Find Labels</span>
+</label>
     </div>
 </div>
 
@@ -13807,7 +13887,9 @@ function renderTurnGuidanceSimple(a, b, c) {
     const target =
         openSurvey.targets.find(t => String(t.id) === String(navigationTargetId))
         || (Array.isArray(finds) ? finds : []).find(f =>
-            f && String(f.id) === String(navigationTargetId)
+            f &&
+            String(f.id) === String(navigationTargetId) &&
+            String(f.surveyId) === String(openSurvey.id)
         );
 
     if (!target) {
@@ -13881,10 +13963,11 @@ function renderTurnGuidanceSimple(a, b, c) {
         });
 
         guidanceHtml = renderTurnGuidanceSimple({
-            bearingDeg: bearing,
-            movementBearingDeg: moveBearing,
-            distanceMeters: dist,
-            bearingLabel: bearingToCompassPoint(bearing, 16)
+            userLat: u.lat,
+            userLon: u.lon,
+            targetLat: tLat,
+            targetLon: tLon,
+            movementBearingDeg: moveBearing
         });
     } else {
         miniMapHtml = `
@@ -14050,7 +14133,6 @@ function handleStartTrackClick() {
     activeTrackSurveyId = openSurvey.id;
     activeTrackId = newTrack.id;
 
-    openSurvey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
     showMessage(`Started recording ${name}.`, 'success');
     render();
@@ -14069,8 +14151,6 @@ function handleStopTrackClick() {
     }
 
     active.track.isRecording = false;
-    const activeSurvey = surveys.find(s => s.id === active.surveyId || (Array.isArray(s.tracks) && s.tracks.some(t => t.id === active.track.id)));
-    if (activeSurvey) activeSurvey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     const name = active.track.name || 'track';
@@ -14098,7 +14178,6 @@ function toggleTrackVisibility(trackId, isVisible) {
     if (!found) return;
 
     found.track.isVisible = !!isVisible;
-    if (found.survey) found.survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     if (currentPage === 'Compass') {
@@ -14390,7 +14469,7 @@ ${(() => {
                 <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
                     <i class="fas fa-map mr-2"></i> Survey Map
                 </h3>
-                ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null, smoothedUserCoords || currentUserCoords)}
+                ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
             </div>
 
             <!-- Inline Tile Grid (permanently embedded) -->
@@ -14466,7 +14545,7 @@ ${(() => {
                     + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
                     + '</div>'
                     + '<div class="w-full flex justify-center mb-3">'
-                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="display:block;"></canvas>'
+                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="max-width: 100%;"></canvas>'
                     + '</div>'
                     + _rainbowHtml
                     + '<div class="flex gap-2">'
@@ -16748,8 +16827,7 @@ function attachPageEventListeners() {
 
     const gpsBtn = document.getElementById('toggle-gps-btn');
 if (gpsBtn) {
-    // Use onclick (assignment) not addEventListener so re-renders don't stack listeners
-    gpsBtn.onclick = () => {
+    gpsBtn.addEventListener('click', () => {
         showUserPosition = !showUserPosition;
 
         if (!needsGpsNow()) {
@@ -16763,18 +16841,19 @@ if (gpsBtn) {
         if (currentPage === 'Compass') {
             const appContent = document.getElementById('app-content');
             if (appContent) {
-                const _compassOpen = !!(document.getElementById('compass-direction-details') || {}).open;
-                const _layersOpen  = !!(document.getElementById('map-layers-details') || {}).open;
                 appContent.innerHTML = renderCompassPage(true);
                 attachPageEventListeners();
-                if (_compassOpen) { const e = document.getElementById('compass-direction-details'); if (e) e.open = true; }
-                if (_layersOpen)  { const e = document.getElementById('map-layers-details');        if (e) e.open = true; }
             }
         }
-    };
+    });
 }
 
-    // gridtile size buttons use inline onclick — no separate listener needed
+    const gridSetBtn = document.getElementById('gridtile-set-gps-btn');
+    if (gridSetBtn) {
+        gridSetBtn.addEventListener('click', () => {
+            try { setGridTileToCurrentGps(); } catch (e) { console.error(e); }
+        });
+    }
 
     const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
     if (gridToggleBtn) {
@@ -16788,7 +16867,19 @@ if (gpsBtn) {
         try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
-// tile pan now uses startTilePan/stopTilePan via inline handlers
+document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dir = btn.getAttribute('data-gridtile-move') || '';
+            const step = Number(btn.getAttribute('data-gridtile-step') || '1');
+            if (!isFinite(step)) return;
+
+            const d = step;
+            if (dir === 'N') moveGridTileByMeters(0, d);
+            if (dir === 'S') moveGridTileByMeters(0, -d);
+            if (dir === 'E') moveGridTileByMeters(d, 0);
+            if (dir === 'W') moveGridTileByMeters(-d, 0);
+        });
+    });
 
 const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
@@ -16829,98 +16920,62 @@ if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
 
 const mapTargetsCb = document.getElementById('map-show-targets-cb');
 if (mapTargetsCb) {
-    mapTargetsCb.onchange = (e) => {
+    mapTargetsCb.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTargets = !!mapTargetsCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
+        if (currentPage === 'Compass') render();
+    });
 }
 
 const mapStakesCb = document.getElementById('map-show-stakes-cb');
 if (mapStakesCb) {
-    mapStakesCb.onchange = (e) => {
+    mapStakesCb.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapStakes = !!mapStakesCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
+        if (currentPage === 'Compass') render();
+    });
 }
 
 const mapFindsCb = document.getElementById('map-show-finds-cb');
 if (mapFindsCb) {
-    mapFindsCb.onchange = (e) => {
+    mapFindsCb.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapFinds = !!mapFindsCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
+        if (currentPage === 'Compass') render();
+    });
 }
 
 const mapTracksCb = document.getElementById('map-show-tracks-cb');
 if (mapTracksCb) {
-    mapTracksCb.onchange = (e) => {
+    mapTracksCb.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTracks = !!mapTracksCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
+        if (currentPage === 'Compass') render();
+    });
 }
 
 const mapTargetLabelsCb = document.getElementById('map-show-target-labels-cb');
 if (mapTargetLabelsCb) {
-    mapTargetLabelsCb.onchange = (e) => {
+    mapTargetLabelsCb.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapTargetLabels = !!mapTargetLabelsCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
+        if (currentPage === 'Compass') render();
+    });
 }
 
 const mapFindLabelsCb = document.getElementById('map-show-find-labels-cb');
 if (mapFindLabelsCb) {
-    mapFindLabelsCb.onchange = (e) => {
+    mapFindLabelsCb.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
         showMapFindLabels = !!mapFindLabelsCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
-}
-
-const mapStakeLabelsCb = document.getElementById('map-show-stake-labels-cb');
-if (mapStakeLabelsCb) {
-    mapStakeLabelsCb.onchange = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapStakeLabels = !!mapStakeLabelsCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
-}
-
-const mapTrackLabelsCb = document.getElementById('map-show-track-labels-cb');
-if (mapTrackLabelsCb) {
-    mapTrackLabelsCb.onchange = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMapTrackLabels = !!mapTrackLabelsCb.checked;
-        if (currentPage === 'Compass') rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    };
+        if (currentPage === 'Compass') render();
+    });
 }
 
 const mapLayersDetails = document.getElementById('map-layers-details');
@@ -16929,6 +16984,14 @@ if (mapLayersDetails) {
 
     mapLayersDetails.addEventListener('toggle', () => {
         mapLayersExpanded = mapLayersDetails.open;
+    });
+}
+
+const tileGridDetails = document.getElementById('tile-grid-details');
+if (tileGridDetails) {
+    tileGridDetails.open = !!tileGridControlsExpanded;
+    tileGridDetails.addEventListener('toggle', () => {
+        tileGridControlsExpanded = tileGridDetails.open;
     });
 }
 
@@ -17921,11 +17984,11 @@ function bootstrapAppLimitsIfMissing() {
 }
 
 try {
-    if (typeof bootstrapAppLimitsIfMissing === 'function') {
-        bootstrapAppLimitsIfMissing();
+    if (typeof bootStrapAppLimitsIfmissing === 'function') {
+        bootStrapAppLimitsIfmissing();
     }
 } catch (e) {
-    console.warn('bootstrapAppLimitsIfMissing failed:', e);
+    console.warn('bootStrapAppLimitsIfmissing failed:', e);
 }
 
 try {
