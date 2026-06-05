@@ -118,11 +118,6 @@ summary {
     transition: transform 0.15s ease;
     flex: 0 0 auto;
   }
-  @keyframes detekta-pin-blink {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.15; }
-  }
-  .pin-blink { animation: detekta-pin-blink 0.75s ease-in-out infinite; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -130,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V3
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -896,7 +891,7 @@ summary {
           name="findType"
           class="dtk-input-sm">
           <option value="Unidentified">Unidentified</option>
-          <option value="Iron Junk">Iron Junk</option>
+          <option value="Iron Junk">Iron JUnk</option>
           <option value="Modern Junk">Modern Junk</option>
           <option value="Button">Button</option>
           <option value="Coin">Coin</option>
@@ -2713,7 +2708,6 @@ let userProfile = {
 
         let autoRefreshIntervalId = null;
         let currentUserCoords = null;
-        let lastKnownMapCoords = null;
         let currentUserAccuracy = null;
         let bestLiveAccuracy = Infinity;
         let liveMapWatchId = null;
@@ -3655,21 +3649,17 @@ function renderHelpPage() {
           <p class="${P}">The Map page shows the survey map with all targets, finds, stakes, and tracks plotted.</p>
 
           <h4 class="${H2}">Survey Map</h4>
-          <p class="${P}">The map plots all items with GPS coordinates. The map adjusts its bounds
-          automatically to show all data.</p>
-          <p class="${P}">Tap any target or find pin to draw a line from your position to that pin —
-          the selected pin blinks to confirm it is active. Tap the pin again to clear the line,
-          or tap your own red position dot to clear it from wherever you are.</p>
+          <p class="${P}">The map plots all items with GPS coordinates. Tap a pin to navigate back to it.
+          The map adjusts its bounds automatically to show all data.</p>
 
           <h4 class="${H2}">Map Controls</h4>
-          <p class="${P}">Below the map are five rows of buttons. The top two control the map view,
-          the bottom three control the tile grid:</p>
+          <p class="${P}">Below the map are four rows of buttons:</p>
           <ul class="${UL}">
-            <li><strong>ZOOM</strong> [+] [−] [Reset] [Hide/Show] — zoom in/out, reset view, show/hide your GPS dot</li>
+            <li><strong>TILE</strong> [10m] [20m] [30m] [Hide/Show] — place the tile grid centred on your GPS position at that size</li>
             <li><strong>MAP</strong> [◀] [▲] [▼] [▶] — pan the survey map (hold to pan continuously)</li>
-            <li><strong>TILE</strong> [10m] [20m] [30m] [Hide/Show] — place the tile grid at your GPS position at that size</li>
             <li><strong>GRID</strong> [W] [N] [S] [E] — move the tile grid (hold to move continuously)</li>
             <li><strong>ROT</strong> [↺] [↻] [0°] — rotate the tile grid to align with field boundaries</li>
+            <li><strong>ZOOM</strong> [+] [−] [Reset] [Hide/Show] — zoom and reset the map view</li>
           </ul>
 
           <h4 class="${H2}">Map Layers</h4>
@@ -3786,72 +3776,24 @@ function renderHelpPage() {
         <!-- GETTING STARTED -->
         <div class="${S}">
           <h3 class="${H}"><i class="fas fa-play-circle"></i> Getting Started</h3>
-
-          <h4 class="${H2}">Before You Go Out</h4>
-          <p class="${P}">Before using Detekta in the field, we recommend the following:</p>
-          <ul class="${UL}">
-            <li><strong>Phone lanyard</strong> — essential. You will have your detector in one hand
-              and a spade in the other. A lanyard keeps your phone accessible without having to put
-              anything down.</li>
-            <li><strong>Battery pack</strong> — you will likely need to raise your screen brightness
-              to see it in daylight. Combined with GPS running continuously, your battery will drain
-              faster than normal. A small portable battery pack is well worth carrying.</li>
-            <li><strong>Small marker flags</strong> — GPS will get you close to a target, typically
-              within a metre or so, but not to the centimetre accuracy you need to relocate a buried
-              signal. Push a flag in the ground the moment you get a signal, before you do anything
-              else. The flag records the exact location; the app records everything else.</li>
-          </ul>
-
-          <h4 class="${H2}">Step by Step</h4>
-          <ol class="list-decimal list-outside ml-5 text-sm text-gray-700 space-y-4">
-            <li><strong>Settings — Set up your profile</strong><br>
-              <span class="text-gray-600">Go to Settings and tap Edit Profile. Enter your name, NCMD number,
-              and detector model. Detekta will automatically configure the correct VDI ranges for your
-              machine. Tap Save Changes.</span></li>
-
-            <li><strong>Home — Create a survey</strong><br>
-              <span class="text-gray-600">Tap Create New Survey. Give it a meaningful name (site name and date
-              works well) and an optional description and photo. Fill in permission details if you have them.</span></li>
-
-            <li><strong>Map — Walk the perimeter and start tracking</strong><br>
-              <span class="text-gray-600">Go to the Map page and tap Start Tracking. Walk the perimeter of the
-              area you intend to detect. This creates a boundary track that will show on the map and help
-              you plan your grid coverage. Tap Stop Tracking when you return to your start point.</span></li>
-
-            <li><strong>Map — Place and align the tile grid</strong><br>
-              <span class="text-gray-600">Stand at one corner or the centre of the area you want to start with.
-              Tap a TILE size button (10m, 20m, or 30m) to place the grid at your position. Use the ROT buttons
-              to rotate the grid so its sides align with the field boundary or perimeter track. Use the GRID
-              buttons to fine-tune the position if needed.</span></li>
-
-            <li><strong>Map — Detect in parallel lines and record targets</strong><br>
-              <span class="text-gray-600">Start Tracking again for this grid section. Walk the grid in parallel
-              lines. As you move, the cells shade green to show your coverage. When your detector signals,
-              push a flag in immediately, then tap the appropriate coloured quick button to log the target.
-              The colour corresponds to the signal strength (VDI range). Carry on — you can dig later.</span></li>
-
-            <li><strong>Targets / Finds — Dig and record each target</strong><br>
-              <span class="text-gray-600">Once you have covered the grid (or at a convenient break), go to the
-              Targets page. Work through each flagged target in turn — dig it, identify it, and update the
-              target status to Dug or Refilled. If it is worth keeping, tap Copy to Finds, fill in the find
-              details, and add a photo. Remove the flag.</span></li>
-
-            <li><strong>Map — Complete the grid and move to the next section</strong><br>
-              <span class="text-gray-600">Once the entire grid has been covered, open the Tile Grid section and
-              tap Complete. The covered area is saved and shown on the survey map. Move the grid to the
-              adjacent section using the GRID buttons, or tap a TILE size button at your new position,
-              and repeat from step 5.</span></li>
-
-            <li><strong>Finds — Clean up and re-photograph</strong><br>
-              <span class="text-gray-600">At the end of the day, once finds have been cleaned, go to the Finds
-              page and edit each one. Update the description, type, condition, and add clear photographs of
-              the cleaned find. Good photos make a big difference to the record.</span></li>
-
-            <li><strong>Home — Back up your work</strong><br>
-              <span class="text-gray-600">When all targets and finds have been processed, export the survey using
-              the Export Now button on the open survey card. The ZIP file is saved to your Downloads folder.
-              Copy it to cloud storage or email it to yourself. The export date on the survey card turns red
-              if there are unsaved changes — do not leave the field without exporting.</span></li>
+          <ol class="list-decimal list-inside text-sm text-gray-700 space-y-3">
+            <li><strong>Set Up Your Profile</strong><br>
+              <span class="text-gray-600 ml-5">Go to Settings → Edit Profile. Enter your name and detector.
+              Detekta sets the correct VDI ranges automatically.</span></li>
+            <li><strong>Create a Survey</strong><br>
+              <span class="text-gray-600 ml-5">Tap Create New Survey on the Home page. Give it a name and optional photo.</span></li>
+            <li><strong>Start Detecting</strong><br>
+              <span class="text-gray-600 ml-5">Go to the Map page and tap Start Tracking. Log targets with the coloured
+              quick buttons or the Log New Target button. Place stakes to mark boundaries.</span></li>
+            <li><strong>Use the Tile Grid</strong><br>
+              <span class="text-gray-600 ml-5">Tap a TILE size button to place the grid. Rotate to align with
+              field boundaries. Walk systematically — cells paint as you move.</span></li>
+            <li><strong>Record Your Finds</strong><br>
+              <span class="text-gray-600 ml-5">Once you have identified a find, tap Copy to Finds on the Targets page.
+              Update the type, description, and photos.</span></li>
+            <li><strong>Back Up Your Data</strong><br>
+              <span class="text-gray-600 ml-5">Export regularly using the Export Now button on the Home page.
+              The export date turns red when there are unsaved changes — do not ignore it.</span></li>
           </ol>
         </div>
 
@@ -3869,16 +3811,6 @@ function renderHelpPage() {
           <h3 class="${H}"><i class="fas fa-shield-alt"></i> Data &amp; Privacy</h3>
           <p class="${P}">Detekta does not collect or transmit any personal data. All data is stored locally
           on your device. Nothing is shared unless you choose to export it.</p>
-        </div>
-
-        <!-- CONTACT -->
-        <div class="${S}">
-          <h3 class="${H}"><i class="fas fa-envelope"></i> Contact &amp; Support</h3>
-          <p class="${P}">Limited support is available. If you have a question or have found a problem,
-          please email:</p>
-          <p class="text-sm font-semibold text-primary">
-            <a href="mailto:support.detekta@gmail.com">support.detekta@gmail.com</a>
-          </p>
         </div>
 
       </div>
@@ -8210,8 +8142,6 @@ function stopLiveMapLocationWatch() {
         bestLiveAccuracy = Infinity;
     }
 
-    if (currentUserCoords) lastKnownMapCoords = { ...currentUserCoords };
-    else if (smoothedUserCoords) lastKnownMapCoords = { ...smoothedUserCoords };
     currentUserCoords = null;
     currentUserAccuracy = null;
     smoothedUserCoords = null;
@@ -8255,7 +8185,6 @@ liveMapWatchId = navigator.geolocation.watchPosition(
                 lat: position.coords.latitude,
                 lon: position.coords.longitude
             };
-            lastKnownMapCoords = { ...currentUserCoords };
             currentUserAccuracy = accuracy;
 
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
@@ -8836,7 +8765,62 @@ function updateMapWithUserLocationAndRender() {
 
     const avoidFullRender = isFormControl;
 
+    const navMiniMapHost = document.getElementById('nav-mini-map-host');
+    const navStatusHost = document.getElementById('nav-status-host');
 
+    if (navMiniMapHost && typeof renderNavigationMiniMapSimple === 'function' && navigationTargetId) {
+        try {
+            const openSurvey = surveys.find(s => s.status === 'Open');
+            if (openSurvey) {
+                const targets = getActiveTargets(openSurvey) || [];
+                const target = targets.find(t => String(t.id) === String(navigationTargetId) || String(t.targetId) === String(navigationTargetId));
+                if (target && target.coordinates && String(target.coordinates).includes(',')) {
+                    const parts = String(target.coordinates).split(',');
+                    const tLat = parseFloat(parts[0]);
+                    const tLon = parseFloat(parts[1]);
+
+                    const uLat = (typeof liveUserLat === 'number') ? liveUserLat
+                               : (typeof currentUserLat === 'number') ? currentUserLat
+                               : (typeof userLat === 'number') ? userLat
+                               : null;
+
+                    const uLon = (typeof liveUserLon === 'number') ? liveUserLon
+                               : (typeof currentUserLon === 'number') ? currentUserLon
+                               : (typeof userLon === 'number') ? userLon
+                               : null;
+
+                    if (typeof uLat === 'number' && typeof uLon === 'number') {
+                        const d = (typeof calculateDistanceMeters === 'function')
+                            ? calculateDistanceMeters(uLat, uLon, tLat, tLon)
+                            : distMeters;
+
+                        const b = (typeof calculateBearingDegrees === 'function')
+                            ? calculateBearingDegrees(uLat, uLon, tLat, tLon)
+                            : bearingDeg;
+
+                        navMiniMapHost.innerHTML = renderNavigationMiniMapSimple({
+                            targetLat: tLat,
+                            targetLon: tLon,
+                            userLat: uLat,
+                            userLon: uLon,
+                            distMeters: (typeof d === 'number') ? d : distMeters,
+                            bearingDeg: (typeof b === 'number') ? b : bearingDeg,
+                            movementBearingDeg: (typeof window.movementBearingDeg === 'number') ? window.movementBearingDeg : movementBearingDeg
+                        });
+
+                        if (navStatusHost) {
+                            navStatusHost.textContent = '';
+                        }
+
+                        if (avoidFullRender) return;
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("Mini-map fast refresh failed:", e);
+        }
+    }
 
     if (avoidFullRender) {
         return;
@@ -10730,14 +10714,11 @@ case 'edit': {
     event.stopPropagation();
 
     if (!targetId) {
-        // User pin tapped — clear the nav line
-        navigationTargetId = null;
-        if (navSession) { navSession.active = false; navSession.path = []; }
-        setTimeout(() => { if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive(); }, 0);
+        console.warn('Map target click without a valid targetId');
         return;
     }
 
-    navigationTargetId = (navigationTargetId === targetId) ? null : targetId;
+    navigationTargetId = targetId;
     console.log('Navigation target selected from map:', navigationTargetId);
 
     if (!navSession) {
@@ -12734,10 +12715,8 @@ const toPercent = (x, y) => {
                           ${isStake ? 'border-black' : (isFind ? 'border-primary' : statusColor.replace('bg-','border-'))}
                           shadow-lg
                           cursor-pointer
-                          ${navigationTargetId && String(navigationTargetId) === String(t.id) ? 'pin-blink' : ''}
                           "
                           style="
-                          --pin-scale: ${invZoom};
                           transform: scale(${invZoom});
                           transform-origin: center;
                           "
@@ -12774,10 +12753,9 @@ const toPercent = (x, y) => {
 
         userHtml = `
             <div
-                class="absolute ${navigationTargetId ? 'cursor-pointer' : 'pointer-events-none'}"
+                class="absolute pointer-events-none"
                 style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
-                title="${navigationTargetId ? 'Tap to clear navigation line' : 'You'}"
-                onclick="${navigationTargetId ? 'handleMapTargetClick(event,&quot;&quot;)' : ''}"
+                title="You"
             >
                 <div
                     class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"
@@ -12975,28 +12953,31 @@ const toPercent = (x, y) => {
             </div>
 </div>
 
-            <!-- Zoom controls -->
-            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapIn(event)">+</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapOut(event)">−</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
-                    onclick="resetMapView(event)">Reset</button>
-                <button id="toggle-gps-btn" type="button"
-                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
-                    style="background-color: rgb(var(--color-secondary));"
-                >${showUserPosition ? 'Hide' : 'Show'}</button>
-            </div>
-
             <!-- Tile size + MAP + GRID button rows — all w-11 h-11 for alignment -->
-            <div class="mt-1 mb-1 flex flex-col gap-1">
+            <div class="mt-2 mb-1 flex flex-col gap-1">
 
-              <!-- Row 1: MAP label + directional pan buttons -->
+              <!-- Row 1: TILE label + size buttons + show/hide -->
+              <div class="flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
+                    ${[10, 20, 30].map(sz => {
+                      const s = getCompassOpenSurvey();
+                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
+                      const active = cur === sz;
+                      return `<button type="button"
+                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
+                    }).join('')}
+                <button id="gridtile-toggle-btn" type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const t = s && s.gridTile ? s.gridTile : null;
+                      return (t && t.enabled) ? 'Hide' : 'Show';
+                    })()}
+                </button>
+              </div>
+
+              <!-- Row 2: MAP label + directional pan buttons -->
               <div class="flex gap-2 justify-center items-center">
                 <span class="text-xs font-bold text-gray-500 w-10 text-center">MAP</span>
                 <button type="button"
@@ -13019,28 +13000,6 @@ const toPercent = (x, y) => {
                     onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
                     ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
                 >▶</button>
-              </div>
-
-              <!-- Row 2: TILE label + size buttons + show/hide -->
-              <div class="flex gap-2 justify-center items-center">
-                <span class="text-xs font-bold text-gray-500 w-10 text-center">TILE</span>
-                    ${[10, 20, 30].map(sz => {
-                      const s = getCompassOpenSurvey();
-                      const cur = (s && s.gridTile && s.gridTile.sizeM) ? Number(s.gridTile.sizeM) : 15;
-                      const active = cur === sz;
-                      return `<button type="button"
-                        class="w-11 h-11 rounded-xl font-bold shadow text-sm select-none ${active ? 'bg-rose-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
-                        onclick="setGridTileToCurrentGps(${sz})">${sz}m</button>`;
-                    }).join('')}
-                <button id="gridtile-toggle-btn" type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                    onclick="try{toggleGridTileEnabled();}catch(e){console.error(e);}">
-                    ${(() => {
-                      const s = getCompassOpenSurvey();
-                      const t = s && s.gridTile ? s.gridTile : null;
-                      return (t && t.enabled) ? 'Hide' : 'Show';
-                    })()}
-                </button>
               </div>
 
               <!-- Row 3: GRID label + tile pan buttons -->
@@ -13089,20 +13048,35 @@ const toPercent = (x, y) => {
 
             </div>
 
+            <!-- Zoom controls -->
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center items-center">
+                <span class="text-xs font-bold text-gray-500 w-10 text-center">ZOOM</span>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapIn(event)">+</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
+                    onclick="zoomMapOut(event)">−</button>
+                <button type="button"
+                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-sm shadow"
+                    onclick="resetMapView(event)">Reset</button>
+                <button id="toggle-gps-btn" type="button"
+                    class="w-11 h-11 rounded-xl font-bold text-white shadow hover:opacity-90 text-sm"
+                    style="background-color: rgb(var(--color-secondary));"
+                >${showUserPosition ? 'Hide' : 'Show'}</button>
+            </div>
+
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between gap-3 flex-wrap">
     <div class="text-sm">
-      <div class="font-semibold text-gray-700">Current GPS
-        ${!showUserPosition ? '<span class="text-xs font-normal text-gray-500 ml-1">— not shown on map</span>' : ''}
-      </div>
+      <div class="font-semibold text-gray-700">Current GPS</div>
       <div class="text-xs text-gray-600">
         ${(() => {
-          const c = getBestLiveGpsCoordsOrNull() || lastKnownMapCoords;
+          const c = getBestLiveGpsCoordsOrNull();
           const acc = (typeof currentUserAccuracy === 'number' && isFinite(currentUserAccuracy)) ? currentUserAccuracy : 0;
           if (!c) return 'No GPS fix yet';
-          const suffix = showUserPosition ? `(±${acc.toFixed(1)}m)` : '(last known)';
-          return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} ${suffix}`;
+          return `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)} (±${acc.toFixed(1)}m)`;
         })()}
       </div>
     </div>
@@ -13180,10 +13154,9 @@ const toPercent = (x, y) => {
 
         userHtml = `
             <div
-                class="absolute ${navigationTargetId ? 'cursor-pointer' : 'pointer-events-none'}"
+                class="absolute pointer-events-none"
                 style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
-                title="${navigationTargetId ? 'Tap to clear navigation line' : 'You'}"
-                onclick="${navigationTargetId ? 'handleMapTargetClick(event,&quot;&quot;)' : ''}"
+                title="You"
             >
                 <div
                     class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"
@@ -13361,6 +13334,588 @@ function toggleMapFullscreen(event) {
     render();
 }
 
+function renderNavigationMiniMapSimple({
+    targetLat, targetLon,
+    userLat, userLon,
+    distMeters,
+    bearingDeg,
+    movementBearingDeg
+}) {
+    const distStr =
+        (typeof distMeters === 'number' && Number.isFinite(distMeters))
+            ? (distMeters >= 1000 ? `${(distMeters / 1000).toFixed(2)} km` : `${Math.round(distMeters)} m`)
+            : '—';
+
+    const bearingLabel =
+        (typeof bearingToCompassPoint === 'function' && typeof bearingDeg === 'number')
+            ? bearingToCompassPoint(bearingDeg, 16)
+            : '';
+
+    let turnText = '';
+    try {
+        if (typeof renderTurnGuidanceSimple === 'function') {
+        }
+    } catch (e) {}
+
+    if (!turnText) {
+        if (typeof movementBearingDeg === 'number' && typeof bearingDeg === 'number') {
+            const diff = ((bearingDeg - movementBearingDeg + 540) % 360) - 180; // -180..+180
+            const ad = Math.abs(diff);
+
+            if (ad < 12) turnText = 'ON COURSE';
+            else if (diff > 0) turnText = ad > 45 ? 'TURN RIGHT' : 'SLIGHT RIGHT';
+            else turnText = ad > 45 ? 'TURN LEFT' : 'SLIGHT LEFT';
+        } else {
+            turnText = '—';
+        }
+    }
+
+    const STATIONARY_DEADBAND_M = 1.8;
+
+    if (!navSession) {
+        navSession = {
+            active: false,
+            startLat: null,
+            startLon: null,
+            targetLat: null,
+            targetLon: null,
+            path: [],
+            lastLat: null,
+            lastLon: null
+        };
+    }
+
+    const targetChanged =
+        !navSession.active ||
+        navSession.targetLat !== targetLat ||
+        navSession.targetLon !== targetLon;
+
+    if (targetChanged) {
+        navSession.active = true;
+        navSession.startLat = userLat;
+        navSession.startLon = userLon;
+        navSession.targetLat = targetLat;
+        navSession.targetLon = targetLon;
+        navSession.path = [];
+        navSession.lastLat = null;
+        navSession.lastLon = null;
+
+        if (typeof navBreadcrumbStartIndex === 'number') navBreadcrumbStartIndex = 0;
+    }
+
+    const nav = navSession;
+    if (!nav.origin) {
+        nav.origin = { lat: nav.startLat, lon: nav.startLon };
+    } else if (
+        typeof nav.origin.lat !== 'number' ||
+        typeof nav.origin.lon !== 'number'
+    ) {
+        nav.origin = { lat: nav.startLat, lon: nav.startLon };
+    }
+
+    if (!nav._stableUser) nav._stableUser = { lat: userLat, lon: userLon };
+    nav._stableUser.lat = (nav._stableUser.lat * 0.85) + (userLat * 0.15);
+    nav._stableUser.lon = (nav._stableUser.lon * 0.85) + (userLon * 0.15);
+
+    const stableUserLat = nav._stableUser.lat;
+    const stableUserLon = nav._stableUser.lon;
+
+    const last = nav.path.length ? nav.path[nav.path.length - 1] : null;
+    let shouldAdd = true;
+    if (last && typeof last.lat === 'number' && typeof last.lon === 'number') {
+        const step = metersBetweenLatLon(last.lat, last.lon, stableUserLat, stableUserLon);
+        if (step < STATIONARY_DEADBAND_M) shouldAdd = false;
+    }
+    if (shouldAdd) nav.path.push({ lat: stableUserLat, lon: stableUserLon, t: Date.now() });
+
+    const MAX_PATH_POINTS = 1500;
+    if (nav.path.length > MAX_PATH_POINTS) nav.path = nav.path.slice(-MAX_PATH_POINTS);
+
+    const origin = nav.origin;
+
+    function toLocalMeters(lat, lon) {
+        const mPerDegLat = 111132.92;
+        const mPerDegLon = 111320 * Math.cos((origin.lat * Math.PI) / 180);
+        return {
+            x: (lon - origin.lon) * mPerDegLon,
+            y: -(lat - origin.lat) * mPerDegLat // north up
+        };
+    }
+
+    const userM = toLocalMeters(stableUserLat, stableUserLon);
+    const targetM = toLocalMeters(targetLat, targetLon);
+
+    if (!nav._targetLocalM) nav._targetLocalM = targetM;
+
+    function clampSvg(p) {
+        const pad = 3;
+        return {
+            x: Math.max(pad, Math.min(100 - pad, p.x)),
+            y: Math.max(pad, Math.min(100 - pad, p.y))
+        };
+    }
+
+    const centerWorldM = {
+        x: (userM.x + nav._targetLocalM.x) / 2,
+        y: (userM.y + nav._targetLocalM.y) / 2
+    };
+    const centerSvg = { x: 50, y: 50 };
+
+    const dxUT = nav._targetLocalM.x - userM.x;
+    const dyUT = nav._targetLocalM.y - userM.y;
+    let viewRadiusM = Math.max(Math.abs(dxUT), Math.abs(dyUT)) * 0.7;
+    viewRadiusM = Math.max(12, viewRadiusM);
+
+    let trailAbs = 0;
+    const recent = nav.path.slice(-250);
+    for (const p of recent) {
+        const pm = toLocalMeters(p.lat, p.lon);
+        trailAbs = Math.max(trailAbs, Math.abs(pm.x - centerWorldM.x), Math.abs(pm.y - centerWorldM.y));
+    }
+    viewRadiusM = Math.max(viewRadiusM, trailAbs * 1.05);
+
+    if (typeof nav._overviewViewRadiusM !== 'number') nav._overviewViewRadiusM = viewRadiusM;
+    nav._overviewViewRadiusM = nav._overviewViewRadiusM * 0.85 + viewRadiusM * 0.15;
+    const ovScale = 50 / nav._overviewViewRadiusM;
+
+    function toOverviewSvg(worldM) {
+        return clampSvg({
+            x: centerSvg.x + (worldM.x - centerWorldM.x) * ovScale,
+            y: centerSvg.y + (worldM.y - centerWorldM.y) * ovScale
+        });
+    }
+
+    const overviewUserSvg = toOverviewSvg(userM);
+    const overviewTargetSvg = toOverviewSvg(nav._targetLocalM);
+    const overviewStartSvg = toOverviewSvg({ x: 0, y: 0 });
+
+    let overviewTrail = '';
+    if (nav.path.length > 1) {
+        const pts = nav.path
+            .map(p => toOverviewSvg(toLocalMeters(p.lat, p.lon)))
+            .map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+            .join(' ');
+        overviewTrail = `<polyline points="${pts}" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
+    }
+
+    const closeupCenter = { x: 50, y: 50 };
+    const CLOSEUP_HALF_SPAN_M = 5; // ±5m => 10m window
+    const cuScale = 50 / CLOSEUP_HALF_SPAN_M;
+
+    function toCloseupSvgFromWorldM(worldM) {
+        const relToTarget = {
+            x: worldM.x - nav._targetLocalM.x,
+            y: worldM.y - nav._targetLocalM.y
+        };
+        return {
+            x: closeupCenter.x + relToTarget.x * cuScale,
+            y: closeupCenter.y + relToTarget.y * cuScale
+        };
+    }
+
+    function isOnCloseup(p) {
+        return p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
+    }
+
+    const closeupUserRaw = toCloseupSvgFromWorldM(userM);
+    const closeupUserOnMap = isOnCloseup(closeupUserRaw);
+    const closeupUserSvg = clampSvg(closeupUserRaw);
+
+    let closeupTrail = '';
+    if (nav.path.length > 1) {
+        const ptsArr = [];
+        for (const p of nav.path) {
+            const pm = toLocalMeters(p.lat, p.lon);
+            const sp = toCloseupSvgFromWorldM(pm);
+            if (isOnCloseup(sp)) {
+                const cp = clampSvg(sp);
+                ptsArr.push(`${cp.x.toFixed(1)},${cp.y.toFixed(1)}`);
+            }
+        }
+        if (ptsArr.length > 1) {
+            closeupTrail = `<polyline points="${ptsArr.join(' ')}" fill="none" stroke="rgba(59,130,246,0.55)" stroke-width="1.8" />`;
+        }
+    }
+
+    let closeupRay = '';
+    if (!closeupUserOnMap) {
+        const v = { x: userM.x - nav._targetLocalM.x, y: userM.y - nav._targetLocalM.y };
+        const vLen = Math.hypot(v.x, v.y) || 1;
+        const ux = v.x / vLen;
+        const uy = v.y / vLen;
+
+        function rayToBoxEdge(cx, cy, dx, dy) {
+            const candidates = [];
+            if (dx !== 0) {
+                const t1 = (0 - cx) / dx;
+                const t2 = (100 - cx) / dx;
+                candidates.push(t1, t2);
+            }
+            if (dy !== 0) {
+                const t3 = (0 - cy) / dy;
+                const t4 = (100 - cy) / dy;
+                candidates.push(t3, t4);
+            }
+            const positive = candidates.filter(t => t > 0).sort((a, b) => a - b);
+            for (const t of positive) {
+                const x = cx + dx * t;
+                const y = cy + dy * t;
+                if (x >= 0 && x <= 100 && y >= 0 && y <= 100) return { x, y };
+            }
+            return { x: cx, y: cy };
+        }
+
+        const edge = rayToBoxEdge(closeupCenter.x, closeupCenter.y, ux, uy);
+        closeupRay = `
+            <line x1="${closeupCenter.x}" y1="${closeupCenter.y}"
+                  x2="${edge.x.toFixed(1)}" y2="${edge.y.toFixed(1)}"
+                  stroke="rgba(59,130,246,0.6)" stroke-dasharray="3 4" stroke-width="2" />
+        `;
+    }
+
+    const side = distMeters < 15 ? 'above' : 'below';
+    const aboveOffset = 22;
+    const belowOffset = 28;
+    const overlayTopPct = (side === 'above') ? (50 - aboveOffset) : (50 + belowOffset);
+
+    const USER_FILL = 'rgba(239,68,68,0.90)';       // red
+    const USER_RING = 'rgba(239,68,68,0.18)';       // red ring
+    const TARGET_FILL = 'rgba(59,130,246,0.90)';    // blue
+    const TARGET_RING = 'rgba(59,130,246,0.18)';    // blue ring
+
+    return `
+        <div class="bg-white rounded-xl shadow border p-3">
+            <div class="text-xs text-gray-500 mb-2">
+                Mini-map (distance & bearing shown above)
+            </div>
+
+            <!-- OVERVIEW -->
+            <div>
+                <div class="w-full aspect-[16/10] rounded-lg border bg-gray-50 overflow-hidden relative">
+                    <svg viewBox="0 0 100 100" class="w-full h-full block">
+                        <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
+                            <line x1="0" y1="50" x2="100" y2="50" />
+                            <line x1="50" y1="0" x2="50" y2="100" />
+                            <line x1="0" y1="25" x2="100" y2="25" />
+                            <line x1="0" y1="75" x2="100" y2="75" />
+                            <line x1="25" y1="0" x2="25" y2="100" />
+                            <line x1="75" y1="0" x2="75" y2="100" />
+                        </g>
+
+                        ${overviewTrail}
+
+                        <!-- Start (grey) -->
+                        <circle cx="${overviewStartSvg.x}" cy="${overviewStartSvg.y}" r="2.6" fill="rgba(107,114,128,0.85)" />
+
+                        <!-- Line user -> target -->
+                        <line x1="${overviewUserSvg.x}" y1="${overviewUserSvg.y}"
+                              x2="${overviewTargetSvg.x}" y2="${overviewTargetSvg.y}"
+                              stroke="rgba(239, 68, 68, 0.55)" stroke-width="2" />
+
+                        <!-- Target (blue) -->
+                        <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="3.5" fill="${TARGET_FILL}" />
+                        <circle cx="${overviewTargetSvg.x}" cy="${overviewTargetSvg.y}" r="6.8" fill="${TARGET_RING}" />
+
+                        <!-- User (red) -->
+                        <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="3.6" fill="${USER_FILL}" />
+                        <circle cx="${overviewUserSvg.x}" cy="${overviewUserSvg.y}" r="7.2" fill="${USER_RING}" />
+                    </svg>
+
+                    <div class="absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800">
+                        Overview
+                    </div>
+
+                    <div class="absolute left-1/2 -translate-x-1/2 px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800"
+                         style="top:${overlayTopPct}%;">
+                        ${distStr}
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-gray-500 mt-2">
+                    Overview: centered between you and target (more detail, less wasted space).
+                </div>
+            </div>
+
+            <!-- CLOSE-UP -->
+            <div class="mt-4">
+                <div class="w-full aspect-square rounded-lg border bg-gray-50 overflow-hidden relative">
+                    <svg viewBox="0 0 100 100" class="w-full h-full block">
+                        <g stroke="rgba(0,0,0,0.08)" stroke-width="0.6">
+                            <line x1="0" y1="50" x2="100" y2="50" />
+                            <line x1="50" y1="0" x2="50" y2="100" />
+                            <line x1="0" y1="25" x2="100" y2="25" />
+                            <line x1="0" y1="75" x2="100" y2="75" />
+                            <line x1="25" y1="0" x2="25" y2="100" />
+                            <line x1="75" y1="0" x2="75" y2="100" />
+                        </g>
+
+                        ${closeupTrail}
+                        ${closeupRay}
+
+                        <!-- TARGET fixed at centre (blue) -->
+                        <circle cx="${closeupCenter.x}" cy="${closeupCenter.y}" r="3.5" fill="${TARGET_FILL}" />
+                        <circle cx="${closeupCenter.x}" cy="${closeupCenter.y}" r="6.8" fill="${TARGET_RING}" />
+
+                        ${
+                            closeupUserOnMap
+                                ? `
+                                    <line x1="${closeupUserSvg.x}" y1="${closeupUserSvg.y}" x2="${closeupCenter.x}" y2="${closeupCenter.y}"
+                                        stroke="rgba(0,0,0,0.18)" stroke-width="1" />
+                                    <!-- USER (red + confidence circle) -->
+                                    <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="3.6" fill="${USER_FILL}" />
+                                    <circle cx="${closeupUserSvg.x}" cy="${closeupUserSvg.y}" r="7.2" fill="${USER_RING}" />
+                                  `
+                                : ''
+                        }
+                    </svg>
+
+                    <div class="absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-semibold bg-white/95 border shadow-sm text-gray-800">
+                        Close-up (10m × 10m)
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-gray-500 mt-2">
+                    Close-up: target centered; dashed blue ray shows approach direction until you enter the window.
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function _norm360(deg) {
+    let a = deg % 360;
+    if (a < 0) a += 360;
+    return a;
+}
+
+function _angleDiffSigned(aDeg, bDeg) {
+    const a = _norm360(aDeg);
+    const b = _norm360(bDeg);
+    let d = a - b;
+    if (d > 180) d -= 360;
+    if (d <= -180) d += 360;
+    return d;
+}
+
+/**
+ * Flexible signature so older callers still work.
+ * Accepts either:
+ *  - renderTurnGuidanceSimple({ bearingDeg, movementBearingDeg, distanceMeters, bearingLabel })
+ *  - renderTurnGuidanceSimple(bearingDeg, movementBearingDeg, distanceMeters)
+ */
+function renderTurnGuidanceSimple(a, b, c) {
+    let bearingDeg = null;
+    let movementBearingDeg = null;
+    let distM = null;
+    let bearingLabel = '';
+
+    if (a && typeof a === 'object') {
+        bearingDeg = (typeof a.bearingDeg === 'number') ? a.bearingDeg : null;
+        movementBearingDeg = (typeof a.movementBearingDeg === 'number') ? a.movementBearingDeg : null;
+        distM = (typeof a.distanceMeters === 'number') ? a.distanceMeters : null;
+        bearingLabel = String(a.bearingLabel || '');
+    } else {
+        bearingDeg = (typeof a === 'number') ? a : null;
+        movementBearingDeg = (typeof b === 'number') ? b : null;
+        distM = (typeof c === 'number') ? c : null;
+    }
+
+    if (bearingDeg === null) return '';
+
+    if (movementBearingDeg === null) {
+        return `
+            <div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                <div class="text-sm font-semibold text-gray-700 mb-1">Guidance</div>
+                <div class="text-sm text-gray-700">
+                    Walk towards <strong>${Math.round(bearingDeg)}°</strong>
+                    ${bearingLabel ? `<span class="text-gray-500">(${bearingLabel})</span>` : ''}
+                    ${Number.isFinite(distM) ? ` · <span class="text-gray-500">${Math.round(distM)}m</span>` : ''}
+                </div>
+                <div class="text-[11px] text-gray-500 mt-1">Move a few metres to enable left/right turn guidance.</div>
+            </div>
+        `;
+    }
+
+    const rel = _angleDiffSigned(bearingDeg, movementBearingDeg);
+    const abs = Math.abs(rel);
+
+    let turnText = '';
+    if (abs <= 10) turnText = 'ON COURSE';
+    else if (abs <= 35) turnText = (rel > 0) ? 'SLIGHT RIGHT' : 'SLIGHT LEFT';
+    else if (abs <= 100) turnText = (rel > 0) ? 'TURN RIGHT' : 'TURN LEFT';
+    else turnText = 'TURN AROUND';
+
+    const distStr =
+        Number.isFinite(distM)
+            ? (distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${Math.round(distM)} m`)
+            : '';
+
+    return `
+        <div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <div class="text-sm font-semibold text-gray-700">Guidance</div>
+                    <div class="text-base font-extrabold ${turnText === 'ON COURSE' ? 'text-green-700' : 'text-indigo-700'}">
+                        ${turnText}${abs > 10 ? ` · ${Math.round(abs)}°` : ''}
+                    </div>
+                    <div class="text-sm text-gray-700 mt-1">
+                        Target bearing: <strong>${Math.round(bearingDeg)}°</strong>
+                        ${bearingLabel ? `<span class="text-gray-500">(${bearingLabel})</span>` : ''}
+                        ${distStr ? ` · <span class="text-gray-500">${distStr}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+ function renderNavigationPanel(openSurvey) {
+    if (!navigationTargetId) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-dashed border-gray-300 mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-1">
+                    <i class="fas fa-location-arrow mr-2"></i> Navigation
+                </h3>
+                <p class="text-sm text-gray-600">
+                    Tap a target (or find) pin on the plot to select it for navigation.
+                    Once selected, distance and bearing from your GPS position will appear here.
+                </p>
+            </div>
+        `;
+    }
+
+    const target =
+        openSurvey.targets.find(t => String(t.id) === String(navigationTargetId))
+        || (Array.isArray(finds) ? finds : []).find(f =>
+            f &&
+            String(f.id) === String(navigationTargetId) &&
+            String(f.surveyId) === String(openSurvey.id)
+        );
+
+    if (!target) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-red-300 mb-6">
+                <h3 class="text-lg font-semibold text-red-700 mb-1">
+                    <i class="fas fa-exclamation-triangle mr-2"></i> Navigation Target Missing
+                </h3>
+                <p class="text-sm text-gray-600">
+                    The selected navigation item could not be found (it may have been deleted).
+                </p>
+                <button
+                    class="mt-3 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
+                    onclick="clearNavigationTarget()"
+                >Clear Navigation</button>
+            </div>
+        `;
+    }
+
+    const coordsStr = String(target.coordinates || '');
+    const parts = coordsStr.split(',').map(x => parseFloat(String(x).trim()));
+    const tLat = parts[0];
+    const tLon = parts[1];
+
+    if (!isFinite(tLat) || !isFinite(tLon)) {
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-md border border-red-300 mb-6">
+                <h3 class="text-lg font-semibold text-red-700 mb-1">
+                    <i class="fas fa-exclamation-triangle mr-2"></i> Navigation Unavailable
+                </h3>
+                <p class="text-sm text-gray-600">
+                    This item does not have valid GPS coordinates.
+                </p>
+                <button
+                    class="mt-3 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
+                    onclick="clearNavigationTarget()"
+                >Clear Navigation</button>
+            </div>
+        `;
+    }
+
+    const u = smoothedUserCoords || currentUserCoords;
+    const hasUser =
+        u &&
+        typeof u.lat === 'number' &&
+        typeof u.lon === 'number' &&
+        !isNaN(u.lat) &&
+        !isNaN(u.lon);
+
+    let distanceStr = '—';
+    let bearingStr = '—';
+    let miniMapHtml = '';
+    let guidanceHtml = '';
+
+    if (hasUser) {
+        const dist = haversineDistanceMeters(u.lat, u.lon, tLat, tLon);
+        distanceStr = dist >= 1000 ? (dist / 1000).toFixed(2) + ' km' : dist.toFixed(1) + ' m';
+
+        const bearing = calculateBearingDegrees(u.lat, u.lon, tLat, tLon);
+        bearingStr = `${bearing.toFixed(0)}° (${bearingToCompassPoint(bearing, 16)})`;
+
+        const moveBearing = (typeof currentMovementBearingDeg === 'number') ? currentMovementBearingDeg : null;
+        miniMapHtml = renderNavigationMiniMapSimple({
+            targetLat: tLat,
+            targetLon: tLon,
+            userLat: u.lat,
+            userLon: u.lon,
+            distMeters: dist,
+            bearingDeg: bearing,
+            movementBearingDeg: moveBearing
+        });
+
+        guidanceHtml = renderTurnGuidanceSimple({
+            userLat: u.lat,
+            userLon: u.lon,
+            targetLat: tLat,
+            targetLon: tLon,
+            movementBearingDeg: moveBearing
+        });
+    } else {
+        miniMapHtml = `
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-600">
+                Waiting for a <strong>GPS fix</strong>… navigation mini-maps will appear as soon as your location is available (even if you are using <strong>Hide</strong>).
+            </div>
+        `;
+    }
+
+    const itemType = (String(target.type || '').toLowerCase() === 'find' || target.isFind) ? 'Find' : 'Target';
+
+    return `
+        <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 mb-6">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-1">
+                        <i class="fas fa-location-arrow mr-2"></i> Navigation
+                    </h3>
+                    <p class="text-sm text-gray-600">
+                        Selected ${itemType}: <strong>${(target.description || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>
+                        ${target.vdi ? ` (ID: <strong>${target.vdi}</strong>)` : ''}
+                    </p>
+                </div>
+                <button
+                    class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-bold"
+                    onclick="clearNavigationTarget()"
+                >Clear</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mt-3">
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <p class="text-xs text-gray-500 font-semibold">Distance</p>
+                    <p class="text-lg font-extrabold text-gray-800">${distanceStr}</p>
+                </div>
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <p class="text-xs text-gray-500 font-semibold">Bearing</p>
+                    <p class="text-lg font-extrabold text-gray-800">${bearingStr}</p>
+                </div>
+            </div>
+
+            <div id="nav-mini-map-host" class="mt-3">
+                ${miniMapHtml}
+            </div>
+
+            ${guidanceHtml}
+        </div>
+    `;
+}
 
 function refreshActiveTrackFromSurveys() {
     activeTrackSurveyId = null;
@@ -13522,17 +14077,15 @@ function handleStopTrackClick() {
  * Toggle whether a track is drawn on the map.
  */
 function toggleTrackVisibility(trackId, isVisible) {
-    const openSurvey = surveys.find(s => s.status === 'Open');
-    if (!openSurvey || !Array.isArray(openSurvey.tracks)) return;
-    const track = openSurvey.tracks.find(t => String(t.id) === String(trackId));
-    if (!track) return;
-    track.isVisible = !!isVisible;
-    openSurvey.dateLastChanged = Date.now();
+    const found = findTrackById(trackId);
+    if (!found) return;
+
+    found.track.isVisible = !!isVisible;
+    if (found.survey) found.survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
+
     if (currentPage === 'Compass') {
-        rerenderCompassIfActive();
-        if (typeof tileGridModalIsOpen !== 'undefined' && tileGridModalIsOpen &&
-            typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
+        render();
     }
 }
 
@@ -13569,7 +14122,6 @@ function renderTracksPanel(openSurvey) {
                             class="track-visibility-toggle h-4 w-4 text-primary flex-shrink-0"
                             data-track-id="${track.id}"
                             ${isVisible ? 'checked' : ''}
-                            onchange="toggleTrackVisibility('${track.id}', this.checked)"
                         >
                         <div class="flex flex-col min-w-0">
                             <span class="text-sm font-medium text-gray-700 truncate">
@@ -13597,7 +14149,6 @@ function renderTracksPanel(openSurvey) {
                             data-track-id="${track.id}"
                             title="Edit track name & description"
                             aria-label="Edit track"
-                            onclick="openEditTrackModal('${track.id}')"
                         >
                             <i class="fas fa-pen"></i>
                         </button>
@@ -13608,7 +14159,6 @@ function renderTracksPanel(openSurvey) {
                             data-track-id="${track.id}"
                             title="Delete track"
                             aria-label="Delete track"
-                            onclick="deleteTrack('${track.id}')"
                         >
                             <i class="fas fa-trash"></i>
                         </button>
@@ -13806,8 +14356,7 @@ ${(() => {
                 <button
                     id="stake-target-btn"
                     type="button"
-                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700 mb-2"
-                    onclick="(function(){const r=canCreate('targets');if(!r.ok){showMessage(r.reason,'error');return;}quickLogTargetByVDI(-100,'STAKE',{description:'STAKE',type:'Something else'});})()">
+                    class="w-full py-3 rounded-lg font-extrabold shadow bg-purple-600 text-white active:bg-purple-700 mb-2">
                     STAKE
                 </button>
                 <div class="grid grid-cols-5 gap-2 mb-2">
@@ -13920,7 +14469,8 @@ ${(() => {
             <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
 
-
+            <!-- Navigation (moved to bottom) -->
+            ${renderNavigationPanel(openSurvey)}
 
         </div>
     `;
@@ -16209,7 +16759,12 @@ if (gpsBtn) {
 
     // gridtile size buttons use inline onclick — no separate listener needed
 
-    // gridtile-toggle-btn uses inline onclick
+    const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
+    if (gridToggleBtn) {
+        gridToggleBtn.addEventListener('click', () => {
+            try { toggleGridTileEnabled(); } catch (e) { console.error(e); }
+        });
+    }
 
     const inlineTileCanvas = document.getElementById('tile-grid-canvas');
     if (inlineTileCanvas) {
@@ -16243,7 +16798,17 @@ if (privacyBtn) {
         });
     }
 
-// track-visibility-toggle uses inline onchange in renderTracksPanel
+const trackVisibilityToggles = document.querySelectorAll('.track-visibility-toggle');
+if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
+    trackVisibilityToggles.forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const trackId = cb.getAttribute('data-track-id');
+            toggleTrackVisibility(trackId, cb.checked);
+        });
+    });
+}
 
 const mapTargetsCb = document.getElementById('map-show-targets-cb');
 if (mapTargetsCb) {
@@ -16366,12 +16931,35 @@ if (tracksPanelDetails) {
 }
 
     const startTrackBtn = document.getElementById('start-track-btn');
-    if (startTrackBtn) startTrackBtn.onclick = handleStartTrackClick;
+    if (startTrackBtn) {
+        startTrackBtn.addEventListener('click', handleStartTrackClick);
+    }
 
     const stopTrackBtn = document.getElementById('stop-track-btn');
-    if (stopTrackBtn) stopTrackBtn.onclick = handleStopTrackClick;
+    if (stopTrackBtn) {
+        stopTrackBtn.addEventListener('click', handleStopTrackClick);
+    }
 
-// track-edit-btn uses inline onclick in renderTracksPanel
+document.querySelectorAll('.track-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const trackId = e.currentTarget.getAttribute('data-track-id');
+        promptEditTrackMeta(trackId);
+    });
+});
+
+const trackEditButtons = document.querySelectorAll('.track-edit-btn');
+if (trackEditButtons && trackEditButtons.length > 0) {
+    trackEditButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const trackId = btn.getAttribute('data-track-id');
+            openEditTrackModal(trackId);
+        });
+    });
+}
 
     const newSurveyBtn = document.getElementById('new-survey-btn');
     if (newSurveyBtn) newSurveyBtn.addEventListener('click', showNewSurveyModal);
@@ -16455,7 +17043,19 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
     });
 }
 
-// stake-target-btn uses inline onclick
+const stakeBtn = document.getElementById('stake-target-btn');
+if (stakeBtn) {
+    stakeBtn.addEventListener('click', () => {
+
+        const r = canCreate('targets');
+        if (!r.ok) {
+            showMessage(r.reason, 'error');
+            return;
+        }
+
+        quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Something else' });
+    });
+}
 
     const findsSearchInput = document.getElementById('finds-search-input');
     const findsTypeSelect = document.getElementById('finds-type-select');
@@ -16538,22 +17138,21 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
 // ── Compass photo buttons ──────────────────────────────────────────
 let _compassPhotoPendingRange = null;
 
-// Called by inline onclick on compass-photo-btn
-function _compassPhotoBtnClick(btn) {
-    const min   = btn.getAttribute('data-min');
-    const max   = btn.getAttribute('data-max');
-    const tid   = btn.getAttribute('data-targetid');
-    const color = btn.getAttribute('data-color');
-    _compassPhotoPendingRange = { min, max, targetId: tid, color };
-    const inp = document.getElementById('compass-photo-capture-input');
-    if (inp) { inp.value = ''; inp.click(); }
-}
+document.querySelectorAll('.compass-photo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const min   = btn.getAttribute('data-min');
+        const max   = btn.getAttribute('data-max');
+        const tid   = btn.getAttribute('data-targetid');
+        const color = btn.getAttribute('data-color');
+        _compassPhotoPendingRange = { min, max, targetId: tid, color };
+        const inp = document.getElementById('compass-photo-capture-input');
+        if (inp) { inp.value = ''; inp.click(); }
+    });
+});
 
-// File input uses event delegation on appContent (survives re-renders)
-document.getElementById('app-content').addEventListener('change', async (e) => {
-    const inp = e.target.closest('#compass-photo-capture-input');
-    if (!inp) return;
-    {
+const compassPhotoInput = document.getElementById('compass-photo-capture-input');
+if (compassPhotoInput) {
+    compassPhotoInput.addEventListener('change', async (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file || !_compassPhotoPendingRange) return;
         const r = _compassPhotoPendingRange;
@@ -16594,23 +17193,33 @@ document.getElementById('app-content').addEventListener('change', async (e) => {
             console.error('Compass photo capture error:', err);
             showMessage('Photo could not be saved, but target was logged.', 'error');
         }
-    }
-});
-
-// Called by inline onclick on compass-range-btn
-function _compassRangeBtnClick(btn) {
-    if (btn.classList.contains('tile-grid-range-btn')) return;
-    const min = Number(btn.getAttribute('data-min'));
-    const max = Number(btn.getAttribute('data-max'));
-    const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
-    const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
-    let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
-    if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
-        if (vdi < min) vdi = min;
-        if (vdi > max) vdi = max;
-    }
-    quickLogTargetByVDI(vdi, `${btn.getAttribute('data-color')} ${min}→${max}`, { type: 'Unidentified' });
+    });
 }
+
+// Guard: only attach once — these buttons are static DOM, not re-rendered
+if (!window._compassRangeBtnsAttached) {
+    window._compassRangeBtnsAttached = true;
+document.querySelectorAll('.compass-range-btn').forEach(btn => {
+    if (btn.classList.contains('tile-grid-range-btn')) return;
+    btn.addEventListener('click', () => {
+        const min = Number(btn.getAttribute('data-min'));
+        const max = Number(btn.getAttribute('data-max'));
+        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
+        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
+
+        {
+            let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
+
+            if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
+                if (vdi < min) vdi = min;
+                if (vdi > max) vdi = max;
+            }
+
+            quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
+        }
+    });
+});
+} // end _compassRangeBtnsAttached guard
 
     try { attachLiveQuickTargetSettingsListeners(); } catch (e) {}
 
@@ -16956,8 +17565,7 @@ function buildCompassPhotoBtnsRow(ranges) {
         return `<button type="button"
             class="compass-photo-btn py-3 rounded-lg text-white font-extrabold text-sm shadow ${classes}"
             data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
-            title="Photo + target (${color} range ${min}→${max})"
-            onclick="_compassPhotoBtnClick(this)">
+            title="Photo + target (${color} range ${min}→${max})">
             <i class="fas fa-camera"></i>
         </button>`;
     }).join('');
@@ -16981,8 +17589,7 @@ function buildCompassRangeButtonsRow(ranges) {
         const classes = cls[color] || 'bg-gray-500 hover:bg-gray-600';
         return `<button type="button"
             class="compass-range-btn py-3 rounded-lg text-white font-extrabold text-xs shadow ${classes}"
-            data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
-            onclick="_compassRangeBtnClick(this)">
+            data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}">
             ${rangeLabel}
         </button>`;
     }).join('');
@@ -17009,8 +17616,7 @@ function buildCompassRangeButtonsHtml(ranges) {
         return `
             <button type="button"
                 class="compass-range-btn w-full py-3 rounded-lg text-white font-extrabold text-xs shadow ${classes}"
-                data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}"
-                onclick="_compassRangeBtnClick(this)">
+                data-min="${min}" data-max="${max}" data-targetid="${tid}" data-color="${escapeHtml(color)}">
                 ${rangeLabel}
             </button>
         `;
