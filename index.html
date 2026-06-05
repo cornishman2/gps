@@ -106,7 +106,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2-Track colour
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2_Track cancel
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6611,6 +6611,8 @@ function openEditTrackModal(trackId, options = {}) {
 
     // Title
     const isNew = !!options.isNew;
+    _editTrackIsNew = isNew;
+    _editTrackNewId = isNew ? track.id : null;
     if (titleEl) titleEl.textContent = isNew ? 'New Track Details' : 'Edit Track';
 
     // Fill fields
@@ -6657,8 +6659,28 @@ function openEditTrackModal(trackId, options = {}) {
     }, 50);
 }
 
+let _editTrackIsNew = false;
+let _editTrackNewId = null;
+
 function closeEditTrackModal() {
+    // If user cancels a brand new track, delete it
+    if (_editTrackIsNew && _editTrackNewId) {
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        if (openSurvey && Array.isArray(openSurvey.tracks)) {
+            openSurvey.tracks = openSurvey.tracks.filter(t => t.id !== _editTrackNewId);
+            // Also stop recording if it was the active track
+            if (activeTrackId === _editTrackNewId) {
+                activeTrackId = null;
+                activeTrackSurveyId = null;
+                isTrackingActive = false;
+            }
+            saveSurveysToLocalStorage();
+        }
+    }
+    _editTrackIsNew = false;
+    _editTrackNewId = null;
     closeModal('edit-track-modal');
+    if (currentPage === 'Compass') rerenderCompassIfActive();
 }
 
 function handleEditTrackSubmit(event) {
@@ -6691,6 +6713,8 @@ function handleEditTrackSubmit(event) {
     found.track.description = newDesc;
     if (newColor) found.track.color = newColor;
 
+    _editTrackIsNew = false;
+    _editTrackNewId = null;
     found.survey.dateLastChanged = Date.now();
 
     if (typeof saveSurveysToLocalStorage === 'function') {
