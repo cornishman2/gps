@@ -125,7 +125,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2563,7 +2563,7 @@ function drawTileGrid() {
     }
 
     // ── Grid lines — North-up, no rotation ───────────────────────────────
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= cells; i++) {
         const x = gridOffX + i * cellPx;
@@ -2653,7 +2653,7 @@ function drawTileGrid() {
                         ? tile.coverageColors[__k] : 'rgba(34,197,94,0.18)';
                     ctx.fillStyle = __fill;
                     ctx.fillRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
-                    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
                     ctx.strokeRect(gridOffX + col * cellPx, gridOffY + row * cellPx, cellPx, cellPx);
                 }
             }
@@ -3042,10 +3042,7 @@ async function deleteFindPermanently(findId) {
         }
     }
 
-    const deletedFind = finds[idx];
     finds.splice(idx, 1);
-    const delFindSurvey = deletedFind && surveys.find(s => s.id === deletedFind.surveyId);
-    if (delFindSurvey) { delFindSurvey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
     saveFindsToLocalStorage();
 
     showMessage('Find deleted (including photos).', 'success');
@@ -3754,17 +3751,11 @@ Storage used and available is also shown.
 From the Home page you can:
 • Create a new survey
 • Open an existing survey
-• Export the open survey directly with the Export Now button
-• Close a survey
+• Close or archive a survey
 • Delete a survey
 
 Only one survey can be open at a time.
 The Targets page always shows data for the currently open survey.
-
-Each survey card shows:
-• Last change — date and time of the most recent edit
-• Last export — date and time of the last ZIP export
-  (shown in red if changes have been made since the last export)
 
 --------------------------------
 MAP PAGE (COMPASS)
@@ -3794,30 +3785,14 @@ Pins are colour coded:
   • Purple     – Unidentified
   • Teal       – Other
 
-  Stakes are shown as small black circles.
+  Stakes are shown as small black squares.
 
 MAP CONTROLS
-Below the map there are four rows of buttons:
-
-TILE  [10m] [20m] [30m] [Hide]
-  Tap a size button to place the tile grid centred on your
-  current GPS position at that size.
-  Hide/Show toggles the grid overlay on the map.
-
-MAP   [◀] [▲] [▼] [▶]
-  Pan the map. Hold a button to pan continuously.
-
-GRID  [W] [N] [S] [E]
-  Move the tile grid. Hold a button to move continuously.
-
-ROT   [↺] [↻] [0°]
-  Rotate the tile grid anticlockwise or clockwise.
-  Hold a button to rotate continuously (3° per step).
-  Tap 0° to reset rotation to North-aligned.
-
-ZOOM  [+] [−] [Reset] [Hide]
-  Zoom the map in/out. Reset returns to default view.
-  Hide/Show toggles your GPS position dot.
+Four directional buttons (◀ ▲ ▼ ▶) pan the map left, up, down,
+and right. Hold a button down to pan continuously.
+The + and – buttons zoom in and out.
+Reset returns the map to its default view.
+Show/Hide toggles your GPS position dot on the map.
 
 Tap any target or find pin to open navigation guidance back
 to that point.
@@ -3866,43 +3841,33 @@ The first track (Perimeter) is always black by default.
 You can change any track colour using the pencil icon.
 
 STAKE BUTTON
-The STAKE button places a small black circle marker at your
-current GPS position. Use stakes to mark field boundaries,
-gates, or reference points.
+The STAKE button places a black square marker at your current
+GPS position. Use stakes to mark field boundaries, gates, or
+reference points.
 
-TILE GRID
-The Tile Grid overlays a square grid on the survey area to
-help you cover it systematically. Choose a size with the
-TILE buttons (10m, 20m, or 30m) — this places the grid
-centred on your current GPS position.
-
-The grid can be rotated to align with a field boundary using
-the ROT buttons. The red square on the survey map rotates
-to match. The Tile Grid canvas always shows North at the top
-but the red square rotates within it to show the true angle.
+TILE GRID (15×15 metres)
+The Tile Grid divides your survey area into a 15×15 metre
+square. It helps you track which parts of the field you have
+covered systematically.
 
 To use the tile grid:
-1. Tap a TILE size button to place the grid at your position.
-2. The red grid outline appears on the survey map.
-3. Open the Tile Grid section below the map controls.
-4. As you move within the grid, cells are shaded green
-   automatically. Green cells persist until you Clear or
-   move the grid.
-5. Rotate with the ROT buttons to align with boundaries.
-   Use GRID buttons to nudge the grid position.
-6. Tap "Complete" when finished. The area is saved on the map.
-7. Move to an adjacent area and repeat.
+1. Stand at the centre of the area you want to cover.
+2. Tap "Set Centre Here" (in the GPS section above the map).
+   This places the 15×15 metre grid centred on your position.
+3. The grid appears on the map as a red outline.
+4. As you move within the grid, cells are shaded automatically
+   to show which areas you have walked over.
+5. Tap "Complete" when you have finished that square.
+   The completed area is saved and shown in green on the map.
+6. Move to an adjacent area and repeat.
 
-The Tile Grid section shows:
+The Tile Grid panel also shows:
 • The grid centre coordinates
-• Your current position
+• Your current position within the grid
 • Your coverage percentage for the current tile
 
-Use "Clear" to reset coverage without marking as complete.
-
-The coloured quick buttons inside the Tile Grid section let
-you log a target and paint the cell at the same time. The
-camera button alongside each colour attaches a photo.
+Use "Clear" to reset the coverage for the current tile without
+marking it as complete.
 
 --------------------------------
 TARGETS PAGE
@@ -3994,10 +3959,8 @@ GPX files can be imported into mapping applications such as
 Google Maps, OsmAnd, and others.
 
 Select File and Import
-Imports a survey previously exported as a ZIP or JSON file.
+Imports a survey previously exported as a ZIP file.
 Use this to restore a backup or move data between devices.
-Imported surveys always arrive as Active status and appear
-immediately on the Home page.
 
 Select GPX and Import
 Creates a survey from a GPX file exported from another
@@ -4084,10 +4047,8 @@ GETTING STARTED
    Delete any unwanted tracks from the Tracks section.
 
 4. Use the Tile Grid for Thorough Coverage
-   Tap a TILE size button (10m / 20m / 30m) to place the
-   grid centred on your GPS position.
-   Rotate the grid with the ROT buttons to align with
-   field boundaries if needed.
+   Stand at the centre of an area you want to cover.
+   Tap "Set Centre Here" to place the 15×15 metre grid.
    Walk the grid systematically — cells paint as you move.
    Tap "Complete" and move on to the next square.
 
@@ -4100,15 +4061,9 @@ GETTING STARTED
 6. Back Up Your Data
    Detekta stores all data locally on your device.
    Regularly export your surveys as ZIP files.
-   The quickest way is the Export Now button on the open
-   survey card on the Home page.
    Exports are saved to your Downloads folder — copy them
    to cloud storage, email them, or transfer to another
    device.
-
-   Each survey card shows the date of the last change and
-   the date of the last export. The export date turns red
-   when there are unsaved changes — do not ignore this.
 
    It is your responsibility to make regular backups.
 
@@ -7315,10 +7270,6 @@ importedSurvey.surveyPhotoData = '';
 
     saveFindsToLocalStorage();
 
-    // Mark survey as changed when a find is edited
-    const editFindSurvey = surveys.find(s => s.id === find.surveyId);
-    if (editFindSurvey) { editFindSurvey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
-
     closeEditFindModal();
     showMessage('Find updated.', 'success');
     render();
@@ -8316,7 +8267,6 @@ function renderExportPage() {
 
         survey.tracks = (survey.tracks || []).filter(t => t.id !== track.id);
 
-        survey.dateLastChanged = Date.now();
         saveSurveysToLocalStorage();
         showMessage(`Track deleted: ${trackName}.`, 'success');
 
@@ -9352,7 +9302,6 @@ async function handleNewSurveySubmit(event) {
     surveys.forEach(s => {
         if (s.status === 'Open') {
             s.status = 'Active';
-            s.dateClosed = now;
             s.dateLastChanged = now;
         }
     });
@@ -13123,7 +13072,7 @@ const toPercent = (x, y) => {
             const pointsStr = corners.map(p => `${p.xPct.toFixed(3)},${p.yPct.toFixed(3)}`).join(' ');
             const cPct      = toPercent(cLon, cLat);
             const strokeColor = style.includes('34,197,94') ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
-            const fillColor   = style.includes('34,197,94') ? 'rgba(34,197,94,0.35)'  : 'rgba(239,68,68,0.25)';
+            const fillColor   = style.includes('34,197,94') ? 'rgba(34,197,94,0.12)'  : 'rgba(239,68,68,0.06)';
 
             return `
                 <svg class="absolute inset-0 w-full h-full pointer-events-none"
@@ -14296,7 +14245,6 @@ function handleStartTrackClick() {
     activeTrackSurveyId = openSurvey.id;
     activeTrackId = newTrack.id;
 
-    openSurvey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
     showMessage(`Started recording ${name}.`, 'success');
     render();
@@ -14315,8 +14263,6 @@ function handleStopTrackClick() {
     }
 
     active.track.isRecording = false;
-    const activeSurvey = surveys.find(s => s.id === active.surveyId || (Array.isArray(s.tracks) && s.tracks.some(t => t.id === active.track.id)));
-    if (activeSurvey) activeSurvey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     const name = active.track.name || 'track';
@@ -14344,7 +14290,6 @@ function toggleTrackVisibility(trackId, isVisible) {
     if (!found) return;
 
     found.track.isVisible = !!isVisible;
-    if (found.survey) found.survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
     if (currentPage === 'Compass') {
