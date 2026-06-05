@@ -106,7 +106,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 - quick buttons
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 - quick buttons 2
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -17216,30 +17216,7 @@ if (stakeBtn) {
         btn.addEventListener('click', () => deleteFind(btn.getAttribute('data-find-id')));
     });
 
-// 7. Compass Page Range Buttons
-document.querySelectorAll('.compass-range-btn').forEach(btn => {
-    if (btn.classList.contains('tile-grid-range-btn')) return;
-    btn.addEventListener('click', () => {
-        const min = Number(btn.getAttribute('data-min'));
-        const max = Number(btn.getAttribute('data-max'));
-        const preferredStr = (btn.getAttribute('data-targetid') ?? '').toString().trim();
-        const preferred = (preferredStr === '') ? NaN : Number(preferredStr);
-
-        ensureTrackingThen(() => {
-            // If a specific Target ID is configured, use it; otherwise fall back to a random within-range value.
-            let vdi = (isFinite(preferred) ? preferred : randomIntInclusive(min, max));
-
-            // Safety: if preferred is set but outside range, clamp to range
-            if (isFinite(min) && isFinite(max) && isFinite(vdi)) {
-                if (vdi < min) vdi = min;
-                if (vdi > max) vdi = max;
-            }
-
-            // Rainbow targets should be Unidentified
-            quickLogTargetByVDI(vdi, `${min}→${max}`, { type: 'Unidentified' });
-        });
-    });
-});
+// 7. Compass Page Range Buttons — use inline onclick="_quickRangeBtnClick(this)" instead
 
 //    
 
