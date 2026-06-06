@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 tile buttons
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Tile camera
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -14614,8 +14614,23 @@ ${(() => {
                     ? (Number(_tile.centerLat).toFixed(6) + ', ' + Number(_tile.centerLon).toFixed(6))
                     : 'Not set';
 
+                // Camera buttons row (same colours as range buttons)
+                const _cameraButtons = _ranges.map(function(r) {
+                    const color = String(r && r.color || '').toUpperCase();
+                    const min = (r && isFinite(Number(r.min))) ? Number(r.min) : '';
+                    const max = (r && isFinite(Number(r.max))) ? Number(r.max) : '';
+                    const tid = (r && isFinite(Number(r.targetId))) ? Number(r.targetId) : '';
+                    const cls = _colorCls[color] || 'bg-gray-500 hover:bg-gray-600';
+                    const oc = "_quickPhotoTargetPending={min:'" + min + "',max:'" + max + "',targetId:'" + tid + "',color:'" + color + "'};document.getElementById('quick-photo-target-input').click();";
+                    return '<button type="button"'
+                        + ' class="px-2 py-2 rounded-lg text-white font-bold text-xs shadow ' + cls + '"'
+                        + ' onclick="' + oc + '"'
+                        + '><i class="fas fa-camera"></i></button>';
+                }).join('');
+
                 const _rainbowHtml = _rainbowButtons
-                    ? '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
+                    ? '<div class="grid grid-cols-5 gap-2 mb-1">' + _cameraButtons + '</div>'
+                      + '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
                     : '<div id="tile-grid-rainbow-buttons"></div>';
 
                 return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
