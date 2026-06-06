@@ -2332,14 +2332,13 @@ function drawTileGrid() {
     const GRID_FACTOR = Math.SQRT2;
     const gridSizeM   = sizeM * GRID_FACTOR;
 
-    const cssMax = Math.min(window.innerWidth - 48, 520);
-    const px     = Math.max(240, cssMax);
-    const half   = px / 2;
-    const mToPx  = px / gridSizeM;   // metres → canvas pixels
+    // Use actual displayed size for pixel-perfect rendering
+    const displaySize = canvas.getBoundingClientRect();
+    const px   = Math.max(240, displaySize.width > 10 ? Math.round(displaySize.width) : Math.min(window.innerWidth - 48, 520));
+    const half = px / 2;
+    const mToPx = px / gridSizeM;   // metres → canvas pixels
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.style.width  = px + 'px';
-    canvas.style.height = px + 'px';
     canvas.width  = Math.floor(px * dpr);
     canvas.height = Math.floor(px * dpr);
 
@@ -14599,7 +14598,7 @@ ${(() => {
                     + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
                     + '</div>'
                     + '<div class="w-full flex justify-center mb-3">'
-                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none; max-width: 100%;"></canvas>'
+                    + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: none; display: block; width: 100%; aspect-ratio: 1 / 1;"></canvas>'
                     + '</div>'
                     + _rainbowHtml
                     + '<div class="flex gap-2">'
