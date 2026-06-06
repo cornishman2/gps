@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 tile label
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 tracks in grid
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2377,14 +2377,90 @@ function drawTileGrid() {
     const covEl = document.getElementById('tile-grid-coverage-text');
     if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
 
-    if (!user) return;
-
+    // ── Draw survey data (tracks, targets, finds, stakes) ───────────────
     const lat0 = Number(tile.centerLat);
     const lon0 = Number(tile.centerLon);
     if (!isFinite(lat0) || !isFinite(lon0)) return;
 
     const M_PER_DEG_LAT = 110574;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    // Convert lat/lon to canvas px
+    const toCanvasPx = (lat, lon) => ({
+        x: ((lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * px,
+        y: (sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT) / sizeM * px
+    });
+    const inBounds = (lat, lon) => {
+        const lx = (lon - lon0) * mPerDegLon + sizeM / 2;
+        const ly = sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT;
+        return lx >= 0 && lx <= sizeM && ly >= 0 && ly <= sizeM;
+    };
+    const parseCoords = (coordsStr) => {
+        if (!coordsStr || coordsStr === 'No GPS logged') return null;
+        const parts = String(coordsStr).split(',').map(Number);
+        if (parts.length < 2 || !isFinite(parts[0]) || !isFinite(parts[1])) return null;
+        return { lat: parts[0], lon: parts[1] };
+    };
+
+    // Tracks
+    if (showMapTracks) {
+        const tracks = Array.isArray(survey.tracks)
+            ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points) && t.points.length > 1)
+            : [];
+        for (const track of tracks) {
+            const pts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
+            if (!pts.length) continue;
+            ctx.beginPath();
+            ctx.strokeStyle = track.color || 'rgba(37,99,235,0.8)';
+            ctx.lineWidth = 1.5;
+            let started = false;
+            for (const p of pts) {
+                const cp = toCanvasPx(p.lat, p.lon);
+                if (!started) { ctx.moveTo(cp.x, cp.y); started = true; }
+                else ctx.lineTo(cp.x, cp.y);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // Targets, finds, stakes
+    const allTargets = showMapTargets || showMapStakes ? (Array.isArray(survey.targets)
+        ? survey.targets.filter(t => t && !t.deleted) : []) : [];
+    const allFinds = showMapFinds ? (Array.isArray(finds)
+        ? finds.filter(f => f && !f.deleted && String(f.surveyId) === String(survey.id)) : []) : [];
+
+    const PIN_R = Math.max(3, cellPx * 0.35);
+
+    for (const t of allTargets) {
+        const c = parseCoords(t.coordinates);
+        if (!c || !inBounds(c.lat, c.lon)) continue;
+        const isStake = String(t.vdi).trim() === '-100';
+        if (isStake && !showMapStakes) continue;
+        if (!isStake && !showMapTargets) continue;
+        const cp = toCanvasPx(c.lat, c.lon);
+        ctx.beginPath();
+        if (isStake) {
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.arc(cp.x, cp.y, PIN_R * 0.5, 0, Math.PI * 2);
+        } else {
+            ctx.fillStyle = 'rgba(37,99,235,0.9)';
+            ctx.arc(cp.x, cp.y, PIN_R, 0, Math.PI * 2);
+        }
+        ctx.fill();
+    }
+
+    for (const f of allFinds) {
+        const c = parseCoords(f.coordinates);
+        if (!c || !inBounds(c.lat, c.lon)) continue;
+        const cp = toCanvasPx(c.lat, c.lon);
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(245,158,11,0.9)';
+        ctx.arc(cp.x, cp.y, PIN_R, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // ── End survey data ──────────────────────────────────────────────────
+
+    if (!user) return;
 
     const dx = (user.lon - lon0) * mPerDegLon;
     const dy = (user.lat - lat0) * M_PER_DEG_LAT;
