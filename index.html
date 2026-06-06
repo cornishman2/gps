@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 photo count
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 - photo buttons
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -17618,36 +17618,12 @@ async function handleFindCardPhotoSelected(event) {
     showMessage('Processing photo...', 'info');
 
     let photoData = '';
-    const blobUrl = URL.createObjectURL(file);
     try {
-        const maxW = getMaxPhotoWidth() || 1000;
-        photoData = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                try {
-                    URL.revokeObjectURL(blobUrl);
-                    const srcW = img.naturalWidth || img.width;
-                    const srcH = img.naturalHeight || img.height;
-                    const scale = (srcW > maxW) ? maxW / srcW : 1;
-                    const canvas = document.createElement('canvas');
-                    canvas.width  = Math.round(srcW * scale);
-                    canvas.height = Math.round(srcH * scale);
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-                    canvas.width = 1; canvas.height = 1;
-                    resolve(dataUrl);
-                } catch(err) { reject(err); }
-            };
-            img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Load failed')); };
-            img.src = blobUrl;
-        });
+        photoData = await fileToResizedDataUrl(file);
     } catch(err) {
-        try { URL.revokeObjectURL(blobUrl); } catch(e) {}
         showMessage('Photo could not be processed.', 'error');
         return;
     }
-
-    await new Promise(r => setTimeout(r, 50));
 
     if (!Array.isArray(find.photos)) find.photos = [];
     find.photos.push(photoData);
@@ -17655,6 +17631,7 @@ async function handleFindCardPhotoSelected(event) {
     showMessage('Photo added to find.', 'success');
     if (typeof render === 'function') render();
 }
+
 
 let _targetCardPhotoPending = null;
 
@@ -17680,36 +17657,12 @@ async function handleTargetCardPhotoSelected(event) {
     showMessage('Processing photo...', 'info');
 
     let photoData = '';
-    const blobUrl = URL.createObjectURL(file);
     try {
-        const maxW = getMaxPhotoWidth() || 1000;
-        photoData = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                try {
-                    URL.revokeObjectURL(blobUrl);
-                    const srcW = img.naturalWidth || img.width;
-                    const srcH = img.naturalHeight || img.height;
-                    const scale = (srcW > maxW) ? maxW / srcW : 1;
-                    const canvas = document.createElement('canvas');
-                    canvas.width  = Math.round(srcW * scale);
-                    canvas.height = Math.round(srcH * scale);
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-                    canvas.width = 1; canvas.height = 1;
-                    resolve(dataUrl);
-                } catch(err) { reject(err); }
-            };
-            img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Load failed')); };
-            img.src = blobUrl;
-        });
+        photoData = await fileToResizedDataUrl(file);
     } catch(err) {
-        try { URL.revokeObjectURL(blobUrl); } catch(e) {}
         showMessage('Photo could not be processed.', 'error');
         return;
     }
-
-    await new Promise(r => setTimeout(r, 50));
 
     if (!Array.isArray(target.photos)) target.photos = [];
     target.photos.push(photoData);
@@ -17718,6 +17671,7 @@ async function handleTargetCardPhotoSelected(event) {
     showMessage('Photo added to target.', 'success');
     if (typeof render === 'function') render();
 }
+
 
 let _surveyPhotoPendingId = null;
 
@@ -17741,36 +17695,12 @@ async function handleSurveyPhotoSelected(event) {
     showMessage('Processing photo...', 'info');
 
     let photoData = '';
-    const blobUrl = URL.createObjectURL(file);
     try {
-        const maxW = getMaxPhotoWidth() || 1000;
-        photoData = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                try {
-                    URL.revokeObjectURL(blobUrl);
-                    const srcW = img.naturalWidth || img.width;
-                    const srcH = img.naturalHeight || img.height;
-                    const scale = (srcW > maxW) ? maxW / srcW : 1;
-                    const canvas = document.createElement('canvas');
-                    canvas.width  = Math.round(srcW * scale);
-                    canvas.height = Math.round(srcH * scale);
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-                    canvas.width = 1; canvas.height = 1;
-                    resolve(dataUrl);
-                } catch(err) { reject(err); }
-            };
-            img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Load failed')); };
-            img.src = blobUrl;
-        });
+        photoData = await fileToResizedDataUrl(file);
     } catch(err) {
-        try { URL.revokeObjectURL(blobUrl); } catch(e) {}
         showMessage('Photo could not be processed.', 'error');
         return;
     }
-
-    await new Promise(r => setTimeout(r, 50));
 
     if (!Array.isArray(survey.photos)) survey.photos = [];
     survey.photos.push(photoData);
@@ -17779,6 +17709,7 @@ async function handleSurveyPhotoSelected(event) {
     showMessage('Photo added to survey.', 'success');
     if (typeof render === 'function') render();
 }
+
 
 function _quickRangeBtnClick(btn) {
     if (btn.classList.contains('tile-grid-range-btn')) return;
