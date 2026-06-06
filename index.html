@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 fix tile buttons
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 grid fix
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1856,9 +1856,8 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
-    // Redraw survey map tile overlay and canvas during movement
+    // Only redraw the tile canvas during movement (no full re-render - would replace button elements)
     if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
-    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
 }
 
 // ------------------------------------------------------
@@ -13613,16 +13612,16 @@ const toPercent = (x, y) => {
             <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
               <button type="button"
                 class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                onpointerdown="_startGridMove('W',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">W</button>
+                ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
               <button type="button"
                 class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                onpointerdown="_startGridMove('N',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">N</button>
+                ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
               <button type="button"
                 class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                onpointerdown="_startGridMove('S',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">S</button>
+                ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
               <button type="button"
                 class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                onpointerdown="_startGridMove('E',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">E</button>
+                ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
             </div>
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -16901,30 +16900,46 @@ if (gpsBtn) {
         try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
-// Grid move helpers — called by inline onpointerdown on W/N/S/E buttons
+// --- FIX FOR CONTINUOUS MOVING GRID BUTTONS ---
 let _gridMoveTimer = null;
-function _doGridMove(dir, step) {
+let _currentGridDir = null;
+let _currentGridStep = 1;
+
+function _doGridMove() {
+    const dir = _currentGridDir;
+    const step = _currentGridStep;
+    if (!dir) return;
     if (dir === 'N') moveGridTileByMeters(0, step);
     if (dir === 'S') moveGridTileByMeters(0, -step);
     if (dir === 'E') moveGridTileByMeters(step, 0);
     if (dir === 'W') moveGridTileByMeters(-step, 0);
 }
+
 function _startGridMove(dir, step) {
-    _stopGridMove(); // clear any existing timer first
-    _doGridMove(dir, step);
-    _gridMoveTimer = setInterval(() => _doGridMove(dir, step), 200);
+    _stopGridMove();
+    _currentGridDir = dir;
+    _currentGridStep = Number(step) || 1;
+    _doGridMove();
+    _gridMoveTimer = setInterval(_doGridMove, 200);
 }
+
 function _stopGridMove() {
     if (_gridMoveTimer) {
         clearInterval(_gridMoveTimer);
         _gridMoveTimer = null;
+        if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
+    _currentGridDir = null;
 }
-// Safety net — stop on any touch/pointer end anywhere on the page
-document.addEventListener('pointerup',    () => _stopGridMove());
-document.addEventListener('pointercancel',() => _stopGridMove());
-document.addEventListener('touchend',     () => _stopGridMove());
-document.addEventListener('touchcancel',  () => _stopGridMove());
+
+if (!window._gridGlobalSafetyAttached) {
+    const clearActiveMove = () => { if (_gridMoveTimer) _stopGridMove(); };
+    document.addEventListener('pointerup',    clearActiveMove);
+    document.addEventListener('pointercancel',clearActiveMove);
+    document.addEventListener('touchend',     clearActiveMove);
+    document.addEventListener('touchcancel',  clearActiveMove);
+    window._gridGlobalSafetyAttached = true;
+}
 
 const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
