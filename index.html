@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 smooth
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 standard buttons
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13360,7 +13360,7 @@ const toPercent = (x, y) => {
         const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
         const tile = survey && survey.gridTile ? survey.gridTile : null;
 
-        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText) => {
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, divId) => {
             const half = sizeM / 2;
             const cx = Number(centerLon) * mPerDegLon;
             const cy = Number(centerLat) * M_PER_DEG_LAT;
@@ -13380,6 +13380,7 @@ const toPercent = (x, y) => {
 
             return `
                 <div class="absolute pointer-events-none"
+                     ${divId ? `id="${divId}"` : ''}
                      style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
                             ${style}; border-radius: 6px;">
                     ${labelText ? `
@@ -13416,7 +13417,7 @@ const toPercent = (x, y) => {
             const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label);
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, 'active-tile-overlay');
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -13540,88 +13541,64 @@ const toPercent = (x, y) => {
 
 
 
-            <!-- Zoom controls -->
+            <!-- Row 1: Zoom / GPS -->
             <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
-                <button type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapIn(event)">+</button>
-                <button type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-extrabold text-lg shadow"
-                    onclick="zoomMapOut(event)">−</button>
-                <button type="button"
-                    class="px-5 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-base shadow"
-                    onclick="resetMapView(event)">Reset</button>
-                <button id="toggle-gps-btn" type="button"
-                    class="px-5 py-2 rounded-xl font-bold text-white shadow hover:opacity-90 text-base"
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapIn(event)">+</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapOut(event)">−</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="resetMapView(event)">Reset</button>
+                <button id="toggle-gps-btn" type="button" class="flex-1 h-11 rounded-xl font-bold text-white text-sm shadow hover:opacity-90 select-none"
                     style="background-color: rgb(var(--color-secondary));"
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
             </div>
 
-            <!-- Directional pan buttons -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >◀</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >▲</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >▼</button>
-                <button type="button"
-                    class="w-11 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-extrabold text-lg shadow select-none"
-                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()"
-                >▶</button>
-            </div>
-
-
-            <!-- Tile Grid controls -->
+            <!-- Row 2: Map pan -->
             <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
-              <button type="button"
-                class="flex-1 px-2 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm"
-                onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e);}">
-                10×10m
-              </button>
-              <button id="gridtile-set-gps-btn" type="button"
-                class="flex-1 px-2 py-2 rounded-xl bg-rose-700 text-white font-bold shadow hover:opacity-90 text-sm"
-                onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e);}">
-                15×15m
-              </button>
-              <button type="button"
-                class="flex-1 px-2 py-2 rounded-xl bg-rose-800 text-white font-bold shadow hover:opacity-90 text-sm"
-                onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e);}">
-                20×20m
-              </button>
-              <button id="gridtile-toggle-btn" type="button"
-                class="flex-1 px-2 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm"
-                onclick="try{toggleGridTileEnabled();}catch(e){console.error(e);}">
-                ${(() => {
-                  const s = getCompassOpenSurvey();
-                  const t = s && s.gridTile ? s.gridTile : null;
-                  return (t && t.enabled) ? 'Hide Tile' : 'Show Tile';
-                })()}
-              </button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">◀</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▲</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▼</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▶</button>
             </div>
+
+            <!-- Row 3: Tile size + Hide/Show -->
+            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
+                <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                    onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e)}">10m</button>
+                <button id="gridtile-set-gps-btn" type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                    onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e)}">15m</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                    onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e)}">20m</button>
+                <button id="gridtile-toggle-btn" type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onclick="try{toggleGridTileEnabled();}catch(e){console.error(e)}">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const t = s && s.gridTile ? s.gridTile : null;
+                      return (t && t.enabled) ? 'Hide' : 'Show';
+                    })()}
+                </button>
+            </div>
+
+            <!-- Row 4: Grid move -->
             <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-              <button type="button"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
-              <button type="button"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
-              <button type="button"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
-              <button type="button"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
-                ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()" onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                    ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                    onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                    ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                    onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                    ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                    onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                    ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                    onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
             </div>
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -16905,6 +16882,7 @@ window._gridMoveTimer = window._gridMoveTimer || null;
 window._currentGridDir = window._currentGridDir || null;
 window._currentGridStep = window._currentGridStep || 1;
 
+window._gridMoveTickCount = 0;
 window._doGridMove = function() {
     const dir = window._currentGridDir;
     const step = window._currentGridStep;
@@ -16913,6 +16891,31 @@ window._doGridMove = function() {
     if (dir === 'S') moveGridTileByMeters(0, -step);
     if (dir === 'E') moveGridTileByMeters(step, 0);
     if (dir === 'W') moveGridTileByMeters(-step, 0);
+    // Re-render every 3 ticks for visual feedback without overwhelming the browser
+    window._gridMoveTickCount = (window._gridMoveTickCount || 0) + 1;
+    if (window._gridMoveTickCount % 3 === 0) {
+        if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    }
+    // Fast DOM update: move the active tile div directly without full re-render
+    try {
+        const survey = getCompassOpenSurvey();
+        const tile = survey && survey.gridTile;
+        if (tile && tile.enabled) {
+            const el = document.getElementById('active-tile-overlay');
+            if (el && typeof toPercent === 'function' && typeof mPerDegLon !== 'undefined') {
+                const sizeM = Number(tile.sizeM) || 15;
+                const half = sizeM / 2;
+                const cx = Number(tile.centerLon) * mPerDegLon;
+                const cy = Number(tile.centerLat) * M_PER_DEG_LAT;
+                const pTL = toPercent(cx - half, cy + half);
+                const pBR = toPercent(cx + half, cy - half);
+                el.style.left  = pTL.xPct.toFixed(2) + '%';
+                el.style.top   = pTL.yPct.toFixed(2) + '%';
+                el.style.width  = (pBR.xPct - pTL.xPct).toFixed(2) + '%';
+                el.style.height = (pBR.yPct - pTL.yPct).toFixed(2) + '%';
+            }
+        }
+    } catch(_) {}
 };
 
 window._startGridMove = function(dir, step) {
@@ -16920,7 +16923,7 @@ window._startGridMove = function(dir, step) {
     window._currentGridDir = dir;
     window._currentGridStep = Number(step) || 1;
     window._doGridMove();
-    window._gridMoveTimer = setInterval(window._doGridMove, 200);
+    window._gridMoveTimer = setInterval(window._doGridMove, 80);
 };
 
 window._stopGridMove = function() {
