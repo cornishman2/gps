@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 clear it
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Paint fix
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2398,11 +2398,12 @@ function drawTileGrid() {
     };
 
     // ── 1. COVERED CELLS (world frame — fixed to ground) ─────────────────
-    // Each cell is stored in tile-local coords (row/col).
-    // Convert cell centre → tile-local metres → rotate by rotRad → world metres → canvas px.
+    // Re-ensure coverage storage is valid before drawing
+    ensureTileCoverageStorage(tile);
     if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total
             && isFinite(lat0) && isFinite(lon0)) {
         for (let i = 0; i < total; i++) {
+            if (i >= tile.coverageBits.length) break;
             if (tile.coverageBits[i] !== '1') continue;
             const r   = Math.floor(i / cells);
             const c   = i - r * cells;
@@ -2562,11 +2563,14 @@ function drawTileGrid() {
             const _ody = (user.lat - _originLat) * M_PER_DEG_LAT;
             return Math.sqrt(_odx*_odx + _ody*_ody) > 1.0;
         })();
-        if (tile.paintingEnabled && _movedEnough) {
-            const tlX =  udx * Math.cos(-rotRad) - udy * Math.sin(-rotRad) + sizeM / 2;
-            const tlY = -(udx * Math.sin(-rotRad) + udy * Math.cos(-rotRad)) + sizeM / 2;
-            const col0 = Math.min(cells-1, Math.max(0, Math.floor(Math.min(Math.max(tlX,0),sizeM) / sizeM * cells)));
-            const row0 = Math.min(cells-1, Math.max(0, Math.floor(Math.min(Math.max(tlY,0),sizeM) / sizeM * cells)));
+        // Rotate user into tile-local frame
+        const tlX =  udx * Math.cos(-rotRad) - udy * Math.sin(-rotRad) + sizeM / 2;
+        const tlY = -(udx * Math.sin(-rotRad) + udy * Math.cos(-rotRad)) + sizeM / 2;
+        // Only paint if user is actually inside the tile bounds
+        const _insideTile = tlX >= 0 && tlX <= sizeM && tlY >= 0 && tlY <= sizeM;
+        if (tile.paintingEnabled && _movedEnough && _insideTile) {
+            const col0 = Math.min(cells-1, Math.max(0, Math.floor(tlX / sizeM * cells)));
+            const row0 = Math.min(cells-1, Math.max(0, Math.floor(tlY / sizeM * cells)));
             let paintedAny = false;
             for (let dr = -1; dr <= 1; dr++) {
                 for (let dc = -1; dc <= 1; dc++) {
