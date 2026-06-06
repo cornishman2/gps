@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 fix move grid
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 fix tile buttons
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1856,8 +1856,9 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
-    // Only redraw canvas during movement — full re-render happens in _stopGridMove
+    // Redraw survey map tile overlay and canvas during movement
     if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
 }
 
 // ------------------------------------------------------
@@ -16878,44 +16879,20 @@ function attachPageEventListeners() {
 
     const gpsBtn = document.getElementById('toggle-gps-btn');
 if (gpsBtn) {
-    gpsBtn.addEventListener('click', () => {
+    gpsBtn.onclick = () => {
         showUserPosition = !showUserPosition;
-
-        // If turning OFF, stop GPS only if nothing else needs it
         if (!needsGpsNow()) {
             if (typeof stopLiveMapLocationWatch === 'function') stopLiveMapLocationWatch();
         } else {
             if (!liveMapWatchId) startLiveMapLocationWatch();
         }
-
         showMessage(showUserPosition ? 'Showing your position.' : 'Hiding your position.', 'info');
-
-        // Re-render Compass to update button label + map
-        if (currentPage === 'Compass') {
-            const appContent = document.getElementById('app-content');
-            if (appContent) {
-                appContent.innerHTML = renderCompassPage(true);
-                attachPageEventListeners();
-            }
-        }
-    });
+        if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    };
 }
 
     
-    // Grid Tile controls (Compass/Map)
-    const gridSetBtn = document.getElementById('gridtile-set-gps-btn');
-    if (gridSetBtn) {
-        gridSetBtn.addEventListener('click', () => {
-            try { setGridTileToCurrentGps(); } catch (e) { console.error(e); }
-        });
-    }
-
-    const gridToggleBtn = document.getElementById('gridtile-toggle-btn');
-    if (gridToggleBtn) {
-        gridToggleBtn.addEventListener('click', () => {
-            try { toggleGridTileEnabled(); } catch (e) { console.error(e); }
-        });
-    }
+    // gridtile buttons use inline onclick
 
     
     // Inline tile grid: initialise whenever the canvas is present in the DOM (Compass page)
@@ -16941,8 +16918,6 @@ function _stopGridMove() {
     if (_gridMoveTimer) {
         clearInterval(_gridMoveTimer);
         _gridMoveTimer = null;
-        // Re-render the survey map once movement ends
-        if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
 }
 // Safety net — stop on any touch/pointer end anywhere on the page
