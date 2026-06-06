@@ -104,13 +104,15 @@ summary {
 <body class="min-h-screen">
     <!-- Persistent hidden inputs always in DOM -->
 
+    <input type="file" id="survey-photo-input" accept="image/*;capture=camera" class="hidden" onchange="handleSurveyPhotoSelected(event)">
     <input type="file" id="quick-photo-target-input" accept="image/*;capture=camera" class="hidden" onchange="handleQuickPhotoTargetSelected(event)">
 
 
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 photo button on open survey                  <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 suurbey photo button
+                  <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
 
@@ -11912,6 +11914,14 @@ function renderSurveyCard(survey, isOpen = false) {
                         <i class="fas fa-times-circle mr-1"></i> Close
                     </button>
                 </div>
+                <div class="mt-2">
+                    <button
+                        class="w-full bg-emerald-600 text-white font-bold py-2 rounded-lg shadow hover:bg-emerald-700 transition"
+                        onclick="triggerSurveyPhotoCapture('${survey.id}')"
+                    >
+                        <i class="fas fa-camera mr-1"></i> Add Photo to Survey
+                    </button>
+                </div>
             `;
             break;
 
@@ -17526,6 +17536,67 @@ function getQuickTargetRangesEffective() {
         if (Array.isArray(quickTargetRangesDraft) && quickTargetRangesDraft.length) return quickTargetRangesDraft;
     } catch (e) {}
     return loadQuickTargetRanges();
+}
+
+let _surveyPhotoPendingId = null;
+
+function triggerSurveyPhotoCapture(surveyId) {
+    _surveyPhotoPendingId = surveyId;
+    const inp = document.getElementById('survey-photo-input');
+    if (inp) { inp.value = ''; inp.click(); }
+}
+
+async function handleSurveyPhotoSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !_surveyPhotoPendingId) return;
+
+    const surveyId = _surveyPhotoPendingId;
+    _surveyPhotoPendingId = null;
+    try { event.target.value = ''; } catch(e) {}
+
+    const survey = Array.isArray(surveys) ? surveys.find(s => s.id === surveyId) : null;
+    if (!survey) { showMessage('Survey not found.', 'error'); return; }
+
+    showMessage('Processing photo...', 'info');
+
+    let photoData = '';
+    const blobUrl = URL.createObjectURL(file);
+    try {
+        const maxW = getMaxPhotoWidth() || 1000;
+        photoData = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    URL.revokeObjectURL(blobUrl);
+                    const srcW = img.naturalWidth || img.width;
+                    const srcH = img.naturalHeight || img.height;
+                    const scale = (srcW > maxW) ? maxW / srcW : 1;
+                    const canvas = document.createElement('canvas');
+                    canvas.width  = Math.round(srcW * scale);
+                    canvas.height = Math.round(srcH * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                    canvas.width = 1; canvas.height = 1;
+                    resolve(dataUrl);
+                } catch(err) { reject(err); }
+            };
+            img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Load failed')); };
+            img.src = blobUrl;
+        });
+    } catch(err) {
+        try { URL.revokeObjectURL(blobUrl); } catch(e) {}
+        showMessage('Photo could not be processed.', 'error');
+        return;
+    }
+
+    await new Promise(r => setTimeout(r, 50));
+
+    if (!Array.isArray(survey.photos)) survey.photos = [];
+    survey.photos.push(photoData);
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+    showMessage('Photo added to survey.', 'success');
+    if (typeof render === 'function') render();
 }
 
 function _quickRangeBtnClick(btn) {
