@@ -112,8 +112,8 @@ summary {
 
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
-            <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 grid movement
+            <div class="flex items-center justify-between p-4"> 
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 grid stop
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -16952,11 +16952,20 @@ document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
     const dir  = btn.getAttribute('data-gridtile-move') || '';
     const step = Number(btn.getAttribute('data-gridtile-step') || '1');
     if (!isFinite(step)) return;
-    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); _startGridMove(dir, step); });
-    btn.addEventListener('pointerup',   () => _stopGridMove());
-    btn.addEventListener('pointerleave',() => _stopGridMove());
-    btn.addEventListener('pointercancel',()=> _stopGridMove());
+    btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        btn.setPointerCapture(e.pointerId);
+        _startGridMove(dir, step);
+    });
+    btn.addEventListener('pointerup',    () => _stopGridMove());
+    btn.addEventListener('pointercancel',() => _stopGridMove());
+    btn.addEventListener('lostpointercapture', () => _stopGridMove());
 });
+// Safety net — stop on any touch/pointer end anywhere on the page
+document.addEventListener('pointerup',    () => _stopGridMove());
+document.addEventListener('pointercancel',() => _stopGridMove());
+document.addEventListener('touchend',     () => _stopGridMove());
+document.addEventListener('touchcancel',  () => _stopGridMove());
 
 const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
