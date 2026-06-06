@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 more rotation
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 more rotate
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2328,22 +2328,14 @@ function drawTileGrid() {
     const rotDeg = Number(tile.rotationDeg) || 0;
     const rotRad = rotDeg * Math.PI / 180;
 
-    // Canvas size — square
+    // Grid is always sqrt(2) * sizeM so the tile can rotate freely inside it
+    const GRID_FACTOR = Math.SQRT2;
+    const gridSizeM   = sizeM * GRID_FACTOR;
+
     const cssMax = Math.min(window.innerWidth - 48, 520);
     const px     = Math.max(240, cssMax);
     const half   = px / 2;
-
-    // How much larger the canvas must be to fit the rotated square
-    // gridScale = |cos θ| + |sin θ|  (1 at 0°/90°, √2 at 45°)
-    const gridScale = Math.abs(Math.cos(rotRad)) + Math.abs(Math.sin(rotRad));
-
-    // effSizeM: metres shown across the full canvas width/height
-    const effSizeM = sizeM * gridScale;
-    const mToPx    = px / effSizeM;
-
-    // tilePx: the tile side-length in canvas pixels (always a true square)
-    const tilePx = px / gridScale;
-    const cellPx = tilePx / cells;
+    const mToPx  = px / gridSizeM;   // metres → canvas pixels
 
     const dpr = window.devicePixelRatio || 1;
     canvas.style.width  = px + 'px';
@@ -2354,61 +2346,80 @@ function drawTileGrid() {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, px, px);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#f9fafb';
     ctx.fillRect(0, 0, px, px);
 
-    // ── 1. COVERED CELLS — fixed to earth, drawn in world frame ─────────────
-    // Cells are stored in tile-local frame (row/col). Convert each cell centre
-    // back to world metres via tile rotation, then to canvas pixels.
-    if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total
-            && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
-        const _lat0c = Number(tile.centerLat);
-        const _lon0c = Number(tile.centerLon);
-        const _M_LAT = 110574;
-        const _mLon  = 111320 * Math.cos(_lat0c * Math.PI / 180);
-        const _cSize = tilePx / cells; // cell size in canvas pixels
+    // tilePx: tile side-length in canvas pixels
+    const tilePx = sizeM * mToPx;
+    const cellPx = tilePx / cells;
 
+    // World coord (lat/lon) → canvas pixel  (north-up, tile centre = canvas centre)
+    const lat0 = Number(tile.centerLat);
+    const lon0 = Number(tile.centerLon);
+    const M_PER_DEG_LAT = 110574;
+    const mPerDegLon    = isFinite(lat0)
+        ? 111320 * Math.cos(lat0 * Math.PI / 180) : 111320;
+
+    const wToPx = (lat, lon) => ({
+        x: half + (lon - lon0) * mPerDegLon * mToPx,
+        y: half - (lat - lat0) * M_PER_DEG_LAT * mToPx
+    });
+    const inCanvas = (lat, lon) => {
+        const wx = Math.abs((lon - lon0) * mPerDegLon);
+        const wy = Math.abs((lat - lat0) * M_PER_DEG_LAT);
+        return wx <= gridSizeM/2 && wy <= gridSizeM/2;
+    };
+    const parseCoords = str => {
+        if (!str || str === 'No GPS logged') return null;
+        const p = String(str).split(',').map(Number);
+        return (p.length >= 2 && isFinite(p[0]) && isFinite(p[1]))
+            ? { lat: p[0], lon: p[1] } : null;
+    };
+
+    // ── 1. COVERED CELLS (world frame — fixed to ground) ─────────────────
+    // Each cell is stored in tile-local coords (row/col).
+    // Convert cell centre → tile-local metres → rotate by rotRad → world metres → canvas px.
+    if (typeof tile.coverageBits === 'string' && tile.coverageBits.length === total
+            && isFinite(lat0) && isFinite(lon0)) {
         for (let i = 0; i < total; i++) {
             if (tile.coverageBits[i] !== '1') continue;
             const r   = Math.floor(i / cells);
             const c   = i - r * cells;
             const key = `${r},${c}`;
             const fill = (tile.coverageColors && tile.coverageColors[key])
-                ? tile.coverageColors[key] : 'rgba(34,197,94,0.35)';
+                ? tile.coverageColors[key] : 'rgba(34,197,94,0.45)';
 
-            // Cell centre in tile-local metres (tile frame: x=east, y=north from tile centre)
-            const tlX = (c + 0.5) * (sizeM / cells) - sizeM / 2;
-            const tlY = sizeM / 2 - (r + 0.5) * (sizeM / cells);
+            // Cell centre in tile-local metres (x=east, y=north from tile centre)
+            const tlX =  (c + 0.5) * (sizeM / cells) - sizeM / 2;
+            const tlY = -(r + 0.5) * (sizeM / cells) + sizeM / 2;
 
-            // Rotate tile-local → world metres
-            const wX = tlX * Math.cos(rotRad) - tlY * Math.sin(rotRad);
-            const wY = tlX * Math.sin(rotRad) + tlY * Math.cos(rotRad);
+            // Rotate into world metres
+            const wX =  tlX * Math.cos(rotRad) - tlY * Math.sin(rotRad);
+            const wY =  tlX * Math.sin(rotRad) + tlY * Math.cos(rotRad);
 
-            // World metres → canvas pixels
+            // Canvas position
             const cpx = half + wX * mToPx;
             const cpy = half - wY * mToPx;
 
-            // Draw cell as a rotated square (same rotation as tile)
             ctx.save();
             ctx.translate(cpx, cpy);
             ctx.rotate(rotRad);
             ctx.fillStyle = fill;
-            ctx.fillRect(-_cSize/2, -_cSize/2, _cSize, _cSize);
+            ctx.fillRect(-cellPx/2, -cellPx/2, cellPx, cellPx);
             ctx.restore();
         }
     }
 
-    // ── 2. GRID LINES — world frame (north-up, not rotated) ───────────────
-    // Draw cells * cells grid over the whole canvas, aligned with compass
+    // ── 2. GRID LINES (world frame — always axis-aligned) ────────────────
     ctx.strokeStyle = 'rgba(0,0,0,0.12)';
     ctx.lineWidth   = 0.5;
     for (let i = 0; i <= cells; i++) {
         const pos = (i / cells) * px;
-        ctx.beginPath(); ctx.moveTo(pos, 0);  ctx.lineTo(pos, px);  ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, pos);  ctx.lineTo(px, pos);  ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pos, 0);   ctx.lineTo(pos, px);  ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,   pos); ctx.lineTo(px,  pos); ctx.stroke();
     }
 
-    // ── 3. TILE OUTLINE — rotated square, centred on canvas ───────────────
+    // ── 3. TILE OUTLINE (rotated square centred on canvas) ───────────────
     ctx.save();
     ctx.translate(half, half);
     ctx.rotate(rotRad);
@@ -2417,7 +2428,7 @@ function drawTileGrid() {
     ctx.strokeRect(-tilePx/2, -tilePx/2, tilePx, tilePx);
     ctx.restore();
 
-    // ── 4. N/S/E/W labels ─────────────────────────────────────────────────
+    // ── 4. COMPASS LABELS ────────────────────────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font      = '12px Arial';
     ctx.textAlign = 'center';
@@ -2428,7 +2439,6 @@ function drawTileGrid() {
     ctx.textAlign = 'right';
     ctx.fillText('E', px - 6, half);
 
-    // Rotation angle label
     if (Math.abs(rotDeg) > 0.5) {
         ctx.fillStyle = 'rgba(239,68,68,0.85)';
         ctx.font      = 'bold 11px Arial';
@@ -2436,30 +2446,8 @@ function drawTileGrid() {
         ctx.fillText(rotDeg.toFixed(0) + '\u00b0', half, px - 20);
     }
 
-    // ── 5. SURVEY DATA — tracks, targets, finds (world frame) ─────────────
-    const lat0 = Number(tile.centerLat);
-    const lon0 = Number(tile.centerLon);
-
+    // ── 5. SURVEY DATA (world frame) ─────────────────────────────────────
     if (isFinite(lat0) && isFinite(lon0)) {
-        const M_PER_DEG_LAT = 110574;
-        const mPerDegLon    = 111320 * Math.cos(lat0 * Math.PI / 180);
-
-        const wToPx = (lat, lon) => ({
-            x: half + (lon - lon0) * mPerDegLon * mToPx,
-            y: half - (lat - lat0) * M_PER_DEG_LAT * mToPx
-        });
-        const inCanvas = (lat, lon) => {
-            const wx = Math.abs((lon - lon0) * mPerDegLon);
-            const wy = Math.abs((lat - lat0) * M_PER_DEG_LAT);
-            return wx <= effSizeM/2 && wy <= effSizeM/2;
-        };
-        const parseCoords = str => {
-            if (!str || str === 'No GPS logged') return null;
-            const p = String(str).split(',').map(Number);
-            return (p.length >= 2 && isFinite(p[0]) && isFinite(p[1])) ? {lat:p[0],lon:p[1]} : null;
-        };
-
-        // Tracks
         if (showMapTracks) {
             const tracks = Array.isArray(survey.tracks)
                 ? survey.tracks.filter(t => t && t.isVisible !== false && Array.isArray(t.points))
@@ -2480,8 +2468,7 @@ function drawTileGrid() {
             }
         }
 
-        // Targets, stakes, finds
-        const PIN_R   = Math.max(3, (px / cells) * 0.3);
+        const PIN_R    = Math.max(3, (px / cells) * 0.25);
         const _qRanges = typeof getQuickTargetRangesEffective === 'function'
             ? getQuickTargetRangesEffective() : [];
         const _findColors = {
@@ -2507,9 +2494,7 @@ function drawTileGrid() {
             const cp = wToPx(c.lat, c.lon);
             ctx.beginPath();
             if (isStake) {
-                ctx.fillStyle   = 'rgba(0,0,0,0.8)';
-                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-                ctx.lineWidth   = 1;
+                ctx.fillStyle = 'rgba(0,0,0,0.8)';
                 ctx.arc(cp.x, cp.y, PIN_R * 0.5, 0, Math.PI * 2);
                 ctx.fill();
             } else {
@@ -2532,86 +2517,83 @@ function drawTileGrid() {
             ctx.arc(cp.x, cp.y, PIN_R, 0, Math.PI * 2);
             ctx.fill(); ctx.stroke();
         }
+    }
 
-        // ── 6. GPS PAINTING + USER DOT ────────────────────────────────────
-        const live    = getBestLiveGpsCoordsOrNull();
-        const tileAge = Date.now() - (tileGridLastFixTs || 0);
-        const user    = (tileGridLastCoords && tileAge <= 2000)
-            ? tileGridLastCoords : (live || tileGridLastCoords);
+    // ── 6. GPS PAINTING + USER DOT ────────────────────────────────────────
+    const live    = getBestLiveGpsCoordsOrNull();
+    const tileAge = Date.now() - (tileGridLastFixTs || 0);
+    const user    = (tileGridLastCoords && tileAge <= 2000)
+        ? tileGridLastCoords : (live || tileGridLastCoords);
 
-        const userEl = document.getElementById('tile-grid-user-text');
-        if (userEl) userEl.textContent = user
-            ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
+    const userEl = document.getElementById('tile-grid-user-text');
+    if (userEl) userEl.textContent = user
+        ? `${user.lat.toFixed(6)}, ${user.lon.toFixed(6)}` : 'No GPS fix';
 
-        if (user) {
-            const udx = (user.lon - lon0) * mPerDegLon;
-            const udy = (user.lat - lat0) * M_PER_DEG_LAT;
+    if (user && isFinite(lat0) && isFinite(lon0)) {
+        const udx = (user.lon - lon0) * mPerDegLon;
+        const udy = (user.lat - lat0) * M_PER_DEG_LAT;
 
-            // Rotate user position into tile-local frame to find which cell to paint
-            if (tile.paintingEnabled) {
-                const tlX =  udx * Math.cos(-rotRad) - udy * Math.sin(-rotRad) + sizeM/2;
-                const tlY = -(udx * Math.sin(-rotRad) + udy * Math.cos(-rotRad)) + sizeM/2;
-                const col0 = Math.min(cells-1, Math.max(0, Math.floor((Math.min(Math.max(tlX,0),sizeM) / sizeM) * cells)));
-                const row0 = Math.min(cells-1, Math.max(0, Math.floor((Math.min(Math.max(tlY,0),sizeM) / sizeM) * cells)));
-                let paintedAny = false;
-                for (let dr = -1; dr <= 1; dr++) {
-                    for (let dc = -1; dc <= 1; dc++) {
-                        const col = col0 + dc, row = row0 + dr;
-                        const did = setTileCellVisited(tile, col, row, cells);
-                        if (did) {
-                            paintedAny = true;
-                            const k    = `${row},${col}`;
-                            const fill = (tile.coverageColors && tile.coverageColors[k])
-                                ? tile.coverageColors[k] : 'rgba(34,197,94,0.35)';
-                            // Cell centre in tile-local metres, rotate to world, draw in world frame
-                            const _cX = (col + 0.5) * (sizeM / cells) - sizeM / 2;
-                            const _cY = sizeM / 2 - (row + 0.5) * (sizeM / cells);
-                            const _wX = _cX * Math.cos(rotRad) - _cY * Math.sin(rotRad);
-                            const _wY = _cX * Math.sin(rotRad) + _cY * Math.cos(rotRad);
-                            const _cpx = half + _wX * mToPx;
-                            const _cpy = half - _wY * mToPx;
-                            const _sz  = tilePx / cells;
-                            ctx.save();
-                            ctx.translate(_cpx, _cpy);
-                            ctx.rotate(rotRad);
-                            ctx.fillStyle = fill;
-                            ctx.fillRect(-_sz/2, -_sz/2, _sz, _sz);
-                            ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-                            ctx.lineWidth   = 1;
-                            ctx.strokeRect(-_sz/2, -_sz/2, _sz, _sz);
-                            ctx.restore();
-                        }
+        // Paint: rotate user position into tile-local frame to find cell
+        if (tile.paintingEnabled) {
+            const tlX =  udx * Math.cos(-rotRad) - udy * Math.sin(-rotRad) + sizeM / 2;
+            const tlY = -(udx * Math.sin(-rotRad) + udy * Math.cos(-rotRad)) + sizeM / 2;
+            const col0 = Math.min(cells-1, Math.max(0, Math.floor(Math.min(Math.max(tlX,0),sizeM) / sizeM * cells)));
+            const row0 = Math.min(cells-1, Math.max(0, Math.floor(Math.min(Math.max(tlY,0),sizeM) / sizeM * cells)));
+            let paintedAny = false;
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const col = col0 + dc, row = row0 + dr;
+                    const did = setTileCellVisited(tile, col, row, cells);
+                    if (did) {
+                        paintedAny = true;
+                        const k    = `${row},${col}`;
+                        const fill = (tile.coverageColors && tile.coverageColors[k])
+                            ? tile.coverageColors[k] : 'rgba(34,197,94,0.45)';
+                        // Cell centre → tile-local → world → canvas
+                        const _tlX =  (col + 0.5) * (sizeM / cells) - sizeM / 2;
+                        const _tlY = -(row + 0.5) * (sizeM / cells) + sizeM / 2;
+                        const _wX  =  _tlX * Math.cos(rotRad) - _tlY * Math.sin(rotRad);
+                        const _wY  =  _tlX * Math.sin(rotRad) + _tlY * Math.cos(rotRad);
+                        const _cpx = half + _wX * mToPx;
+                        const _cpy = half - _wY * mToPx;
+                        ctx.save();
+                        ctx.translate(_cpx, _cpy);
+                        ctx.rotate(rotRad);
+                        ctx.fillStyle = fill;
+                        ctx.fillRect(-cellPx/2, -cellPx/2, cellPx, cellPx);
+                        ctx.restore();
                     }
                 }
-                if (paintedAny) {
-                    tile.coverageLastPainted = Date.now();
-                    survey.dateLastChanged   = Date.now();
-                    saveSurveysToLocalStorage();
-                }
             }
+            if (paintedAny) {
+                tile.coverageLastPainted = Date.now();
+                survey.dateLastChanged   = Date.now();
+                saveSurveysToLocalStorage();
+            }
+        }
 
-            // User dot (world frame)
-            if (Math.abs(udx) <= effSizeM/2 && Math.abs(udy) <= effSizeM/2) {
-                const upx = half + udx * mToPx;
-                const upy = half - udy * mToPx;
-                ctx.beginPath();
-                ctx.fillStyle   = 'rgba(29,78,216,0.95)';
-                ctx.arc(upx, upy, 5, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.lineWidth   = 2;
-                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                ctx.stroke();
-            }
+        // User dot (world frame)
+        if (Math.abs(udx) <= gridSizeM/2 && Math.abs(udy) <= gridSizeM/2) {
+            const upx = half + udx * mToPx;
+            const upy = half - udy * mToPx;
+            ctx.beginPath();
+            ctx.fillStyle   = 'rgba(29,78,216,0.95)';
+            ctx.arc(upx, upy, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth   = 2;
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.stroke();
         }
     }
 
-    // Info text
+    // ── 7. INFO TEXT ──────────────────────────────────────────────────────
     const centreEl = document.getElementById('tile-grid-centre-text');
     if (centreEl && isFinite(lat0) && isFinite(lon0))
         centreEl.textContent = `${lat0.toFixed(6)}, ${lon0.toFixed(6)} (${Math.round(sizeM)}m)`;
     const covEl = document.getElementById('tile-grid-coverage-text');
     if (covEl) covEl.textContent = `${getCoveragePercent(tile).toFixed(0)}%`;
 }
+
 
 
 
