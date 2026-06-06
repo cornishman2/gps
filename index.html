@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 pin colour
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 rotation
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1773,6 +1773,9 @@ function ensureSurveyGridTileDefaults(survey) {
     if (typeof survey.gridTile.enabled !== 'boolean') {
         survey.gridTile.enabled = !!survey.gridTile.enabled;
     }
+    if (typeof survey.gridTile.rotationDeg !== 'number' || !isFinite(survey.gridTile.rotationDeg)) {
+        survey.gridTile.rotationDeg = 0;
+    }
     if (survey.gridTile.centerLat !== null && !isFinite(Number(survey.gridTile.centerLat))) survey.gridTile.centerLat = null;
     if (survey.gridTile.centerLon !== null && !isFinite(Number(survey.gridTile.centerLon))) survey.gridTile.centerLon = null;
 }
@@ -1809,6 +1812,20 @@ function setGridTileToCurrentGps(sizeM) {
     showMessage(`Grid tile (${survey.gridTile.sizeM}m) set to current GPS position.`, 'success');
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
+}
+
+function rotateTile(deltaDeg) {
+    const survey = getCompassOpenSurvey();
+    if (!survey) return;
+    ensureSurveyGridTileDefaults(survey);
+    if (deltaDeg === 0) {
+        survey.gridTile.rotationDeg = 0;
+    } else {
+        survey.gridTile.rotationDeg = ((survey.gridTile.rotationDeg || 0) + deltaDeg + 360) % 360;
+    }
+    survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
 }
 
 function toggleGridTileEnabled() {
@@ -2350,10 +2367,24 @@ function drawTileGrid() {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(px, y); ctx.stroke();
     }
 
+    // Draw rotated tile outline at canvas centre
+    const rotDeg = Number(tile.rotationDeg) || 0;
+    const rotRad = rotDeg * Math.PI / 180;
+    // The grid canvas always fits the rotated tile — bounding box expansion factor
+    const gridScale = Math.abs(Math.cos(rotRad)) + Math.abs(Math.sin(rotRad)); // ≥1, peaks at 45°
+
+    const half = px / 2;
+    const tileHalf = (px / gridScale) / 2; // tile half-size in canvas pixels
+
+    ctx.save();
+    ctx.translate(half, half);
+    ctx.rotate(rotRad);
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, px - 2, px - 2);
+    ctx.strokeRect(-tileHalf, -tileHalf, tileHalf * 2, tileHalf * 2);
+    ctx.restore();
 
+    // N/S/E/W labels always at compass positions
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
@@ -2363,6 +2394,14 @@ function drawTileGrid() {
     ctx.fillText('W', 6, px / 2);
     ctx.textAlign = 'right';
     ctx.fillText('E', px - 6, px / 2);
+
+    // Show rotation angle if non-zero
+    if (Math.abs(rotDeg) > 0.5) {
+        ctx.fillStyle = 'rgba(239,68,68,0.85)';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(rotDeg.toFixed(0) + '°', px / 2, px - 20);
+    }
 
     const centreEl = document.getElementById('tile-grid-centre-text');
     if (centreEl) centreEl.textContent = `${Number(tile.centerLat).toFixed(6)}, ${Number(tile.centerLon).toFixed(6)} (${Math.round(sizeM)}m)`;
@@ -2385,15 +2424,26 @@ function drawTileGrid() {
     const M_PER_DEG_LAT = 110574;
     const mPerDegLon = 111320 * Math.cos(lat0 * Math.PI / 180);
 
-    // Convert lat/lon to canvas px
-    const toCanvasPx = (lat, lon) => ({
-        x: ((lon - lon0) * mPerDegLon + sizeM / 2) / sizeM * px,
-        y: (sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT) / sizeM * px
-    });
+    // Rotation-aware coordinate mapping
+    const _rotDeg2 = Number(tile.rotationDeg) || 0;
+    const _rotRad2 = _rotDeg2 * Math.PI / 180;
+    const _gridScale2 = Math.abs(Math.cos(_rotRad2)) + Math.abs(Math.sin(_rotRad2));
+    const _effSize = sizeM * _gridScale2; // effective area shown in canvas
+
+    const toCanvasPx = (lat, lon) => {
+        // Local metres from tile centre
+        const dx = (lon - lon0) * mPerDegLon;
+        const dy = (lat - lat0) * M_PER_DEG_LAT;
+        // Rotate into tile frame (undo tile rotation to get canvas position)
+        // Canvas shows the unrotated world — tile is drawn rotated
+        const cx = dx + _effSize / 2;
+        const cy = _effSize / 2 - dy;
+        return { x: cx / _effSize * px, y: cy / _effSize * px };
+    };
     const inBounds = (lat, lon) => {
-        const lx = (lon - lon0) * mPerDegLon + sizeM / 2;
-        const ly = sizeM / 2 - (lat - lat0) * M_PER_DEG_LAT;
-        return lx >= 0 && lx <= sizeM && ly >= 0 && ly <= sizeM;
+        const cx = (lon - lon0) * mPerDegLon + _effSize / 2;
+        const cy = _effSize / 2 - (lat - lat0) * M_PER_DEG_LAT;
+        return cx >= 0 && cx <= _effSize && cy >= 0 && cy <= _effSize;
     };
     const parseCoords = (coordsStr) => {
         if (!coordsStr || coordsStr === 'No GPS logged') return null;
@@ -2484,8 +2534,14 @@ function drawTileGrid() {
     const dx = (user.lon - lon0) * mPerDegLon;
     const dy = (user.lat - lat0) * M_PER_DEG_LAT;
 
-    const localX = dx + (sizeM / 2);
-    const localY = (sizeM / 2) - dy;
+    // Effective area shown on canvas (expanded for rotation)
+    const _rotDeg3 = Number(tile.rotationDeg) || 0;
+    const _rotRad3 = _rotDeg3 * Math.PI / 180;
+    const _gridScale3 = Math.abs(Math.cos(_rotRad3)) + Math.abs(Math.sin(_rotRad3));
+    const _effSizeUser = sizeM * _gridScale3;
+
+    const localX = dx + (_effSizeUser / 2);
+    const localY = (_effSizeUser / 2) - dy;
 
     
     // Paint cells directly under the blue dot.
@@ -2529,10 +2585,10 @@ function drawTileGrid() {
         }
     }
 
-if (localX < -1 || localX > sizeM + 1 || localY < -1 || localY > sizeM + 1) return;
+if (localX < -1 || localX > _effSizeUser + 1 || localY < -1 || localY > _effSizeUser + 1) return;
 
-    const pxX = (localX / sizeM) * px;
-    const pxY = (localY / sizeM) * px;
+    const pxX = (localX / _effSizeUser) * px;
+    const pxY = (localY / _effSizeUser) * px;
 
     ctx.beginPath();
     ctx.fillStyle = 'rgba(29,78,216,0.95)';
@@ -13493,32 +13549,34 @@ const toPercent = (x, y) => {
         const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
         const tile = survey && survey.gridTile ? survey.gridTile : null;
 
-        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, divId) => {
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, divId, rotationDeg) => {
             const half = sizeM / 2;
             const cx = Number(centerLon) * mPerDegLon;
             const cy = Number(centerLat) * M_PER_DEG_LAT;
+            const rot = rotationDeg || 0;
 
             const minTx = cx - half, maxTx = cx + half;
             const minTy = cy - half, maxTy = cy + half;
 
             const pTL = toPercent(minTx, maxTy);
             const pBR = toPercent(maxTx, minTy);
+            const pCentre = toPercent(cx, cy);
 
-            const left = pTL.xPct;
-            const top = pTL.yPct;
             const width = (pBR.xPct - pTL.xPct);
             const height = (pBR.yPct - pTL.yPct);
-
             const fontPx = (10 * invZoom);
 
             return `
                 <div class="absolute pointer-events-none"
                      ${divId ? `id="${divId}"` : ''}
-                     style="left:${left.toFixed(2)}%; top:${top.toFixed(2)}%; width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
-                            ${style}; border-radius: 6px;">
+                     style="left:${pCentre.xPct.toFixed(2)}%; top:${pCentre.yPct.toFixed(2)}%;
+                            width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
+                            transform: translate(-50%, -50%) rotate(${rot}deg);
+                            transform-origin: center center;
+                            ${style}; border-radius: 2px;">
                     ${labelText ? `
                     <div class="absolute"
-                         style="left:50%; top:-10px; transform:translateX(-50%);
+                         style="left:50%; top:-10px; transform:translateX(-50%) rotate(${-rot}deg);
                                 font-size:${fontPx.toFixed(2)}px;
                                 padding:2px 6px; border-radius:999px;
                                 background: rgba(255,255,255,0.92);
@@ -13550,7 +13608,7 @@ const toPercent = (x, y) => {
             const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
             const label = '';
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, 'active-tile-overlay');
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, 'active-tile-overlay', tile.rotationDeg || 0);
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -13732,6 +13790,18 @@ const toPercent = (x, y) => {
                 <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
                     ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
                     onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
+            </div>
+            <!-- Row 5: Tile rotation -->
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
+                <button type="button"
+                    class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                    onclick="rotateTile(-5)">↺</button>
+                <button type="button"
+                    class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onclick="rotateTile(0)">0°</button>
+                <button type="button"
+                    class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                    onclick="rotateTile(5)">↻</button>
             </div>
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
