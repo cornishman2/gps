@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 grid fix
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 fix grid
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -16901,39 +16901,39 @@ if (gpsBtn) {
     }
 
 // --- FIX FOR CONTINUOUS MOVING GRID BUTTONS ---
-let _gridMoveTimer = null;
-let _currentGridDir = null;
-let _currentGridStep = 1;
+window._gridMoveTimer = window._gridMoveTimer || null;
+window._currentGridDir = window._currentGridDir || null;
+window._currentGridStep = window._currentGridStep || 1;
 
-function _doGridMove() {
-    const dir = _currentGridDir;
-    const step = _currentGridStep;
+window._doGridMove = function() {
+    const dir = window._currentGridDir;
+    const step = window._currentGridStep;
     if (!dir) return;
     if (dir === 'N') moveGridTileByMeters(0, step);
     if (dir === 'S') moveGridTileByMeters(0, -step);
     if (dir === 'E') moveGridTileByMeters(step, 0);
     if (dir === 'W') moveGridTileByMeters(-step, 0);
-}
+};
 
-function _startGridMove(dir, step) {
-    _stopGridMove();
-    _currentGridDir = dir;
-    _currentGridStep = Number(step) || 1;
-    _doGridMove();
-    _gridMoveTimer = setInterval(_doGridMove, 200);
-}
+window._startGridMove = function(dir, step) {
+    window._stopGridMove();
+    window._currentGridDir = dir;
+    window._currentGridStep = Number(step) || 1;
+    window._doGridMove();
+    window._gridMoveTimer = setInterval(window._doGridMove, 200);
+};
 
-function _stopGridMove() {
-    if (_gridMoveTimer) {
-        clearInterval(_gridMoveTimer);
-        _gridMoveTimer = null;
+window._stopGridMove = function() {
+    if (window._gridMoveTimer) {
+        clearInterval(window._gridMoveTimer);
+        window._gridMoveTimer = null;
         if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
-    _currentGridDir = null;
-}
+    window._currentGridDir = null;
+};
 
 if (!window._gridGlobalSafetyAttached) {
-    const clearActiveMove = () => { if (_gridMoveTimer) _stopGridMove(); };
+    const clearActiveMove = () => { if (window._gridMoveTimer) window._stopGridMove(); };
     document.addEventListener('pointerup',    clearActiveMove);
     document.addEventListener('pointercancel',clearActiveMove);
     document.addEventListener('touchend',     clearActiveMove);
