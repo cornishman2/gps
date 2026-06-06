@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 tracks in grid
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 pin colour
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2431,6 +2431,14 @@ function drawTileGrid() {
 
     const PIN_R = Math.max(3, cellPx * 0.35);
 
+    const _qRanges = (typeof getQuickTargetRangesEffective === 'function') ? getQuickTargetRangesEffective() : [];
+    const _findTypeCanvasColors = {
+        'Coin': '#eab308', 'Button': '#d97706', 'Relic': '#ef4444',
+        'Jewelry': '#ec4899', 'Jewellery': '#ec4899',
+        'Iron Junk': '#4b5563', 'Modern Junk': '#9ca3af',
+        'Unidentified': '#8b5cf6',
+    };
+
     for (const t of allTargets) {
         const c = parseCoords(t.coordinates);
         if (!c || !inBounds(c.lat, c.lon)) continue;
@@ -2441,22 +2449,33 @@ function drawTileGrid() {
         ctx.beginPath();
         if (isStake) {
             ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+            ctx.lineWidth = 1;
             ctx.arc(cp.x, cp.y, PIN_R * 0.5, 0, Math.PI * 2);
+            ctx.fill();
         } else {
-            ctx.fillStyle = 'rgba(37,99,235,0.9)';
+            const _pc = getTargetPinColors(t, _qRanges);
+            ctx.fillStyle = _pc.fill;
+            ctx.strokeStyle = _pc.border;
+            ctx.lineWidth = Math.max(1.5, PIN_R * 0.4);
             ctx.arc(cp.x, cp.y, PIN_R, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
         }
-        ctx.fill();
     }
 
     for (const f of allFinds) {
         const c = parseCoords(f.coordinates);
         if (!c || !inBounds(c.lat, c.lon)) continue;
         const cp = toCanvasPx(c.lat, c.lon);
+        const findTypeName = f.findType || f.type || '';
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(245,158,11,0.9)';
+        ctx.fillStyle = _findTypeCanvasColors[findTypeName] || '#14b8a6';
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 1.5;
         ctx.arc(cp.x, cp.y, PIN_R, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
     }
     // ── End survey data ──────────────────────────────────────────────────
 
@@ -5926,6 +5945,43 @@ async function loadPhotoUrlsFromRefs(refs) {
 // ======================================
 
 // Helper: return only non-deleted targets for a survey
+
+// ── Shared target pin colour helper ─────────────────────────────────────
+// Fill  = VDI range colour from quick target buttons
+// Border = status colour
+function getTargetPinColors(t, ranges) {
+    const vdi = parseFloat(String(t.vdi ?? t.targetVdi ?? '').trim());
+    const status = String(t.status || 'Not dug').toLowerCase();
+
+    // Border from status
+    const borderColors = {
+        'not dug':  '#3b82f6',  // blue-500
+        'dug':      '#f59e0b',  // amber-500
+        'refilled': '#22c55e',  // green-500
+        'ignore':   '#6b7280',  // gray-500
+    };
+    const border = borderColors[status] || '#3b82f6';
+
+    // Fill from VDI range
+    const rangeColors = {
+        'BLUE':  '#2563eb',
+        'SKY':   '#0ea5e9',
+        'GREEN': '#16a34a',
+        'AMBER': '#d97706',
+        'RED':   '#dc2626',
+    };
+    let fill = '#6b7280'; // default grey
+    if (isFinite(vdi) && Array.isArray(ranges)) {
+        for (const r of ranges) {
+            if (isFinite(r.min) && isFinite(r.max) && vdi >= r.min && vdi <= r.max) {
+                fill = rangeColors[r.color] || fill;
+                break;
+            }
+        }
+    }
+    return { fill, border };
+}
+// ── End shared helper ────────────────────────────────────────────────────
 function getActiveTargets(survey) {
     if (!survey || !Array.isArray(survey.targets)) return [];
     return survey.targets.filter(t => !t.deleted);
@@ -13317,32 +13373,28 @@ const toPercent = (x, y) => {
         .map(t => {
             const { xPct, yPct } = toPercent(t.x, t.y);
 
-            // pin style (STATUS-based) + Finds
             const isFind = !!t.isFind || (String(t.type || '').toLowerCase() === 'find');
-            const st = (t.status || (isFind ? 'find' : 'Not dug')).toLowerCase();
+            const isStake = (!isFind) && (String(t.vdi).trim() === '-100');
 
-            // Default = targets (status-based)
-            let pinColor = 'bg-blue-500';      // Not dug
-            if (st === 'dug')      pinColor = 'bg-amber-500';
-            if (st === 'refilled') pinColor = 'bg-green-500';
-            if (st === 'ignore')   pinColor = 'bg-gray-500';
+            // Get fill and border colours from shared helper
+            const _ranges = (typeof getQuickTargetRangesEffective === 'function') ? getQuickTargetRangesEffective() : [];
+            const _pinColors = isFind ? null : (isStake ? null : getTargetPinColors(t, _ranges));
 
             // Finds: colour by find type
-            if (isFind || st === 'find') {
-                const findTypeColors = {
-                    'Coin':         'bg-yellow-500',
-                    'Button':       'bg-amber-600',
-                    'Relic':        'bg-red-500',
-                    'Jewelry':      'bg-pink-500',
-                    'Iron Junk':    'bg-gray-600',
-                    'Modern Junk':  'bg-gray-400',
-                    'Unidentified': 'bg-purple-500',
-                };
-                const findTypeName = t.findType || t.type || '';
-                pinColor = findTypeColors[findTypeName] || 'bg-teal-500';
-            }
-
-            const isStake = (!isFind) && (String(t.vdi).trim() === '-100');
+            const findTypeColors = {
+                'Coin':         'bg-yellow-500',
+                'Button':       'bg-amber-600',
+                'Relic':        'bg-red-500',
+                'Jewelry':      'bg-pink-500',
+                'Jewellery':    'bg-pink-500',
+                'Iron Junk':    'bg-gray-600',
+                'Modern Junk':  'bg-gray-400',
+                'Unidentified': 'bg-purple-500',
+            };
+            const findTypeName = t.findType || t.type || '';
+            let pinColor = isFind
+                ? (findTypeColors[findTypeName] || 'bg-teal-500')
+                : (_pinColors ? '' : 'bg-blue-500');
             const pinSize = 'w-4 h-4';
 
             // Accuracy ring (optional)
@@ -13369,10 +13421,10 @@ const toPercent = (x, y) => {
                         <div
                           class="
                           ${isStake ? 'w-2 h-2' : pinSize}
-                          ${isStake ? 'bg-black' : pinColor}
+                          ${(isStake || isFind || !_pinColors) ? (isStake ? 'bg-black' : pinColor) : ''}
                           rounded-full
                           border-2
-                          ${isStake ? 'border-black' : 'border-primary'}
+                          ${isStake ? 'border-black' : (isFind ? 'border-primary' : '')}
                           shadow-lg
                           cursor-pointer
                           ${navigationTargetId && String(navigationTargetId) === String(t.id) ? 'pin-blink' : ''}
@@ -13380,6 +13432,7 @@ const toPercent = (x, y) => {
                           style="
                           transform: scale(${invZoom});
                           transform-origin: center;
+                          ${(!isStake && !isFind && _pinColors) ? 'background-color:' + _pinColors.fill + '; border-color:' + _pinColors.border + ';' : ''}
                           "
                           title="${isStake ? 'Stake marker' : ''}"
                           ></div>
