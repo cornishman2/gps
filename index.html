@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Find photo
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 grid movement
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13679,46 +13679,15 @@ const toPercent = (x, y) => {
     </div>
   </div>
 
-  <div class="mt-3 text-xs text-gray-600">Move tile (buttons):</div>
-
-  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
-    <div></div>
-    <button data-gridtile-move="N" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">N</button>
-    <div></div>
-
+  <div class="mt-3 flex gap-2 justify-center">
     <button data-gridtile-move="W" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">W</button>
-    <button type="button" disabled
-      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
-    <button data-gridtile-move="E" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">E</button>
-
-    <div></div>
+      class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">W</button>
+    <button data-gridtile-move="N" data-gridtile-step="1"
+      class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">N</button>
     <button data-gridtile-move="S" data-gridtile-step="1"
-      class="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm">S</button>
-    <div></div>
-  </div>
-
-  
-  
-  <div class="mt-2 grid grid-cols-3 gap-2 justify-items-center">
-    <div></div>
-    <button data-gridtile-move="N" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">N 5m</button>
-    <div></div>
-
-    <button data-gridtile-move="W" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">W 5m</button>
-    <button type="button" disabled
-      class="px-4 py-2 rounded-xl bg-gray-50 text-gray-400 font-bold shadow text-sm">•</button>
-    <button data-gridtile-move="E" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">E 5m</button>
-
-    <div></div>
-    <button data-gridtile-move="S" data-gridtile-step="5"
-      class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold shadow text-sm">S 5m</button>
-    <div></div>
+      class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">S</button>
+    <button data-gridtile-move="E" data-gridtile-step="1"
+      class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">E</button>
   </div>
 
 
@@ -16964,19 +16933,30 @@ if (gpsBtn) {
         try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
+// Grid move buttons — continuous movement while held
+let _gridMoveTimer = null;
+function _doGridMove(dir, step) {
+    if (dir === 'N') moveGridTileByMeters(0, step);
+    if (dir === 'S') moveGridTileByMeters(0, -step);
+    if (dir === 'E') moveGridTileByMeters(step, 0);
+    if (dir === 'W') moveGridTileByMeters(-step, 0);
+}
+function _startGridMove(dir, step) {
+    _doGridMove(dir, step);
+    _gridMoveTimer = setInterval(() => _doGridMove(dir, step), 200);
+}
+function _stopGridMove() {
+    if (_gridMoveTimer) { clearInterval(_gridMoveTimer); _gridMoveTimer = null; }
+}
 document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const dir = btn.getAttribute('data-gridtile-move') || '';
-            const step = Number(btn.getAttribute('data-gridtile-step') || '1');
-            if (!isFinite(step)) return;
-
-            const d = step;
-            if (dir === 'N') moveGridTileByMeters(0, d);
-            if (dir === 'S') moveGridTileByMeters(0, -d);
-            if (dir === 'E') moveGridTileByMeters(d, 0);
-            if (dir === 'W') moveGridTileByMeters(-d, 0);
-        });
-    });
+    const dir  = btn.getAttribute('data-gridtile-move') || '';
+    const step = Number(btn.getAttribute('data-gridtile-step') || '1');
+    if (!isFinite(step)) return;
+    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); _startGridMove(dir, step); });
+    btn.addEventListener('pointerup',   () => _stopGridMove());
+    btn.addEventListener('pointerleave',() => _stopGridMove());
+    btn.addEventListener('pointercancel',()=> _stopGridMove());
+});
 
 const navClearBtn = document.getElementById('nav-clear-btn');
     if (navClearBtn) {
