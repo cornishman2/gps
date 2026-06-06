@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 - 3 tile sizes
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 fix move grid
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1856,8 +1856,8 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
-    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
-    else render();
+    // Only redraw canvas during movement — full re-render happens in _stopGridMove
+    if (typeof drawTileGrid === 'function') { try { drawTileGrid(); } catch(_) {} }
 }
 
 // ------------------------------------------------------
@@ -13610,14 +13610,18 @@ const toPercent = (x, y) => {
               </button>
             </div>
             <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-              <button data-gridtile-move="W" data-gridtile-step="1"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">W</button>
-              <button data-gridtile-move="N" data-gridtile-step="1"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">N</button>
-              <button data-gridtile-move="S" data-gridtile-step="1"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">S</button>
-              <button data-gridtile-move="E" data-gridtile-step="1"
-                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none">E</button>
+              <button type="button"
+                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
+                onpointerdown="_startGridMove('W',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">W</button>
+              <button type="button"
+                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
+                onpointerdown="_startGridMove('N',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">N</button>
+              <button type="button"
+                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
+                onpointerdown="_startGridMove('S',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">S</button>
+              <button type="button"
+                class="w-14 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm select-none"
+                onpointerdown="_startGridMove('E',1)" onpointerup="_stopGridMove()" onpointercancel="_stopGridMove()" onpointerleave="_stopGridMove()">E</button>
             </div>
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
@@ -16920,7 +16924,7 @@ if (gpsBtn) {
         try { initInlineTileGrid(); } catch (e) { console.error('initInlineTileGrid:', e); }
     }
 
-// Grid move buttons — continuous movement while held
+// Grid move helpers — called by inline onpointerdown on W/N/S/E buttons
 let _gridMoveTimer = null;
 function _doGridMove(dir, step) {
     if (dir === 'N') moveGridTileByMeters(0, step);
@@ -16929,25 +16933,18 @@ function _doGridMove(dir, step) {
     if (dir === 'W') moveGridTileByMeters(-step, 0);
 }
 function _startGridMove(dir, step) {
+    _stopGridMove(); // clear any existing timer first
     _doGridMove(dir, step);
     _gridMoveTimer = setInterval(() => _doGridMove(dir, step), 200);
 }
 function _stopGridMove() {
-    if (_gridMoveTimer) { clearInterval(_gridMoveTimer); _gridMoveTimer = null; }
+    if (_gridMoveTimer) {
+        clearInterval(_gridMoveTimer);
+        _gridMoveTimer = null;
+        // Re-render the survey map once movement ends
+        if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+    }
 }
-document.querySelectorAll('button[data-gridtile-move]').forEach(btn => {
-    const dir  = btn.getAttribute('data-gridtile-move') || '';
-    const step = Number(btn.getAttribute('data-gridtile-step') || '1');
-    if (!isFinite(step)) return;
-    btn.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        btn.setPointerCapture(e.pointerId);
-        _startGridMove(dir, step);
-    });
-    btn.addEventListener('pointerup',    () => _stopGridMove());
-    btn.addEventListener('pointercancel',() => _stopGridMove());
-    btn.addEventListener('lostpointercapture', () => _stopGridMove());
-});
 // Safety net — stop on any touch/pointer end anywhere on the page
 document.addEventListener('pointerup',    () => _stopGridMove());
 document.addEventListener('pointercancel',() => _stopGridMove());
