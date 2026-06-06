@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 move tile buttons
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 - 3 tile sizes
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1786,7 +1786,7 @@ function getBestLiveGpsCoordsOrNull() {
     return { lat, lon };
 }
 
-function setGridTileToCurrentGps() {
+function setGridTileToCurrentGps(sizeM) {
     const survey = getCompassOpenSurvey();
     if (!survey) {
         showMessage('No open survey.', 'error');
@@ -1802,10 +1802,11 @@ function setGridTileToCurrentGps() {
     survey.gridTile.centerLat = c.lat;
     survey.gridTile.centerLon = c.lon;
     survey.gridTile.enabled = true;
+    if (sizeM && Number.isFinite(+sizeM)) survey.gridTile.sizeM = +sizeM;
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 
-    showMessage('Grid tile set to current GPS position.', 'success');
+    showMessage(`Grid tile (${survey.gridTile.sizeM}m) set to current GPS position.`, 'success');
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
 }
@@ -13583,13 +13584,23 @@ const toPercent = (x, y) => {
 
             <!-- Tile Grid controls -->
             <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
+              <button type="button"
+                class="flex-1 px-2 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm"
+                onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e);}">
+                10×10m
+              </button>
               <button id="gridtile-set-gps-btn" type="button"
-                class="flex-1 px-4 py-2 rounded-xl bg-rose-600 text-white font-bold shadow hover:opacity-90 text-sm"
-                onclick="try{setGridTileToCurrentGps();}catch(e){console.error(e);}">
-                Set Tile to GPS
+                class="flex-1 px-2 py-2 rounded-xl bg-rose-700 text-white font-bold shadow hover:opacity-90 text-sm"
+                onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e);}">
+                15×15m
+              </button>
+              <button type="button"
+                class="flex-1 px-2 py-2 rounded-xl bg-rose-800 text-white font-bold shadow hover:opacity-90 text-sm"
+                onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e);}">
+                20×20m
               </button>
               <button id="gridtile-toggle-btn" type="button"
-                class="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm"
+                class="flex-1 px-2 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold shadow text-sm"
                 onclick="try{toggleGridTileEnabled();}catch(e){console.error(e);}">
                 ${(() => {
                   const s = getCompassOpenSurvey();
