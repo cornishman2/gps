@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 colours
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 jump fix
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -9304,7 +9304,9 @@ function updateMapWithUserLocationAndRender() {
     const appContent = document.getElementById('app-content');
     if (!appContent) return;
 
+    const savedScroll = appContent.scrollTop;
     appContent.innerHTML = renderCompassPage(true);
+    appContent.scrollTop = savedScroll;
     attachPageEventListeners();
 }
     /** Shows a temporary, highly visible notification toast (top-centre). */
@@ -13081,7 +13083,9 @@ function rerenderCompassIfActive() {
     if (typeof currentPage !== 'undefined' && currentPage === 'Compass') {
         const appContent = document.getElementById('app-content');
         if (appContent && typeof renderCompassPage === 'function') {
+            const savedScroll = appContent.scrollTop;
             appContent.innerHTML = renderCompassPage(true);
+            appContent.scrollTop = savedScroll;
             if (typeof attachPageEventListeners === 'function') {
                 attachPageEventListeners();
             }
