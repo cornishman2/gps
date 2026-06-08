@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 order
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Corrections
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5645,11 +5645,11 @@ async function fileToResizedDataUrl(file) {
 
 // NEW: smoothed position for the live map
         let smoothedUserCoords = null;
-        const USER_SMOOTHING_ALPHA = 0.15; // 0 < alpha ≤ 1 (lower = smoother, slower)
+        const USER_SMOOTHING_ALPHA = 0.5; // 0 < alpha ≤ 1 (lower = smoother, slower)
 // --- TRACK RECORDING STATE ---
         let activeTrackSurveyId = null;
         let activeTrackId = null;
-        const TRACK_POINT_MIN_DISTANCE_METERS = 3; // only log a point if you've moved at least this far
+        const TRACK_POINT_MIN_DISTANCE_METERS = 1; // only log a point if you've moved at least this far
 
 function isAnyTrackRecording() {
     return Boolean(activeTrackId && activeTrackSurveyId);
@@ -6056,10 +6056,14 @@ function saveCollectionToStorage(key, data) {
             );
 
         if (isQuotaError) {
-            showMessage(
-                "Storage quota exceeded. Consider exporting and clearing old data.",
-                'error'
-            );
+            const now = Date.now();
+            if (!saveCollectionToStorage._lastQuotaWarn || now - saveCollectionToStorage._lastQuotaWarn > 10000) {
+                saveCollectionToStorage._lastQuotaWarn = now;
+                showMessage(
+                    "Storage quota exceeded. Consider exporting and clearing old data.",
+                    'error'
+                );
+            }
         } else {
             // For other errors, just log them.
             // If you really want a toast, you could downgrade it to 'warning':
@@ -7613,7 +7617,11 @@ function saveSurveysToLocalStorage() {
         console.error("Error saving to Local Storage:", e);
         // Only show message for actual localStorage errors (like quota exceeded)
         if (e.name === 'QuotaExceededError') {
-            showMessage("Storage quota exceeded. Consider exporting and clearing old data.", 'error');
+            const now = Date.now();
+            if (!saveSurveysToLocalStorage._lastQuotaWarn || now - saveSurveysToLocalStorage._lastQuotaWarn > 10000) {
+                saveSurveysToLocalStorage._lastQuotaWarn = now;
+                showMessage("Storage quota exceeded. Consider exporting and clearing old data.", 'error');
+            }
         }
     }
 }
@@ -7841,7 +7849,7 @@ function quickLogTargetByVDI(raw, sourceLabel = '', opts = {}) {
         detector: userProfile.detector,
         centerOnMap: false,
 
-        photos: [],
+        photos: Array.isArray(opts.photos) ? opts.photos : [],
         targetPhotoRef: '',
         targetPhotoData: opts.targetPhotoData || ''
     };
@@ -13654,6 +13662,7 @@ const toPercent = (x, y) => {
     }
 
     if (drawTracks.length) {
+        const trackStrokeWidth = (100 / mapWidthMeters).toFixed(4); // 1 metre in viewBox units
         const polylines = drawTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
@@ -13679,7 +13688,7 @@ const toPercent = (x, y) => {
                         >${safe}</text>`;
                 }
             }
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />${trackLabelHtml}`;
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="${trackStrokeWidth}" points="${pts}" />${trackLabelHtml}`;
         }).join('');
 
         trackSvgHtml = `
@@ -13809,6 +13818,7 @@ const toPercent = (x, y) => {
     // 6. Track SVG (if any)
     let trackSvgHtml = '';
     if (drawTracks.length) {
+        const trackStrokeWidth = (100 / mapWidthMeters).toFixed(4); // 1 metre in viewBox units
         const polylines = drawTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
@@ -13834,7 +13844,7 @@ const toPercent = (x, y) => {
                         >${safe}</text>`;
                 }
             }
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="0.7" points="${pts}" />${trackLabelHtml}`;
+            return `<polyline fill="none" stroke="${stroke}" stroke-width="${trackStrokeWidth}" points="${pts}" />${trackLabelHtml}`;
         }).join('');
 
         trackSvgHtml = `
@@ -17970,9 +17980,23 @@ async function handleQuickPhotoTargetSelected(event) {
     // Yield to GC before saving the large surveys object
     await new Promise(r => setTimeout(r, 50));
 
+    // Store photo in IndexedDB (not base64 in localStorage)
+    let photoRefs = [];
+    try {
+        photoRefs = await saveDataUrlsAsPhotoRefs([photoData]);
+    } catch(err) {
+        console.error('Failed to store photo in IDB:', err);
+        // Fall back to storing in target as legacy data URL
+        quickLogTargetByVDI(vdi, `${p.color} ${min}→${max}`, {
+            type: 'Unidentified',
+            targetPhotoData: photoData
+        });
+        return;
+    }
+
     quickLogTargetByVDI(vdi, `${p.color} ${min}→${max}`, {
         type: 'Unidentified',
-        targetPhotoData: photoData
+        photos: photoRefs
     });
 }
 
