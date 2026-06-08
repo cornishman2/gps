@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Corrections
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 share
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3818,6 +3818,8 @@ function renderHelpPage() {
         <p class="text-sm font-bold text-gray-700 mb-1">Find card actions</p>
         <div class="text-sm text-gray-700 space-y-1">
           <div><strong>Edit details</strong> — update any field or add / remove photos.</div>
+          <div><strong>Add Photo</strong> — attach another photo to the find from your camera or photo library.</div>
+          <div><strong>Share Find</strong> — generates a self-contained HTML report of the find with all its details and photos embedded, then opens the system share sheet so you can send it by email, WhatsApp, AirDrop, or any other app. On browsers that do not support file sharing, the report is downloaded instead so you can attach it manually.</div>
           <div><strong>Delete</strong> — removes the find permanently. Cannot be restored without copying the original target again.</div>
         </div>
         <p class="text-xs text-gray-500 mt-2">Tap a find photo to open the full gallery and step through all photos for that find.</p>
@@ -12628,6 +12630,14 @@ function renderFindsPage() {
                         <i class="fas fa-camera mr-1"></i> Add Photo
                     </button>
                 </div>
+                <!-- Row 3: Share Find -->
+                <div class="mt-2">
+                    <button type="button"
+                        class="w-full inline-flex items-center justify-center px-3 py-3 rounded-md bg-sky-600 text-white hover:bg-sky-700 text-xs sm:text-sm font-semibold"
+                        onclick="shareFindAsHtml('${find.id}')">
+                        <i class="fas fa-share-alt mr-1"></i> Share Find
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
@@ -17751,6 +17761,146 @@ function triggerFindPhotoCapture(findId) {
     _findCardPhotoPending = findId;
     const inp = document.getElementById('find-card-photo-input');
     if (inp) { inp.value = ''; inp.click(); }
+}
+
+async function shareFindAsHtml(findId) {
+    const find = Array.isArray(finds) ? finds.find(f => String(f.id) === String(findId)) : null;
+    if (!find) { showMessage('Find not found.', 'error'); return; }
+
+    showMessage('Preparing find report…', 'info');
+
+    // Collect all photo refs (new IDB style + legacy base64)
+    const allRefs = [];
+    if (Array.isArray(find.photos) && find.photos.length) {
+        allRefs.push(...find.photos);
+    } else if (find.targetPhotoData || find.photoData) {
+        allRefs.push(find.targetPhotoData || find.photoData);
+    }
+
+    // Resolve every ref to an embedded base64 data URL
+    const photoDataUrls = [];
+    for (const ref of allRefs) {
+        try {
+            if (typeof ref === 'string' && ref.startsWith('data:image/')) {
+                photoDataUrls.push(ref);
+            } else if (typeof ref === 'string' && ref.startsWith('idb:')) {
+                const id   = parsePhotoRef(ref);
+                const blob = id != null ? await loadPhotoBlob(id) : null;
+                if (blob) photoDataUrls.push(await blobToDataUrl(blob));
+            }
+        } catch(e) { /* skip unloadable photos */ }
+    }
+
+    const dateText = (() => {
+        const tsRaw = find.dateCreated ?? find.createdAt ?? find.time ?? find.dateLastChanged ?? null;
+        const ts = typeof tsRaw === 'number' ? tsRaw : (tsRaw ? Date.parse(tsRaw) : null);
+        return ts && !isNaN(ts)
+            ? new Date(ts).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+            : 'Not recorded';
+    })();
+
+    const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    const row = (label, value) => value
+        ? `<tr><td style="font-weight:600;padding:6px 10px 6px 0;color:#555;white-space:nowrap;vertical-align:top">${esc(label)}</td><td style="padding:6px 0 6px 10px">${esc(value)}</td></tr>`
+        : '';
+
+    const photosHtml = photoDataUrls.length
+        ? photoDataUrls.map(url =>
+            `<div style="margin-top:16px"><img src="${url}" style="max-width:100%;border-radius:8px;border:1px solid #ddd" alt="Find photo"></div>`
+          ).join('')
+        : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(find.description || 'Find Report')} — Detekta</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #f5f5f5; color: #222; }
+  .card { background: #fff; max-width: 600px; margin: 24px auto; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.1); padding: 24px; }
+  .badge { display: inline-block; background: #e5e7eb; color: #374151; border-radius: 9999px; padding: 2px 12px; font-size: 12px; font-weight: 600; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #1e3a5f; }
+  .meta { font-size: 12px; color: #888; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .section { margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px; }
+  .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #888; margin-bottom: 8px; }
+  .footer { margin-top: 24px; font-size: 11px; color: #aaa; text-align: center; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+    <div>
+      <h1>${esc(find.description || 'Unnamed Find')}</h1>
+      <div class="meta">${esc(find.surveyName || 'Unknown survey')} &nbsp;·&nbsp; Logged: ${dateText}</div>
+    </div>
+    <span class="badge">${esc(find.type || 'Unknown')}</span>
+  </div>
+
+  ${photosHtml}
+
+  <div class="section">
+    <div class="section-title">Details</div>
+    <table>
+      ${row('Identification', find.identification)}
+      ${row('Material', find.material)}
+      ${row('Condition', find.condition)}
+      ${row('Period', find.period)}
+      ${row('Weight', find.weightG ? find.weightG + ' g' : '')}
+      ${row('Dimensions', find.dimensionsMm)}
+      ${row('Kept', find.whereKept)}
+      ${find.possibleTreasure ? row('Possible treasure', 'Yes') : ''}
+      ${row('Disposition', find.disposition)}
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Recovery</div>
+    <table>
+      ${row('VDI', find.vdi)}
+      ${row('Depth', find.depth)}
+      ${row('Coordinates', find.coordinates)}
+      ${row('GPS accuracy', find.accuracy)}
+      ${row('Detector', find.detector)}
+      ${row('Found by', find.user)}
+    </table>
+  </div>
+
+  <div class="footer">Generated by Detekta &nbsp;·&nbsp; ${new Date().toLocaleDateString('en-GB')}</div>
+</div>
+</body>
+</html>`;
+
+    const filename = `${(find.description || 'find').replace(/[^a-z0-9]/gi,'_').toLowerCase()}_detekta.html`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const file = new File([blob], filename, { type: 'text/html' });
+
+    // Try Web Share API with file support first (works on iOS/Android)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({
+                title: find.description || 'Find Report',
+                text: `Find report from Detekta: ${find.description || 'Unnamed Find'}`,
+                files: [file]
+            });
+            return;
+        } catch(e) {
+            if (e.name === 'AbortError') return; // user cancelled — do nothing
+            // fall through to download fallback
+        }
+    }
+
+    // Fallback: trigger a download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+    showMessage('Report downloaded — attach it to an email manually.', 'success');
 }
 
 async function handleFindCardPhotoSelected(event) {
