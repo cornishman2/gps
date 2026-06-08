@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 tabs
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 no smooth
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5622,9 +5622,8 @@ async function fileToResizedDataUrl(file) {
     return await resizeDataUrlToMaxWidth(dataUrl, maxW);
 }
 
-// NEW: smoothed position for the live map
+// No smoothing - use raw GPS directly for zero lag
         let smoothedUserCoords = null;
-        const USER_SMOOTHING_ALPHA = 0.5; // 0 < alpha ≤ 1 (lower = smoother, slower)
 // --- TRACK RECORDING STATE ---
         let activeTrackSurveyId = null;
         let activeTrackId = null;
@@ -5765,17 +5764,8 @@ function resetLiveTrackingAndRecordingState() {
 
         
         function updateSmoothedUserCoords(newLat, newLon) {
-    // First reading: snap straight to the new value
-    if (!smoothedUserCoords) {
-        smoothedUserCoords = { lat: newLat, lon: newLon };
-        return;
-    }
-
-    // Exponential moving average
-    smoothedUserCoords.lat =
-        smoothedUserCoords.lat + USER_SMOOTHING_ALPHA * (newLat - smoothedUserCoords.lat);
-    smoothedUserCoords.lon =
-        smoothedUserCoords.lon + USER_SMOOTHING_ALPHA * (newLon - smoothedUserCoords.lon);
+    // No smoothing — use raw GPS coordinates directly for zero lag
+    smoothedUserCoords = { lat: newLat, lon: newLon };
 }
 
 // =====================
