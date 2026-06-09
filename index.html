@@ -118,7 +118,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 tile flash
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 stop flash
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13640,11 +13640,12 @@ const toPercent = (x, y) => {
                 .join('');
         }
 
-        // 2) Active tile — thin flashing border while grid is shown
+        // 2) Active tile — thin flashing border while grid is shown (stops flashing during tracking)
         let activeHtml = '';
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
             const sizeM = Number(tile.sizeM) || 15;
-            const style = `border: 0.5px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.04); z-index: 8; animation: tile-border-flash 1s ease-in-out infinite;`;
+            const flash = isAnyTrackRecording() ? '' : 'animation: tile-border-flash 1s ease-in-out infinite;';
+            const style = `border: 0.5px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.04); z-index: 8; ${flash}`;
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0);
         }
 
