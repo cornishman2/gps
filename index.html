@@ -118,7 +118,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Cpmplete
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Stake labels
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13218,6 +13218,14 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     // - Targets: if description is 'STAKE' => no label; else if description present => use description; else fallback to VDI
  const getMapPinLabelText = (t) => {
     const isFind = (t && (t.isFind || String(t.type || '').toLowerCase() === 'find'));
+
+    // Stakes are controlled by their own toggle — check before the target labels guard
+    if (!isFind && isStakeTarget(t)) {
+        if (!showMapStakeLabels) return '';
+        const stakeDesc = String(t.description || '').trim();
+        return (stakeDesc && stakeDesc !== 'STAKE') ? stakeDesc : 'Stake';
+    }
+
     // Label toggles
     if (isFind && !showMapFindLabels) return '';
     if (!isFind && !showMapTargetLabels) return '';
@@ -13226,12 +13234,6 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
     }
 
     const desc = String(t.description || '').trim();
-    // Stakes: show label only if showMapStakeLabels
-    if (isStakeTarget(t)) {
-        if (!showMapStakeLabels) return '';
-        const stakeDesc = String(t.description || '').trim();
-        return (stakeDesc && stakeDesc !== 'STAKE') ? stakeDesc : 'Stake';
-    }
 
     // Get VDI / Target ID (prefer t.vdi)
     const v = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
