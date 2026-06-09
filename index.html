@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Stake changes
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 labels on grid
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13602,12 +13602,12 @@ const toPercent = (x, y) => {
                             ${style}; border-radius: 2px;">
                     ${labelText ? `
                     <div class="absolute"
-                         style="left:50%; top:-10px; transform:translateX(-50%) rotate(${-rot}deg);
-                                font-size:${fontPx.toFixed(2)}px;
+                         style="left:50%; top:50%; transform:translate(-50%,-50%) rotate(${-rot}deg);
+                                font-size:${fontPx.toFixed(2)}px; font-weight:700;
                                 padding:2px 6px; border-radius:999px;
                                 background: rgba(255,255,255,0.92);
-                                border: 1px solid rgba(34,197,94,0.35);
-                                color: rgba(20,83,45,0.95);">
+                                border: 1px solid currentColor;
+                                pointer-events:none;">
                         ${labelText}
                     </div>` : ''}
                 </div>
@@ -13619,11 +13619,11 @@ const toPercent = (x, y) => {
         if (completed.length) {
             completedHtml = completed
                 .filter(a => a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)) && isFinite(Number(a.sizeM)))
-                .map(a => {
+                .map((a, idx) => {
                     const sizeM = Number(a.sizeM) || 15;
                     const rot = Number(a.rotationDeg) || 0;
                     const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
-                    const label = '';
+                    const label = showMapTrackLabels ? `${completed.length - idx}` : '';
                     return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label, undefined, rot);
                 })
                 .join('');
@@ -13634,7 +13634,7 @@ const toPercent = (x, y) => {
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
             const sizeM = Number(tile.sizeM) || 15;
             const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
-            const label = '';
+            const label = showMapTrackLabels ? `${sizeM}m` : '';
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, 'active-tile-overlay', tile.rotationDeg || 0);
         }
 
@@ -13951,12 +13951,6 @@ const toPercent = (x, y) => {
         </label>
   </div>
 </div>
-
-
-    `;
-}
-        
-    /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen(event) {
     // Prevent accidental fullscreen toggles when clicking UI controls/pins
     if (event && event.target && event.target.closest) {
