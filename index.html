@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 grid complete
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Stake changes
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13223,7 +13223,11 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
 
     const desc = String(t.description || '').trim();
     // Stakes: show label only if showMapStakeLabels
-    if (isStakeTarget(t)) return showMapStakeLabels ? 'Stake' : '';
+    if (isStakeTarget(t)) {
+        if (!showMapStakeLabels) return '';
+        const stakeDesc = String(t.description || '').trim();
+        return (stakeDesc && stakeDesc !== 'STAKE') ? stakeDesc : 'Stake';
+    }
 
     // Get VDI / Target ID (prefer t.vdi)
     const v = (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
@@ -13654,7 +13658,7 @@ const toPercent = (x, y) => {
 
             const stroke = track.color || '#2563eb';
             let trackLabelHtml = '';
-            if (showMapTrackLabels && track.name) {
+            if (showMapTrackLabels && track.name && !track.isRecording) {
                 const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
                 if (midPts.length > 0) {
                     const mid = midPts[Math.floor(midPts.length / 2)];
@@ -13810,7 +13814,7 @@ const toPercent = (x, y) => {
 
             const stroke = track.color || '#2563eb';
             let trackLabelHtml = '';
-            if (showMapTrackLabels && track.name) {
+            if (showMapTrackLabels && track.name && !track.isRecording) {
                 const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
                 if (midPts.length > 0) {
                     const mid = midPts[Math.floor(midPts.length / 2)];
@@ -14455,20 +14459,39 @@ ${(() => {
             </div>
 
             <!-- Row 3: Tile size + Hide/Show -->
-            ${isAnyTrackRecording() ? `<p class="text-xs text-center text-amber-600 font-semibold mb-1"><i class="fas fa-lock mr-1"></i>Grid controls locked while tracking</p>` : ''}
+            ${(() => {
+                const _s = getCompassOpenSurvey();
+                const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                const _gridShown  = _gt && _gt.enabled;
+                const _nudgeOk    = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                return `<p class="text-xs text-center ${isAnyTrackRecording() ? 'text-amber-600 font-semibold' : (_gridPlaced && !_gridShown ? 'text-gray-400' : 'hidden')} mb-1">
+                    ${isAnyTrackRecording()
+                        ? '<i class="fas fa-lock mr-1"></i>Grid controls locked while tracking'
+                        : (_gridPlaced && !_gridShown ? 'Show the grid to enable nudge &amp; rotate' : '')}
+                </p>`;
+            })()}
             <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
-                ${isAnyTrackRecording() ? `
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">10m</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">15m</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">20m</button>
-                ` : `
-                <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
-                    onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e)}">10m</button>
-                <button id="gridtile-set-gps-btn" type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
-                    onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e)}">15m</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
-                    onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e)}">20m</button>
-                `}
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _sizeOk = !isAnyTrackRecording();
+                    if (!_sizeOk) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">10m</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">15m</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">20m</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                            onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e)}">10m</button>
+                        <button id="gridtile-set-gps-btn" type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                            onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e)}">15m</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                            onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e)}">20m</button>
+                    `;
+                })()}
                 <button id="gridtile-toggle-btn" type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
                     onclick="try{toggleGridTileEnabled();}catch(e){console.error(e)}">
                     ${(() => {
@@ -14481,43 +14504,56 @@ ${(() => {
 
             <!-- Row 4: Grid move -->
             <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                ${isAnyTrackRecording() ? `
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">W</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">N</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">S</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">E</button>
-                ` : `
-                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                    ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                    onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                    ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                    onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                    ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                    onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                    ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                    onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
-                `}
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                    if (!_ok) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">W</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">N</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">S</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">E</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
+                    `;
+                })()}
             </div>
             <!-- Row 5: Tile rotation -->
             <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                ${isAnyTrackRecording() ? `
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↺</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-sm shadow select-none cursor-not-allowed">0°</button>
-                <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↻</button>
-                ` : `
-                <button type="button"
-                    class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
-                    onclick="rotateTile(-5)">↺</button>
-                <button type="button"
-                    class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onclick="rotateTile(0)">0°</button>
-                <button type="button"
-                    class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
-                    onclick="rotateTile(5)">↻</button>
-                `}
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                    if (!_ok) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↺</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-sm shadow select-none cursor-not-allowed">0°</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↻</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                            onclick="rotateTile(-5)">↺</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                            onclick="rotateTile(0)">0°</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                            onclick="rotateTile(5)">↻</button>
+                    `;
+                })()}
             </div>
                     ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
                     ${buildCompassRangeButtonsHtml(getQuickTargetRangesEffective())}
@@ -14596,7 +14632,35 @@ ${(() => {
 </details>
 </div>
 
-            <!-- Inline Tile Grid (permanently embedded) -->
+            <!-- Compact Tracking Controls (duplicate for easy access) -->
+            ${(() => {
+                const isOn = !!isAnyTrackRecording();
+                const startDisabled = isOn;
+                const stopDisabled = !isOn;
+                return `
+                <div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="text-sm font-semibold text-gray-700"><i class="fas fa-route mr-1"></i> Tracking</span>
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
+                            ${isOn ? 'ON' : 'OFF'}
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="start-track-btn-2" type="button"
+                            ${startDisabled ? 'disabled' : ''}
+                            class="py-2 rounded-lg font-bold text-white text-sm shadow
+                                   ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
+                            🟢 Start
+                        </button>
+                        <button id="stop-track-btn-2" type="button"
+                            ${stopDisabled ? 'disabled' : ''}
+                            class="py-2 rounded-lg font-bold text-white text-sm shadow
+                                   ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
+                            🔴 Stop
+                        </button>
+                    </div>
+                </div>`;
+            })()}
             ${(() => {
                 const _survey = openSurvey;
                 ensureSurveyGridTileDefaults(_survey);
@@ -17281,6 +17345,17 @@ if (tracksPanelDetails) {
         stopTrackBtn.addEventListener('click', handleStopTrackClick);
     }
 
+    // Duplicate tracking buttons (below map layers)
+    const startTrackBtn2 = document.getElementById('start-track-btn-2');
+    if (startTrackBtn2) {
+        startTrackBtn2.addEventListener('click', handleStartTrackClick);
+    }
+
+    const stopTrackBtn2 = document.getElementById('stop-track-btn-2');
+    if (stopTrackBtn2) {
+        stopTrackBtn2.addEventListener('click', handleStopTrackClick);
+    }
+
 // Track edit (name + description)
 document.querySelectorAll('.track-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -17383,8 +17458,28 @@ if (stakeBtn) {
             return;
         }
 
-        // Create stake immediately (logs GPS only if currently available)
-        quickLogTargetByVDI(-100, 'STAKE', { description: 'STAKE', type: 'Something else' });
+        // Ask for a stake name before logging
+        showConfirmationModal(
+            'Name this Stake',
+            `<label class="block text-sm font-medium text-gray-700 mb-1">Stake name (optional)</label>
+             <input id="stake-name-input" type="text" maxlength="40"
+                    class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-primary focus:border-primary"
+                    placeholder="e.g. Gate, Car, North boundary"
+                    autocomplete="off">`,
+            () => {
+                const nameEl = document.getElementById('stake-name-input');
+                const stakeName = nameEl ? nameEl.value.trim() : '';
+                quickLogTargetByVDI(-100, 'STAKE', {
+                    description: stakeName || 'STAKE',
+                    type: 'Something else'
+                });
+            }
+        );
+        // Auto-focus the input after the modal renders
+        setTimeout(() => {
+            const inp = document.getElementById('stake-name-input');
+            if (inp) inp.focus();
+        }, 50);
     });
 }
         
