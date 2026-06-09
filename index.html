@@ -99,6 +99,11 @@ summary {
     50%       { opacity: 0.15; }
   }
   .pin-blink { animation: detekta-pin-blink 0.75s ease-in-out infinite; }
+  @keyframes tile-border-flash {
+    0%, 100% { border-color: rgba(239,68,68,0.95); }
+    50%       { border-color: rgba(239,68,68,0.05); }
+  }
+  .tile-border-flash { animation: tile-border-flash 1s ease-in-out infinite; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -113,7 +118,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Survey updates
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 several changes
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13621,28 +13626,26 @@ const toPercent = (x, y) => {
             `;
         };
 
-        // 1) Completed tiles — only shown when grid is visible
+        // 1) Completed tiles — always visible regardless of grid show/hide
         let completedHtml = '';
-        if (completed.length && tile && tile.enabled) {
+        if (completed.length) {
             completedHtml = completed
                 .filter(a => a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)) && isFinite(Number(a.sizeM)))
                 .map((a, idx) => {
                     const sizeM = Number(a.sizeM) || 15;
                     const rot = Number(a.rotationDeg) || 0;
-                    const style = `border: 2px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.12); z-index: 7;`;
-                    const label = showMapTrackLabels ? `${completed.length - idx}` : '';
-                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, label, undefined, rot);
+                    const style = `border: 0.5px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.18); z-index: 7;`;
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, '', undefined, rot);
                 })
                 .join('');
         }
 
-        // 2) Active tile
+        // 2) Active tile — thin flashing border while grid is shown
         let activeHtml = '';
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
             const sizeM = Number(tile.sizeM) || 15;
-            const style = `border: 2px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.06); z-index: 8;`;
-            const label = showMapTrackLabels ? `${sizeM}m` : '';
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, label, 'active-tile-overlay', tile.rotationDeg || 0);
+            const style = `border: 0.5px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.04); z-index: 8;`;
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay tile-border-flash', tile.rotationDeg || 0);
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -13652,7 +13655,7 @@ const toPercent = (x, y) => {
     }
 
     if (drawTracks.length) {
-        const trackStrokeWidth = 0.5; // fixed thin stroke, matches tile grid visual weight
+        const trackStrokeWidth = 0.2; // thin stroke matching tile grid visual weight
         const polylines = drawTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
@@ -13808,7 +13811,7 @@ const toPercent = (x, y) => {
     // 6. Track SVG (if any)
     let trackSvgHtml = '';
     if (drawTracks.length) {
-        const trackStrokeWidth = 0.5; // fixed thin stroke, matches tile grid visual weight
+        const trackStrokeWidth = 0.2; // thin stroke matching tile grid visual weight
         const polylines = drawTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
