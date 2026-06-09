@@ -113,7 +113,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 labels on grid
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 stake labels
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2525,6 +2525,19 @@ function drawTileGrid() {
                 ctx.fillStyle = 'rgba(0,0,0,0.8)';
                 ctx.arc(cp.x, cp.y, PIN_R * 0.5, 0, Math.PI * 2);
                 ctx.fill();
+                // Stake label
+                if (showMapStakeLabels) {
+                    const stakeDesc = String(t.description || '').trim();
+                    const stakeLabel = (stakeDesc && stakeDesc !== 'STAKE') ? stakeDesc : 'Stake';
+                    ctx.font = `bold ${Math.max(8, PIN_R * 1.4)}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeText(stakeLabel, cp.x, cp.y - PIN_R * 0.5 - 1);
+                    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+                    ctx.fillText(stakeLabel, cp.x, cp.y - PIN_R * 0.5 - 1);
+                }
             } else {
                 const pc = getTargetPinColors(t, _qRanges);
                 ctx.fillStyle   = pc.fill;
