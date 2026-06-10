@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 pulse
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Share survey
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -7754,9 +7754,15 @@ switch (currentPage) {
     case 'Targets':
         contentHtml = renderTargetsPage();
         break;
-    case 'Finds':                           // <--- NEW
+    case 'Finds': {                           // <--- NEW
+        // Auto-select the open survey if the filter is still on 'All'
+        const _openForFinds = surveys.find(s => s.status === 'Open');
+        if (_openForFinds && findsFilter.surveyId === 'All') {
+            findsFilter.surveyId = _openForFinds.id;
+        }
         contentHtml = renderFindsPage();
         break;
+    }
     case 'Compass':
         contentHtml = renderCompassPage(false);
         break;
@@ -12143,6 +12149,14 @@ function renderSurveyCard(survey, isOpen = false) {
                         <i class="fas fa-file-archive mr-1"></i> Export Survey as ZIP
                     </button>
                 </div>
+                <div class="mt-2">
+                    <button
+                        class="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg shadow hover:bg-indigo-700 transition"
+                        onclick="shareSurveyAsZip()"
+                    >
+                        <i class="fas fa-share-alt mr-1"></i> Share Survey as ZIP
+                    </button>
+                </div>
             `;
             break;
 
@@ -12679,6 +12693,17 @@ function renderFindsPage() {
                         />
                     </div>
                     <div class="flex-1">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1" for="finds-survey-select">
+                            Filter by survey
+                        </label>
+                        <select
+                            id="finds-survey-select"
+                            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        >
+                            ${surveyOptionsHtml}
+                        </select>
+                    </div>
+                    <div class="flex-1">
                         <label class="block text-xs font-semibold text-gray-600 mb-1" for="finds-type-select">
                             Filter by type
                         </label>
@@ -12690,16 +12715,6 @@ function renderFindsPage() {
                         </select>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-semibold text-gray-600 mb-1" for="finds-survey-select">
-                            Filter by survey
-                        </label>
-                        <select
-                            id="finds-survey-select"
-                            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                        >
-                            ${surveyOptionsHtml}
-                        </select>
-                    <div class="flex-1">
                         <label class="block text-xs font-semibold text-gray-600 mb-1" for="finds-date-select">
                             Filter by date
                         </label>
@@ -12709,8 +12724,6 @@ function renderFindsPage() {
                         >
                             ${dateOptionsHtml}
                         </select>
-                    </div>
-
                     </div>
                 </div>
                 <div class="mt-3 flex justify-end">
@@ -16572,7 +16585,63 @@ function exportOpenSurveyWithPhotos() {
     });
 }
 
-async function actuallyExportOpenSurvey() {
+async function shareSurveyAsZip() {
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (!openSurvey) {
+        showMessage('No open survey to share.', 'error');
+        return;
+    }
+    showConfirmationModal(
+        'Share Survey as ZIP',
+        `Share <strong>${escapeHtml(openSurvey.name || 'Survey')}</strong> as a ZIP file?<br>
+         <span class="text-sm text-gray-600">The survey will be packaged with all targets, finds, and photos, then shared via your device's share sheet.</span>`,
+        () => actuallyShareSurveyAsZip()
+    );
+}
+
+async function buildSurveyZipBlob() {
+    return await actuallyExportOpenSurvey({ returnBlob: true });
+}
+
+async function actuallyShareSurveyAsZip() {
+    showMessage('Preparing survey ZIP for sharing…', 'info');
+    try {
+        const zipBlob = await buildSurveyZipBlob();
+        if (!zipBlob) return;
+
+        const openSurvey = surveys.find(s => s.status === 'Open');
+        const safeName = (openSurvey?.name || 'survey')
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'survey';
+        const timestamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        const filename = `detekta_${safeName}_${timestamp}.zip`;
+        const file = new File([zipBlob], filename, { type: 'application/zip' });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    title: openSurvey?.name || 'Detekta Survey',
+                    text: `Survey export from Detekta: ${openSurvey?.name || 'Survey'}`,
+                    files: [file]
+                });
+                return;
+            } catch(e) {
+                if (e.name === 'AbortError') return;
+                // fall through to download
+            }
+        }
+        // Fallback: download
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+        showMessage('ZIP downloaded — attach it to share manually.', 'success');
+    } catch(e) {
+        showMessage('Failed to prepare ZIP: ' + (e.message || e), 'error');
+    }
+}
+
+async function actuallyExportOpenSurvey(opts = {}) {
     const openSurvey = surveys.find(s => s.status === 'Open');
     if (!openSurvey) {
         showMessage('No open survey to export.', 'error');
@@ -16867,6 +16936,14 @@ if (payload.survey) {
         updateProgressOverlay(99, 'Saving file…');
 
         const filename = `geoFind_${safeName}_${timestamp}.zip`;
+
+        // If called in returnBlob mode (for sharing), return the blob directly
+        if (opts.returnBlob) {
+            updateProgressOverlay(100, 'Done.');
+            setTimeout(() => hideProgressOverlay(), 400);
+            return zipBlob;
+        }
+
         const url = URL.createObjectURL(zipBlob);
 
         const a = document.createElement('a');
