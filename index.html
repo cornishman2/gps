@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Image stamp
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 More stamp
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3917,7 +3917,7 @@ function renderHelpPage() {
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Photo stamp</p>
-        <p class="text-sm text-gray-700 mb-3">Every photo taken or imported into Detekta is automatically stamped with a semi-transparent bar along the bottom edge showing <strong>Detekta  |  date &amp; time  |  GPS coordinates</strong> (coordinates are omitted if no GPS fix is available at the moment the photo is saved). The stamp is baked permanently into the image and travels with it when exported or shared.</p>
+        <p class="text-sm text-gray-700 mb-3">Every photo taken or imported into Detekta is automatically stamped with a semi-transparent bar along the bottom edge showing <strong>Detekta  |  detectorist name  |  detector  |  date &amp; time  |  GPS coordinates</strong> (coordinates are omitted if no GPS fix is available at the moment the photo is saved). The stamp is baked permanently into the image and travels with it when exported or shared.</p>
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Totals</p>
@@ -5718,8 +5718,11 @@ async function stampDataUrlDetekta(dataUrl, stampInfo) {
     ctx.textBaseline = 'middle';
     ctx.textAlign    = 'left';
 
-    const parts = ['Detekta', stampInfo.datetime];
-    if (stampInfo.coords) parts.push(stampInfo.coords);
+    const parts = ['Detekta'];
+    if (stampInfo.name)     parts.push(stampInfo.name);
+    if (stampInfo.detector) parts.push(stampInfo.detector);
+    parts.push(stampInfo.datetime);
+    if (stampInfo.coords)   parts.push(stampInfo.coords);
     const line = parts.join('  |  ');
 
     ctx.fillText(line, pad, h - barH / 2);
@@ -5742,16 +5745,18 @@ async function fileToResizedDataUrl(file) {
     const resized = await resizeDataUrlToMaxWidth(dataUrl, maxW);
 
     // Build stamp text
-    const now    = new Date();
-    const dt     = now.toLocaleDateString('en-GB', { day:'2-digit', month:'2-digit', year:'2-digit' })
-                 + '  ' + now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-    const gps    = (typeof getBestLiveGpsCoordsOrNull === 'function')
-                 ? getBestLiveGpsCoordsOrNull() : null;
-    const coords = gps
-                 ? `${Math.abs(gps.lat).toFixed(5)}°${gps.lat >= 0 ? 'N' : 'S'}  ${Math.abs(gps.lon).toFixed(5)}°${gps.lon >= 0 ? 'E' : 'W'}`
-                 : null;
+    const now      = new Date();
+    const dt       = now.toLocaleDateString('en-GB', { day:'2-digit', month:'2-digit', year:'2-digit' })
+                   + '  ' + now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    const gps      = (typeof getBestLiveGpsCoordsOrNull === 'function')
+                   ? getBestLiveGpsCoordsOrNull() : null;
+    const coords   = gps
+                   ? `${Math.abs(gps.lat).toFixed(5)}°${gps.lat >= 0 ? 'N' : 'S'}  ${Math.abs(gps.lon).toFixed(5)}°${gps.lon >= 0 ? 'E' : 'W'}`
+                   : null;
+    const name     = (typeof userProfile !== 'undefined' && userProfile.name)     ? userProfile.name     : null;
+    const detector = (typeof userProfile !== 'undefined' && userProfile.detector) ? userProfile.detector : null;
 
-    return await stampDataUrlDetekta(resized, { datetime: dt, coords });
+    return await stampDataUrlDetekta(resized, { name, detector, datetime: dt, coords });
 }
 
 // No smoothing - use raw GPS directly for zero lag
@@ -18533,14 +18538,16 @@ async function handleQuickPhotoTargetSelected(event) {
         });
 
         // Apply Detekta stamp
-        const now    = new Date();
-        const dt     = now.toLocaleDateString('en-GB', { day:'2-digit', month:'2-digit', year:'2-digit' })
-                     + '  ' + now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-        const gps    = (typeof getBestLiveGpsCoordsOrNull === 'function') ? getBestLiveGpsCoordsOrNull() : null;
-        const coords = gps
-                     ? `${Math.abs(gps.lat).toFixed(5)}°${gps.lat >= 0 ? 'N' : 'S'}  ${Math.abs(gps.lon).toFixed(5)}°${gps.lon >= 0 ? 'E' : 'W'}`
-                     : null;
-        photoData = await stampDataUrlDetekta(photoData, { datetime: dt, coords });
+        const now      = new Date();
+        const dt       = now.toLocaleDateString('en-GB', { day:'2-digit', month:'2-digit', year:'2-digit' })
+                       + '  ' + now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+        const gps      = (typeof getBestLiveGpsCoordsOrNull === 'function') ? getBestLiveGpsCoordsOrNull() : null;
+        const coords   = gps
+                       ? `${Math.abs(gps.lat).toFixed(5)}°${gps.lat >= 0 ? 'N' : 'S'}  ${Math.abs(gps.lon).toFixed(5)}°${gps.lon >= 0 ? 'E' : 'W'}`
+                       : null;
+        const name     = (typeof userProfile !== 'undefined' && userProfile.name)     ? userProfile.name     : null;
+        const detector = (typeof userProfile !== 'undefined' && userProfile.detector) ? userProfile.detector : null;
+        photoData = await stampDataUrlDetekta(photoData, { name, detector, datetime: dt, coords });
     } catch(err) {
         try { URL.revokeObjectURL(blobUrl); } catch(e) {}
         showMessage('Photo could not be processed.', 'error');
