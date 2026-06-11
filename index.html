@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Help update
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Stakes
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -2664,6 +2664,7 @@ function drawTileGrid() {
 
 
 let targetSortMode = 'date'; // 'date' | 'id'
+let targetsViewMode = 'targets'; // 'targets' | 'stakes'
 
 let hasRenderedFirstGpsFix = false;
 
@@ -12359,7 +12360,16 @@ function renderSurveyCard(survey, isOpen = false) {
                 `;
             }
 
-let targets = openSurvey.targets.filter(t => !t.deleted);
+// Split into true targets (VDI !== -100) and stakes (VDI === -100)
+const allActive = openSurvey.targets.filter(t => !t.deleted);
+const isStake   = t => Number(t.vdi) === -100;
+
+let targets;
+if (targetsViewMode === 'stakes') {
+    targets = allActive.filter(t => isStake(t));
+} else {
+    targets = allActive.filter(t => !isStake(t));
+}
 
 if (targetSortMode === 'id') {
     targets.sort((a, b) => {
@@ -12372,6 +12382,27 @@ if (targetSortMode === 'id') {
     targets.sort((a, b) => (b.dateCreated || 0) - (a.dateCreated || 0));
 }
 
+// Tab active styles
+const activeTab   = 'px-3 py-2 rounded-md font-semibold text-white';
+const inactiveTab = 'px-3 py-2 rounded-md bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300';
+const primaryBg   = 'style="background-color: rgb(var(--color-primary));"';
+
+const idTabClass   = (targetsViewMode !== 'stakes' && targetSortMode === 'id')   ? activeTab : inactiveTab;
+const dateTabClass = (targetsViewMode !== 'stakes' && targetSortMode === 'date') ? activeTab : inactiveTab;
+const idTabStyle   = (targetsViewMode !== 'stakes' && targetSortMode === 'id')   ? primaryBg : '';
+const dateTabStyle = (targetsViewMode !== 'stakes' && targetSortMode === 'date') ? primaryBg : '';
+
+// Third tab: toggles between showing targets and showing stakes
+const stakesTabLabel = targetsViewMode === 'stakes' ? 'Show Targets' : 'Show Stakes';
+const stakesTabClass = targetsViewMode === 'stakes' ? activeTab : inactiveTab;
+const stakesTabStyle = targetsViewMode === 'stakes' ? primaryBg : '';
+
+const listHeading = targetsViewMode === 'stakes'
+    ? `Stakes (${targets.length})`
+    : `Target Log (${targets.length})`;
+const emptyMsg = targetsViewMode === 'stakes'
+    ? 'No stakes in this survey yet.'
+    : 'No targets logged in this survey yet.';
 
             return `
                 <div class="p-4">
@@ -12381,28 +12412,38 @@ if (targetSortMode === 'id') {
                         <i class="fas fa-crosshairs mr-2"></i> Log New Target
                     </button>
 
-<!-- Sort buttons -->
-<div class="mt-3 flex gap-3">
+<!-- Sort / view tabs -->
+<div class="mt-3 flex gap-2">
     <button
         id="sort-target-id-btn"
-        class="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300"
+        class="flex-1 ${idTabClass}"
+        ${idTabStyle}
     >
         Sort by Target ID
     </button>
 
     <button
         id="sort-target-date-btn"
-        class="flex-1 px-3 py-2 rounded-md bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300"
+        class="flex-1 ${dateTabClass}"
+        ${dateTabStyle}
     >
         Sort by Date
+    </button>
+
+    <button
+        id="toggle-stakes-btn"
+        class="flex-1 ${stakesTabClass}"
+        ${stakesTabStyle}
+    >
+        ${stakesTabLabel}
     </button>
 </div>
 
         
-                    <h3 class="text-2xl font-bold text-gray-700 mb-3">Target Log (${targets.length})</h3>
+                    <h3 class="text-2xl font-bold text-gray-700 mb-3 mt-4">${listHeading}</h3>
                     <div id="targets-list" class="space-y-4">
                         ${targets.length === 0 ? 
-                            '<p class="text-gray-500 italic p-4 bg-white rounded-xl shadow-lg">No targets logged in this survey yet.</p>' : 
+                            `<p class="text-gray-500 italic p-4 bg-white rounded-xl shadow-lg">${emptyMsg}</p>` : 
                             targets.map(t => renderTargetCard(t, openSurvey.id)).join('')}
                     </div>
                 </div>
@@ -17766,6 +17807,7 @@ if (scanTargetQrBtn) {
         const sortByIdBtn = document.getElementById('sort-target-id-btn');
 if (sortByIdBtn) {
     sortByIdBtn.addEventListener('click', () => {
+        targetsViewMode = 'targets';
         targetSortMode = 'id';
         render();
     });
@@ -17774,7 +17816,16 @@ if (sortByIdBtn) {
 const sortByDateBtn = document.getElementById('sort-target-date-btn');
 if (sortByDateBtn) {
     sortByDateBtn.addEventListener('click', () => {
+        targetsViewMode = 'targets';
         targetSortMode = 'date';
+        render();
+    });
+}
+
+const toggleStakesBtn = document.getElementById('toggle-stakes-btn');
+if (toggleStakesBtn) {
+    toggleStakesBtn.addEventListener('click', () => {
+        targetsViewMode = (targetsViewMode === 'stakes') ? 'targets' : 'stakes';
         render();
     });
 }
