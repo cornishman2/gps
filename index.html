@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Images
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Finds
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -13279,10 +13279,22 @@ function renderFindsPage() {
     });
     const typeOptions = Array.from(typeSet).sort();
 
-    // Build distinct Survey options (by ID)
+    // Build distinct Survey options — merge from the surveys array AND from finds,
+    // so surveys with no finds yet (e.g. demo survey before first GPS open) still appear.
     const surveyMap = new Map();
+
+    // First, add every non-deleted survey from the surveys array
+    if (Array.isArray(surveys)) {
+        surveys.forEach(s => {
+            if (s && !s.deleted && s.id) {
+                surveyMap.set(String(s.id), s.name || 'Unnamed survey');
+            }
+        });
+    }
+
+    // Then overlay any surveyName stored on finds (in case it differs from current survey.name)
     finds.forEach(f => {
-        const id   = f.surveyId   || 'unknown';
+        const id   = f.surveyId   ? String(f.surveyId) : 'unknown';
         const name = f.surveyName || 'Unknown survey';
         if (!surveyMap.has(id)) {
             surveyMap.set(id, name);
@@ -13358,8 +13370,8 @@ function renderFindsPage() {
 
         // Survey filter
         if (findsFilter.surveyId !== 'All') {
-            const id = f.surveyId || 'unknown';
-            if (id !== findsFilter.surveyId) return false;
+            const id = f.surveyId ? String(f.surveyId) : 'unknown';
+            if (id !== String(findsFilter.surveyId)) return false;
         }
 
 
