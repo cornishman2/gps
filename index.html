@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 demo
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 demo map
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -11684,12 +11684,44 @@ async function handleSurveyAction(button) {
                     const demoGps = (typeof getBestLiveGpsCoordsOrNull === 'function')
                                   ? getBestLiveGpsCoordsOrNull()
                                   : null;
+
                     if (!demoGps) {
-                        showMessage('Head outside for a GPS fix, then tap Open again — demo targets will be placed around you.', 'info');
+                        // No fix yet — start a GPS watch and try again when we get one
+                        showMessage('Getting a GPS fix for the demo survey — please wait…', 'info');
+
+                        if (!navigator.geolocation) {
+                            showMessage('GPS is not available on this device.', 'error');
+                            return;
+                        }
+
+                        let watchFired = false;
+                        const watchId = navigator.geolocation.watchPosition(
+                            pos => {
+                                if (watchFired) return;
+                                watchFired = true;
+                                navigator.geolocation.clearWatch(watchId);
+                                // Store the fix so the rest of the app can use it
+                                if (typeof currentUserCoords !== 'undefined') {
+                                    currentUserCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                                }
+                                if (typeof lastKnownMapCoords !== 'undefined') {
+                                    lastKnownMapCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                                }
+                                // Re-trigger the open action now that we have a fix
+                                handleSurveyAction(button);
+                            },
+                            err => {
+                                if (watchFired) return;
+                                watchFired = true;
+                                navigator.geolocation.clearWatch(watchId);
+                                showMessage('Could not get a GPS fix. Please try again outside.', 'error');
+                            },
+                            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                        );
                         return;
                     }
 
-                    // Helpers
+                    // We have a fix — build the demo data
                     const M_PER_DEG_LAT = 110574;
                     const mPerDegLon    = 111320 * Math.cos(demoGps.lat * Math.PI / 180);
                     const offsetCoords  = (dx, dy) => ({
@@ -11715,7 +11747,7 @@ async function handleSurveyAction(button) {
                             coordinates: `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`,
                             accuracy: (Math.random() * 4 + 2).toFixed(1),
                             user: 'Demo Detectorist', detector: 'Minelab Equinox 800',
-                            centerOnMap: true, photos: [], targetPhotoRef: '',
+                            centerOnMap: false, photos: [], targetPhotoRef: '',
                             targetPhotoData: t.photo ? (photos[t.photo] || '') : '',
                             deleted: false
                         };
@@ -11723,7 +11755,7 @@ async function handleSurveyAction(button) {
 
                     // Build finds with real coordinates
                     const newFinds = fDefs.map(f => {
-                        const tgt = survey.targets.find(t => t.id === f.tid);
+                        const tgt  = survey.targets.find(t => t.id === f.tid);
                         const tDef = tDefs.find(t => t.id === f.tid);
                         return {
                             id: 'df_' + f.tid,
@@ -11742,7 +11774,7 @@ async function handleSurveyAction(button) {
                             disposition: 'Retained',
                             coordinates: tgt ? tgt.coordinates : '',
                             accuracy: tgt ? tgt.accuracy : '',
-                            centerOnMap: true,
+                            centerOnMap: false,
                             targetPhotoData: tDef && tDef.photo ? (photos[tDef.photo] || '') : '',
                             photos: [], findPhotoRef: '',
                             dateCreated: dNow - Math.round(Math.random() * 3600000),
@@ -11760,7 +11792,7 @@ async function handleSurveyAction(button) {
                         { id:'dtr3', name:'Track 3',   color:'#d97706', points: (tOffsets.track3||[]).map(([dx,dy])    => { const p = offsetCoords(dx,dy); return [p.lat,p.lon]; }) },
                     ];
 
-                    // Clear the pending defs — no longer needed, saves storage
+                    // Clear pending defs — no longer needed, saves storage
                     delete survey.demoPending;
                     delete survey.demoPhotos;
                     delete survey.demoTargetDefs;
@@ -13967,11 +13999,17 @@ const toPercent = (x, y) => {
             const focus = coordsMeters.find(c => c && c.id === centerTarget.id);
             if (focus) {
                 const p = toPercent(focus.x, focus.y);
-                // Reset zoom/pan to a sensible centred view
-                mapZoom = 1;
-                mapOffsetX = (50 - p.xPct);
-                mapOffsetY = (50 - p.yPct);
+                // Only reset zoom/pan if this is a newly flagged centre target
+                // (prevents zoom buttons being overridden on every re-render)
+                if (renderCompassPage._lastCentreId !== centerTarget.id) {
+                    renderCompassPage._lastCentreId = centerTarget.id;
+                    mapZoom = 1;
+                    mapOffsetX = (50 - p.xPct);
+                    mapOffsetY = (50 - p.yPct);
+                }
             }
+        } else {
+            renderCompassPage._lastCentreId = null;
         }
     } catch (e) {
         console.warn('Centre-on-map: unable to compute focus point', e);
@@ -14914,7 +14952,7 @@ if (!openSurvey) {
 
     return `
         <div class="p-4">
-            <h2 class="text-3xl font-bold text-primary mb-4">Targets Plot View</h2>
+            <h2 class="text-3xl font-bold text-primary mb-4">Survey Map</h2>
 
             <!-- Survey info -->
             <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
