@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 scroll
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 scroll fix
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6496,10 +6496,12 @@ function openModal(modalId) {
 
     modal.style.display = 'block';
 
-    // Make sure we start at the top of the modal + page
+    // Lock the page behind the modal so it cannot scroll while the modal is open
+    document.body.style.overflow = 'hidden';
+
+    // Make sure we start at the top of the modal content
     setTimeout(() => {
         modal.scrollTop = 0;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 50);
 }
 
@@ -6507,6 +6509,13 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     modal.style.display = 'none';
+
+    // Only restore scrolling if no other modal is still visible
+    const anyOpen = document.querySelectorAll('.modal');
+    const stillOpen = Array.from(anyOpen).some(m => m.id !== modalId && m.style.display === 'block');
+    if (!stillOpen) {
+        document.body.style.overflow = '';
+    }
 }
 
 async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
@@ -8011,157 +8020,42 @@ function createDemoSurveyIfNeeded() {
     const sid = 'demo_' + now.toString(36);
 
     // Photos generated once and stored on the survey for use when coordinates are applied
-    // ── Flag photo generator ─────────────────────────────────────────────────
-    function makeFlagPhoto(flowerColors, flagX) {
-        const W = 240, H = 240;
-        const c = document.createElement('canvas');
-        c.width = W; c.height = H;
-        const ctx = c.getContext('2d');
-
-        // Sky gradient upper third
-        const sky = ctx.createLinearGradient(0, 0, 0, H * 0.45);
-        sky.addColorStop(0, '#c8e6f5');
-        sky.addColorStop(1, '#e8f4fd');
-        ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, W, H * 0.45);
-
-        // Ground gradient lower two thirds
-        const gnd = ctx.createLinearGradient(0, H * 0.35, 0, H);
-        gnd.addColorStop(0, '#4a7c3f');
-        gnd.addColorStop(0.4, '#3d6b34');
-        gnd.addColorStop(1, '#2e5227');
-        ctx.fillStyle = gnd;
-        ctx.fillRect(0, H * 0.35, W, H * 0.65);
-
-        // Blend horizon
-        const hor = ctx.createLinearGradient(0, H * 0.32, 0, H * 0.48);
-        hor.addColorStop(0, 'rgba(72,120,60,0)');
-        hor.addColorStop(1, 'rgba(72,120,60,1)');
-        ctx.fillStyle = hor;
-        ctx.fillRect(0, H * 0.32, W, H * 0.18);
-
-        // Grass tufts
-        ctx.strokeStyle = '#5a9448';
-        ctx.lineWidth = 1.5;
-        for (let gx = 10; gx < W; gx += 14 + Math.random() * 8) {
-            const gy = H * 0.42 + Math.random() * H * 0.25;
-            ctx.beginPath();
-            ctx.moveTo(gx, gy);
-            ctx.quadraticCurveTo(gx - 4 + Math.random() * 8, gy - 12, gx + Math.random() * 6 - 3, gy - 18);
-            ctx.stroke();
-        }
-
-        // Small flowers
-        flowerColors.forEach(([fx, fy, fc]) => {
-            // Stem
-            ctx.strokeStyle = '#4a8c38';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(fx, fy + 14);
-            ctx.lineTo(fx, fy);
-            ctx.stroke();
-            // Petals
-            ctx.fillStyle = fc;
-            for (let a = 0; a < 5; a++) {
-                const angle = (a / 5) * Math.PI * 2;
-                ctx.beginPath();
-                ctx.ellipse(fx + Math.cos(angle) * 5, fy + Math.sin(angle) * 5, 4, 3, angle, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            // Centre
-            ctx.fillStyle = '#FFD700';
-            ctx.beginPath();
-            ctx.arc(fx, fy, 3, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        // Flag pole
-        const px = flagX, pTop = H * 0.12, pBot = H * 0.68;
-        ctx.strokeStyle = '#8B6914';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(px, pBot);
-        ctx.lineTo(px, pTop);
-        ctx.stroke();
-
-        // White flag body
-        const fW = 62, fH = 36;
-        ctx.fillStyle = 'white';
-        ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(px, pTop);
-        ctx.lineTo(px + fW, pTop + fH * 0.25);
-        ctx.lineTo(px + fW, pTop + fH);
-        ctx.lineTo(px, pTop + fH);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // "Detekta" on flag
-        ctx.fillStyle = 'rgb(var(--color-primary, 30,64,175))';
-        ctx.font = 'bold 11px Arial, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#1e40af';
-        ctx.fillText('Detekta', px + 5, pTop + fH * 0.52);
-
-        // Stamp bar
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(0, H - 38, W, 38);
-        ctx.fillStyle = 'rgba(255,255,255,0.92)';
-        ctx.font = 'bold 13px Arial, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'center';
-        ctx.fillText('Detekta  |  Demo', W / 2, H - 19);
-
-        return c.toDataURL('image/jpeg', 0.82);
-    }
-
-    // Six flag photos — varied flower colours and flag positions
     const photos = {
-        flag1: makeFlagPhoto([[40,155,'#ff6b9d'],[75,165,'#ff9de2'],[110,152,'#ff6b9d'],[155,160,'#ffffff'],[185,168,'#ff9de2']], 65),
-        flag2: makeFlagPhoto([[30,158,'#FFD700'],[65,163,'#FFA500'],[130,155,'#FFD700'],[170,162,'#FFA500'],[200,157,'#FFD700']], 80),
-        flag3: makeFlagPhoto([[45,160,'#9b59b6'],[90,153,'#c39bd3'],[140,162,'#9b59b6'],[180,155,'#c39bd3']], 55),
-        flag4: makeFlagPhoto([[35,157,'#e74c3c'],[80,164,'#f1948a'],[120,158,'#e74c3c'],[165,163,'#f1948a'],[195,156,'#e74c3c']], 72),
-        flag5: makeFlagPhoto([[50,161,'#3498db'],[95,155,'#85c1e9'],[145,160,'#3498db'],[185,154,'#85c1e9']], 60),
-        flag6: makeFlagPhoto([[40,159,'#ffffff'],[85,165,'#f0e6ff'],[125,157,'#ffffff'],[170,162,'#f0e6ff'],[200,158,'#ffffff']], 68),
-        // Find photos — kept for the Finds library
         coin1:  makeDemoPhoto('Roman Coin',      '#8B6914', '#D4A017', 'coin'),
         coin2:  makeDemoPhoto('Medieval Coin',   '#7A5C10', '#C8962A', 'coin'),
         coin3:  makeDemoPhoto('Victorian Penny', '#6B4226', '#A0522D', 'coin'),
         button: makeDemoPhoto('Brass Button',    '#5C4A1E', '#CFB53B', 'button'),
         relic:  makeDemoPhoto('Belt Buckle',     '#4A3728', '#8B7355', 'relic'),
         ring:   makeDemoPhoto('Gold Ring',       '#5A4800', '#FFD700', 'ring'),
+        junk1:  makeDemoPhoto('Iron Fragment',   '#3A3A3A', '#696969', 'junk'),
+        junk2:  makeDemoPhoto('Iron Nail',       '#3C3028', '#5C4033', 'junk'),
     };
 
-    // Target definitions — only genuine in-ground targets, no finds
-    // The 6 finds are in the Finds library only (already copied & target removed)
+    // Target definitions — coordinates are null until the demo is opened outdoors
     const targetDefs = [
-        { id:'dt1',  description:'Strong signal — not yet investigated',  vdi:'61',  depth:'',   type:'Unidentified', status:'Not dug',  dx: 12,  dy: 18,  photo:'flag1' },
-        { id:'dt2',  description:'Possible coin — good repeatable signal',vdi:'55',  depth:'',   type:'Unidentified', status:'Not dug',  dx:-15,  dy: 30,  photo:'flag2' },
-        { id:'dt3',  description:'Deep signal — large object?',           vdi:'38',  depth:'10', type:'Unidentified', status:'Not dug',  dx: 28,  dy:-10,  photo:'flag3' },
-        { id:'dt4',  description:'Dug — refilled, unidentified fragment', vdi:'47',  depth:'5',  type:'Unidentified', status:'Refilled', dx:-22,  dy:-25,  photo:'flag4' },
-        { id:'dt5',  description:'Shallow signal — checking later',       vdi:'28',  depth:'3',  type:'Unidentified', status:'Not dug',  dx:  5,  dy: 42,  photo:'flag5' },
-        { id:'dt6',  description:'Possible button or coin — mid VDI',     vdi:'52',  depth:'',   type:'Unidentified', status:'Not dug',  dx:-30,  dy:  8,  photo:'flag6' },
-        { id:'dt7',  description:'Iron signal — left in ground',          vdi:'-5',  depth:'',   type:'Iron Junk',    status:'Ignored',  dx: 35,  dy: 22,  photo:null    },
-        { id:'dt8',  description:'Modern junk — bottle cap',              vdi:'15',  depth:'2',  type:'Modern Junk',  status:'Dug',      dx:-18,  dy: 50,  photo:null    },
-        { id:'dt9',  description:'Iron fragment — not worth digging',     vdi:'-8',  depth:'',   type:'Iron Junk',    status:'Ignored',  dx: 20,  dy:-35,  photo:null    },
-        { id:'dt10', description:'Possible lead — deep',                  vdi:'22',  depth:'8',  type:'Unidentified', status:'Not dug',  dx:-40,  dy:-15,  photo:null    },
-        // Stakes
-        { id:'dt11', description:'Gate',                                  vdi:'-100',depth:'',   type:'Stake',        status:'Not dug',  dx:-60,  dy: 65,  photo:null    },
-        { id:'dt12', description:'Car Park',                              vdi:'-100',depth:'',   type:'Stake',        status:'Not dug',  dx: 65,  dy:-60,  photo:null    },
-        { id:'dt13', description:'North Boundary',                        vdi:'-100',depth:'',   type:'Stake',        status:'Not dug',  dx:  0,  dy: 70,  photo:null    },
+        { id:'dt1',  description:'Roman coin — beautiful patina',        vdi:'63',   depth:'4',  type:'Coin',         status:'Refilled', dx: 12,  dy: 18,  photo:'coin1'  },
+        { id:'dt2',  description:'Medieval hammered silver penny',       vdi:'58',   depth:'3',  type:'Coin',         status:'Refilled', dx:-15,  dy: 30,  photo:'coin2'  },
+        { id:'dt3',  description:'Victorian penny — good detail',        vdi:'55',   depth:'6',  type:'Coin',         status:'Refilled', dx: 28,  dy:-10,  photo:'coin3'  },
+        { id:'dt4',  description:'Brass button — possible military',     vdi:'47',   depth:'5',  type:'Button',       status:'Refilled', dx:-22,  dy:-25,  photo:'button' },
+        { id:'dt5',  description:'Bronze belt buckle — medieval',        vdi:'38',   depth:'8',  type:'Relic',        status:'Refilled', dx:  5,  dy: 42,  photo:'relic'  },
+        { id:'dt6',  description:'Gold ring — possible Tudor',           vdi:'72',   depth:'3',  type:'Jewelry',      status:'Refilled', dx:-30,  dy:  8,  photo:'ring'   },
+        { id:'dt7',  description:'Strong signal — not yet investigated', vdi:'61',   depth:'',   type:'Unidentified', status:'Not dug',  dx: 35,  dy: 22,  photo:null     },
+        { id:'dt8',  description:'Possible lead weight',                 vdi:'28',   depth:'7',  type:'Unidentified', status:'Not dug',  dx:-18,  dy: 50,  photo:null     },
+        { id:'dt9',  description:'Iron signal — left in ground',         vdi:'-5',   depth:'',   type:'Iron Junk',    status:'Ignored',  dx: 20,  dy:-35,  photo:'junk1'  },
+        { id:'dt10', description:'Modern junk — bottle cap',             vdi:'15',   depth:'2',  type:'Modern Junk',  status:'Dug',      dx:-40,  dy:-15,  photo:null     },
+        { id:'dt11', description:'Iron fragment',                        vdi:'-8',   depth:'5',  type:'Iron Junk',    status:'Ignored',  dx: 45,  dy: -5,  photo:'junk2'  },
+        { id:'dt12', description:'Gate',                                 vdi:'-100', depth:'',   type:'Stake',        status:'Not dug',  dx:-60,  dy: 65,  photo:null     },
+        { id:'dt13', description:'Car Park',                             vdi:'-100', depth:'',   type:'Stake',        status:'Not dug',  dx: 65,  dy:-60,  photo:null     },
+        { id:'dt14', description:'North Boundary',                       vdi:'-100', depth:'',   type:'Stake',        status:'Not dug',  dx:  0,  dy: 70,  photo:null     },
     ];
 
-    // Find defs — standalone, not linked to any current target
     const findDefs = [
-        { tid:'df1', desc:'Roman coin — beautiful patina',    type:'Coin',    vdi:'63', depth:'4', dx: 12, dy: 18, ident:'Roman AE3 — 4th century',     material:'Bronze', condition:'Good',      period:'Roman',     weight:'3.2',  dims:'17×17', photo:'coin1'  },
-        { tid:'df2', desc:'Medieval hammered silver penny',   type:'Coin',    vdi:'58', depth:'3', dx:-15, dy: 30, ident:'Edward I penny c.1280',        material:'Silver', condition:'Very good', period:'Medieval',  weight:'1.3',  dims:'18×18', photo:'coin2'  },
-        { tid:'df3', desc:'Victorian penny — good detail',    type:'Coin',    vdi:'55', depth:'6', dx: 28, dy:-10, ident:'Victoria penny 1887',          material:'Bronze', condition:'Fair',      period:'Victorian', weight:'9.4',  dims:'31×31', photo:'coin3'  },
-        { tid:'df4', desc:'Brass button — possible military', type:'Button',  vdi:'47', depth:'5', dx:-22, dy:-25, ident:'Possible Georgian military',   material:'Brass',  condition:'Good',      period:'Georgian',  weight:'4.1',  dims:'22×22', photo:'button' },
-        { tid:'df5', desc:'Bronze belt buckle — medieval',    type:'Relic',   vdi:'38', depth:'8', dx:  5, dy: 42, ident:'Medieval dress buckle',        material:'Bronze', condition:'Fair',      period:'Medieval',  weight:'12.5', dims:'38×28', photo:'relic'  },
-        { tid:'df6', desc:'Gold ring — possible Tudor',       type:'Jewelry', vdi:'72', depth:'3', dx:-30, dy:  8, ident:'Plain gold posy ring — Tudor', material:'Gold',   condition:'Excellent', period:'Tudor',     weight:'2.8',  dims:'20×20', photo:'ring'   },
+        { tid:'dt1', ident:'Roman AE3 — 4th century',     material:'Bronze', condition:'Good',      period:'Roman',     weight:'3.2',  dims:'17×17' },
+        { tid:'dt2', ident:'Edward I penny c.1280',        material:'Silver', condition:'Very good', period:'Medieval',  weight:'1.3',  dims:'18×18' },
+        { tid:'dt3', ident:'Victoria penny 1887',          material:'Bronze', condition:'Fair',      period:'Victorian', weight:'9.4',  dims:'31×31' },
+        { tid:'dt4', ident:'Possible Georgian military',   material:'Brass',  condition:'Good',      period:'Georgian',  weight:'4.1',  dims:'22×22' },
+        { tid:'dt5', ident:'Medieval dress buckle',        material:'Bronze', condition:'Fair',      period:'Medieval',  weight:'12.5', dims:'38×28' },
+        { tid:'dt6', ident:'Plain gold posy ring — Tudor', material:'Gold',   condition:'Excellent', period:'Tudor',     weight:'2.8',  dims:'20×20' },
     ];
 
     // Track offsets — stored relative to centre, resolved when opened
@@ -10760,7 +10654,12 @@ function ensureGallerySwipeHandlers() {
     wrapper.addEventListener('touchstart', (e) => {
         if (!e.touches || !e.touches.length) return;
         galleryTouchStartX = e.touches[0].clientX;
-    });
+    }, { passive: true });
+
+    // Prevent the page underneath scrolling while swiping inside the gallery
+    wrapper.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+    }, { passive: false });
 
     wrapper.addEventListener('touchend', (e) => {
         if (galleryTouchStartX === null || !e.changedTouches || !e.changedTouches.length) return;
@@ -11868,28 +11767,29 @@ async function handleSurveyAction(button) {
                         };
                     });
 
-                    // Build finds with real coordinates (independent of targets)
+                    // Build finds with real coordinates
                     const newFinds = fDefs.map(f => {
-                        const p = offsetCoords(f.dx, f.dy);
+                        const tgt  = survey.targets.find(t => t.id === f.tid);
+                        const tDef = tDefs.find(t => t.id === f.tid);
                         return {
                             id: 'df_' + f.tid,
                             surveyId: survey.id,
                             surveyName: survey.name,
                             surveyDescription: survey.description,
-                            targetId: '',
-                            description: f.desc,
-                            type: f.type,
-                            vdi: f.vdi, depth: f.depth,
+                            targetId: f.tid,
+                            description: tDef ? tDef.description : '',
+                            type: tDef ? tDef.type : 'Unknown',
+                            vdi: tDef ? tDef.vdi : '', depth: tDef ? tDef.depth : '',
                             identification: f.ident, material: f.material,
                             condition: f.condition, period: f.period,
                             weightG: f.weight, dimensionsMm: f.dims,
                             whereKept: 'Demo box',
-                            possibleTreasure: f.type === 'Jewelry' || f.type === 'Coin',
+                            possibleTreasure: tDef && (tDef.type === 'Jewelry' || tDef.type === 'Coin'),
                             disposition: 'Retained',
-                            coordinates: `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`,
-                            accuracy: (Math.random() * 4 + 2).toFixed(1),
+                            coordinates: tgt ? tgt.coordinates : '',
+                            accuracy: tgt ? tgt.accuracy : '',
                             centerOnMap: false,
-                            targetPhotoData: f.photo ? (photos[f.photo] || '') : '',
+                            targetPhotoData: tDef && tDef.photo ? (photos[tDef.photo] || '') : '',
                             photos: [], findPhotoRef: '',
                             dateCreated: dNow - Math.round(Math.random() * 3600000),
                             statusAtSave: 'Refilled',
@@ -13185,8 +13085,6 @@ function renderFindsPage() {
                             data-find-id="${find.id}"
                             alt="Find photo"
                             class="w-11/12 h-auto object-contain rounded-lg border border-gray-200 cursor-pointer"
-                            ontouchstart="event.stopPropagation();"
-                            ontouchend="event.preventDefault(); event.stopPropagation(); openFindPhotoGallery('${find.id}');"
                             onclick="openFindPhotoGallery('${find.id}')"
                         />
                     </div>
@@ -13578,8 +13476,6 @@ switch (s) {
                         data-survey-id="${surveyId}"
                         alt="Target photo"
                         class="w-11/12 h-auto object-contain rounded-lg border border-gray-200 cursor-pointer"
-                        ontouchstart="event.stopPropagation();"
-                        ontouchend="event.preventDefault(); event.stopPropagation(); openTargetPhotoGallery('${target.id}', '${surveyId}');"
                         onclick="openTargetPhotoGallery('${target.id}', '${surveyId}')"
                     />
                 </div>
