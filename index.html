@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 demo button
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 demo
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -8060,7 +8060,7 @@ function createDemoSurveyIfNeeded() {
         id: sid,
         name: '🟢 Demo Survey — Try Me!',
         description: "Welcome to Detekta! This demo survey shows what the app can do. Open it outside and explore the map, browse the targets and finds — then delete it when you're ready to start your own survey.",
-        status: 'Closed',
+        status: 'Active',
         isDemo: true,
         demoPending: true,          // coordinates not yet applied — waiting for GPS on first open
         demoPhotos: photos,         // stored here until coordinates are applied
@@ -18081,9 +18081,13 @@ if (trackEditButtons && trackEditButtons.length > 0) {
 
     const recreateDemoBtn = document.getElementById('recreate-demo-btn');
     if (recreateDemoBtn) recreateDemoBtn.addEventListener('click', () => {
-        if (surveys.some(s => s.isDemo)) {
-            showMessage('A demo survey already exists on the Home page.', 'info');
-            return;
+        // Remove any existing demo survey (broken or otherwise) and recreate fresh
+        const existingIdx = surveys.findIndex(s => s.isDemo);
+        if (existingIdx !== -1) {
+            // Also remove its finds
+            const existingId = surveys[existingIdx].id;
+            finds = finds.filter(f => f.surveyId !== existingId);
+            surveys.splice(existingIdx, 1);
         }
         localStorage.removeItem('detekta_demo_created_v1');
         createDemoSurveyIfNeeded();
