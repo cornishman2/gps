@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 demo
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Images
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -7943,11 +7943,12 @@ function createDemoSurveyIfNeeded() {
 
     // ── Photo generator ──────────────────────────────────────────────────────
     // ── Flag photo for Targets ────────────────────────────────────────────────
-    // Draws an outdoor scene: sky, ground, varied plants, and a white Detekta flag.
-    // `variant` (0–13) controls flag position and plant arrangement so every target
-    // gets a unique-looking photo.
-    function makeFlagPhoto(variant) {
-        const W = 320, H = 320;
+    // Top half: sky + above-ground plants + Detekta flag.
+    // Bottom half: soil cross-section with a buried object whose shape matches the VDI.
+    // `variant` (0–10) gives a unique flag position / plant combo.
+    // `vdi`     (number) determines what object is shown underground.
+    function makeFlagPhoto(variant, vdi) {
+        const W = 320, H = 360;
         const c = document.createElement('canvas');
         c.width = W; c.height = H;
         const ctx = c.getContext('2d');
@@ -7956,73 +7957,185 @@ function createDemoSurveyIfNeeded() {
         let seed = variant * 1731 + 42;
         function rnd() { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; }
 
-        // Sky gradient — subtle variation per variant
+        // ── Sky (top ~42 %) ───────────────────────────────────────────────
         const skyHues = ['#b8d4f0','#a8c8e8','#c4daf5','#d0e4f8','#bcd0ec','#aac4e4',
-                         '#c8dcf2','#b4ccec','#d4e8fa','#a0bcde','#cce0f6','#b0cae8',
-                         '#bcd8f4','#c0d8f0'];
-        const skyCol = skyHues[variant % skyHues.length];
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+                         '#c8dcf2','#b4ccec','#d4e8fa','#a0bcde','#cce0f6'];
+        const skyCol  = skyHues[variant % skyHues.length];
+        const horizonY = Math.round(H * 0.44);   // fixed horizon — sky above, soil below
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
         skyGrad.addColorStop(0, skyCol);
         skyGrad.addColorStop(1, '#e8f4ff');
         ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillRect(0, 0, W, horizonY);
 
-        // Ground — horizon sits at ~55 % of height
-        const horizonY = Math.round(H * (0.52 + rnd() * 0.06));
-        const soilCols = ['#7a5c3a','#6b4e2e','#8a6640','#7c5e3c','#5e4228',
-                          '#856040','#6e5234','#7f5e3a','#7a5430','#6a4e2e',
-                          '#826242','#725438','#7e5c38','#6c5030'];
+        // ── Soil cross-section (horizon → bottom) ────────────────────────
+        const soilCols  = ['#7a5c3a','#6b4e2e','#8a6640','#7c5e3c','#5e4228',
+                           '#856040','#6e5234','#7f5e3a','#7a5430','#6a4e2e','#826242'];
         const grassTops = ['#4a7c3a','#3d6e2e','#527840','#4e743c','#3a6028',
-                           '#4e7e3a','#406830','#4a7238','#467036','#3c6428',
-                           '#507c3c','#426a30','#4c7438','#3e6a2c'];
-        const soilCol  = soilCols[variant  % soilCols.length];
-        const grassTop = grassTops[variant % grassTops.length];
+                           '#4e7e3a','#406830','#4a7238','#467036','#3c6428','#507c3c'];
+        const soilCol   = soilCols[variant  % soilCols.length];
+        const grassTop  = grassTops[variant % grassTops.length];
+
         const groundGrad = ctx.createLinearGradient(0, horizonY, 0, H);
-        groundGrad.addColorStop(0, grassTop);
-        groundGrad.addColorStop(0.15, soilCol);
-        groundGrad.addColorStop(1, '#3a2a18');
+        groundGrad.addColorStop(0,    grassTop);
+        groundGrad.addColorStop(0.08, soilCol);
+        groundGrad.addColorStop(1,    '#2e1e0e');
         ctx.fillStyle = groundGrad;
         ctx.fillRect(0, horizonY, W, H - horizonY);
 
-        // Grass strip at horizon
+        // Grass turf strip at the very horizon
         ctx.fillStyle = grassTop;
-        ctx.fillRect(0, horizonY, W, 8);
-        // Irregular grass edge
-        for (let x = 0; x < W; x += 4) {
-            const gh = 4 + rnd() * 10;
-            ctx.fillRect(x, horizonY - gh, 3, gh);
+        ctx.fillRect(0, horizonY - 4, W, 10);
+        // Irregular grass blade tips
+        for (let x = 0; x < W; x += 3) {
+            const gh = 5 + rnd() * 9;
+            ctx.fillRect(x, horizonY - 4 - gh, 2, gh);
         }
 
-        // ── Plants ─────────────────────────────────────────────────────────
-        // Each variant gets a different arrangement of grass tufts / plants
+        // Subtle soil pebbles / texture dots
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        for (let i = 0; i < 80; i++) {
+            const px = rnd() * W;
+            const py = horizonY + 20 + rnd() * (H - horizonY - 30);
+            const pr = 1 + rnd() * 3;
+            ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // ── Buried object — shape driven by VDI ──────────────────────────
+        // VDI guide (Equinox-style):
+        //   < 0          → iron nail / rod
+        //   0 – 19       → small iron / tin foil blob
+        //   20 – 34      → lead weight / pull-tab
+        //   35 – 49      → brass/bronze relic (rectangular)
+        //   50 – 64      → bronze/copper coin
+        //   65 – 74      → silver coin
+        //   ≥ 75         → gold ring
+        const vdiNum  = parseInt(vdi, 10);
+        // Object sits directly below the flag stick (sx defined later, use W/2 for now
+        // then we'll draw it centred on the flag x); capture its x as objX placeholder
+        // — we draw it after computing sx.
+        const objDepthFrac = 0.55;   // how far down the soil section the object sits
+        const objY = horizonY + Math.round((H - horizonY) * objDepthFrac);
+
+        function drawBuriedObject(ox) {
+            ctx.save();
+            if (vdiNum < 0) {
+                // Iron nail — dark rod
+                ctx.strokeStyle = '#4a3a28'; ctx.lineWidth = 5;
+                ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(ox - 18, objY - 6); ctx.lineTo(ox + 18, objY + 6); ctx.stroke();
+                ctx.strokeStyle = '#6a5038'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(ox - 18, objY - 6); ctx.lineTo(ox + 18, objY + 6); ctx.stroke();
+                // Nail head
+                ctx.fillStyle = '#3a2a18';
+                ctx.beginPath(); ctx.arc(ox - 18, objY - 6, 5, 0, Math.PI * 2); ctx.fill();
+                // Rust halo
+                ctx.strokeStyle = 'rgba(139,69,19,0.35)'; ctx.lineWidth = 8;
+                ctx.beginPath(); ctx.arc(ox, objY, 22, 0, Math.PI * 2); ctx.stroke();
+            } else if (vdiNum < 20) {
+                // Crumpled foil / small iron blob
+                ctx.fillStyle = '#888880';
+                ctx.beginPath();
+                const pts2 = [[0,-14],[8,-8],[14,0],[9,10],[0,13],[-9,9],[-13,0],[-8,-9]];
+                ctx.moveTo(ox + pts2[0][0], objY + pts2[0][1]);
+                pts2.forEach(([dx,dy]) => ctx.lineTo(ox+dx, objY+dy));
+                ctx.closePath(); ctx.fill();
+                ctx.strokeStyle = 'rgba(100,100,90,0.5)'; ctx.lineWidth = 1;
+                ctx.stroke();
+            } else if (vdiNum < 35) {
+                // Lead weight — dull grey oval
+                ctx.fillStyle = '#7a7a82';
+                ctx.beginPath(); ctx.ellipse(ox, objY, 18, 12, 0.2, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#555560'; ctx.lineWidth = 1.5;
+                ctx.stroke();
+                // Sheen
+                ctx.fillStyle = 'rgba(200,200,210,0.25)';
+                ctx.beginPath(); ctx.ellipse(ox - 4, objY - 3, 7, 4, -0.3, 0, Math.PI * 2); ctx.fill();
+            } else if (vdiNum < 50) {
+                // Bronze/brass relic — greenish rectangle
+                ctx.fillStyle = '#7a6030';
+                ctx.beginPath(); ctx.roundRect(ox - 22, objY - 10, 44, 20, 3); ctx.fill();
+                ctx.strokeStyle = '#5a8050'; ctx.lineWidth = 1.5; ctx.stroke();
+                // Patina overlay
+                ctx.fillStyle = 'rgba(60,140,60,0.28)';
+                ctx.beginPath(); ctx.roundRect(ox - 22, objY - 10, 44, 20, 3); ctx.fill();
+                // Centre bar (buckle-like)
+                ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(ox, objY - 8); ctx.lineTo(ox, objY + 8); ctx.stroke();
+            } else if (vdiNum < 65) {
+                // Bronze/copper coin — warm brown circle
+                ctx.fillStyle = '#9a6830';
+                ctx.beginPath(); ctx.arc(ox, objY, 17, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#6a4820'; ctx.lineWidth = 2; ctx.stroke();
+                // Inner ring detail
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(ox, objY, 11, 0, Math.PI * 2); ctx.stroke();
+                // Green patina spots
+                ctx.fillStyle = 'rgba(50,130,50,0.35)';
+                [[5,-6],[-7,4],[3,8],[-4,-4]].forEach(([dx,dy]) => {
+                    ctx.beginPath(); ctx.arc(ox+dx, objY+dy, 4, 0, Math.PI*2); ctx.fill();
+                });
+            } else if (vdiNum < 75) {
+                // Silver coin — bright grey circle
+                ctx.fillStyle = '#c0c0b8';
+                ctx.beginPath(); ctx.arc(ox, objY, 16, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#909088'; ctx.lineWidth = 2; ctx.stroke();
+                // Inner ring
+                ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(ox, objY, 10, 0, Math.PI * 2); ctx.stroke();
+                // Highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.beginPath(); ctx.arc(ox - 4, objY - 4, 6, 0, Math.PI * 2); ctx.fill();
+            } else {
+                // Gold ring — bright gold torus
+                ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 7;
+                ctx.beginPath(); ctx.arc(ox, objY, 14, 0, Math.PI * 2); ctx.stroke();
+                // Dark outer edge
+                ctx.strokeStyle = 'rgba(120,80,0,0.6)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(ox, objY, 18, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(ox, objY, 9, 0, Math.PI * 2); ctx.stroke();
+                // Highlight
+                ctx.fillStyle = 'rgba(255,255,200,0.5)';
+                ctx.beginPath(); ctx.arc(ox - 5, objY - 6, 4, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // ── Above-ground plants ───────────────────────────────────────────
+        // x = fraction of W for root position; h = pixel height above ground.
+        // Plants avoid the flag stick zone (±55 px around sx) — handled below.
         const plantSets = [
-            [{x:0.15,y:0.60,h:38,type:'grass'},{x:0.72,y:0.72,h:28,type:'daisy'},{x:0.88,y:0.62,h:32,type:'grass'}],
-            [{x:0.10,y:0.65,h:42,type:'thistle'},{x:0.82,y:0.70,h:35,type:'grass'},{x:0.55,y:0.58,h:20,type:'daisy'}],
-            [{x:0.80,y:0.60,h:36,type:'grass'},{x:0.18,y:0.75,h:30,type:'dock'},{x:0.90,y:0.80,h:22,type:'daisy'}],
-            [{x:0.12,y:0.62,h:40,type:'dock'},{x:0.78,y:0.68,h:34,type:'grass'},{x:0.60,y:0.82,h:18,type:'daisy'}],
-            [{x:0.75,y:0.58,h:44,type:'thistle'},{x:0.15,y:0.70,h:28,type:'grass'},{x:0.85,y:0.78,h:24,type:'dock'}],
-            [{x:0.08,y:0.64,h:36,type:'grass'},{x:0.70,y:0.72,h:32,type:'daisy'},{x:0.88,y:0.60,h:40,type:'thistle'}],
-            [{x:0.14,y:0.68,h:38,type:'dock'},{x:0.80,y:0.60,h:26,type:'grass'},{x:0.50,y:0.80,h:20,type:'daisy'}],
-            [{x:0.78,y:0.62,h:42,type:'grass'},{x:0.10,y:0.72,h:30,type:'thistle'},{x:0.88,y:0.82,h:22,type:'dock'}],
-            [{x:0.12,y:0.60,h:34,type:'daisy'},{x:0.82,y:0.66,h:38,type:'grass'},{x:0.62,y:0.76,h:28,type:'thistle'}],
-            [{x:0.82,y:0.64,h:36,type:'dock'},{x:0.14,y:0.74,h:32,type:'grass'},{x:0.56,y:0.60,h:24,type:'daisy'}],
-            [{x:0.10,y:0.62,h:40,type:'grass'},{x:0.76,y:0.70,h:34,type:'thistle'},{x:0.88,y:0.80,h:20,type:'dock'}],
-            [{x:0.80,y:0.60,h:44,type:'daisy'},{x:0.12,y:0.68,h:28,type:'grass'},{x:0.60,y:0.78,h:32,type:'thistle'}],
-            [{x:0.14,y:0.66,h:36,type:'dock'},{x:0.84,y:0.72,h:30,type:'grass'},{x:0.52,y:0.82,h:22,type:'daisy'}],
-            [{x:0.76,y:0.58,h:42,type:'grass'},{x:0.10,y:0.74,h:36,type:'dock'},{x:0.86,y:0.64,h:26,type:'thistle'}],
+            [{x:0.13,h:40,type:'grass'},{x:0.78,h:32,type:'daisy'},{x:0.90,h:36,type:'grass'}],
+            [{x:0.10,h:46,type:'thistle'},{x:0.84,h:30,type:'grass'},{x:0.72,h:22,type:'daisy'}],
+            [{x:0.82,h:38,type:'grass'},{x:0.16,h:28,type:'dock'},{x:0.92,h:20,type:'daisy'}],
+            [{x:0.11,h:42,type:'dock'},{x:0.80,h:34,type:'grass'},{x:0.68,h:18,type:'daisy'}],
+            [{x:0.78,h:48,type:'thistle'},{x:0.13,h:28,type:'grass'},{x:0.88,h:26,type:'dock'}],
+            [{x:0.08,h:36,type:'grass'},{x:0.74,h:34,type:'daisy'},{x:0.90,h:44,type:'thistle'}],
+            [{x:0.12,h:40,type:'dock'},{x:0.82,h:26,type:'grass'},{x:0.70,h:20,type:'daisy'}],
+            [{x:0.80,h:44,type:'grass'},{x:0.09,h:32,type:'thistle'},{x:0.91,h:22,type:'dock'}],
+            [{x:0.11,h:36,type:'daisy'},{x:0.84,h:40,type:'grass'},{x:0.68,h:28,type:'thistle'}],
+            [{x:0.85,h:38,type:'dock'},{x:0.12,h:30,type:'grass'},{x:0.74,h:24,type:'daisy'}],
+            [{x:0.09,h:42,type:'grass'},{x:0.79,h:36,type:'thistle'},{x:0.91,h:20,type:'dock'}],
         ];
         const plants = plantSets[variant % plantSets.length];
 
-        function drawPlant(px, py, ph, ptype) {
-            const bx = Math.round(px * W);
-            const by = Math.round(py * H);
+        // Flag stick x position — varies per variant
+        const flagXFracs = [0.38,0.50,0.62,0.42,0.56,0.46,0.36,0.58,0.44,0.54,0.40];
+        const sx = Math.round(flagXFracs[variant % flagXFracs.length] * W);
+
+        // Draw plants — roots at horizonY, growing upward
+        function drawPlant(bx, ph, ptype) {
+            const by = horizonY;   // root is always at the ground surface
             ctx.save();
             if (ptype === 'grass') {
                 ctx.strokeStyle = '#3a7a28'; ctx.lineWidth = 2;
                 for (let b = -2; b <= 2; b++) {
                     ctx.beginPath();
-                    ctx.moveTo(bx + b*5, by);
-                    ctx.quadraticCurveTo(bx + b*5 + (b<0?-8:8), by - ph*0.6, bx + b*6 + (b<0?-12:12), by - ph);
+                    ctx.moveTo(bx + b * 5, by);
+                    ctx.quadraticCurveTo(
+                        bx + b * 5 + (b < 0 ? -8 : 8), by - ph * 0.6,
+                        bx + b * 6 + (b < 0 ? -14 : 14), by - ph
+                    );
                     ctx.stroke();
                 }
             } else if (ptype === 'daisy') {
@@ -8030,71 +8143,75 @@ function createDemoSurveyIfNeeded() {
                 ctx.strokeStyle = '#4a8a30'; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by - ph); ctx.stroke();
                 // Petals
-                ctx.fillStyle = '#f5f5dc';
+                ctx.fillStyle = '#f8f8e8';
                 for (let p = 0; p < 8; p++) {
                     const a = (p / 8) * Math.PI * 2;
                     ctx.beginPath();
-                    ctx.ellipse(bx + Math.cos(a)*9, by - ph + Math.sin(a)*9, 5, 3, a, 0, Math.PI*2);
+                    ctx.ellipse(bx + Math.cos(a) * 9, by - ph + Math.sin(a) * 9, 5, 3, a, 0, Math.PI * 2);
                     ctx.fill();
                 }
-                // Centre
                 ctx.fillStyle = '#e8c840';
-                ctx.beginPath(); ctx.arc(bx, by - ph, 5, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(bx, by - ph, 5, 0, Math.PI * 2); ctx.fill();
             } else if (ptype === 'thistle') {
-                // Stem + leaves
                 ctx.strokeStyle = '#5a7a30'; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by - ph); ctx.stroke();
                 ctx.strokeStyle = '#4a6a28'; ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.moveTo(bx, by - ph*0.4); ctx.lineTo(bx - 14, by - ph*0.55); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(bx, by - ph*0.65); ctx.lineTo(bx + 14, by - ph*0.78); ctx.stroke();
-                // Purple head
+                ctx.beginPath(); ctx.moveTo(bx, by - ph * 0.4); ctx.lineTo(bx - 14, by - ph * 0.58); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(bx, by - ph * 0.65); ctx.lineTo(bx + 14, by - ph * 0.80); ctx.stroke();
                 ctx.fillStyle = '#9b59b6';
-                ctx.beginPath(); ctx.ellipse(bx, by - ph, 8, 11, 0, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = '#c39bd3';
+                ctx.beginPath(); ctx.ellipse(bx, by - ph, 8, 11, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#c39bd3'; ctx.lineWidth = 1;
                 for (let sp = 0; sp < 10; sp++) {
-                    const sa = (sp/10)*Math.PI*2;
-                    ctx.beginPath(); ctx.moveTo(bx, by-ph); ctx.lineTo(bx+Math.cos(sa)*12, by-ph+Math.sin(sa)*12); ctx.stroke();
+                    const sa = (sp / 10) * Math.PI * 2;
+                    ctx.beginPath(); ctx.moveTo(bx, by - ph); ctx.lineTo(bx + Math.cos(sa) * 11, by - ph + Math.sin(sa) * 11); ctx.stroke();
                 }
             } else if (ptype === 'dock') {
-                // Broad dock leaves
                 ctx.fillStyle = '#3d6b22';
-                ctx.beginPath();
-                ctx.ellipse(bx - 10, by - ph*0.5, 14, 8, -0.4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(bx - 10, by - ph * 0.55, 14, 8, -0.4, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = '#4a7a28';
-                ctx.beginPath();
-                ctx.ellipse(bx + 8, by - ph*0.7, 12, 7, 0.5, 0, Math.PI*2); ctx.fill();
-                // Seed spike
+                ctx.beginPath(); ctx.ellipse(bx + 8, by - ph * 0.75, 12, 7, 0.5, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = '#7a5028'; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 4, by - ph); ctx.stroke();
                 ctx.fillStyle = '#8b5e2a';
                 for (let s = 0; s < 6; s++) {
                     ctx.beginPath();
-                    ctx.arc(bx + 4, by - ph + s * (ph/6), 3, 0, Math.PI*2); ctx.fill();
+                    ctx.arc(bx + 4, by - ph + s * (ph / 6), 3, 0, Math.PI * 2); ctx.fill();
                 }
             }
             ctx.restore();
         }
 
-        plants.forEach(p => drawPlant(p.x, p.y, p.h, p.type));
+        plants.forEach(p => {
+            const bx = Math.round(p.x * W);
+            // Skip if too close to the flag stick
+            if (Math.abs(bx - sx) < 50) return;
+            drawPlant(bx, p.h, p.type);
+        });
+
+        // ── Draw buried object centred on the flag stick x ────────────────
+        drawBuriedObject(sx);
+
+        // Dashed indicator line from stick base down to object
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(sx, horizonY + 8);
+        ctx.lineTo(sx, objY - 22);
+        ctx.stroke();
+        ctx.restore();
 
         // ── Flag stick ────────────────────────────────────────────────────
-        // Flag position varies: left-of-centre, centre, or right-of-centre
-        const flagPositions = [
-            {sx:0.38},{sx:0.50},{sx:0.62},{sx:0.42},{sx:0.56},
-            {sx:0.46},{sx:0.36},{sx:0.58},{sx:0.44},{sx:0.54},
-            {sx:0.40},{sx:0.60},{sx:0.48},{sx:0.52}
-        ];
-        const fp  = flagPositions[variant % flagPositions.length];
-        const sx  = Math.round(fp.sx * W);
-        const sy  = horizonY + 6;           // stick bottom just below ground surface
-        const sTop = Math.round(horizonY - 90); // stick top
+        const sy   = horizonY + 4;          // stick base (just below surface)
+        const sTop = horizonY - 88;         // stick top (above ground)
 
         // Stick shadow
         ctx.save();
         ctx.globalAlpha = 0.18;
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(sx + 3, sy); ctx.lineTo(sx + 5, sTop); ctx.stroke();
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(sx + 4, sy); ctx.lineTo(sx + 4, sTop); ctx.stroke();
         ctx.restore();
 
         // Stick
@@ -8102,45 +8219,44 @@ function createDemoSurveyIfNeeded() {
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sTop); ctx.stroke();
 
-        // Flag body (white rectangle attached to top of stick)
-        const fW = 72, fH = 38;
+        // Flag rectangle
+        const fW = 78, fH = 40;
         const fX = sx;
         const fY = sTop;
 
-        // Subtle flag shadow
+        // Flag shadow
         ctx.save();
         ctx.globalAlpha = 0.12;
         ctx.fillStyle = '#000';
         ctx.fillRect(fX + 3, fY + 3, fW, fH);
         ctx.restore();
 
-        // Flag fill
+        // Flag fill + border
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = '#cccccc';
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.rect(fX, fY, fW, fH);
+        ctx.beginPath(); ctx.rect(fX, fY, fW, fH);
         ctx.fill(); ctx.stroke();
 
-        // "Detekta" text on flag
-        ctx.fillStyle = '#1d4ed8';   // blue
-        ctx.font = 'bold 13px Arial, sans-serif';
+        // Green logo dot
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath(); ctx.arc(fX + 9, fY + fH / 2, 4, 0, Math.PI * 2); ctx.fill();
+
+        // "Detekta" text
+        ctx.fillStyle = '#1d4ed8';
+        ctx.font = 'bold 14px Arial, sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Detekta', fX + 7, fY + fH / 2);
+        ctx.fillText('Detekta', fX + 18, fY + fH / 2);
 
-        // Small logo dot before text
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath(); ctx.arc(fX + 4, fY + fH / 2, 3, 0, Math.PI*2); ctx.fill();
-
-        // Watermark strip at bottom
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        ctx.fillRect(0, H - 32, W, 32);
+        // ── Watermark strip ───────────────────────────────────────────────
+        ctx.fillStyle = 'rgba(0,0,0,0.50)';
+        ctx.fillRect(0, H - 28, W, 28);
         ctx.fillStyle = 'rgba(255,255,255,0.88)';
         ctx.font = 'bold 11px Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Detekta  |  Demo Target', W / 2, H - 16);
+        ctx.fillText('Detekta  |  Demo Target', W / 2, H - 14);
 
         return c.toDataURL('image/jpeg', 0.84);
     }
@@ -8229,18 +8345,18 @@ function createDemoSurveyIfNeeded() {
     // Target flag photos — one unique outdoor scene per target (variants 0–13)
     // Find artefact photos — used only by Find records
     const photos = {
-        // Target flag photos (each a unique outdoor scene with Detekta flag)
-        flag0:  makeFlagPhoto(0),
-        flag1:  makeFlagPhoto(1),
-        flag2:  makeFlagPhoto(2),
-        flag3:  makeFlagPhoto(3),
-        flag4:  makeFlagPhoto(4),
-        flag5:  makeFlagPhoto(5),
-        flag6:  makeFlagPhoto(6),
-        flag7:  makeFlagPhoto(7),
-        flag8:  makeFlagPhoto(8),
-        flag9:  makeFlagPhoto(9),
-        flag10: makeFlagPhoto(10),
+        // Target flag photos — each unique scene with Detekta flag + VDI-matched buried object
+        flag0:  makeFlagPhoto(0,   63),   // dt1  Roman coin        VDI 63
+        flag1:  makeFlagPhoto(1,   58),   // dt2  Medieval coin      VDI 58
+        flag2:  makeFlagPhoto(2,   55),   // dt3  Victorian penny    VDI 55
+        flag3:  makeFlagPhoto(3,   47),   // dt4  Brass button       VDI 47
+        flag4:  makeFlagPhoto(4,   38),   // dt5  Belt buckle        VDI 38
+        flag5:  makeFlagPhoto(5,   72),   // dt6  Gold ring          VDI 72
+        flag6:  makeFlagPhoto(6,   61),   // dt7  Strong signal      VDI 61
+        flag7:  makeFlagPhoto(7,   28),   // dt8  Lead weight        VDI 28
+        flag8:  makeFlagPhoto(8,   -5),   // dt9  Iron signal        VDI -5
+        flag9:  makeFlagPhoto(9,   15),   // dt10 Modern junk        VDI 15
+        flag10: makeFlagPhoto(10,  -8),   // dt11 Iron fragment      VDI -8
         // Find artefact photos (shown only in Finds)
         coin1:  makeArtefactPhoto('Roman Coin',      '#8B6914', '#D4A017', 'coin'),
         coin2:  makeArtefactPhoto('Medieval Coin',   '#7A5C10', '#C8962A', 'coin'),
