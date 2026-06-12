@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Photos
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Images
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6955,44 +6955,23 @@ async function openEditFindModal(findId) {
     if (form['findWhereKept'])       form['findWhereKept'].value = find.whereKept || '';
     if (form['findDisposition'])     form['findDisposition'].value = find.disposition || '';
     if (form['findPossibleTreasure']) form['findPossibleTreasure'].checked = !!find.possibleTreasure;
-    // Photos for editing: resolve IndexedDB refs -> object URLs, or migrate legacy base64 to IDB
+    // Photos for editing: resolve IndexedDB refs -> object URLs, or use existing data URLs
     try {
         if (Array.isArray(find.photos) && find.photos.length > 0) {
             const first = find.photos[0];
             if (isIndexedDbPhotoRef(first)) {
-                // Already IDB-backed: load as displayable URLs for the preview
                 currentEditFindPhotos = await loadPhotoUrlsFromRefs(find.photos);
             } else {
-                // Legacy: direct data URLs already in find.photos
                 currentEditFindPhotos = find.photos.slice();
             }
+        } else if (find.findPhotoData) {
+            currentEditFindPhotos = [find.findPhotoData];
+        } else if (find.targetPhotoData) {
+            currentEditFindPhotos = [find.targetPhotoData];
+        } else if (find.photoData) {
+            currentEditFindPhotos = [find.photoData];
         } else {
-            // No find.photos yet — collect any legacy single-photo fields,
-            // migrate them to IDB straight away so the hidden field stays small.
-            const legacyUrl = find.findPhotoData || find.targetPhotoData || find.photoData || '';
-            if (legacyUrl) {
-                try {
-                    const refs = await saveDataUrlsAsPhotoRefs([legacyUrl]);
-                    if (refs.length > 0) {
-                        // Upgrade the find in place so future opens also use IDB
-                        find.photos        = refs;
-                        find.findPhotoRef  = refs[0];
-                        find.findPhotoData = '';
-                        find.targetPhotoData = '';
-                        find.photoData     = '';
-                        saveFindsToLocalStorage();
-                        // Load as displayable URL for the preview
-                        currentEditFindPhotos = await loadPhotoUrlsFromRefs(refs);
-                    } else {
-                        // IDB save failed — fall back to raw URL
-                        currentEditFindPhotos = [legacyUrl];
-                    }
-                } catch (_) {
-                    currentEditFindPhotos = [legacyUrl];
-                }
-            } else {
-                currentEditFindPhotos = [];
-            }
+            currentEditFindPhotos = [];
         }
     } catch (e) {
         console.error('Error preparing edit find photos:', e);
@@ -19144,7 +19123,31 @@ async function handleFindCardPhotoSelected(event) {
     }
 
     if (!Array.isArray(find.photos)) find.photos = [];
-    find.photos.push(photoData);
+
+    // Migrate any existing legacy single-photo fields into find.photos first,
+    // so the new photo is added alongside them rather than hiding them.
+    const legacyUrl = find.findPhotoData || find.targetPhotoData || find.photoData || '';
+    if (legacyUrl && find.photos.length === 0) {
+        try {
+            const legacyRefs = await saveDataUrlsAsPhotoRefs([legacyUrl]);
+            find.photos = legacyRefs.length > 0 ? legacyRefs : [legacyUrl];
+            if (legacyRefs.length > 0) find.findPhotoRef = legacyRefs[0];
+        } catch (_) {
+            find.photos = [legacyUrl];
+        }
+        find.findPhotoData   = '';
+        find.targetPhotoData = '';
+        find.photoData       = '';
+    }
+
+    // Save the new photo to IDB and append
+    try {
+        const newRefs = await saveDataUrlsAsPhotoRefs([photoData]);
+        find.photos.push(newRefs.length > 0 ? newRefs[0] : photoData);
+    } catch (_) {
+        find.photos.push(photoData);
+    }
+
     saveFindsToLocalStorage();
     showMessage('Photo added to find.', 'success');
     if (typeof render === 'function') render();
@@ -19183,7 +19186,31 @@ async function handleTargetCardPhotoSelected(event) {
     }
 
     if (!Array.isArray(target.photos)) target.photos = [];
-    target.photos.push(photoData);
+
+    // Migrate any existing legacy single-photo fields into target.photos first,
+    // so the new photo is added alongside them rather than hiding them.
+    const legacyUrl = target.targetPhotoData || target.photoDataUrl || target.photoData || '';
+    if (legacyUrl && target.photos.length === 0) {
+        try {
+            const legacyRefs = await saveDataUrlsAsPhotoRefs([legacyUrl]);
+            target.photos = legacyRefs.length > 0 ? legacyRefs : [legacyUrl];
+            if (legacyRefs.length > 0) target.targetPhotoRef = legacyRefs[0];
+        } catch (_) {
+            target.photos = [legacyUrl];
+        }
+        target.targetPhotoData = '';
+        target.photoDataUrl    = '';
+        target.photoData       = '';
+    }
+
+    // Save the new photo to IDB and append
+    try {
+        const newRefs = await saveDataUrlsAsPhotoRefs([photoData]);
+        target.photos.push(newRefs.length > 0 ? newRefs[0] : photoData);
+    } catch (_) {
+        target.photos.push(photoData);
+    }
+
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
     showMessage('Photo added to target.', 'success');
