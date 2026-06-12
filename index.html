@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Finds
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Photos
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -6955,25 +6955,44 @@ async function openEditFindModal(findId) {
     if (form['findWhereKept'])       form['findWhereKept'].value = find.whereKept || '';
     if (form['findDisposition'])     form['findDisposition'].value = find.disposition || '';
     if (form['findPossibleTreasure']) form['findPossibleTreasure'].checked = !!find.possibleTreasure;
-    // Photos for editing: resolve IndexedDB refs -> object URLs, or use existing data URLs
+    // Photos for editing: resolve IndexedDB refs -> object URLs, or migrate legacy base64 to IDB
     try {
         if (Array.isArray(find.photos) && find.photos.length > 0) {
             const first = find.photos[0];
             if (isIndexedDbPhotoRef(first)) {
-                // Load from IndexedDB
+                // Already IDB-backed: load as displayable URLs for the preview
                 currentEditFindPhotos = await loadPhotoUrlsFromRefs(find.photos);
             } else {
-                // Legacy: direct data URLs
+                // Legacy: direct data URLs already in find.photos
                 currentEditFindPhotos = find.photos.slice();
             }
-        } else if (find.findPhotoData) {
-            currentEditFindPhotos = [find.findPhotoData];
-        } else if (find.targetPhotoData) {
-            currentEditFindPhotos = [find.targetPhotoData];
-        } else if (find.photoData) {
-            currentEditFindPhotos = [find.photoData];
         } else {
-            currentEditFindPhotos = [];
+            // No find.photos yet — collect any legacy single-photo fields,
+            // migrate them to IDB straight away so the hidden field stays small.
+            const legacyUrl = find.findPhotoData || find.targetPhotoData || find.photoData || '';
+            if (legacyUrl) {
+                try {
+                    const refs = await saveDataUrlsAsPhotoRefs([legacyUrl]);
+                    if (refs.length > 0) {
+                        // Upgrade the find in place so future opens also use IDB
+                        find.photos        = refs;
+                        find.findPhotoRef  = refs[0];
+                        find.findPhotoData = '';
+                        find.targetPhotoData = '';
+                        find.photoData     = '';
+                        saveFindsToLocalStorage();
+                        // Load as displayable URL for the preview
+                        currentEditFindPhotos = await loadPhotoUrlsFromRefs(refs);
+                    } else {
+                        // IDB save failed — fall back to raw URL
+                        currentEditFindPhotos = [legacyUrl];
+                    }
+                } catch (_) {
+                    currentEditFindPhotos = [legacyUrl];
+                }
+            } else {
+                currentEditFindPhotos = [];
+            }
         }
     } catch (e) {
         console.error('Error preparing edit find photos:', e);
@@ -7601,9 +7620,13 @@ importedSurvey.surveyPhotoData = '';
     const primaryRef     = photoRefs[0] || '';
 
     // Store new IndexedDB-backed structure
-    find.photos         = photoRefs;
-    find.findPhotoRef   = primaryRef;
-    find.targetPhotoData = photoRefs.length > 0 ? '' : primaryDataUrl;
+    find.photos          = photoRefs;
+    find.findPhotoRef    = primaryRef;
+    // Clear ALL legacy base64 fields — IDB refs are now the source of truth.
+    // If IDB save failed (photoRefs empty), keep the first photo as a base64 fallback.
+    find.findPhotoData   = photoRefs.length > 0 ? '' : primaryDataUrl;
+    find.targetPhotoData = '';
+    find.photoData       = '';
 
     find.updatedAt = Date.now();
 
