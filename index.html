@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Rotate
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Corner
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1843,6 +1843,8 @@ function setGridTileToCurrentGps(sizeM) {
 
     survey.gridTile.centerLat  = c.lat + (half / M_PER_DEG_LAT);
     survey.gridTile.centerLon  = c.lon + (half / mPerDegLon);
+    survey.gridTile.swLat      = c.lat;   // SW corner pinned here permanently
+    survey.gridTile.swLon      = c.lon;
     survey.gridTile.rotationDeg = 0;   // always reset rotation on fresh placement
     survey.gridTile.enabled    = true;
 
@@ -1868,35 +1870,31 @@ function rotateTile(deltaDeg) {
     if (!survey) return;
     ensureSurveyGridTileDefaults(survey);
 
-    const sizeM  = Number(survey.gridTile.sizeM) || 15;
-    const half   = sizeM / 2;
-    const oldRot = (survey.gridTile.rotationDeg || 0) * Math.PI / 180;
+    const sizeM = Number(survey.gridTile.sizeM) || 15;
+    const half  = sizeM / 2;
 
     const M_PER_DEG_LAT = 110574;
-    const lat0          = Number(survey.gridTile.centerLat);
-    const lon0          = Number(survey.gridTile.centerLon);
-    const mPerDegLon    = 111320 * Math.cos(lat0 * Math.PI / 180);
-
-    // Compute current SW corner from centre + current rotation.
-    // In tile-local space the SW corner is at (-half, -half) [west = -x, south = -y].
-    // Rotate that into world space and offset from centre.
-    const swDx = -half * Math.cos(oldRot) - (-half) * Math.sin(oldRot);  // world east offset
-    const swDy = -half * Math.sin(oldRot) + (-half) * Math.cos(oldRot);  // world north offset
-
-    const swLat = lat0 + swDy / M_PER_DEG_LAT;
-    const swLon = lon0 + swDx / mPerDegLon;
+    const swLat = Number(survey.gridTile.swLat ?? survey.gridTile.centerLat);
+    const swLon = Number(survey.gridTile.swLon ?? survey.gridTile.centerLon);
+    const mPerDegLon = 111320 * Math.cos(swLat * Math.PI / 180);
 
     // Apply new rotation
     const newRotDeg = deltaDeg === 0
         ? 0
         : ((survey.gridTile.rotationDeg || 0) + deltaDeg + 360) % 360;
-    const newRot = newRotDeg * Math.PI / 180;
 
-    // Compute new centre: SW corner + rotated (+half, +half) vector
-    const newDx =  half * Math.cos(newRot) - half * Math.sin(newRot);
-    const newDy =  half * Math.sin(newRot) + half * Math.cos(newRot);
+    // Canvas rotation is clockwise-positive, so use negative angle for standard trig
+    const r = -newRotDeg * Math.PI / 180;
+
+    // Centre = SW corner + rotate the (+half east, +half north) vector by newRot.
+    // In world space: east = +x, north = +y.
+    // Rotated: newDx = half*cos(r) - half*sin(r), newDy = half*sin(r) + half*cos(r)
+    const newDx = half * Math.cos(r) - half * Math.sin(r);
+    const newDy = half * Math.sin(r) + half * Math.cos(r);
 
     survey.gridTile.rotationDeg = newRotDeg;
+    survey.gridTile.swLat       = swLat;   // keep SW corner pinned
+    survey.gridTile.swLon       = swLon;
     survey.gridTile.centerLat   = swLat + newDy / M_PER_DEG_LAT;
     survey.gridTile.centerLon   = swLon + newDx / mPerDegLon;
 
@@ -1952,6 +1950,11 @@ function moveGridTileByMeters(dxMeters, dyMeters) {
 
     survey.gridTile.centerLat = lat + dLat;
     survey.gridTile.centerLon = lon + dLon;
+    // Keep SW corner in sync with nudge
+    if (survey.gridTile.swLat != null) {
+        survey.gridTile.swLat = Number(survey.gridTile.swLat) + dLat;
+        survey.gridTile.swLon = Number(survey.gridTile.swLon) + dLon;
+    }
     // Clear coverage when tile is moved — position no longer matches previous paint
     const _mc = Math.round(Number(survey.gridTile.sizeM) || 15);
     survey.gridTile.coverageBits   = '0'.repeat(_mc * _mc);
