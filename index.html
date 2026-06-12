@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Corner
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 demo
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3973,7 +3973,16 @@ function renderHelpPage() {
         </div>
       </div>
 
-      <!-- GETTING STARTED -->
+      <!-- DEMO SURVEY -->
+      <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
+        <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-play-circle"></i> Demo Survey</h3>
+        <p class="text-sm text-gray-700 mb-2">When you first open Detekta, a <strong>🟢 Demo Survey — Try Me!</strong> appears on the Home page. It contains pre-loaded targets, finds, stakes, and tracks — but they have no coordinates yet.</p>
+        <p class="text-sm text-gray-700 mb-2">To bring the demo to life, take your phone outside to a park, a beach, or any open ground. Then tap <strong>Open</strong> on the demo survey. All the targets, finds, stakes, and tracks will be placed around your actual GPS position so everything appears on the map right where you are.</p>
+        <p class="text-sm text-gray-700 mb-2">Once open, explore freely — try the Map page, browse the targets and finds, experiment with the Tile Grid, log a target of your own. Nothing you do in the demo survey affects any real data.</p>
+        <p class="text-sm text-gray-700">When you are ready to start detecting for real, delete the demo survey from the Home page and create your own.</p>
+      </div>
+
+
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-3 flex items-center gap-2"><i class="fas fa-play-circle"></i> Getting Started</h3>
 
@@ -7905,6 +7914,180 @@ function loadDataFromLocalStorage() {
     }
 }
 
+// ── DEMO SURVEY ───────────────────────────────────────────────────────────────
+/**
+ * Creates a demo survey the first time the app runs (or after a reset).
+ * Uses the device's live GPS when available, otherwise defers to the
+ * first GPS fix via a one-shot watch.
+ * The demo survey is identified by the flag survey.isDemo = true.
+ */
+function createDemoSurveyIfNeeded() {
+    const DEMO_KEY = 'detekta_demo_created_v1';
+    if (localStorage.getItem(DEMO_KEY)) return;
+    if (surveys.some(s => s.isDemo)) return;
+
+    // ── Photo generator ──────────────────────────────────────────────────────
+    function makeDemoPhoto(label, bgColor, fgColor, shape) {
+        const W = 240, H = 240;
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const ctx = c.getContext('2d');
+
+        const grad = ctx.createRadialGradient(W/2, H/2, 10, W/2, H/2, W/1.4);
+        grad.addColorStop(0, lighten(bgColor, 30));
+        grad.addColorStop(1, bgColor);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = 'rgba(0,0,0,0.06)';
+        for (let i = 0; i < 120; i++) {
+            const rx = Math.random() * W, ry = Math.random() * H;
+            const rs = Math.random() * 3 + 1;
+            ctx.beginPath(); ctx.arc(rx, ry, rs, 0, Math.PI*2); ctx.fill();
+        }
+
+        ctx.fillStyle = fgColor;
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 2;
+        const cx = W/2, cy = H/2 - 10;
+
+        if (shape === 'coin') {
+            ctx.beginPath(); ctx.arc(cx, cy, 48, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI*2); ctx.stroke();
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(cx-25, cy); ctx.lineTo(cx+25, cy); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx, cy-25); ctx.lineTo(cx, cy+25); ctx.stroke();
+        } else if (shape === 'button') {
+            ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = bgColor;
+            [[0,-14],[0,14],[-14,0],[14,0]].forEach(([dx,dy]) => {
+                ctx.beginPath(); ctx.arc(cx+dx, cy+dy, 5, 0, Math.PI*2); ctx.fill();
+            });
+        } else if (shape === 'relic') {
+            ctx.beginPath(); ctx.roundRect(cx-36, cy-24, 72, 48, 6); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(cx, cy-20); ctx.lineTo(cx, cy+20); ctx.stroke();
+        } else if (shape === 'ring') {
+            ctx.lineWidth = 14; ctx.strokeStyle = fgColor;
+            ctx.beginPath(); ctx.arc(cx, cy, 36, 0, Math.PI*2); ctx.stroke();
+            ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.beginPath(); ctx.arc(cx, cy, 43, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx, cy, 29, 0, Math.PI*2); ctx.stroke();
+        } else if (shape === 'junk') {
+            ctx.beginPath();
+            const pts = [[0,-44],[20,-30],[42,-10],[38,20],[10,40],[-18,36],[-40,12],[-36,-20],[-16,-40]];
+            ctx.moveTo(cx+pts[0][0], cy+pts[0][1]);
+            pts.forEach(([dx,dy]) => ctx.lineTo(cx+dx, cy+dy));
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+        } else {
+            ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, H-38, W, 38);
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.font = 'bold 13px Arial, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText('Detekta  |  Demo', W/2, H-19);
+
+        return c.toDataURL('image/jpeg', 0.82);
+    }
+
+    function lighten(hex, amt) {
+        const n = parseInt(hex.replace('#',''), 16);
+        const r = Math.min(255, (n>>16)+amt);
+        const g = Math.min(255, ((n>>8)&0xff)+amt);
+        const b = Math.min(255, (n&0xff)+amt);
+        return `rgb(${r},${g},${b})`;
+    }
+
+    const now = Date.now();
+    const sid = 'demo_' + now.toString(36);
+
+    // Photos generated once and stored on the survey for use when coordinates are applied
+    const photos = {
+        coin1:  makeDemoPhoto('Roman Coin',      '#8B6914', '#D4A017', 'coin'),
+        coin2:  makeDemoPhoto('Medieval Coin',   '#7A5C10', '#C8962A', 'coin'),
+        coin3:  makeDemoPhoto('Victorian Penny', '#6B4226', '#A0522D', 'coin'),
+        button: makeDemoPhoto('Brass Button',    '#5C4A1E', '#CFB53B', 'button'),
+        relic:  makeDemoPhoto('Belt Buckle',     '#4A3728', '#8B7355', 'relic'),
+        ring:   makeDemoPhoto('Gold Ring',       '#5A4800', '#FFD700', 'ring'),
+        junk1:  makeDemoPhoto('Iron Fragment',   '#3A3A3A', '#696969', 'junk'),
+        junk2:  makeDemoPhoto('Iron Nail',       '#3C3028', '#5C4033', 'junk'),
+    };
+
+    // Target definitions — coordinates are null until the demo is opened outdoors
+    const targetDefs = [
+        { id:'dt1',  description:'Roman coin — beautiful patina',        vdi:'63',   depth:'4',  type:'Coin',         status:'Refilled', dx: 12,  dy: 18,  photo:'coin1'  },
+        { id:'dt2',  description:'Medieval hammered silver penny',       vdi:'58',   depth:'3',  type:'Coin',         status:'Refilled', dx:-15,  dy: 30,  photo:'coin2'  },
+        { id:'dt3',  description:'Victorian penny — good detail',        vdi:'55',   depth:'6',  type:'Coin',         status:'Refilled', dx: 28,  dy:-10,  photo:'coin3'  },
+        { id:'dt4',  description:'Brass button — possible military',     vdi:'47',   depth:'5',  type:'Button',       status:'Refilled', dx:-22,  dy:-25,  photo:'button' },
+        { id:'dt5',  description:'Bronze belt buckle — medieval',        vdi:'38',   depth:'8',  type:'Relic',        status:'Refilled', dx:  5,  dy: 42,  photo:'relic'  },
+        { id:'dt6',  description:'Gold ring — possible Tudor',           vdi:'72',   depth:'3',  type:'Jewelry',      status:'Refilled', dx:-30,  dy:  8,  photo:'ring'   },
+        { id:'dt7',  description:'Strong signal — not yet investigated', vdi:'61',   depth:'',   type:'Unidentified', status:'Not dug',  dx: 35,  dy: 22,  photo:null     },
+        { id:'dt8',  description:'Possible lead weight',                 vdi:'28',   depth:'7',  type:'Unidentified', status:'Not dug',  dx:-18,  dy: 50,  photo:null     },
+        { id:'dt9',  description:'Iron signal — left in ground',         vdi:'-5',   depth:'',   type:'Iron Junk',    status:'Ignored',  dx: 20,  dy:-35,  photo:'junk1'  },
+        { id:'dt10', description:'Modern junk — bottle cap',             vdi:'15',   depth:'2',  type:'Modern Junk',  status:'Dug',      dx:-40,  dy:-15,  photo:null     },
+        { id:'dt11', description:'Iron fragment',                        vdi:'-8',   depth:'5',  type:'Iron Junk',    status:'Ignored',  dx: 45,  dy: -5,  photo:'junk2'  },
+        { id:'dt12', description:'Gate',                                 vdi:'-100', depth:'',   type:'Stake',        status:'Not dug',  dx:-60,  dy: 65,  photo:null     },
+        { id:'dt13', description:'Car Park',                             vdi:'-100', depth:'',   type:'Stake',        status:'Not dug',  dx: 65,  dy:-60,  photo:null     },
+        { id:'dt14', description:'North Boundary',                       vdi:'-100', depth:'',   type:'Stake',        status:'Not dug',  dx:  0,  dy: 70,  photo:null     },
+    ];
+
+    const findDefs = [
+        { tid:'dt1', ident:'Roman AE3 — 4th century',     material:'Bronze', condition:'Good',      period:'Roman',     weight:'3.2',  dims:'17×17' },
+        { tid:'dt2', ident:'Edward I penny c.1280',        material:'Silver', condition:'Very good', period:'Medieval',  weight:'1.3',  dims:'18×18' },
+        { tid:'dt3', ident:'Victoria penny 1887',          material:'Bronze', condition:'Fair',      period:'Victorian', weight:'9.4',  dims:'31×31' },
+        { tid:'dt4', ident:'Possible Georgian military',   material:'Brass',  condition:'Good',      period:'Georgian',  weight:'4.1',  dims:'22×22' },
+        { tid:'dt5', ident:'Medieval dress buckle',        material:'Bronze', condition:'Fair',      period:'Medieval',  weight:'12.5', dims:'38×28' },
+        { tid:'dt6', ident:'Plain gold posy ring — Tudor', material:'Gold',   condition:'Excellent', period:'Tudor',     weight:'2.8',  dims:'20×20' },
+    ];
+
+    // Track offsets — stored relative to centre, resolved when opened
+    const trackOffsets = {
+        perimeter: [[-70,80],[-50,82],[-20,84],[10,83],[40,82],[68,80],[70,55],[72,30],[73,5],[72,-20],[70,-50],[68,-68],[45,-70],[20,-72],[-5,-71],[-30,-70],[-55,-68],[-70,-65],[-72,-40],[-73,-15],[-72,15],[-71,40],[-70,80]],
+        track2:    [[-60,10],[-45,12],[-25,11],[-5,10],[15,11],[35,12],[55,10],[56,-5],[36,-6],[16,-7],[-4,-6],[-24,-7],[-44,-6],[-61,-5],[-60,10]],
+        track3:    [[-60,30],[-40,31],[-18,30],[5,31],[28,30],[50,31],[51,15],[29,14],[6,14],[-17,15],[-39,14],[-58,15],[-60,30]],
+    };
+
+    const survey = {
+        id: sid,
+        name: '🟢 Demo Survey — Try Me!',
+        description: "Welcome to Detekta! This demo survey shows what the app can do. Open it outside and explore the map, browse the targets and finds — then delete it when you're ready to start your own survey.",
+        status: 'Closed',
+        isDemo: true,
+        demoPending: true,          // coordinates not yet applied — waiting for GPS on first open
+        demoPhotos: photos,         // stored here until coordinates are applied
+        demoTargetDefs: targetDefs,
+        demoFindDefs: findDefs,
+        demoTrackOffsets: trackOffsets,
+        dateCreated: now,
+        dateLastChanged: now,
+        permissionFrom: 'Demo Landowner', permissionType: 'Written',
+        permissionDateGranted: '', permissionExpiry: '',
+        permissionNotes: 'This is demo data — no real permission required!',
+        areaType: 'Farmland', landUseCurrent: 'Arable',
+        soilType: 'Clay loam', groundCondition: 'Firm', mineralisationLevel: 'Medium',
+        weather: 'Sunny', recentRain: 'None', temperature: '18°C',
+        purpose: ['Leisure', 'Research'], expectedPeriod: 'Multi-period',
+        accessNotes: 'Park at the gate. Close all gates behind you.',
+        hazards: [],
+        overallProductivity: 'Excellent', wouldDetectAgain: 'Yes',
+        surveyObservations: 'Excellent results across the whole area. Strong Roman presence in the north-east corner.',
+        targets: [], tracks: [],
+        gridTile: { enabled: false, sizeM: 15, centerLat: null, centerLon: null, rotationDeg: 0 },
+        gridTileCompletedAreas: [],
+        photoData: '', photos: [],
+    };
+
+    surveys.unshift(survey);
+    saveSurveysToLocalStorage();
+    localStorage.setItem(DEMO_KEY, '1');
+    console.log('Detekta demo survey shell created — awaiting GPS on first open.');
+}
+
         /** Renders the current page content into the main container. */
         function render() {
             const appContent = document.getElementById('app-content');
@@ -11492,6 +11675,95 @@ async function handleSurveyAction(button) {
 
         switch (action) {
             case 'open':
+                // ── Demo survey: populate coordinates from live GPS on first open ──
+                if (survey.isDemo && survey.demoPending) {
+                    const demoGps = (typeof getBestLiveGpsCoordsOrNull === 'function')
+                                  ? getBestLiveGpsCoordsOrNull()
+                                  : null;
+                    if (!demoGps) {
+                        showMessage('Head outside for a GPS fix, then tap Open again — demo targets will be placed around you.', 'info');
+                        return;
+                    }
+
+                    // Helpers
+                    const M_PER_DEG_LAT = 110574;
+                    const mPerDegLon    = 111320 * Math.cos(demoGps.lat * Math.PI / 180);
+                    const offsetCoords  = (dx, dy) => ({
+                        lat: demoGps.lat + dy / M_PER_DEG_LAT,
+                        lon: demoGps.lon + dx / mPerDegLon
+                    });
+
+                    const photos   = survey.demoPhotos      || {};
+                    const tDefs    = survey.demoTargetDefs  || [];
+                    const fDefs    = survey.demoFindDefs    || [];
+                    const tOffsets = survey.demoTrackOffsets || {};
+                    const dNow     = Date.now();
+
+                    // Build targets with real coordinates
+                    survey.targets = tDefs.map(t => {
+                        const p = offsetCoords(t.dx, t.dy);
+                        return {
+                            id: t.id,
+                            description: t.description,
+                            vdi: t.vdi, depth: t.depth, type: t.type, status: t.status,
+                            time: dNow - Math.round(Math.random() * 3600000),
+                            dateCreated: dNow - Math.round(Math.random() * 3600000),
+                            coordinates: `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`,
+                            accuracy: (Math.random() * 4 + 2).toFixed(1),
+                            user: 'Demo Detectorist', detector: 'Minelab Equinox 800',
+                            centerOnMap: true, photos: [], targetPhotoRef: '',
+                            targetPhotoData: t.photo ? (photos[t.photo] || '') : '',
+                            deleted: false
+                        };
+                    });
+
+                    // Build finds with real coordinates
+                    const newFinds = fDefs.map(f => {
+                        const tgt = survey.targets.find(t => t.id === f.tid);
+                        const tDef = tDefs.find(t => t.id === f.tid);
+                        return {
+                            id: 'df_' + f.tid,
+                            surveyId: survey.id,
+                            surveyName: survey.name,
+                            surveyDescription: survey.description,
+                            targetId: f.tid,
+                            description: tDef ? tDef.description : '',
+                            type: tDef ? tDef.type : 'Unknown',
+                            vdi: tDef ? tDef.vdi : '', depth: tDef ? tDef.depth : '',
+                            identification: f.ident, material: f.material,
+                            condition: f.condition, period: f.period,
+                            weightG: f.weight, dimensionsMm: f.dims,
+                            whereKept: 'Demo box',
+                            possibleTreasure: tDef && (tDef.type === 'Jewelry' || tDef.type === 'Coin'),
+                            disposition: 'Retained',
+                            coordinates: tgt ? tgt.coordinates : '',
+                            accuracy: tgt ? tgt.accuracy : '',
+                            centerOnMap: true,
+                            targetPhotoData: tDef && tDef.photo ? (photos[tDef.photo] || '') : '',
+                            photos: [], findPhotoRef: '',
+                            dateCreated: dNow - Math.round(Math.random() * 3600000),
+                            statusAtSave: 'Refilled',
+                            user: 'Demo Detectorist', detector: 'Minelab Equinox 800',
+                            deleted: false
+                        };
+                    });
+                    newFinds.forEach(f => finds.push(f));
+
+                    // Build tracks with real coordinates
+                    survey.tracks = [
+                        { id:'dtr1', name:'Perimeter', color:'#2563eb', points: (tOffsets.perimeter||[]).map(([dx,dy]) => { const p = offsetCoords(dx,dy); return [p.lat,p.lon]; }) },
+                        { id:'dtr2', name:'Track 2',   color:'#16a34a', points: (tOffsets.track2||[]).map(([dx,dy])    => { const p = offsetCoords(dx,dy); return [p.lat,p.lon]; }) },
+                        { id:'dtr3', name:'Track 3',   color:'#d97706', points: (tOffsets.track3||[]).map(([dx,dy])    => { const p = offsetCoords(dx,dy); return [p.lat,p.lon]; }) },
+                    ];
+
+                    // Clear the pending defs — no longer needed, saves storage
+                    delete survey.demoPending;
+                    delete survey.demoPhotos;
+                    delete survey.demoTargetDefs;
+                    delete survey.demoFindDefs;
+                    delete survey.demoTrackOffsets;
+                }
+
                 // ✅ Opening a survey must start "clean"
                 resetLiveTrackingAndRecordingState();
 
@@ -18082,6 +18354,7 @@ async function importSurveyWithPhotosFromFile() {
         });
         
     loadDataFromLocalStorage();
+    createDemoSurveyIfNeeded();
     attachNavDelegationOnce();   // your delegated nav handler
 
     
