@@ -134,7 +134,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Surveys
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Open
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12826,8 +12826,12 @@ function renderHomePage() {
             .join('');
     };
 
-    // The open survey is always expanded; others keep their toggle state
-    if (openSurvey) expandedSurveyIds.add(openSurvey.id);
+    // Auto-expand the open survey the first time it is seen, but respect
+    // the user's choice if they have already toggled it.
+    if (openSurvey && !expandedSurveyIds.has('__seen_' + openSurvey.id)) {
+        expandedSurveyIds.add(openSurvey.id);
+        expandedSurveyIds.add('__seen_' + openSurvey.id);
+    }
 
     return `
 <div class="p-4">
