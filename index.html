@@ -75,25 +75,29 @@
         }
     
   /* Hide native disclosure marker so we can use our own caret */
-  summary { list-style: none; }
-  summary::-webkit-details-marker { display: none; }
-summary::marker { display: none; }
-/* Map page collapsible panel headers */
-summary {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 0.5rem;
-}
+  /* Suppress ALL native <details> disclosure markers cross-browser */
+  summary { list-style: none !important; display: flex !important; }
+  summary::-webkit-details-marker { display: none !important; }
+  summary::marker { display: none !important; content: none !important; }
 </style>
 <style>
+  /* Map page collapsible panel headers — flex, title left, chevron right */
+  summary {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100%;
+    cursor: pointer;
+    gap: 0.5rem;
+  }
   details[open] > summary .map-chevron {
     transform: rotate(180deg);
   }
   summary .map-chevron {
     transition: transform 0.15s ease;
     flex: 0 0 auto;
-    color: #9ca3af; /* text-gray-400 */
+    color: #9ca3af;
+    font-size: 1rem;
   }
   @keyframes detekta-pin-blink {
     0%, 100% { opacity: 1; }
@@ -135,7 +139,7 @@ summary {
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Map
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Panels
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12030,6 +12034,13 @@ function toggleSurveyCard(surveyId) {
     render();
 }
 
+function toggleMapPanel(panel) {
+    if (panel === 'layers')   { mapLayersExpanded   = !mapLayersExpanded;   }
+    if (panel === 'tracks')   { tracksPanelExpanded = !tracksPanelExpanded; }
+    if (panel === 'tileGrid') { tileGridExpanded    = !tileGridExpanded;    }
+    rerenderCompassIfActive();
+}
+
 async function handleSurveyAction(button) {
     const id = button.dataset.id;
     const action = button.dataset.action;
@@ -15250,20 +15261,22 @@ function renderTracksPanel(openSurvey) {
 
     return `
         <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-            <details id="tracks-panel-details" class="w-full" ${tracksPanelExpanded ? 'open' : ''}>
-  <summary class="cursor-pointer select-none flex items-center justify-between w-full">
-  <span class="text-xl font-semibold text-gray-700 flex items-center gap-2"><i class="fas fa-route text-primary"></i>Tracks for this survey</span>
-  <i class="fas fa-chevron-down map-chevron ml-2"></i>
-</summary>
-
+            <div id="tracks-panel-details" class="w-full">
+  <div class="flex items-center justify-between cursor-pointer select-none"
+       onclick="toggleMapPanel('tracks')">
+    <span class="text-xl font-semibold text-gray-700 flex items-center gap-2">
+      <i class="fas fa-route text-primary"></i>Tracks for this survey
+    </span>
+    <i class="fas ${tracksPanelExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2"></i>
+  </div>
+  ${tracksPanelExpanded ? `
   <p class="text-xs text-gray-500 mt-2">
     Select which tracks to overlay on the map.
   </p>
-
   <div class="mt-2 space-y-1">
     ${tracksListHtml}
-  </div>
-</details>
+  </div>` : ''}
+</div>
         </div>
     `;
 }
@@ -15606,11 +15619,13 @@ ${(() => {
 
     
 <!-- Map layer toggles (draw only; bounds still include all) -->
-<details id="map-layers-details" class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-  <summary class="cursor-pointer select-none flex items-center justify-between w-full">
-  <span class="text-xl font-semibold text-gray-700">Map layers</span>
-  <i class="fas fa-chevron-down map-chevron ml-2"></i>
-</summary>
+<div id="map-layers-details" class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+  <div class="flex items-center justify-between cursor-pointer select-none"
+       onclick="toggleMapPanel('layers')">
+    <span class="text-xl font-semibold text-gray-700">Map layers</span>
+    <i class="fas ${mapLayersExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2"></i>
+  </div>
+  ${mapLayersExpanded ? `
   <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTracks=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTracks ? 'checked' : ''}>
@@ -15644,8 +15659,8 @@ ${(() => {
             <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakeLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakeLabels ? 'checked' : ''}>
             <span>Stake Labels</span>
         </label>
-  </div>
-</details>
+  </div>` : ''}
+</div>
 </div>
 
             <!-- Compact Tracking Controls (duplicate for easy access) -->
@@ -15732,13 +15747,15 @@ ${(() => {
                       + '<div class="grid grid-cols-5 gap-2 mb-3" id="tile-grid-rainbow-buttons">' + _rainbowButtons + '</div>'
                     : '<div id="tile-grid-rainbow-buttons"></div>';
 
+                const _tileChevron = tileGridExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
                 return '<div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">'
-                    + '<details id="tile-grid-inline-details" ' + (tileGridExpanded ? 'open' : '') + '>'
-                    + '<summary class="cursor-pointer select-none flex items-center justify-between w-full">'
+                    + '<div id="tile-grid-inline-details">'
+                    + '<div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleMapPanel(\'tileGrid\')">' 
                     + '<span class="text-xl font-semibold text-gray-700 flex items-center gap-2">'
                     + '<i class="fas fa-th text-primary"></i> Tile Grid (' + (Number(_tile.sizeM)||15) + '&times;' + (Number(_tile.sizeM)||15) + 'm)'
-                    + '</span><i class="fas fa-chevron-down map-chevron ml-2"></i></summary>'
-                    + '<div class="mt-3">'
+                    + '</span><i class="fas ' + _tileChevron + ' text-gray-400 ml-2"></i>'
+                    + '</div>'
+                    + (tileGridExpanded ? '<div class="mt-3">'
                     + '<div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 mb-2">'
                     + '<div><span class="font-semibold">Tile centre:</span> <span id="tile-grid-centre-text">' + _centreTxt + '</span></div>'
                     + '<div><span class="font-semibold">You:</span> <span id="tile-grid-user-text">No GPS fix</span></div>'
@@ -15758,7 +15775,8 @@ ${(() => {
                     + ' onclick="clearTileCoverage()">Clear</button>'
                     + '</div>'
                     + '</div>'
-                    + '</details>'
+                    : '')
+                    + '</div>'
                     + '</div>';
             })()}
 
@@ -18422,47 +18440,11 @@ if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
 
 
 
-// --- Map layers panel expand/collapse (Compass/Map page) ---
-const mapLayersDetails = document.getElementById('map-layers-details');
-if (mapLayersDetails) {
-    // Apply saved state after every render
-    mapLayersDetails.open = !!mapLayersExpanded;
-
-    // Persist state when user toggles
-    mapLayersDetails.addEventListener('toggle', () => {
-        mapLayersExpanded = mapLayersDetails.open;
-    });
-}
+// Map panels now use toggleMapPanel() — no <details> wiring needed
 
 
 
-// --- Tile/Grid panel expand/collapse (Compass/Map page) ---
-const tileGridDetails = document.getElementById('tile-grid-details');
-if (tileGridDetails) {
-    tileGridDetails.open = !!tileGridExpanded;
-    tileGridDetails.addEventListener('toggle', () => {
-        tileGridExpanded = tileGridDetails.open;
-    });
-}
-
-// --- Inline Tile Grid panel expand/collapse ---
-const tileGridInlineDetails = document.getElementById('tile-grid-inline-details');
-if (tileGridInlineDetails) {
-    tileGridInlineDetails.addEventListener('toggle', () => {
-        tileGridExpanded = tileGridInlineDetails.open;
-    });
-}
-
-
-
-// --- Tracks panel expand/collapse (Compass/Map page) ---
-const tracksPanelDetails = document.getElementById('tracks-panel-details');
-if (tracksPanelDetails) {
-    tracksPanelDetails.open = !!tracksPanelExpanded;
-    tracksPanelDetails.addEventListener('toggle', () => {
-        tracksPanelExpanded = tracksPanelDetails.open;
-    });
-}
+// Tracks panel now uses toggleMapPanel() — no <details> wiring needed
 
 
 
