@@ -139,7 +139,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Top count
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Stake count
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -15392,6 +15392,7 @@ if (!openSurvey) {
                 const _allTargets = Array.isArray(openSurvey.targets) ? openSurvey.targets.filter(t => t && !t.deleted) : [];
                 const _isStake = t => Number(t.vdi) === -100;
                 const _totalTargets = _allTargets.filter(t => !_isStake(t)).length;
+                const _totalStakes  = _allTargets.filter(t =>  _isStake(t)).length;
                 const _totalFinds   = Array.isArray(finds) ? finds.filter(f => f && !f.deleted && String(f.surveyId) === String(openSurvey.id)).length : 0;
                 const _totalTracks  = Array.isArray(openSurvey.tracks) ? openSurvey.tracks.filter(t => t && t.deleted !== true).length : 0;
                 const _mappedTargets = targets.length;
@@ -15412,6 +15413,10 @@ if (!openSurvey) {
                         <i class="fas fa-gem text-yellow-600 w-3"></i>
                         <span class="font-semibold">${_totalFinds}</span> finds
                         ${_mappedFinds < _totalFinds ? '<span class="text-gray-400">('+_mappedFinds+' mapped)</span>' : ''}
+                    </span>
+                    <span class="text-xs text-gray-600 flex items-center gap-1">
+                        <i class="fas fa-map-marker-alt text-gray-500 w-3"></i>
+                        <span class="font-semibold">${_totalStakes}</span> stakes
                     </span>
                     <span class="text-xs text-gray-600 flex items-center gap-1">
                         <i class="fas fa-route text-green-600 w-3"></i>
