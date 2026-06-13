@@ -139,7 +139,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Panels
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Flick
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -12035,7 +12035,22 @@ function toggleSurveyCard(surveyId) {
 }
 
 function toggleMapPanel(panel) {
-    if (panel === 'layers')   { mapLayersExpanded   = !mapLayersExpanded;   }
+    if (panel === 'layers') {
+        // Update state
+        mapLayersExpanded = !mapLayersExpanded;
+        // Directly manipulate the DOM — no full redraw needed, avoids canvas flicker
+        const wrapper = document.getElementById('map-layers-details');
+        if (wrapper) {
+            const chevron = wrapper.querySelector('.map-panel-chevron');
+            const body    = wrapper.querySelector('.map-panel-body');
+            if (chevron) {
+                chevron.classList.toggle('fa-chevron-up',   mapLayersExpanded);
+                chevron.classList.toggle('fa-chevron-down', !mapLayersExpanded);
+            }
+            if (body) body.style.display = mapLayersExpanded ? '' : 'none';
+        }
+        return;
+    }
     if (panel === 'tracks')   { tracksPanelExpanded = !tracksPanelExpanded; }
     if (panel === 'tileGrid') { tileGridExpanded    = !tileGridExpanded;    }
     rerenderCompassIfActive();
@@ -15623,10 +15638,9 @@ ${(() => {
   <div class="flex items-center justify-between cursor-pointer select-none"
        onclick="toggleMapPanel('layers')">
     <span class="text-xl font-semibold text-gray-700">Map layers</span>
-    <i class="fas ${mapLayersExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2"></i>
+    <i class="fas ${mapLayersExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} map-panel-chevron text-gray-400 ml-2"></i>
   </div>
-  ${mapLayersExpanded ? `
-  <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+  <div class="map-panel-body mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm" style="${mapLayersExpanded ? '' : 'display:none'}">
         <label class="flex items-center gap-2 select-none">
             <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTracks=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTracks ? 'checked' : ''}>
             <span>Show Tracks</span>
@@ -15659,7 +15673,7 @@ ${(() => {
             <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakeLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakeLabels ? 'checked' : ''}>
             <span>Stake Labels</span>
         </label>
-  </div>` : ''}
+  </div>
 </div>
 </div>
 
