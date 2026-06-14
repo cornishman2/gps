@@ -139,7 +139,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Stake count
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Map
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1745,6 +1745,10 @@ let surveys = [];
 let finds = [];  // permanent library of Finds
 let currentPage = 'Home';
 let expandedSurveyIds = new Set(); // survey IDs whose cards are currently expanded
+// Map page collapsible panel states
+let mapSummaryExpanded    = true;   // survey summary
+let mapTrackingExpanded   = false;  // tracking controls (collapsed by default)
+let mapCanvasExpanded     = true;   // survey map canvas
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
@@ -12035,6 +12039,18 @@ function toggleSurveyCard(surveyId) {
 }
 
 function toggleMapPanel(panel) {
+    if (panel === 'summary') {
+        mapSummaryExpanded  = !mapSummaryExpanded;
+        rerenderCompassIfActive(); return;
+    }
+    if (panel === 'tracking') {
+        mapTrackingExpanded = !mapTrackingExpanded;
+        rerenderCompassIfActive(); return;
+    }
+    if (panel === 'canvas') {
+        mapCanvasExpanded   = !mapCanvasExpanded;
+        rerenderCompassIfActive(); return;
+    }
     if (panel === 'layers') {
         // Update state
         mapLayersExpanded = !mapLayersExpanded;
@@ -15399,10 +15415,15 @@ if (!openSurvey) {
                 const _mappedFinds   = findsForMap.length;
                 return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
-                <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <span class="text-base font-bold text-primary truncate">${openSurvey.name || 'Unnamed survey'}</span>
-                    <span class="ml-2 flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">OPEN</span>
+                <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none ${mapSummaryExpanded ? 'border-b border-gray-100' : ''}"
+                     onclick="toggleMapPanel('summary')">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-base font-bold text-primary truncate">${openSurvey.name || 'Unnamed survey'}</span>
+                        <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">OPEN</span>
+                    </div>
+                    <i class="fas ${mapSummaryExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2 flex-shrink-0"></i>
                 </div>
+                ${mapSummaryExpanded ? `
                 <div class="px-4 py-2 flex flex-wrap gap-x-4 gap-y-1">
                     <span class="text-xs text-gray-600 flex items-center gap-1">
                         <i class="fas fa-crosshairs text-primary w-3"></i>
@@ -15422,7 +15443,7 @@ if (!openSurvey) {
                         <i class="fas fa-route text-green-600 w-3"></i>
                         <span class="font-semibold">${_totalTracks}</span> tracks
                     </span>
-                </div>
+                </div>` : ''}
             </div>`;
             })()}
 
@@ -15440,49 +15461,60 @@ ${(() => {
         : 'Tracking OFF';
 
     return `
-    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-        <div class="flex items-start justify-between gap-3 mb-3">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
+        <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none \${mapTrackingExpanded ? 'border-b border-gray-100' : ''}"
+             onclick="toggleMapPanel('tracking')">
             <h3 class="text-xl font-semibold text-gray-700 flex items-center">
                 <i class="fas fa-route mr-2"></i> Tracking Controls
             </h3>
-
-            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                ${statusText}
-            </span>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full \${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                    \${statusText}
+                </span>
+                <i class="fas \${mapTrackingExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400"></i>
+            </div>
         </div>
-
-        <div class="grid grid-cols-2 gap-3">
-            <button
-                id="start-track-btn"
-                type="button"
-                ${startDisabled ? 'disabled' : ''}
-                class="py-3 rounded-xl font-bold text-white shadow
-                       ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
-                🟢 Start Tracking
-            </button>
-
-            <button
-                id="stop-track-btn"
-                type="button"
-                ${stopDisabled ? 'disabled' : ''}
-                class="py-3 rounded-xl font-bold text-white shadow
-                       ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
-                🔴 Stop Tracking
-            </button>
-        </div>
-        <p class="text-xs text-gray-500 mt-2">
-            Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
-        </p>
+        \${mapTrackingExpanded ? `
+        <div class="p-4">
+            <div class="grid grid-cols-2 gap-3">
+                <button
+                    id="start-track-btn"
+                    type="button"
+                    \${startDisabled ? 'disabled' : ''}
+                    class="py-3 rounded-xl font-bold text-white shadow
+                           \${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
+                    🟢 Start Tracking
+                </button>
+                <button
+                    id="stop-track-btn"
+                    type="button"
+                    \${stopDisabled ? 'disabled' : ''}
+                    class="py-3 rounded-xl font-bold text-white shadow
+                           \${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
+                    🔴 Stop Tracking
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn't squash the survey map.
+            </p>
+        </div>` : ''}
     </div>
     `;
 })()}
 
             <!-- Map -->
-            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
-                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
-                    <i class="fas fa-map mr-2"></i> Survey Map
-                </h3>
-                ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
+                <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none ${mapCanvasExpanded ? 'border-b border-gray-100' : ''}"
+                     onclick="toggleMapPanel('canvas')">
+                    <h3 class="text-xl font-semibold text-gray-700 flex items-center">
+                        <i class="fas fa-map mr-2"></i> Survey Map
+                    </h3>
+                    <i class="fas ${mapCanvasExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2"></i>
+                </div>
+                ${mapCanvasExpanded ? `
+                <div class="p-4">
+                    ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
+                </div>` : ''}
             </div>
 
 
@@ -15492,6 +15524,7 @@ ${(() => {
 
 
 
+            ${mapCanvasExpanded ? `
             <!-- Row 1: Zoom / GPS -->
             <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
                 <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapIn(event)">+</button>
@@ -15628,6 +15661,7 @@ ${(() => {
                     STAKE
                 </button>
             </div>
+            ` : ''}
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
