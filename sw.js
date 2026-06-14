@@ -1,10 +1,20 @@
-const CACHE_NAME = "detekta-cache-v13"; // <-- bump this on every deployment
+const CACHE_NAME = "detekta-cache-v14"; // <-- bump this on every deployment
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
   "./assets/icon-192.png",
-  "./assets/icon-512.png"
+  "./assets/icon-512.png",
+  "./assets/screenshot-home1.jpg",
+  "./assets/screenshot-home2.jpg",
+  "./assets/screenshot-map.jpg",
+  "./assets/screenshot-map-tilegrid.jpg",
+  "./assets/screenshot-targets.jpg",
+  "./assets/screenshot-log-target.jpg",
+  "./assets/screenshot-finds1.jpg",
+  "./assets/screenshot-find2.jpg",
+  "./assets/screenshot-settings.jpg",
+  "./assets/screenshot-quick-targets.jpg"
 ];
 // Install: pre-cache app shell
 self.addEventListener("install", (event) => {
