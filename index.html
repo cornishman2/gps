@@ -139,7 +139,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Collapse
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 Summary
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1745,10 +1745,7 @@ let surveys = [];
 let finds = [];  // permanent library of Finds
 let currentPage = 'Home';
 let expandedSurveyIds = new Set(); // survey IDs whose cards are currently expanded
-// Map page collapsible panel states
-let mapSummaryExpanded    = true;   // survey summary
-let mapTrackingExpanded   = false;  // tracking controls (collapsed by default)
-let mapCanvasExpanded     = true;   // survey map canvas
+let mapSummaryExpanded = true;     // survey summary panel on map page
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
@@ -12029,6 +12026,11 @@ async function editSurvey(id) {
     }, 50);
 }
 
+function toggleMapSummary() {
+    mapSummaryExpanded = !mapSummaryExpanded;
+    rerenderCompassIfActive();
+}
+
 function toggleSurveyCard(surveyId) {
     if (expandedSurveyIds.has(surveyId)) {
         expandedSurveyIds.delete(surveyId);
@@ -12039,18 +12041,6 @@ function toggleSurveyCard(surveyId) {
 }
 
 function toggleMapPanel(panel) {
-    if (panel === 'summary') {
-        mapSummaryExpanded  = !mapSummaryExpanded;
-        rerenderCompassIfActive(); return;
-    }
-    if (panel === 'tracking') {
-        mapTrackingExpanded = !mapTrackingExpanded;
-        rerenderCompassIfActive(); return;
-    }
-    if (panel === 'canvas') {
-        mapCanvasExpanded   = !mapCanvasExpanded;
-        rerenderCompassIfActive(); return;
-    }
     if (panel === 'layers') {
         // Update state
         mapLayersExpanded = !mapLayersExpanded;
@@ -13656,160 +13646,6 @@ function renderFindsPage() {
             `<option value="${d.key}" ${findsFilter.date === d.key ? 'selected' : ''}>${d.label}</option>`
         )
     ].join('');
-
-
-    // Pre-compute map controls HTML to avoid nested template literal issues
-    const _mapControls = mapCanvasExpanded ? `
-                <div class="p-4">
-                    ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
-                </div>` : ''}
-            </div>
-
-
-
-
-            
-
-
-
-            ${mapCanvasExpanded ? `
-            <!-- Row 1: Zoom / GPS -->
-            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapIn(event)">+</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapOut(event)">−</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="resetMapView(event)">Reset</button>
-                <button id="toggle-gps-btn" type="button" class="flex-1 h-11 rounded-xl font-bold text-white text-sm shadow hover:opacity-90 select-none"
-                    style="background-color: rgb(var(--color-secondary));"
-                >${showUserPosition ? 'Hide' : 'Show'}</button>
-            </div>
-
-            <!-- Row 2: Map pan -->
-            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">◀</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▲</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▼</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▶</button>
-            </div>
-
-            <!-- Row 3: Tile size + Hide/Show -->
-            ${(() => {
-                const _s = getCompassOpenSurvey();
-                const _gt = _s && _s.gridTile ? _s.gridTile : null;
-                const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
-                const _gridShown  = _gt && _gt.enabled;
-                const _nudgeOk    = !isAnyTrackRecording() && _gridPlaced && _gridShown;
-                return `<p class="text-xs text-center ${isAnyTrackRecording() ? 'text-amber-600 font-semibold' : (_gridPlaced && !_gridShown ? 'text-gray-400' : 'hidden')} mb-1">
-                    ${isAnyTrackRecording()
-                        ? '<i class="fas fa-lock mr-1"></i>Grid controls locked while tracking'
-                        : (_gridPlaced && !_gridShown ? 'Show the grid to enable nudge &amp; rotate' : '')}
-                </p>`;
-            })()}
-            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
-                ${(() => {
-                    const _s = getCompassOpenSurvey();
-                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
-                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
-                    const _gridShown  = _gt && _gt.enabled;
-                    const _sizeOk = !isAnyTrackRecording();
-                    if (!_sizeOk) return `
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">10m</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">15m</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">20m</button>
-                    `;
-                    return `
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
-                            onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e)}">10m</button>
-                        <button id="gridtile-set-gps-btn" type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
-                            onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e)}">15m</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
-                            onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e)}">20m</button>
-                    `;
-                })()}
-                <button id="gridtile-toggle-btn" type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onclick="try{toggleGridTileEnabled();}catch(e){console.error(e)}">
-                    ${(() => {
-                      const s = getCompassOpenSurvey();
-                      const t = s && s.gridTile ? s.gridTile : null;
-                      return (t && t.enabled) ? 'Hide' : 'Show';
-                    })()}
-                </button>
-            </div>
-
-            <!-- Row 4: Grid move -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                ${(() => {
-                    const _s = getCompassOpenSurvey();
-                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
-                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
-                    const _gridShown  = _gt && _gt.enabled;
-                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
-                    if (!_ok) return `
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">W</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">N</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">S</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">E</button>
-                    `;
-                    return `
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
-                    `;
-                })()}
-            </div>
-            <!-- Row 5: Tile rotation -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                ${(() => {
-                    const _s = getCompassOpenSurvey();
-                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
-                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
-                    const _gridShown  = _gt && _gt.enabled;
-                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
-                    if (!_ok) return `
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↺</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-sm shadow select-none cursor-not-allowed">0°</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↻</button>
-                    `;
-                    return `
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
-                            onclick="rotateTile(-5)">↺</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                            onclick="rotateTile(0)">0°</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
-                            onclick="rotateTile(5)">↻</button>
-                    `;
-                })()}
-            </div>
-                    ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
-                    ${buildCompassRangeButtonsHtml(getQuickTargetRangesEffective())}
-
-            <!-- STAKE button -->
-            <div class="mt-1 mb-2">
-                <button
-                    id="stake-target-btn"
-                    type="button"
-                    class="w-full h-11 rounded-xl font-extrabold shadow bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 text-sm"
-                    >
-                    STAKE
-                </button>
-            </div>
-    ` : '';
 
     return `
         <div class="p-4">
@@ -15561,43 +15397,34 @@ if (!openSurvey) {
             ${(() => {
                 const _allTargets = Array.isArray(openSurvey.targets) ? openSurvey.targets.filter(t => t && !t.deleted) : [];
                 const _isStake = t => Number(t.vdi) === -100;
-                const _totalTargets = _allTargets.filter(t => !_isStake(t)).length;
-                const _totalStakes  = _allTargets.filter(t =>  _isStake(t)).length;
-                const _totalFinds   = Array.isArray(finds) ? finds.filter(f => f && !f.deleted && String(f.surveyId) === String(openSurvey.id)).length : 0;
-                const _totalTracks  = Array.isArray(openSurvey.tracks) ? openSurvey.tracks.filter(t => t && t.deleted !== true).length : 0;
+                const _totalTargets  = _allTargets.filter(t => !_isStake(t)).length;
+                const _totalStakes   = _allTargets.filter(t =>  _isStake(t)).length;
+                const _totalFinds    = Array.isArray(finds) ? finds.filter(f => f && !f.deleted && String(f.surveyId) === String(openSurvey.id)).length : 0;
+                const _totalTracks   = Array.isArray(openSurvey.tracks) ? openSurvey.tracks.filter(t => t && t.deleted !== true).length : 0;
                 const _mappedTargets = targets.length;
                 const _mappedFinds   = findsForMap.length;
+                // Pre-compute toggle values — no nested backticks needed
+                const _borderCls  = mapSummaryExpanded ? 'border-b border-gray-100' : '';
+                const _chevronCls = mapSummaryExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
+                const _countsHtml = mapSummaryExpanded
+                    ? '<div class="px-4 py-2 flex flex-wrap gap-x-4 gap-y-1">'
+                    + '<span class="text-xs text-gray-600 flex items-center gap-1"><i class="fas fa-crosshairs text-primary w-3"></i><span class="font-semibold">' + _totalTargets + '</span> targets' + (_mappedTargets < _totalTargets ? ' <span class="text-gray-400">('+_mappedTargets+' mapped)</span>' : '') + '</span>'
+                    + '<span class="text-xs text-gray-600 flex items-center gap-1"><i class="fas fa-gem text-yellow-600 w-3"></i><span class="font-semibold">' + _totalFinds + '</span> finds' + (_mappedFinds < _totalFinds ? ' <span class="text-gray-400">('+_mappedFinds+' mapped)</span>' : '') + '</span>'
+                    + '<span class="text-xs text-gray-600 flex items-center gap-1"><i class="fas fa-map-marker-alt text-gray-500 w-3"></i><span class="font-semibold">' + _totalStakes + '</span> stakes</span>'
+                    + '<span class="text-xs text-gray-600 flex items-center gap-1"><i class="fas fa-route text-green-600 w-3"></i><span class="font-semibold">' + _totalTracks + '</span> tracks</span>'
+                    + '</div>'
+                    : '';
                 return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
-                <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none ${mapSummaryExpanded ? 'border-b border-gray-100' : ''}"
-                     onclick="toggleMapPanel('summary')">
+                <div class="px-4 py-3 ${_borderCls} flex items-center justify-between cursor-pointer select-none"
+                     onclick="toggleMapSummary()">
                     <div class="flex items-center gap-2 min-w-0">
                         <span class="text-base font-bold text-primary truncate">${openSurvey.name || 'Unnamed survey'}</span>
                         <span class="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">OPEN</span>
                     </div>
-                    <i class="fas ${mapSummaryExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2 flex-shrink-0"></i>
+                    <i class="fas ${_chevronCls} text-gray-400 ml-2 flex-shrink-0"></i>
                 </div>
-                ${mapSummaryExpanded ? `
-                <div class="px-4 py-2 flex flex-wrap gap-x-4 gap-y-1">
-                    <span class="text-xs text-gray-600 flex items-center gap-1">
-                        <i class="fas fa-crosshairs text-primary w-3"></i>
-                        <span class="font-semibold">${_totalTargets}</span> targets
-                        ${_mappedTargets < _totalTargets ? '<span class="text-gray-400">('+_mappedTargets+' mapped)</span>' : ''}
-                    </span>
-                    <span class="text-xs text-gray-600 flex items-center gap-1">
-                        <i class="fas fa-gem text-yellow-600 w-3"></i>
-                        <span class="font-semibold">${_totalFinds}</span> finds
-                        ${_mappedFinds < _totalFinds ? '<span class="text-gray-400">('+_mappedFinds+' mapped)</span>' : ''}
-                    </span>
-                    <span class="text-xs text-gray-600 flex items-center gap-1">
-                        <i class="fas fa-map-marker-alt text-gray-500 w-3"></i>
-                        <span class="font-semibold">${_totalStakes}</span> stakes
-                    </span>
-                    <span class="text-xs text-gray-600 flex items-center gap-1">
-                        <i class="fas fa-route text-green-600 w-3"></i>
-                        <span class="font-semibold">${_totalTracks}</span> tracks
-                    </span>
-                </div>` : ''}
+                ${_countsHtml}
             </div>`;
             })()}
 
@@ -15614,56 +15441,195 @@ ${(() => {
         ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
         : 'Tracking OFF';
 
-    const _borderClass = mapTrackingExpanded ? 'border-b border-gray-100' : '';
-    const _chevron     = mapTrackingExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
-    const _statusClass = isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
-    const _startCls    = startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700';
-    const _stopCls     = stopDisabled  ? 'bg-red-600 opacity-40 cursor-not-allowed'   : 'bg-red-600 hover:bg-red-700';
-    const _body = mapTrackingExpanded ? `
-        <div class="p-4">
-            <div class="grid grid-cols-2 gap-3">
-                <button id="start-track-btn" type="button" ${startDisabled ? 'disabled' : ''}
-                    class="py-3 rounded-xl font-bold text-white shadow ${_startCls}">
-                    🟢 Start Tracking
-                </button>
-                <button id="stop-track-btn" type="button" ${stopDisabled ? 'disabled' : ''}
-                    class="py-3 rounded-xl font-bold text-white shadow ${_stopCls}">
-                    🔴 Stop Tracking
-                </button>
-            </div>
-            <p class="text-xs text-gray-500 mt-2">
-                Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn't squash the survey map.
-            </p>
-        </div>` : '';
     return `
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
-        <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none ${_borderClass}"
-             onclick="toggleMapPanel('tracking')">
+    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+        <div class="flex items-start justify-between gap-3 mb-3">
             <h3 class="text-xl font-semibold text-gray-700 flex items-center">
                 <i class="fas fa-route mr-2"></i> Tracking Controls
             </h3>
-            <div class="flex items-center gap-2 flex-shrink-0">
-                <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${_statusClass}">
-                    ${statusText}
-                </span>
-                <i class="fas ${_chevron} text-gray-400"></i>
-            </div>
+
+            <span class="text-xs font-semibold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                ${statusText}
+            </span>
         </div>
-        ${_body}
+
+        <div class="grid grid-cols-2 gap-3">
+            <button
+                id="start-track-btn"
+                type="button"
+                ${startDisabled ? 'disabled' : ''}
+                class="py-3 rounded-xl font-bold text-white shadow
+                       ${startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}">
+                🟢 Start Tracking
+            </button>
+
+            <button
+                id="stop-track-btn"
+                type="button"
+                ${stopDisabled ? 'disabled' : ''}
+                class="py-3 rounded-xl font-bold text-white shadow
+                       ${stopDisabled ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
+                🔴 Stop Tracking
+            </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">
+            Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.
+        </p>
     </div>
     `;
 })()}
 
             <!-- Map -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
-                <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none ${mapCanvasExpanded ? 'border-b border-gray-100' : ''}"
-                     onclick="toggleMapPanel('canvas')">
-                    <h3 class="text-xl font-semibold text-gray-700 flex items-center">
-                        <i class="fas fa-map mr-2"></i> Survey Map
-                    </h3>
-                    <i class="fas ${mapCanvasExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400 ml-2"></i>
-                </div>
-                ${_mapControls}
+            <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 mb-4">
+                <h3 class="text-xl font-semibold text-gray-700 flex items-center mb-3">
+                    <i class="fas fa-map mr-2"></i> Survey Map
+                </h3>
+                ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
+            </div>
+
+
+
+
+            
+
+
+
+            <!-- Row 1: Zoom / GPS -->
+            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapIn(event)">+</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapOut(event)">−</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="resetMapView(event)">Reset</button>
+                <button id="toggle-gps-btn" type="button" class="flex-1 h-11 rounded-xl font-bold text-white text-sm shadow hover:opacity-90 select-none"
+                    style="background-color: rgb(var(--color-secondary));"
+                >${showUserPosition ? 'Hide' : 'Show'}</button>
+            </div>
+
+            <!-- Row 2: Map pan -->
+            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">◀</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▲</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▼</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▶</button>
+            </div>
+
+            <!-- Row 3: Tile size + Hide/Show -->
+            ${(() => {
+                const _s = getCompassOpenSurvey();
+                const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                const _gridShown  = _gt && _gt.enabled;
+                const _nudgeOk    = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                return `<p class="text-xs text-center ${isAnyTrackRecording() ? 'text-amber-600 font-semibold' : (_gridPlaced && !_gridShown ? 'text-gray-400' : 'hidden')} mb-1">
+                    ${isAnyTrackRecording()
+                        ? '<i class="fas fa-lock mr-1"></i>Grid controls locked while tracking'
+                        : (_gridPlaced && !_gridShown ? 'Show the grid to enable nudge &amp; rotate' : '')}
+                </p>`;
+            })()}
+            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _sizeOk = !isAnyTrackRecording();
+                    if (!_sizeOk) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">10m</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">15m</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-rose-200 text-rose-400 font-bold text-sm shadow select-none cursor-not-allowed" title="Stop tracking to create a new grid">20m</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                            onclick="try{setGridTileToCurrentGps(10);}catch(e){console.error(e)}">10m</button>
+                        <button id="gridtile-set-gps-btn" type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                            onclick="try{setGridTileToCurrentGps(15);}catch(e){console.error(e)}">15m</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-sm shadow select-none"
+                            onclick="try{setGridTileToCurrentGps(20);}catch(e){console.error(e)}">20m</button>
+                    `;
+                })()}
+                <button id="gridtile-toggle-btn" type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onclick="try{toggleGridTileEnabled();}catch(e){console.error(e)}">
+                    ${(() => {
+                      const s = getCompassOpenSurvey();
+                      const t = s && s.gridTile ? s.gridTile : null;
+                      return (t && t.enabled) ? 'Hide' : 'Show';
+                    })()}
+                </button>
+            </div>
+
+            <!-- Row 4: Grid move -->
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                    if (!_ok) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">W</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">N</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">S</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">E</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
+                    `;
+                })()}
+            </div>
+            <!-- Row 5: Tile rotation -->
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                    if (!_ok) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↺</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-sm shadow select-none cursor-not-allowed">0°</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↻</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                            onclick="rotateTile(-5)">↺</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                            onclick="rotateTile(0)">0°</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                            onclick="rotateTile(5)">↻</button>
+                    `;
+                })()}
+            </div>
+                    ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
+                    ${buildCompassRangeButtonsHtml(getQuickTargetRangesEffective())}
+
+            <!-- STAKE button -->
+            <div class="mt-1 mb-2">
+                <button
+                    id="stake-target-btn"
+                    type="button"
+                    class="w-full h-11 rounded-xl font-extrabold shadow bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 text-sm"
+                    >
+                    STAKE
+                </button>
+            </div>
 
 <!-- Current GPS + Grid Tile controls (Step 1) -->
 <div class="mt-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
