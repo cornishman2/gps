@@ -76,6 +76,10 @@
     
   /* Hide native disclosure marker so we can use our own caret */
   /* Suppress ALL native <details> disclosure markers cross-browser */
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .details-chevron { transform: rotate(180deg); transition: transform 0.2s; }
+  .details-chevron { transition: transform 0.2s; }
   summary { list-style: none !important; display: flex !important; }
   summary::-webkit-details-marker { display: none !important; }
   summary::marker { display: none !important; content: none !important; }
@@ -351,9 +355,13 @@
                 <h4 class="text-lg font-semibold text-gray-800 mb-3">Permission &amp; Site Details (optional)</h4>
 
                 <!-- 1) Permission & Legality -->
-                <div class="mb-4 bg-blue-50 border-l-4 border-blue-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-blue-800 mb-3"><i class="fas fa-shield-alt mr-1"></i> Permission &amp; Legality</h5>
-                    <div class="mb-3">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-blue-50 border-l-4 border-blue-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-blue-800"><i class="fas fa-shield-alt mr-1"></i> Permission &amp; Legality</span>
+                    <i class="fas fa-chevron-down text-blue-400 details-chevron"></i>
+                </summary>
+                <div class="bg-blue-50 border-l-4 border-blue-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="mb-3 pt-3">
                     <label for="survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
                     <input type="text" id="survey-permission-from" name="permissionFrom"
                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
@@ -392,11 +400,16 @@
                               placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
                 </div>
                 </div>
+                </details>
 
                 <!-- 2) Area / Site Type -->
-                <div class="mb-4 bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-map mr-1"></i> Area / Site</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-gray-700"><i class="fas fa-map mr-1"></i> Area / Site</span>
+                    <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                </summary>
+                <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
                     <div>
                         <label for="survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
                         <select id="survey-area-type" name="areaType"
@@ -426,13 +439,17 @@
                         </select>
                     </div>
                 </div>
+                </div>
+                </details>
 
                 <!-- 3) Soil & Ground -->
-                </div><!-- close area/site card -->
-
-                <div class="mb-4 bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-layer-group mr-1"></i> Soil &amp; Ground</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-gray-700"><i class="fas fa-layer-group mr-1"></i> Soil &amp; Ground</span>
+                    <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                </summary>
+                <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3">
                     <div>
                         <label for="survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
                         <select id="survey-soil-type" name="soilType"
@@ -470,12 +487,17 @@
                         </select>
                     </div>
                 </div>
-                </div><!-- close soil card -->
+                </div>
+                </details>
 
                 <!-- 4) Environment -->
-                <div class="mb-4 bg-sky-50 border-l-4 border-sky-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-sky-800 mb-3"><i class="fas fa-cloud-sun mr-1"></i> Environment</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-sky-50 border-l-4 border-sky-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-sky-800"><i class="fas fa-cloud-sun mr-1"></i> Environment</span>
+                    <i class="fas fa-chevron-down text-sky-400 details-chevron"></i>
+                </summary>
+                <div class="bg-sky-50 border-l-4 border-sky-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3">
                     <div>
                         <label for="survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
                         <select id="survey-weather" name="weather"
@@ -505,12 +527,17 @@
                                placeholder="e.g. 8°C" />
                     </div>
                 </div>
-                </div><!-- close environment card -->
+                </div>
+                </details>
 
                 <!-- 5) Intent & Context -->
-                <div class="mb-4 bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-compass mr-1"></i> Intent &amp; Context</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-gray-700"><i class="fas fa-compass mr-1"></i> Intent &amp; Context</span>
+                    <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                </summary>
+                <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Purpose of Survey (multi-select)</label>
                         <div class="space-y-1 text-sm text-gray-700">
@@ -535,18 +562,22 @@
                         </select>
                     </div>
                 </div>
-                </div><!-- close intent card -->
+                </div>
+                </details>
 
                 <!-- 6) Access & Practical -->
-                <div class="mb-4 bg-amber-50 border-l-4 border-amber-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-amber-800 mb-3"><i class="fas fa-exclamation-triangle mr-1"></i> Access &amp; Practical</h5>
-                <div class="mb-3">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-amber-50 border-l-4 border-amber-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-amber-800"><i class="fas fa-exclamation-triangle mr-1"></i> Access &amp; Practical</span>
+                    <i class="fas fa-chevron-down text-amber-400 details-chevron"></i>
+                </summary>
+                <div class="bg-amber-50 border-l-4 border-amber-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="mb-3 pt-3">
                     <label for="survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
                     <textarea id="survey-access-notes" name="accessNotes" rows="2"
                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
                               placeholder="Parking, gates, paths, tides, livestock..."></textarea>
                 </div>
-
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Hazards / Warnings (multi-select)</label>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm text-gray-700">
@@ -558,12 +589,17 @@
                         <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
                     </div>
                 </div>
-                </div><!-- close access card -->
+                </div>
+                </details>
 
                 <!-- 7) Outcome Summary -->
-                <div class="mb-4 bg-green-50 border-l-4 border-green-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-green-800 mb-3"><i class="fas fa-chart-bar mr-1"></i> Outcome Summary</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-green-50 border-l-4 border-green-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-green-800"><i class="fas fa-chart-bar mr-1"></i> Outcome Summary</span>
+                    <i class="fas fa-chevron-down text-green-400 details-chevron"></i>
+                </summary>
+                <div class="bg-green-50 border-l-4 border-green-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3 pt-3">
                     <div>
                         <label for="survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
                         <select id="survey-overall-productivity" name="overallProductivity"
@@ -586,14 +622,15 @@
                         </select>
                     </div>
                 </div>
-
                 <div>
                     <label for="survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
                     <textarea id="survey-observations" name="surveyObservations" rows="3"
                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
                               placeholder="Anything useful you noticed..."></textarea>
                 </div>
-                </div><!-- close outcome card -->
+                </div>
+                </details>
+
             </div><!-- close optional sections -->
                 <div class="flex justify-end space-x-3 mt-6">
                     <button type="button" onclick="closeNewSurveyModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
@@ -762,9 +799,13 @@
                 <h4 class="text-lg font-semibold text-gray-800 mb-3">Permission &amp; Site Details (optional)</h4>
 
                 <!-- 1) Permission & Legality -->
-                <div class="mb-4 bg-blue-50 border-l-4 border-blue-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-blue-800 mb-3"><i class="fas fa-shield-alt mr-1"></i> Permission &amp; Legality</h5>
-                    <div class="mb-3">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-blue-50 border-l-4 border-blue-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-blue-800"><i class="fas fa-shield-alt mr-1"></i> Permission &amp; Legality</span>
+                    <i class="fas fa-chevron-down text-blue-400 details-chevron"></i>
+                </summary>
+                <div class="bg-blue-50 border-l-4 border-blue-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="mb-3 pt-3">
                     <label for="edit-survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
                     <input type="text" id="edit-survey-permission-from" name="permissionFrom"
                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
@@ -802,12 +843,17 @@
                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
                               placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
                 </div>
-                </div><!-- close permission card -->
+                </div>
+                </details>
 
                 <!-- 2) Area / Site Type -->
-                <div class="mb-4 bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-map mr-1"></i> Area / Site</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-gray-700"><i class="fas fa-map mr-1"></i> Area / Site</span>
+                    <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                </summary>
+                <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
                     <div>
                         <label for="edit-survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
                         <select id="edit-survey-area-type" name="areaType"
@@ -837,12 +883,17 @@
                         </select>
                     </div>
                 </div>
-                </div><!-- close area card -->
+                </div>
+                </details>
 
                 <!-- 3) Soil & Ground -->
-                <div class="mb-4 bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-layer-group mr-1"></i> Soil &amp; Ground</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-gray-700"><i class="fas fa-layer-group mr-1"></i> Soil &amp; Ground</span>
+                    <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                </summary>
+                <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3">
                     <div>
                         <label for="edit-survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
                         <select id="edit-survey-soil-type" name="soilType"
@@ -880,12 +931,17 @@
                         </select>
                     </div>
                 </div>
-                </div><!-- close soil card -->
+                </div>
+                </details>
 
                 <!-- 4) Environment -->
-                <div class="mb-4 bg-sky-50 border-l-4 border-sky-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-sky-800 mb-3"><i class="fas fa-cloud-sun mr-1"></i> Environment</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-sky-50 border-l-4 border-sky-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-sky-800"><i class="fas fa-cloud-sun mr-1"></i> Environment</span>
+                    <i class="fas fa-chevron-down text-sky-400 details-chevron"></i>
+                </summary>
+                <div class="bg-sky-50 border-l-4 border-sky-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3">
                     <div>
                         <label for="edit-survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
                         <select id="edit-survey-weather" name="weather"
@@ -915,12 +971,17 @@
                                placeholder="e.g. 8°C" />
                     </div>
                 </div>
-                </div><!-- close environment card -->
+                </div>
+                </details>
 
                 <!-- 5) Intent & Context -->
-                <div class="mb-4 bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-compass mr-1"></i> Intent &amp; Context</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-gray-700"><i class="fas fa-compass mr-1"></i> Intent &amp; Context</span>
+                    <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                </summary>
+                <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Purpose of Survey (multi-select)</label>
                         <div class="space-y-1 text-sm text-gray-700">
@@ -945,18 +1006,22 @@
                         </select>
                     </div>
                 </div>
-                </div><!-- close intent card -->
+                </div>
+                </details>
 
                 <!-- 6) Access & Practical -->
-                <div class="mb-4 bg-amber-50 border-l-4 border-amber-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-amber-800 mb-3"><i class="fas fa-exclamation-triangle mr-1"></i> Access &amp; Practical</h5>
-                <div class="mb-3">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-amber-50 border-l-4 border-amber-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-amber-800"><i class="fas fa-exclamation-triangle mr-1"></i> Access &amp; Practical</span>
+                    <i class="fas fa-chevron-down text-amber-400 details-chevron"></i>
+                </summary>
+                <div class="bg-amber-50 border-l-4 border-amber-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="mb-3 pt-3">
                     <label for="edit-survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
                     <textarea id="edit-survey-access-notes" name="accessNotes" rows="2"
                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
                               placeholder="Parking, gates, paths, tides, livestock..."></textarea>
                 </div>
-
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Hazards / Warnings (multi-select)</label>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm text-gray-700">
@@ -968,12 +1033,17 @@
                         <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
                     </div>
                 </div>
-                </div><!-- close access card -->
+                </div>
+                </details>
 
                 <!-- 7) Outcome Summary -->
-                <div class="mb-4 bg-green-50 border-l-4 border-green-300 rounded-lg p-3">
-                    <h5 class="text-sm font-bold text-green-800 mb-3"><i class="fas fa-chart-bar mr-1"></i> Outcome Summary</h5>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                <details class="mb-4">
+                <summary class="flex items-center justify-between bg-green-50 border-l-4 border-green-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                    <span class="text-sm font-bold text-green-800"><i class="fas fa-chart-bar mr-1"></i> Outcome Summary</span>
+                    <i class="fas fa-chevron-down text-green-400 details-chevron"></i>
+                </summary>
+                <div class="bg-green-50 border-l-4 border-green-300 rounded-b-lg px-3 pb-3 -mt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3 pt-3">
                     <div>
                         <label for="edit-survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
                         <select id="edit-survey-overall-productivity" name="overallProductivity"
@@ -996,14 +1066,15 @@
                         </select>
                     </div>
                 </div>
-
                 <div>
                     <label for="edit-survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
                     <textarea id="edit-survey-observations" name="surveyObservations" rows="3"
                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
                               placeholder="Anything useful you noticed..."></textarea>
                 </div>
-                </div><!-- close outcome card -->
+                </div>
+                </details>
+
             </div>
             <div class="flex justify-end space-x-3 mt-6">
                 <button
