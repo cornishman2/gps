@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2 24
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -3633,22 +3633,17 @@ async function updateHomeStorageStats() {
 // -------------------- App Limits / Expiry (Tester build controls) --------------------
 
 function isUnlimitedUser() {
-    // Special unlimited mode for the named tester account (case-sensitive match).
-    try {
-        return (userProfile && userProfile.name === 'Laurence Wright');
-    } catch (e) {
-        return false;
-    }
+    return false; // No bypass in the public release
 }
 window.APP_LIMITS_STORAGE_KEY ??= 'detekta_app_limits_v1';
 window.APP_RUNS_STORAGE_KEY   ??= 'detekta_app_runs_v1';
 
 function getDefaultAppLimits() {
     return {
-        maxSurveys: 3,
+        maxSurveys: 4,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-10-01' // ISO YYYY-MM-DD
+        expiryDate: '2027-06-01' // ISO YYYY-MM-DD
     };
 }
 
@@ -3728,7 +3723,7 @@ function canCreate(type, openSurvey = null) {
     const limits = loadAppLimits();
 
     if (isExpired(limits)) {
-        return { ok: false, reason: `This test version expired on ${limits.expiryDate}.`, type: 'expired' };
+        return { ok: false, reason: `This version of Detekta expired on ${limits.expiryDate}. Your data is safe and can be exported. Please check the Play Store for the latest version.`, type: 'expired' };
     }
 
     // Count surveys
@@ -3749,13 +3744,13 @@ function canCreate(type, openSurvey = null) {
     const findsCount   = allFinds.length;
 
     if (type === 'surveys' && limits.maxSurveys !== null && surveysCount >= limits.maxSurveys) {
-        return { ok: false, reason: `Max surveys reached (${limits.maxSurveys}).`, type: 'surveys' };
+        return { ok: false, reason: `You've reached the limit of ${limits.maxSurveys} surveys in the free version. Delete an old survey to create a new one, or export your data first.`, type: 'surveys' };
     }
     if (type === 'targets' && limits.maxTargets !== null && targetsCount >= limits.maxTargets) {
-        return { ok: false, reason: `Max targets reached (${limits.maxTargets}).`, type: 'targets' };
+        return { ok: false, reason: `You've reached the limit of ${limits.maxTargets} targets in the free version. Your existing data is safe and can be exported.`, type: 'targets' };
     }
     if (type === 'finds' && limits.maxFinds !== null && findsCount >= limits.maxFinds) {
-        return { ok: false, reason: `Max finds reached (${limits.maxFinds}).`, type: 'finds' };
+        return { ok: false, reason: `You've reached the limit of ${limits.maxFinds} finds in the free version. Your existing data is safe and can be exported.`, type: 'finds' };
     }
 
     return { ok: true, reason: '', type: type };
@@ -4053,8 +4048,8 @@ function renderHelpPage() {
         <p class="text-sm text-gray-700 mb-3">A live summary grid showing counts across all surveys: surveys, targets, finds, tracks, stakes, and photos, plus the amount of device storage used and how much remains available.</p>
 
         <hr class="border-t border-gray-100 my-3">
-        <p class="text-sm font-bold text-gray-700 mb-1">App Limits (Tester Build)</p>
-        <p class="text-sm text-gray-700 mb-3">Displays any active limits on surveys, targets, and finds, and the expiry date of this build. Blank fields mean unlimited. When expired, no new surveys, targets, or finds can be created, but existing data can still be exported.</p>
+        <p class="text-sm font-bold text-gray-700 mb-1">App Limits</p>
+        <p class="text-sm text-gray-700 mb-3">Displays any active limits on surveys, targets, and finds, and the expiry date of the free version. Blank fields mean unlimited. When limits are reached or the app has expired, no new surveys, targets, or finds can be created, but all existing data remains safe and can be exported.</p>
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">About</p>
@@ -16090,10 +16085,10 @@ function renderSettingsPage() {
     // Limits (Tester build) - display only
     // Assumes you have loadAppLimits() + isExpired(); falls back to your defaults if not present yet.
     const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {
-        maxSurveys: 3,
+        maxSurveys: 4,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-10-01'
+        expiryDate: '2027-06-01'
     };
 
     const valOrBlank = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
@@ -16234,7 +16229,7 @@ return `
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
   <div class="flex items-start justify-between gap-3">
     <div>
-      <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits (Tester Build)</h4>
+      <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits</h4>
       <p class="text-sm text-gray-600">These limits are set by the build. Blank means <strong>unlimited</strong>.</p>
     </div>
     ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
@@ -19995,10 +19990,10 @@ function bootstrapAppLimitsIfMissing() {
     if (localStorage.getItem(APP_LIMITS_STORAGE_KEY)) return;
 
     const testerDefaults = {
-        maxSurveys: 3,
+        maxSurveys: 4,
         maxTargets: 50,
         maxFinds: 30,
-        expiryDate: '2026-10-01'
+        expiryDate: '2027-06-01'
     };
 
     localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(testerDefaults));
