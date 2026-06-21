@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta Sunday 8:34
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta Panels
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1821,6 +1821,7 @@ let expandedFindIds    = new Set(); // find IDs whose cards are currently expand
 let mapSummaryExpanded  = true;     // survey summary panel on map page
 let mapTrackingExpanded = false;    // tracking controls panel (collapsed by default)
 let mapCanvasExpanded   = true;     // survey map canvas + controls
+let mapNewTrackPanel    = null;     // {id, name, color} when inline new-track form is open, else null
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
@@ -2080,17 +2081,6 @@ function startTileGridLocationWatch() {
             console.warn('Tile Grid GPS Watch Error:', error);
             tileGridLastCoords = null;
             tileGridLastFixTs = 0;
-
-            // Restart the watch if it wasn't a permission denial
-            if (error.code !== 1) {
-                setTimeout(() => {
-                    if (tileGridWatchId !== null) {
-                        navigator.geolocation.clearWatch(tileGridWatchId);
-                        tileGridWatchId = null;
-                    }
-                    startTileGridLocationWatch();
-                }, 2000);
-            }
         },
         { enableHighAccuracy: true, maximumAge: 0 }
     );
@@ -6677,23 +6667,6 @@ function closeModal(modalId) {
     const stillOpen = Array.from(anyOpen).some(m => m.id !== modalId && m.style.display === 'block');
     if (!stillOpen) {
         document.body.style.overflow = '';
-
-        // TWA fix: Android can kill the GPS watchPosition when a modal is open.
-        // Restart the GPS watches after every modal close to ensure GPS is always live.
-        setTimeout(() => {
-            if (typeof startLiveMapLocationWatch === 'function') {
-                if (liveMapWatchId !== null) {
-                    navigator.geolocation.clearWatch(liveMapWatchId);
-                    liveMapWatchId = null;
-                }
-                startLiveMapLocationWatch();
-            }
-            if (typeof startTileGridLocationWatch === 'function' && tileGridWatchId !== null) {
-                navigator.geolocation.clearWatch(tileGridWatchId);
-                tileGridWatchId = null;
-                startTileGridLocationWatch();
-            }
-        }, 500);
     }
 }
 
@@ -9587,7 +9560,6 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             };
             lastKnownMapCoords = { ...currentUserCoords };
             currentUserAccuracy = accuracy;
-            window._lastGpsFixTs = Date.now(); // watchdog heartbeat
 
             // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
@@ -9668,18 +9640,6 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
             currentUserAccuracy = null;
             smoothedUserCoords = null;
             console.error('Live Map GPS Watch Error:', error);
-
-            // In a TWA (Android packaged app), the GPS watch can be killed when
-            // a modal opens or focus shifts. Attempt to restart it automatically.
-            if (error.code !== 1) { // code 1 = permission denied — don't retry that
-                setTimeout(() => {
-                    if (liveMapWatchId !== null) {
-                        navigator.geolocation.clearWatch(liveMapWatchId);
-                        liveMapWatchId = null;
-                    }
-                    startLiveMapLocationWatch();
-                }, 2000); // wait 2 seconds then restart
-            }
         },
         {
             enableHighAccuracy: true,
@@ -12218,6 +12178,62 @@ function toggleMapSummary() {
 
 function toggleMapTracking() {
     mapTrackingExpanded = !mapTrackingExpanded;
+    rerenderCompassIfActive();
+}
+
+/** Save the inline new-track form on the Map page (replaces edit-track-modal for new tracks). */
+function saveInlineNewTrack() {
+    if (!mapNewTrackPanel) return;
+
+    const nameEl  = document.getElementById('inline-track-name');
+    const descEl  = document.getElementById('inline-track-description');
+    const colourInput = document.getElementById('inline-track-colour');
+
+    const newName  = (nameEl  ? nameEl.value.trim()  : '');
+    const newDesc  = (descEl  ? descEl.value.trim()  : '');
+    const newColor = (colourInput ? colourInput.value : '');
+
+    if (!newName) {
+        showMessage('Track name is required.', 'error');
+        return;
+    }
+
+    const found = findTrackById(mapNewTrackPanel.id);
+    if (!found || !found.track) {
+        showMessage('Track not found.', 'error');
+        mapNewTrackPanel = null;
+        rerenderCompassIfActive();
+        return;
+    }
+
+    found.track.name        = newName;
+    found.track.description = newDesc;
+    if (newColor) found.track.color = newColor;
+    found.survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    mapNewTrackPanel = null;
+    showMessage('Track saved.', 'success');
+    rerenderCompassIfActive();
+}
+
+/** Cancel the inline new-track form — deletes the just-created track. */
+function cancelInlineNewTrack() {
+    if (!mapNewTrackPanel) return;
+
+    const trackId = mapNewTrackPanel.id;
+    const openSurvey = surveys.find(s => s.status === 'Open');
+    if (openSurvey && Array.isArray(openSurvey.tracks)) {
+        openSurvey.tracks = openSurvey.tracks.filter(t => t.id !== trackId);
+        if (activeTrackId === trackId) {
+            activeTrackId       = null;
+            activeTrackSurveyId = null;
+            isTrackingActive    = false;
+        }
+        saveSurveysToLocalStorage();
+    }
+
+    mapNewTrackPanel = null;
     rerenderCompassIfActive();
 }
 
@@ -15383,15 +15399,16 @@ function handleStartTrackClick() {
 
     const nextIndex = openSurvey.tracks.length + 1;
     const name = nextIndex === 1 ? 'Perimeter' : `Track ${nextIndex}`;
+    const color = pickTrackColor(openSurvey.tracks.length);
 
     const newTrack = {
         id: generateId(),
         name,
-        description: '',              // ✅ NEW: GPX supports <desc>
+        description: '',
         createdAt: Date.now(),
         isRecording: true,
         isVisible: true,
-        color: pickTrackColor(openSurvey.tracks.length), // ✅ keep your colour logic
+        color,
         points: []
     };
 
@@ -15402,10 +15419,11 @@ function handleStartTrackClick() {
 
     saveSurveysToLocalStorage();
     showMessage(`Started recording ${name}.`, 'success');
-    render();
-    // After render(), pop the modal so user can name/describe immediately
-    openEditTrackModal(newTrack.id, { isNew: true });
 
+    // Open the inline new-track panel instead of the modal
+    mapNewTrackPanel = { id: newTrack.id, name, color };
+    mapTrackingExpanded = true;  // ensure the section is open
+    rerenderCompassIfActive();
 }
 
 /**
@@ -15704,7 +15722,6 @@ ${(() => {
         ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
         : 'Tracking OFF';
 
-    // Pre-compute toggle values to avoid nested template literals
     const _borderCls  = mapTrackingExpanded ? 'border-b border-gray-100' : '';
     const _chevronCls = mapTrackingExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
     const _statusCls  = isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
@@ -15712,14 +15729,58 @@ ${(() => {
     const _stopCls    = stopDisabled  ? 'bg-red-600 opacity-40 cursor-not-allowed'   : 'bg-red-600 hover:bg-red-700';
     const _startDis   = startDisabled ? 'disabled' : '';
     const _stopDis    = stopDisabled  ? 'disabled' : '';
+
+    // Build colour swatches for inline new-track form
+    const _swatchColors = [
+        { c: 'rgba(59,130,246,0.9)',  label: 'Blue'   },
+        { c: 'rgba(239,68,68,0.9)',   label: 'Red'    },
+        { c: 'rgba(34,197,94,0.9)',   label: 'Green'  },
+        { c: 'rgba(245,158,11,0.9)',  label: 'Amber'  },
+        { c: 'rgba(168,85,247,0.9)',  label: 'Purple' },
+        { c: 'rgba(20,184,166,0.9)',  label: 'Teal'   },
+        { c: 'rgba(236,72,153,0.9)',  label: 'Pink'   },
+        { c: 'rgba(100,116,139,0.9)', label: 'Slate'  },
+    ];
+    const _panelColor = mapNewTrackPanel ? mapNewTrackPanel.color : '';
+    const _swatchHtml = _swatchColors.map(s => {
+        const sel = s.c === _panelColor;
+        const bdr = sel ? 'border-blue-800' : 'border-transparent';
+        const scl = sel ? ' style="background:' + s.c + ';transform:scale(1.2)"' : ' style="background:' + s.c + '"';
+        return '<button type="button" onclick="(function(b){document.querySelectorAll(\'.inline-track-swatch\').forEach(x=>{x.style.borderColor=\'transparent\';x.style.transform=\'scale(1)\'});b.style.borderColor=\'#1e40af\';b.style.transform=\'scale(1.2)\';document.getElementById(\'inline-track-colour\').value=\''+s.c+'\'})(this)" class="inline-track-swatch w-8 h-8 rounded-full border-2 ' + bdr + '"' + scl + ' title="' + s.label + '"></button>';
+    }).join('');
+
+    const _inlineForm = mapNewTrackPanel
+        ? '<div class="p-4 border-t-2 border-green-200 bg-green-50">'
+        +   '<p class="text-sm font-semibold text-green-700 mb-3 flex items-center gap-1"><i class="fas fa-circle-notch fa-spin mr-1"></i> Recording — name your track:</p>'
+        +   '<div class="mb-3">'
+        +     '<label class="block text-sm font-medium text-gray-700 mb-1">Track Name *</label>'
+        +     '<input id="inline-track-name" type="text" value="' + (mapNewTrackPanel.name || '').replace(/"/g, '&quot;') + '" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm" placeholder="e.g. Perimeter">'
+        +   '</div>'
+        +   '<div class="mb-3">'
+        +     '<label class="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>'
+        +     '<textarea id="inline-track-description" rows="2" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm" placeholder="e.g. Started at gate, worked north…"></textarea>'
+        +   '</div>'
+        +   '<div class="mb-4">'
+        +     '<label class="block text-sm font-medium text-gray-700 mb-2">Track Colour</label>'
+        +     '<div class="flex gap-2 flex-wrap">' + _swatchHtml + '</div>'
+        +     '<input type="hidden" id="inline-track-colour" value="' + _panelColor + '">'
+        +   '</div>'
+        +   '<div class="flex gap-3">'
+        +     '<button type="button" onclick="cancelInlineNewTrack()" class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>'
+        +     '<button type="button" onclick="saveInlineNewTrack()" class="flex-1 py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 shadow" style="background-color:rgb(var(--color-secondary))">Save Track</button>'
+        +   '</div>'
+        + '</div>'
+        : '';
+
     const _bodyHtml   = mapTrackingExpanded
         ? '<div class="p-4">'
         + '<div class="grid grid-cols-2 gap-3">'
         + '<button id="start-track-btn" type="button" ' + _startDis + ' class="py-3 rounded-xl font-bold text-white shadow ' + _startCls + '">🟢 Start Tracking</button>'
         + '<button id="stop-track-btn" type="button" ' + _stopDis  + ' class="py-3 rounded-xl font-bold text-white shadow ' + _stopCls  + '">🔴 Stop Tracking</button>'
         + '</div>'
-        + '<p class="text-xs text-gray-500 mt-2">Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.</p>'
+        + '<p class="text-xs text-gray-500 mt-2">Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn\'t squash the survey map.</p>'
         + '</div>'
+        + _inlineForm
         : '';
 
     return `
@@ -20366,46 +20427,6 @@ document.addEventListener('click', function(e) {
         if (dd) dd.style.display = 'none';
     }
 });
-
-// ── TWA GPS WATCHDOG ────────────────────────────────────────────────────────
-// Android TWA can silently kill navigator.geolocation.watchPosition when a
-// modal opens (due to overflow:hidden or focus changes). This watchdog:
-//   1. Restarts GPS watches whenever the page becomes visible again
-//   2. Polls every 5 seconds and restarts if no GPS fix has arrived recently
-// ────────────────────────────────────────────────────────────────────────────
-
-function restartGpsWatches() {
-    if (!navigator.geolocation) return;
-    try {
-        if (typeof startLiveMapLocationWatch === 'function') {
-            if (liveMapWatchId !== null) {
-                navigator.geolocation.clearWatch(liveMapWatchId);
-                liveMapWatchId = null;
-            }
-            startLiveMapLocationWatch();
-        }
-    } catch(e) { console.warn('GPS watchdog restart error:', e); }
-}
-
-// Restart GPS whenever app comes back to foreground
-document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-        setTimeout(restartGpsWatches, 500);
-    }
-});
-
-// Watchdog: if on the Map page and GPS has been silent for more than 8 seconds, restart
-setInterval(function() {
-    if (currentPage !== 'Compass') return;
-    if (!navigator.geolocation) return;
-    const now = Date.now();
-    const lastFix = window._lastGpsFixTs || 0;
-    if (lastFix > 0 && (now - lastFix) > 8000) {
-        console.warn('GPS watchdog: no fix for 8s, restarting...');
-        restartGpsWatches();
-    }
-}, 5000);
-
 </script>
 
 <!-- Detector datalist: must be at top level so it works when modal is hidden -->
