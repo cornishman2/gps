@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta VC3
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta Sunday 8:34
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -9587,6 +9587,7 @@ liveMapWatchId = navigator.geolocation.watchPosition(
             };
             lastKnownMapCoords = { ...currentUserCoords };
             currentUserAccuracy = accuracy;
+            window._lastGpsFixTs = Date.now(); // watchdog heartbeat
 
             // Update smoothed position used by the map
             updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
@@ -20365,6 +20366,46 @@ document.addEventListener('click', function(e) {
         if (dd) dd.style.display = 'none';
     }
 });
+
+// ── TWA GPS WATCHDOG ────────────────────────────────────────────────────────
+// Android TWA can silently kill navigator.geolocation.watchPosition when a
+// modal opens (due to overflow:hidden or focus changes). This watchdog:
+//   1. Restarts GPS watches whenever the page becomes visible again
+//   2. Polls every 5 seconds and restarts if no GPS fix has arrived recently
+// ────────────────────────────────────────────────────────────────────────────
+
+function restartGpsWatches() {
+    if (!navigator.geolocation) return;
+    try {
+        if (typeof startLiveMapLocationWatch === 'function') {
+            if (liveMapWatchId !== null) {
+                navigator.geolocation.clearWatch(liveMapWatchId);
+                liveMapWatchId = null;
+            }
+            startLiveMapLocationWatch();
+        }
+    } catch(e) { console.warn('GPS watchdog restart error:', e); }
+}
+
+// Restart GPS whenever app comes back to foreground
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        setTimeout(restartGpsWatches, 500);
+    }
+});
+
+// Watchdog: if on the Map page and GPS has been silent for more than 8 seconds, restart
+setInterval(function() {
+    if (currentPage !== 'Compass') return;
+    if (!navigator.geolocation) return;
+    const now = Date.now();
+    const lastFix = window._lastGpsFixTs || 0;
+    if (lastFix > 0 && (now - lastFix) > 8000) {
+        console.warn('GPS watchdog: no fix for 8s, restarting...');
+        restartGpsWatches();
+    }
+}, 5000);
+
 </script>
 
 <!-- Detector datalist: must be at top level so it works when modal is hidden -->
