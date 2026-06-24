@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta Web Stable
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.5
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1802,6 +1802,27 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+        // --- VISIBILITY CHANGE: restart GPS if app returns from background (e.g. after camera) ---
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState !== 'visible') return;
+
+    // Only act if GPS should be running but the watch has been killed by the OS
+    if (typeof needsGpsNow === 'function' && needsGpsNow()) {
+        if (typeof liveMapWatchId !== 'undefined' && liveMapWatchId === null) {
+            console.log('Visibility restored: restarting GPS watch after OS focus loss.');
+            if (typeof startLiveMapLocationWatch === 'function') {
+                startLiveMapLocationWatch();
+            }
+        } else {
+            // Watch ID still exists — reset the watchdog timestamp so it doesn't
+            // immediately trigger a false "GPS lost" alarm after returning from camera
+            if (typeof lastGpsTimestamp !== 'undefined') {
+                lastGpsTimestamp = Date.now();
+            }
+        }
+    }
+});
+
         // --- GLOBAL STATE & INITIALIZATION ---
 // =====================
 //  APP META
@@ -1821,6 +1842,27 @@ let expandedFindIds    = new Set(); // find IDs whose cards are currently expand
 let mapSummaryExpanded  = true;     // survey summary panel on map page
 let mapTrackingExpanded = false;    // tracking controls panel (collapsed by default)
 let mapCanvasExpanded   = true;     // survey map canvas + controls
+let stakePanelOpen      = false;    // whether the inline stake-naming panel is showing
+let expandedTrackEditId   = null;     // track ID currently open for inline editing (null = none)
+let expandedTrackDeleteId = null;     // track ID currently open for inline delete confirm (null = none)
+let newSurveyPanelOpen     = false;    // whether the inline new-survey form is expanded on the home page
+let editSurveyPanelOpen    = false;    // whether the inline edit-survey form is expanded on the home page
+let expandedSurveyDeleteId = null;     // survey ID currently open for inline delete confirm (null = none)
+let exportSurveyConfirmOpen  = false;   // whether the inline export-zip confirm is showing
+let maintenanceConfirmOpen   = false;   // whether the inline maintenance confirm is showing
+let shareSurveyConfirmOpen   = false;   // whether the inline share-zip confirm is showing
+let importSurveyConfirmData  = null;    // {filename, text, log} when inline import confirm is showing
+let importGpxConfirmData     = null;    // {filename, openName, doImport} when inline GPX-as-new-survey confirm is showing
+let qrScanPanelOpen          = false;   // whether the inline QR scanner panel is showing on the exports page
+let editProfilePanelOpen     = false;   // whether the inline edit-profile form is showing on the settings page
+let detectorPresetConfirm    = null;    // {detector, label} when inline detector preset confirm is showing
+let newTargetPanelOpen      = false;   // whether the inline new-target form is showing on the targets page
+let expandedTargetEditId    = null;    // target ID currently open for inline editing
+let expandedTargetCopyId    = null;    // target ID currently open for inline copy-to-finds confirm
+let expandedTargetDeleteId  = null;    // target ID currently open for inline delete confirm
+let qrPanelTargetId         = null;    // target ID whose QR panel is currently open
+let expandedFindEditId      = null;    // find ID currently open for inline editing
+let expandedFindDeleteId    = null;    // find ID currently open for inline delete confirm
 let isMapFullscreen = false;
 let targetWatchId = null;
 let compassQuickTargetIdDraft = '';
@@ -2835,6 +2877,15 @@ let userProfile = {
 
       // --- NEW REAL-TIME LOCATION STATE ---
         let autoRefreshIntervalId = null; 
+
+        // GPS watchdog
+        let lastGpsTimestamp       = null;  // time of last successful GPS fix
+        let gpsWatchdogTimer       = null;  // setInterval ID — null when not running
+        let gpsRecoveryAttempts    = 0;     // auto-recovery attempts this session
+        let gpsLostWarning         = false; // true when recovery has failed
+        const GPS_LOST_MS          = 6000;  // silent for 6s = probably lost
+        const GPS_CHECK_MS         = 3000;  // watchdog check interval
+        const GPS_MAX_RECOVERIES   = 3;     // give up after this many attempts
         let currentUserCoords = null;
         let lastKnownMapCoords = null;
         let currentUserAccuracy = null;
@@ -5191,15 +5242,8 @@ async function exportPhotoGalleryToSelectedFolder() {
         Optional JPGs will also be written directly into the same folder.
       </span>
     `;
-    if (typeof showConfirmationModal === 'function') {
-        showConfirmationModal('Export Photo Gallery', msg, async () => {
-            if (typeof closeConfirmationModal === 'function') closeConfirmationModal();
-            await exportPhotoGalleries_MasterFolder(photoGalleryExportRootHandle, opts);
-        });
-    } else {
-        // If your app doesn’t have a confirm modal in this build
-        await exportPhotoGalleries_MasterFolder(photoGalleryExportRootHandle, opts);
-    }
+    // Export directly — user has already configured options above
+    await exportPhotoGalleries_MasterFolder(photoGalleryExportRootHandle, opts);
 }
 
 
@@ -6735,14 +6779,6 @@ async function exportOpenSurveyPhotoGallery_ToFolder(rootPick) {
         </div>
     `;
 
-    showConfirmationModal('Export Photo Gallery', confirmHtml, async () => {
-        // close modal immediately
-        if (typeof closeConfirmationModal === 'function') closeConfirmationModal();
-        else {
-            const m = document.getElementById('confirmation-modal');
-            if (m) m.style.display = 'none';
-        }
-
         let originalBtnText = '';
         if (btn) {
             originalBtnText = btn.innerText;
@@ -7058,7 +7094,6 @@ if (surveyRefs.length) {
                 btn.innerText = originalBtnText || 'Step 2: Export to Selected Folder';
             }
         }
-    });
 }
 // ======================================
 // SHARED FORM HELPERS
@@ -7077,44 +7112,40 @@ function attachFormSubmitHandler(formId, handler) {
         
 async function openEditFindModal(findId) {
     const find = finds.find(f => f.id === findId);
-    if (!find) {
-        showMessage('Find not found.', 'error');
-        return;
-    }
+    if (!find) { showMessage('Find not found.', 'error'); return; }
 
-    const modal = document.getElementById('edit-find-modal');
-    const form  = document.getElementById('edit-find-form');
-    if (!modal || !form) return;
+    expandedFindDeleteId = null;
+    expandedFindEditId   = findId;
+    render();
 
-    // Core fields
-    form['findId'].value           = find.id;
-    form['findDescription'].value  = find.description || '';
-    form['findType'].value         = find.type || 'Unknown';
-    form['findVDI'].value          = find.vdi || '';
-    form['findDepth'].value        = find.depth || '';
-    form['findCoords'].value       = find.coordinates || '';
-    form['findAccuracy'].value     = find.accuracy || '';
+    // Populate fields after render
+    const form = document.getElementById('edit-find-form');
+    if (!form) return;
 
+    form['findId'].value          = find.id;
+    form['findDescription'].value = find.description || '';
+    form['findType'].value        = find.type || 'Unknown';
+    form['findVDI'].value         = find.vdi || '';
+    form['findDepth'].value       = find.depth || '';
+    form['findCoords'].value      = find.coordinates || '';
+    form['findAccuracy'].value    = find.accuracy || '';
 
-    // New optional fields (Find data model v1)
-    if (form['findIdentification'])  form['findIdentification'].value = find.identification || '';
-    if (form['findMaterial'])        form['findMaterial'].value = find.material || '';
-    if (form['findCondition'])       form['findCondition'].value = find.condition || '';
-    if (form['findPeriod'])          form['findPeriod'].value = find.period || '';
-    if (form['findWeightG'])         form['findWeightG'].value = (find.weightG ?? '') === 0 ? '0' : (find.weightG || '');
-    if (form['findDimensionsMm'])    form['findDimensionsMm'].value = find.dimensionsMm || '';
-    if (form['findWhereKept'])       form['findWhereKept'].value = find.whereKept || '';
-    if (form['findDisposition'])     form['findDisposition'].value = find.disposition || '';
+    if (form['findIdentification'])   form['findIdentification'].value  = find.identification || '';
+    if (form['findMaterial'])         form['findMaterial'].value        = find.material || '';
+    if (form['findCondition'])        form['findCondition'].value       = find.condition || '';
+    if (form['findPeriod'])           form['findPeriod'].value          = find.period || '';
+    if (form['findWeightG'])          form['findWeightG'].value         = (find.weightG ?? '') === 0 ? '0' : (find.weightG || '');
+    if (form['findDimensionsMm'])     form['findDimensionsMm'].value    = find.dimensionsMm || '';
+    if (form['findWhereKept'])        form['findWhereKept'].value       = find.whereKept || '';
+    if (form['findDisposition'])      form['findDisposition'].value     = find.disposition || '';
     if (form['findPossibleTreasure']) form['findPossibleTreasure'].checked = !!find.possibleTreasure;
-    // Photos for editing: resolve IndexedDB refs -> object URLs, or use existing data URLs
+
     try {
         if (Array.isArray(find.photos) && find.photos.length > 0) {
             const first = find.photos[0];
-            if (isIndexedDbPhotoRef(first)) {
-                currentEditFindPhotos = await loadPhotoUrlsFromRefs(find.photos);
-            } else {
-                currentEditFindPhotos = find.photos.slice();
-            }
+            currentEditFindPhotos = isIndexedDbPhotoRef(first)
+                ? await loadPhotoUrlsFromRefs(find.photos)
+                : find.photos.slice();
         } else if (find.findPhotoData) {
             currentEditFindPhotos = [find.findPhotoData];
         } else if (find.targetPhotoData) {
@@ -7124,22 +7155,44 @@ async function openEditFindModal(findId) {
         } else {
             currentEditFindPhotos = [];
         }
-    } catch (e) {
+    } catch(e) {
         console.error('Error preparing edit find photos:', e);
         currentEditFindPhotos = [];
     }
 
-    // Update preview + hidden field from currentEditFindPhotos
     updateEditFindPhotoPreview();
-
-    // Attach the submit handler via shared helper
     attachFormSubmitHandler('edit-find-form', handleEditFindSubmit);
 
-    // Show the modal
-    openModal('edit-find-modal');
+    // Set logged date
+    try {
+        const el = document.getElementById('edit-find-logged-datetime-value');
+        if (el) el.textContent = find.dateCreated ? new Date(find.dateCreated).toLocaleString() : 'Not recorded';
+    } catch(e) {}
 }
+
 function closeEditFindModal() {
-    closeModal('edit-find-modal');
+    expandedFindEditId = null;
+    render();
+}
+
+/** Open inline delete confirm for a find. */
+function openInlineFindDelete(findId) {
+    expandedFindEditId   = null;
+    expandedFindDeleteId = findId;
+    render();
+}
+
+/** Cancel inline find delete. */
+function cancelInlineFindDelete() {
+    expandedFindDeleteId = null;
+    render();
+}
+
+/** Confirm and execute inline find delete. */
+async function confirmInlineFindDelete(findId) {
+    expandedFindDeleteId = null;
+    const ok = await deleteFindPermanently(findId);
+    if (ok) render();
 }
 
 function openEditTrackModal(trackId, options = {}) {
@@ -7309,8 +7362,13 @@ async function handleSurveyWithPhotosImport(event) {
     }
 
     // Confirm first
-    showImportConfirmModal(file.name, async () => {
-        try {
+    // Store file data and show inline confirm panel instead of modal
+    importSurveyConfirmData = { filename: file.name, file, log, event };
+    render();
+}
+
+async function _executeHandleSurveyWithPhotosImport(file, log, event) {
+    try {
             log(`Reading "${file.name}"...`);
 
             const lower = file.name.toLowerCase();
@@ -7358,7 +7416,6 @@ async function handleSurveyWithPhotosImport(event) {
             // reset file input so selecting same file again triggers onchange
             try { event.target.value = ''; } catch (_) {}
         }
-    });
 }
         
 async function performSurveyZipImport(zip, jsonText, filename, log) {
@@ -8766,11 +8823,8 @@ function exportOpenSurveyAsGPX() {
 
     const what = parts.length ? parts.join(', ') : 'Nothing (no boxes ticked)';
 
-    showConfirmationModal(
-        'Export GPX',
-        `Export the open survey to a GPX file?\n\nIncluded: ${what}`,
-        () => actuallyExportOpenSurveyAsGPX()
-    );
+    // Export directly — user has already set options above
+    actuallyExportOpenSurveyAsGPX();
 }
 
 function actuallyExportOpenSurveyAsGPX() {
@@ -8894,6 +8948,9 @@ function actuallyExportOpenSurveyAsGPX() {
 
  const name = track.name || 'Track';
 const desc = track.description || '';
+const trackExt = track.color
+    ? `\n    <extensions>\n      <color>${xmlEscape(track.color)}</color>\n    </extensions>`
+    : '';
 
 return `
   <trk>
@@ -9248,6 +9305,17 @@ function renderExportPage() {
                 </div>
                 <textarea id="import-survey-log" rows="6" readonly placeholder="Import log will appear here."
                           class="w-full p-2 border border-emerald-500 rounded-md font-mono text-xs mt-2"></textarea>
+                ${importSurveyConfirmData ? `
+                <div class="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <p class="text-sm text-gray-700 mb-3">Import survey from <strong>${importSurveyConfirmData.filename}</strong>? The survey and its finds will be added to your local data.</p>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="importSurveyConfirmData=null;render()"
+                                class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                        <button type="button" onclick="(async()=>{const d=importSurveyConfirmData;importSurveyConfirmData=null;render();if(d.text){d.log('Starting import...');await performSurveyImport(d.text,d.filename,d.log);}else{await _executeHandleSurveyWithPhotosImport(d.file,d.log,d.event);}})()"
+                                class="flex-1 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 shadow">Import</button>
+                    </div>
+                </div>
+                ` : ''}
             </div>
 
             <!-- IMPORT GPX -->
@@ -9278,6 +9346,18 @@ function renderExportPage() {
 
                 <textarea id="import-gpx-log" rows="6" readonly placeholder="GPX import log will appear here."
                           class="w-full p-2 border border-sky-500 rounded-md font-mono text-xs mt-3"></textarea>
+                ${importGpxConfirmData ? `
+                <div class="mt-3 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                    <p class="text-sm text-gray-700 mb-1">This will close the current open survey (<strong>${importGpxConfirmData.openName}</strong>) and create a new survey from:</p>
+                    <p class="text-sm font-semibold text-gray-800 mb-3">${importGpxConfirmData.filename}</p>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="importGpxConfirmData=null;render()"
+                                class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                        <button type="button" onclick="(()=>{const d=importGpxConfirmData;importGpxConfirmData=null;render();d.doImport();})()"
+                                class="flex-1 py-2 rounded-lg bg-sky-600 text-white font-semibold text-sm hover:bg-sky-700 shadow">Import</button>
+                    </div>
+                </div>
+                ` : ''}
             </div>
 
             <!-- Import Target via QR Code -->
@@ -9288,13 +9368,31 @@ function renderExportPage() {
                     Scan a QR code generated from a Target to import it into the currently open survey.
                 </p>
 
+                ${qrScanPanelOpen ? `
+                <div class="w-full aspect-video bg-black rounded-lg overflow-hidden mb-3 flex items-center justify-center">
+                    <video
+                        id="target-qr-scan-video"
+                        autoplay
+                        playsinline
+                        class="w-full h-full object-cover"
+                    ></video>
+                </div>
+                <canvas id="target-qr-scan-canvas" class="hidden"></canvas>
+                <p id="target-qr-scan-status" class="text-xs text-gray-500 mb-4">Initialising camera…</p>
+                <button type="button" onclick="closeTargetQrScanModal()"
+                        class="w-full py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">
+                    Cancel
+                </button>
+                ` : `
                 <button
                     id="scan-target-qr-btn"
+                    onclick="openTargetQrScanModal()"
                     class="px-4 py-2 rounded-lg text-white font-bold shadow hover:opacity-90"
                     style="background-color: ${secondaryColor};"
                     type="button">
                     Scan Target QR
                 </button>
+                `}
             </div>
 
         </div>
@@ -9505,6 +9603,15 @@ function stopLiveMapLocationWatch() {
         bestLiveAccuracy = Infinity;
     }
 
+    // Stop watchdog and reset all state
+    if (gpsWatchdogTimer !== null) {
+        clearInterval(gpsWatchdogTimer);
+        gpsWatchdogTimer = null;
+    }
+    lastGpsTimestamp    = null;
+    gpsRecoveryAttempts = 0;
+    gpsLostWarning      = false;
+
     // Clear all live-user map state so it cannot affect the bounding box
     if (currentUserCoords) lastKnownMapCoords = { ...currentUserCoords };
     else if (smoothedUserCoords) lastKnownMapCoords = { ...smoothedUserCoords };
@@ -9517,9 +9624,54 @@ function stopLiveMapLocationWatch() {
     movementHistory = [];
     hasRenderedFirstGpsFix = false;
 
-
     console.log("Live Map GPS Watch stopped and user map state cleared.");
 }
+
+function checkGpsWatchdog() {
+    // Only run while GPS is supposed to be active
+    if (liveMapWatchId === null) return;
+    if (lastGpsTimestamp === null) return; // no fix yet — too early to judge
+
+    const silent = Date.now() - lastGpsTimestamp;
+    if (silent < GPS_LOST_MS) return; // GPS is fine
+
+    console.warn('GPS watchdog: no fix for ' + silent + 'ms');
+
+    if (gpsRecoveryAttempts < GPS_MAX_RECOVERIES) {
+        gpsRecoveryAttempts++;
+        console.log('GPS watchdog: recovery attempt ' + gpsRecoveryAttempts + '/' + GPS_MAX_RECOVERIES);
+
+        // Clear the stale watch and start a fresh one
+        if (liveMapWatchId !== null) {
+            navigator.geolocation.clearWatch(liveMapWatchId);
+            liveMapWatchId = null;
+        }
+        liveMapWatchId = navigator.geolocation.watchPosition(
+            function(position) {
+                var accuracy = Math.round(position.coords.accuracy * 10) / 10;
+                lastGpsTimestamp = Date.now();
+                if (gpsLostWarning) {
+                    gpsLostWarning      = false;
+                    gpsRecoveryAttempts = 0;
+                    console.log('GPS watchdog: recovered.');
+                    rerenderCompassIfActive();
+                }
+                currentUserCoords   = { lat: position.coords.latitude, lon: position.coords.longitude };
+                currentUserAccuracy = accuracy;
+                lastKnownMapCoords  = { lat: position.coords.latitude, lon: position.coords.longitude };
+            },
+            function(err) { console.error('GPS watchdog recovery error:', err); },
+            { enableHighAccuracy: true, maximumAge: 0 }
+        );
+    } else {
+        if (!gpsLostWarning) {
+            gpsLostWarning = true;
+            console.error('GPS watchdog: lost after ' + GPS_MAX_RECOVERIES + ' recovery attempts.');
+            rerenderCompassIfActive();
+        }
+    }
+}
+
 
     function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
@@ -9551,6 +9703,14 @@ hasRenderedFirstGpsFix = false;
 liveMapWatchId = navigator.geolocation.watchPosition(
         (position) => {
             const accuracy = Math.round(position.coords.accuracy *10) / 10;
+
+            // Record fix time for watchdog; clear any warning if GPS has recovered
+            lastGpsTimestamp = Date.now();
+            if (gpsLostWarning) {
+                gpsLostWarning      = false;
+                gpsRecoveryAttempts = 0;
+                rerenderCompassIfActive();
+            }
 
             // Raw latest reading
             currentUserCoords = {
@@ -9652,6 +9812,16 @@ if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
             updateMapWithUserLocationAndRender();
         }, 1000); // 3 seconds
         console.log('Live Map GPS Watch and auto-refresh interval started.');
+    }
+
+    // Reset watchdog for a clean session
+    lastGpsTimestamp    = null;
+    gpsRecoveryAttempts = 0;
+    gpsLostWarning      = false;
+
+    // Start watchdog (guard against duplicates)
+    if (gpsWatchdogTimer === null) {
+        gpsWatchdogTimer = setInterval(checkGpsWatchdog, GPS_CHECK_MS);
     }
 }
 
@@ -9896,13 +10066,8 @@ async function handleGpxImport(event) {
         const openSurvey = surveys.find(s => s.status === 'Open');
         const openName = openSurvey ? (openSurvey.name || 'Open survey') : '(none)';
 
-        showConfirmationModal(
-            'Import GPX as New Survey',
-            `This will close the current Open survey (<strong>${openName}</strong>) and create a new survey from:<br><br>
-             <strong>${file.name}</strong><br><br>
-             Continue?`,
-            doImport
-        );
+        importGpxConfirmData = { filename: file.name, openName, doImport };
+        render();
     } else {
         doImport();
     }
@@ -10176,6 +10341,14 @@ function startCompassAutoRefresh() {
 function updateMapWithUserLocationAndRender() {
     if (currentPage !== 'Compass') return;
 
+    // Don't re-render while the user is editing or confirming deletion of a track inline.
+    if (expandedTrackEditId !== null) return;
+    if (expandedTrackDeleteId !== null) return;
+
+    // Don't re-render while either tracking setup form or stake panel is open
+    if (document.getElementById('inline-track-name')) return;
+    if (stakePanelOpen) return;
+
     const ae = document.activeElement;
     const tag = ae ? (ae.tagName || '').toUpperCase() : '';
     const isFormControl = !!ae && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae.isContentEditable);
@@ -10218,19 +10391,12 @@ function showMessage(message, type = 'info') {
     const toast = document.getElementById('message-toast');
     if (!toast) return;
 
-    // Clear any old fade timers
-    if (toast._hideTimer) {
-        clearTimeout(toast._hideTimer);
-        toast._hideTimer = null;
-    }
-    if (toast._removeTimer) {
-        clearTimeout(toast._removeTimer);
-        toast._removeTimer = null;
-    }
+    // Clear any old timers
+    if (toast._hideTimer)   { clearTimeout(toast._hideTimer);   toast._hideTimer   = null; }
+    if (toast._removeTimer) { clearTimeout(toast._removeTimer); toast._removeTimer = null; }
 
     toast.textContent = message;
 
-    // Strong background colours
     const bgColor =
         type === 'success' ? 'bg-green-600'
         : type === 'error' ? 'bg-red-700'
@@ -10238,36 +10404,24 @@ function showMessage(message, type = 'info') {
         : 'bg-gray-900';
 
     toast.className = [
-        'fixed',
-        'top-20',
-        'left-1/2',
-        '-translate-x-1/2',
-        'z-50',
-        'px-5',
-        'py-3',
-        'rounded-xl',
-        'text-white',
-        'font-semibold',
-        'shadow-2xl',
-        'border',
-        'border-white/30',
-        'opacity-100',
-        'transition-opacity',
-        'duration-400'
-    ].join(' ') + ' ' + bgColor;
+        'fixed', 'top-20', 'left-1/2', '-translate-x-1/2', 'z-50',
+        'px-5', 'py-3', 'rounded-xl', 'text-white', 'font-semibold',
+        'shadow-2xl', 'border', 'border-white/30',
+        'transition-opacity', 'duration-400',
+        bgColor
+    ].join(' ');
+
+    // Show — no display change, just opacity
+    requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'pointer-events-none');
+        toast.classList.add('opacity-100');
+    });
 
     // Fade out after 2.5 seconds
     toast._hideTimer = setTimeout(() => {
-        toast.classList.add('opacity-0');
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0', 'pointer-events-none');
     }, 2500);
-
-    // Remove (display:none) after the fade finishes
-    toast._removeTimer = setTimeout(() => {
-        toast.style.display = 'none';
-    }, 3000);
-
-    // Ensure it's visible again on next message
-    toast.style.display = 'block';
 }
 
         
@@ -10336,38 +10490,32 @@ function showConfirmationModal(title, message, onConfirmCallback) {
 
     /** Shows the New Survey Modal and attaches the submit listener. */
 function showNewSurveyModal() {
-    // LIMITS: block opening the modal if over limit / expired
+    // LIMITS: block opening if over limit / expired
     const r = canCreate('surveys');
     if (!r.ok) {
         showMessage(r.reason, 'error');
         return;
     }
+    newSurveyPanelOpen = true;
+    render();
 
-    // Reset the form whenever the modal is opened
+    // After render, reset the form and photo state
     const form = document.getElementById('new-survey-form');
     if (form) form.reset();
-
-    // Reset multi-photo buffer + preview
     window.currentNewSurveyPhotos = [];
     updateNewSurveyPhotoPreview();
-
-    // Ensure file input is configured for multi-select + no forced camera
     const input = document.getElementById('new-survey-photo-input');
     if (input) {
         try { input.removeAttribute('capture'); } catch (e) {}
         input.multiple = true;
     }
-
-    // Use shared helper to attach the submit listener safely
     attachFormSubmitHandler('new-survey-form', handleNewSurveySubmit);
-
-    // Show the modal via shared helper
-    openModal('new-survey-modal');
 }
 
-/** Closes the New Survey Modal. */
+/** Closes the inline New Survey panel. */
 function closeNewSurveyModal() {
-    closeModal('new-survey-modal');
+    newSurveyPanelOpen = false;
+    render();
 }
 
 async function handleNewSurveySubmit(event) {
@@ -10547,127 +10695,93 @@ async function showEditSurveyModal() {
         return;
     }
 
+    editSurveyPanelOpen = true;
+    render();
+
+    // Populate fields after render creates the DOM elements
     const form = document.getElementById('edit-survey-form');
     if (!form) return;
 
-    // Populate fields
     form['surveyId'].value = openSurvey.id;
     form['surveyName'].value = openSurvey.name || '';
     form['surveyDescription'].value = openSurvey.description || '';
 
-    // Populate NEW optional survey metadata fields (Sections 1–7)
-    const setVal = (id, v) => {
-        const el = document.getElementById(id);
-        if (el) el.value = (v ?? '');
-    };
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v ?? ''); };
 
     setVal('edit-survey-permission-from', openSurvey.permissionFrom || '');
     setVal('edit-survey-permission-type', openSurvey.permissionType || '');
     setVal('edit-survey-permission-date-granted', formatSurveyPermissionDate(openSurvey.permissionDateGranted));
     setVal('edit-survey-permission-expiry', formatSurveyPermissionDate(openSurvey.permissionExpiry));
     setVal('edit-survey-permission-notes', openSurvey.permissionNotes || '');
-
     setVal('edit-survey-area-type', openSurvey.areaType || '');
     setVal('edit-survey-land-use-current', openSurvey.landUseCurrent || '');
-
     setVal('edit-survey-soil-type', openSurvey.soilType || '');
     setVal('edit-survey-ground-condition', openSurvey.groundCondition || '');
     setVal('edit-survey-mineralisation-level', openSurvey.mineralisationLevel || '');
-
     setVal('edit-survey-weather', openSurvey.weather || '');
     setVal('edit-survey-recent-rain', openSurvey.recentRain || '');
     setVal('edit-survey-temperature', openSurvey.temperature || '');
-
     setVal('edit-survey-expected-period', openSurvey.expectedPeriod || '');
     setVal('edit-survey-access-notes', openSurvey.accessNotes || '');
     setVal('edit-survey-overall-productivity', openSurvey.overallProductivity || '');
     setVal('edit-survey-would-detect-again', openSurvey.wouldDetectAgain || '');
     setVal('edit-survey-observations', openSurvey.surveyObservations || '');
 
-    // Purpose multi-select (checkboxes)
     const purposes = Array.isArray(openSurvey.purpose) ? openSurvey.purpose : [];
-    form.querySelectorAll('input[name="purpose"]').forEach(cb => {
-        cb.checked = purposes.includes(cb.value);
-    });
+    form.querySelectorAll('input[name="purpose"]').forEach(cb => { cb.checked = purposes.includes(cb.value); });
 
-    // Hazards multi-select (checkboxes)
     const hazardsArr = Array.isArray(openSurvey.hazards) ? openSurvey.hazards : [];
-    form.querySelectorAll('input[name="hazards"]').forEach(cb => {
-        cb.checked = hazardsArr.includes(cb.value);
-    });
+    form.querySelectorAll('input[name="hazards"]').forEach(cb => { cb.checked = hazardsArr.includes(cb.value); });
 
-    // --- IMPORTANT: keep refs alongside preview URLs ---
+    // Photos
     window.currentEditSurveyPhotos = [];
-    window.currentEditSurveyPhotoRefs = []; // aligned by index to currentEditSurveyPhotos
-
+    window.currentEditSurveyPhotoRefs = [];
     try {
-        // Preferred new structure: openSurvey.photos = ["idb:..", ...]
         if (Array.isArray(openSurvey.photos) && openSurvey.photos.length) {
             const first = openSurvey.photos[0];
-
             if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(first)) {
-                // Load blob URLs for preview, keep refs in parallel
                 if (typeof loadPhotoUrlsFromRefs === 'function') {
                     const urls = await loadPhotoUrlsFromRefs(openSurvey.photos);
                     window.currentEditSurveyPhotos = Array.isArray(urls) ? urls : [];
                     window.currentEditSurveyPhotoRefs = openSurvey.photos.slice(0, window.currentEditSurveyPhotos.length);
                 } else {
-                    // Fallback: resolve one-by-one
-                    const urls = [];
-                    const refs = [];
                     for (const ref of openSurvey.photos) {
-                        try {
-                            const u = await getPhotoUrlFromRef(ref);
-                            if (u) {
-                                urls.push(u);
-                                refs.push(ref);
-                            }
-                        } catch (e) {}
+                        try { const u = await getPhotoUrlFromRef(ref); if (u) { window.currentEditSurveyPhotos.push(u); window.currentEditSurveyPhotoRefs.push(ref); } } catch(e) {}
                     }
-                    window.currentEditSurveyPhotos = urls;
-                    window.currentEditSurveyPhotoRefs = refs;
                 }
             } else {
-                // Legacy: data URLs stored directly in openSurvey.photos
                 window.currentEditSurveyPhotos = openSurvey.photos.slice();
                 window.currentEditSurveyPhotoRefs = new Array(window.currentEditSurveyPhotos.length).fill(null);
             }
-        }
-        // Back-compat: single survey photo ref/data
-        else if (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
+        } else if (openSurvey.surveyPhotoRef && typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(openSurvey.surveyPhotoRef)) {
             const u = await getPhotoUrlFromRef(openSurvey.surveyPhotoRef);
-            if (u) {
-                window.currentEditSurveyPhotos = [u];
-                window.currentEditSurveyPhotoRefs = [openSurvey.surveyPhotoRef];
-            }
+            if (u) { window.currentEditSurveyPhotos = [u]; window.currentEditSurveyPhotoRefs = [openSurvey.surveyPhotoRef]; }
         } else if (openSurvey.surveyPhotoData) {
             window.currentEditSurveyPhotos = [openSurvey.surveyPhotoData];
             window.currentEditSurveyPhotoRefs = [null];
         }
-    } catch (e) {
+    } catch(e) {
         console.error('Error preparing edit survey photos:', e);
         window.currentEditSurveyPhotos = [];
         window.currentEditSurveyPhotoRefs = [];
     }
-
-    // Update UI using your existing preview renderer (must be multi-photo version)
     updateEditSurveyPhotoPreview();
 
-    // Ensure chooser offers camera
     const input = document.getElementById('edit-survey-photo-input');
     if (input) {
-        try { input.removeAttribute('capture'); } catch (e) {}
+        try { input.removeAttribute('capture'); } catch(e) {}
         input.setAttribute('accept', 'image/*;capture=camera');
         input.multiple = true;
     }
 
     attachFormSubmitHandler('edit-survey-form', handleEditSurveySubmit);
-    openModal('edit-survey-modal');
 }
 
         function closeEditSurveyModal() {
-    closeModal('edit-survey-modal');
+    editSurveyPanelOpen = false;
+    render();
 }
+
 async function handleEditSurveySubmit(event) {
     event.preventDefault();
     const form = event.target;
@@ -10814,7 +10928,7 @@ const permissionNotes = (document.getElementById('edit-survey-permission-notes')
 /** Shows the New Target Modal. */
 function showNewTargetModal() {
 
-    // LIMITS: block opening the modal if over limit / expired
+    // LIMITS: block opening if over limit / expired
     const r = canCreate('targets');
     if (!r.ok) {
         showMessage(r.reason, 'error');
@@ -10829,59 +10943,39 @@ function showNewTargetModal() {
         );
     }
 
-    // 1. Set survey name + id in the modal
-    const headerSpan = document.getElementById('current-target-survey-name');
-    if (headerSpan) {
-        headerSpan.textContent = openSurvey.name;
-    }
-    const surveyIdHidden = document.getElementById('new-target-survey-id');
-    if (surveyIdHidden) {
-        surveyIdHidden.value = openSurvey.id;
-    }
+    newTargetPanelOpen = true;
+    currentPage = 'Targets';
+    render();
 
-    // 2. Reset the form
+    // After render, initialise the form
     const form = document.getElementById('new-target-form');
-    if (form) {
-        form.reset();
-    }
+    if (form) form.reset();
 
-    // 3. Reset NEW TARGET photo state + UI (IMPORTANT!)
     currentNewTargetPhotos = [];
 
     const statusSpan  = document.getElementById('new-target-photo-status');
     const wrapper     = document.getElementById('new-target-photo-preview-wrapper');
     const hiddenField = document.getElementById('target-photo-data');
     const fileInput   = document.getElementById('new-target-photo-input');
+    const headerSpan  = document.getElementById('current-target-survey-name');
+    const surveyIdEl  = document.getElementById('new-target-survey-id');
 
-    if (statusSpan) {
-        statusSpan.textContent = 'No photo captured yet.';
-    }
-    if (wrapper) {
-        wrapper.classList.add('hidden');
-        wrapper.innerHTML = ''; // clear any old thumbnails
-    }
-    if (hiddenField) {
-        // store an empty array, ready for JSON.parse
-        hiddenField.value = '[]';
-    }
-    if (fileInput) {
-        fileInput.value = ''; // clear any previous selection
-    }
+    if (headerSpan)  headerSpan.textContent = openSurvey.name;
+    if (surveyIdEl)  surveyIdEl.value = openSurvey.id;
+    if (statusSpan)  statusSpan.textContent = 'No photo captured yet.';
+    if (wrapper)     { wrapper.classList.add('hidden'); wrapper.innerHTML = ''; }
+    if (hiddenField) hiddenField.value = '[]';
+    if (fileInput)   fileInput.value = '';
 
-    // 4. Request GPS location
     startTargetLocationWatch();
-
-    // 5. Attach the submit listener via shared helper
     attachFormSubmitHandler('new-target-form', handleNewTargetSubmit);
-
-    // 6. Display modal via shared helper
-    openModal('new-target-modal');
 }
 
-/** Closes the New Target Modal. */
+/** Closes the inline New Target panel. */
 function closeNewTargetModal() {
     stopTargetLocationWatch();
-    closeModal('new-target-modal');
+    newTargetPanelOpen = false;
+    render();
 }
 
 // NOTE: now async because we talk to IndexedDB
@@ -11825,77 +11919,46 @@ async function handleEditFindPhotoSelected(event) {
         
 async function showEditTargetModal(targetId, surveyId) {
     const survey = surveys.find(s => s.id === surveyId);
-    if (!survey) {
-        showMessage('Error: Survey not found.', 'error');
-        return;
-    }
+    if (!survey) { showMessage('Error: Survey not found.', 'error'); return; }
 
     const target = survey.targets.find(t => t.id === targetId);
-if (!target) {
-        showMessage('Error: Target not found.', 'error');
-        return;
-    }
+    if (!target) { showMessage('Error: Target not found.', 'error'); return; }
 
-    // 1. Populate the form fields
+    expandedTargetEditId = targetId;
+    currentPage = 'Targets';
+    render();
+
+    // Populate form fields after render
     document.getElementById('edit-target-id').value = target.id;
     document.getElementById('edit-survey-id').value = survey.id;
     document.getElementById('current-edit-survey-name').textContent = survey.name;
 
-    // Populate read-only Logged Date/Time (robust: after modal is visible)
-    const setLogged = () => {
-        try {
-            const el = document.getElementById("edit-target-logged-datetime-value");
-            if (el) el.textContent = formatTargetLoggedDateTime(target);
-        } catch (e) {}
-    };
-    setLogged();
-    // In some builds the modal content mounts a moment later, so retry on next tick.
-    setTimeout(setLogged, 0);
-    setTimeout(setLogged, 50);
+    try {
+        const el = document.getElementById('edit-target-logged-datetime-value');
+        if (el) el.textContent = formatTargetLoggedDateTime(target);
+    } catch(e) {}
 
-
-    document.getElementById('edit-target-description').value =
-        typeof target.description === 'string' ? target.description : '';
-
-    document.getElementById('edit-target-vdi').value =
-        target.vdi === 'N/A' || target.vdi == null ? '' : String(target.vdi);
-
-    document.getElementById('edit-target-depth').value =
-        target.depth === 'Unknown' || target.depth == null ? '' : String(target.depth);
-
+    document.getElementById('edit-target-description').value = typeof target.description === 'string' ? target.description : '';
+    document.getElementById('edit-target-vdi').value = target.vdi === 'N/A' || target.vdi == null ? '' : String(target.vdi);
+    document.getElementById('edit-target-depth').value = target.depth === 'Unknown' || target.depth == null ? '' : String(target.depth);
     document.getElementById('edit-target-type').value = target.type || 'Coin';
+    document.getElementById('edit-target-coords').value = target.coordinates === 'No GPS logged' || !target.coordinates ? '' : String(target.coordinates);
+    document.getElementById('edit-target-accuracy').value = target.accuracy === 'N/A' || target.accuracy == null ? '' : String(target.accuracy);
 
-    document.getElementById('edit-target-coords').value =
-        target.coordinates === 'No GPS logged' || !target.coordinates
-            ? ''
-            : String(target.coordinates);
-
-    // Accuracy
-    document.getElementById('edit-target-accuracy').value =
-        target.accuracy === 'N/A' || target.accuracy == null ? '' : String(target.accuracy);
-
-    // Centre on map radios
-    const shouldCenterOnMap = target.centerOnMap === true;
     const yesRadio = document.getElementById('edit-target-center-yes');
     const noRadio  = document.getElementById('edit-target-center-no');
-
     if (yesRadio && noRadio) {
-        yesRadio.checked = shouldCenterOnMap;
-        noRadio.checked  = !shouldCenterOnMap;
+        yesRadio.checked = target.centerOnMap === true;
+        noRadio.checked  = target.centerOnMap !== true;
     }
 
-    // 2. Photos: convert stored data into displayable thumbnails
+    // Photos
     try {
         if (Array.isArray(target.photos) && target.photos.length > 0) {
             const first = target.photos[0];
-
-            if (isIndexedDbPhotoRef(first)) {
-                // NEW: load from IndexedDB, get object URLs
-                currentEditTargetPhotos = await loadPhotoUrlsFromRefs(target.photos);
-            } else {
-                // Old style: already data URLs
-                currentEditTargetPhotos = target.photos.slice();
-            }
+            currentEditTargetPhotos = isIndexedDbPhotoRef(first)
+                ? await loadPhotoUrlsFromRefs(target.photos)
+                : target.photos.slice();
         } else if (target.targetPhotoData) {
             currentEditTargetPhotos = [target.targetPhotoData];
         } else if (target.photoDataUrl) {
@@ -11903,22 +11966,95 @@ if (!target) {
         } else {
             currentEditTargetPhotos = [];
         }
-    } catch (e) {
+    } catch(e) {
         console.error('Error preparing edit target photos:', e);
         currentEditTargetPhotos = [];
     }
 
     updateEditTargetPhotoPreview();
-
-    // 3. Attach the submit listener (via your shared helper)
     attachFormSubmitHandler('edit-target-form', handleEditTargetSubmit);
-
-    // 4. Show the modal
-    openModal('edit-target-modal');
 }
-        
+
 function closeEditTargetModal() {
-    closeModal('edit-target-modal');
+    expandedTargetEditId = null;
+    render();
+}
+
+/** Open inline copy-to-finds confirm for a target. */
+function openInlineTargetCopy(targetId) {
+    expandedTargetEditId   = null;
+    expandedTargetDeleteId = null;
+    expandedTargetCopyId   = targetId;
+    render();
+}
+
+/** Cancel inline copy-to-finds. */
+function cancelInlineTargetCopy() {
+    expandedTargetCopyId = null;
+    render();
+}
+
+/** Confirm and execute copy-to-finds for a target. */
+function confirmInlineTargetCopy(targetId, surveyId) {
+    expandedTargetCopyId = null;
+
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return;
+    const target = (survey.targets || []).find(t => t.id === targetId);
+    if (!target) return;
+
+    target.isFind = true;
+    const created = createFindFromTarget(target, survey);
+    if (!created) return;
+
+    const maybePromise = deleteTargetPermanently(surveyId, targetId);
+    if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then((ok) => {
+            if (ok && navigationTargetId === targetId) navigationTargetId = null;
+            render();
+        }).catch((e) => {
+            console.error('Error deleting target after saving find:', e);
+            showMessage('Find saved, but failed to remove the target.', 'warning');
+            render();
+        });
+    } else {
+        if (maybePromise && navigationTargetId === targetId) navigationTargetId = null;
+        survey.dateLastChanged = Date.now();
+        saveSurveysToLocalStorage();
+        render();
+    }
+}
+
+/** Open inline delete confirm for a target. */
+function openInlineTargetDelete(targetId) {
+    expandedTargetEditId = null;
+    expandedTargetCopyId = null;
+    expandedTargetDeleteId = targetId;
+    render();
+}
+
+/** Cancel inline target delete. */
+function cancelInlineTargetDelete() {
+    expandedTargetDeleteId = null;
+    render();
+}
+
+/** Confirm and execute inline target delete. */
+function confirmInlineTargetDelete(targetId, surveyId) {
+    expandedTargetDeleteId = null;
+
+    const survey = surveys.find(s => s.id === surveyId);
+    const maybePromise = deleteTargetPermanently(surveyId, targetId);
+    if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then((ok) => {
+            if (ok && navigationTargetId === targetId) navigationTargetId = null;
+            render();
+        });
+    } else {
+        if (maybePromise && navigationTargetId === targetId) navigationTargetId = null;
+        if (survey) { survey.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
+        render();
+    }
 }
         /** Handles the submission of the Edit Target form. */
 /** Handles the submission of the Edit Target form. */
@@ -12052,24 +12188,28 @@ async function handleEditTargetSubmit(event) {
 
         /** Shows the Edit Profile Modal and loads current data. */
         function showEditProfileModal() {
-            const modal = document.getElementById('edit-profile-modal');
-            // Pre-fill the form with current profile data
-            document.getElementById('profile-name').value = userProfile.name;
-            document.getElementById('profile-detector').value = userProfile.detector;
-            document.getElementById('profile-ncmd-number').value = userProfile.ncmdNumber || '';
+            editProfilePanelOpen = true;
+            render();
 
-            modal.style.display = 'block';
+            // Pre-fill after render
+            const nameEl   = document.getElementById('profile-name');
+            const detEl    = document.getElementById('profile-detector');
+            const ncmdEl   = document.getElementById('profile-ncmd-number');
+            if (nameEl)  nameEl.value  = userProfile.name || '';
+            if (detEl)   detEl.value   = userProfile.detector || '';
+            if (ncmdEl)  ncmdEl.value  = userProfile.ncmdNumber || '';
 
-            // Attach the submit listener
             const form = document.getElementById('edit-profile-form');
-            form.removeEventListener('submit', handleEditProfileSubmit); 
-            form.addEventListener('submit', handleEditProfileSubmit); 
-            showMessage("Edit Profile modal opened. Please enter your name and detector and click 'Save Changes'.", 'info');
+            if (form) {
+                form.removeEventListener('submit', handleEditProfileSubmit);
+                form.addEventListener('submit', handleEditProfileSubmit);
+            }
         }
 
-        /** Closes the Edit Profile Modal. */
+        /** Closes the inline Edit Profile panel. */
         function closeEditProfileModal() {
-            document.getElementById('edit-profile-modal').style.display = 'none';
+            editProfilePanelOpen = false;
+            render();
         }
 
         /** Handles the submission of the Edit Profile form. */
@@ -12104,7 +12244,7 @@ function handleEditProfileSubmit(event) {
         });
     }
 
-    // If detector changed and a preset exists for the new one, prompt to apply it
+    // If detector changed and a preset exists for the new one, show inline confirm
     if (newDetector && newDetector !== oldDetector) {
         const key = getPresetKeyForDetector(newDetector);
         if (key) {
@@ -12112,18 +12252,9 @@ function handleEditProfileSubmit(event) {
                           key === 'legend'  ? 'Nokta Legend (0 to 60)' :
                                              'Standard (0 to 99)';
             saveSurveysToLocalStorage();
-            closeEditProfileModal();
+            editProfilePanelOpen = false;
+            detectorPresetConfirm = { detector: newDetector, label };
             render();
-            showConfirmationModal(
-                'Update Quick Target Ranges?',
-                `You changed your detector to <strong>${newDetector}</strong>.<br><br>
-                 Would you like to update the Quick Target Button VDI ranges to the
-                 <strong>${label}</strong> preset to match?`,
-                () => {
-                    applyDetectorPreset(newDetector, false);
-                    showMessage(`VDI ranges updated for ${newDetector}.`, 'success');
-                }
-            );
             return;
         }
     }
@@ -12178,6 +12309,101 @@ function toggleMapSummary() {
 function toggleMapTracking() {
     mapTrackingExpanded = !mapTrackingExpanded;
     rerenderCompassIfActive();
+}
+
+/** Save an inline track edit from the track list panel. */
+function saveInlineTrackEdit(trackId) {
+    const nameEl   = document.getElementById('inline-edit-track-name-' + trackId);
+    const colourEl = document.getElementById('inline-edit-track-colour-' + trackId);
+
+    const newName  = nameEl  ? nameEl.value.trim()  : '';
+    const newColor = colourEl ? colourEl.value       : '';
+
+    if (!newName) {
+        showMessage('Track name is required.', 'error');
+        return;
+    }
+
+    const found = findTrackById(trackId);
+    if (!found || !found.track) {
+        showMessage('Track not found.', 'error');
+        expandedTrackEditId = null;
+        rerenderCompassIfActive();
+        return;
+    }
+
+    found.track.name = newName;
+    if (newColor) found.track.color = newColor;
+    found.survey.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+
+    expandedTrackEditId = null;
+    rerenderCompassIfActive();
+}
+
+/** Cancel an inline track edit without saving. */
+function cancelInlineTrackEdit() {
+    expandedTrackEditId = null;
+    rerenderCompassIfActive();
+}
+
+/** Open the inline delete confirmation for a track. */
+function openInlineTrackDelete(trackId) {
+    expandedTrackEditId   = null; // close any open edit
+    expandedTrackDeleteId = trackId;
+    rerenderCompassIfActive();
+}
+
+/** Confirm and execute the inline track delete. */
+function confirmInlineTrackDelete(trackId) {
+    expandedTrackDeleteId = null;
+
+    const found = findTrackById(trackId);
+    if (!found) { showMessage('Track not found.', 'error'); rerenderCompassIfActive(); return; }
+
+    const { survey, track } = found;
+    const trackName = track.name || 'track';
+
+    // If deleting the active recording track, stop and clear state
+    if (activeTrackId === track.id && activeTrackSurveyId === survey.id) {
+        activeTrackId = null;
+        activeTrackSurveyId = null;
+        isTrackingActive = false;
+        if (typeof stopLiveMapLocationWatch === 'function') stopLiveMapLocationWatch();
+    }
+
+    survey.tracks = (survey.tracks || []).filter(t => t.id !== track.id);
+    saveSurveysToLocalStorage();
+
+    if (currentPage === 'Compass') render();
+}
+
+/** Cancel the inline track delete. */
+function cancelInlineTrackDelete() {
+    expandedTrackDeleteId = null;
+    rerenderCompassIfActive();
+}
+
+/** Open the inline delete confirmation for a survey. */
+function openInlineSurveyDelete(surveyId) {
+    expandedSurveyDeleteId = surveyId;
+    render();
+}
+
+/** Cancel the inline survey delete. */
+function cancelInlineSurveyDelete() {
+    expandedSurveyDeleteId = null;
+    render();
+}
+
+/** Confirm and execute the inline survey delete. */
+async function confirmInlineSurveyDelete(surveyId) {
+    expandedSurveyDeleteId = null;
+    const survey = surveys.find(s => s.id === surveyId);
+    const name = survey ? (survey.name || 'Survey') : 'Survey';
+    const ok = await deleteSurveyAndAllAssociatedData(surveyId);
+    if (!ok) showMessage(`Could not delete survey '${name}'.`, 'error');
+    render();
 }
 
 // Survey Map toggle — update state then re-render
@@ -12516,85 +12742,78 @@ case 'edit': {
  * plus minimal survey + profile info.
  */
 function buildTargetQrPayload(target, survey) {
+    const trim = (v, max) => String(v || '').slice(0, max);
+    // Strip non-ASCII chars — QRCode library uses byte mode and chokes on UTF-8 multibyte
+    const ascii = (v) => v.replace(/[^\x00-\x7F]/g, '?');
+
     const payload = {
-        kind: 'geoFind-target',
-        version: 1,
-
-        surveyId: survey.id,
-        surveyName: survey.name || '',
-        surveyDescription: survey.description || '',
-
-        targetId: target.id,
-        description: target.description || '',
-        type: target.type || '',
-        vdi: target.vdi || '',
-        depth: target.depth || '',
-        coordinates: target.coordinates || '',
-        accuracy: target.accuracy || '',
-        status: target.status || '',
-        createdAt: target.createdAt || target.timestamp || null,
-
-        user: (userProfile && userProfile.name) ? userProfile.name : '',
-        detector: (userProfile && userProfile.detector) ? userProfile.detector : ''
+        k:   'target',
+        tid: trim(target.id, 36),
+        sid: trim(survey.id, 36),
+        sn:  ascii(trim(survey.name, 40)),
+        d:   ascii(trim(target.description, 60)),
+        t:   ascii(trim(target.type, 20)),
+        vdi: trim(target.vdi, 8),
+        dep: ascii(trim(target.depth, 15)),
+        c:   trim(target.coordinates, 25),
+        st:  trim(target.status, 15)
     };
 
-    // Keep it compact for QR efficiency
-    return JSON.stringify(payload);
+    const result = JSON.stringify(payload);
+    console.log('QR payload chars:', result.length);
+    return result;
 }
 
 /**
  * Given a target + survey, populate and show the QR modal.
  */
 function showTargetQrModalFor(target, survey) {
-    const modal        = document.getElementById('target-qr-modal');
-    const titleEl      = document.getElementById('target-qr-title');
-    const codeContainer = document.getElementById('target-qr-code-container');
-    const textArea     = document.getElementById('target-qr-raw-text');
+    qrPanelTargetId = target.id;
+    render();
 
-    if (!modal || !titleEl || !codeContainer) {
-        console.error('Target QR modal elements not found.');
-        showMessage('QR modal not found in page.', 'error');
-        return;
-    }
+    // Wait for the DOM to settle after render() before generating the QR code
+    setTimeout(() => {
+        const codeContainer = document.getElementById('target-qr-code-container');
+        const textArea      = document.getElementById('target-qr-raw-text');
 
-    const qrText = buildTargetQrPayload(target, survey);
+        if (!codeContainer) return;
 
-    // Title
-    titleEl.textContent = `Target QR: ${target.description || 'Unnamed target'}`;
+        const qrText = buildTargetQrPayload(target, survey);
 
-    // Raw JSON text (for debugging / copy-paste)
-    if (textArea) {
-        textArea.value = qrText;
-    }
+        if (textArea) textArea.value = qrText;
 
-    // Clear any previous QR code
-    codeContainer.innerHTML = '';
+        codeContainer.innerHTML = '';
 
-    // Use the QRCode library if available
-    if (typeof QRCode === 'function') {
-        try {
-            new QRCode(codeContainer, {
-                text: qrText,
-                width: 256,
-                height: 256,
-                correctLevel: QRCode.CorrectLevel.M
-            });
-        } catch (e) {
-            console.error('Error creating QR code:', e);
-            codeContainer.innerHTML =
-                '<p class="text-xs text-red-600">Could not generate QR code.</p>';
+        if (typeof QRCode === 'function') {
+            try {
+                new QRCode(codeContainer, {
+                    text: qrText,
+                    width: 256,
+                    height: 256,
+                    correctLevel: 1  // QRCode.CorrectLevel.L — lowest, allows most data
+                });
+            } catch(e) {
+                console.error('QRCode generation error:', e);
+                codeContainer.innerHTML = '<p class="text-xs text-red-600">QR data too large to encode.</p>';
+            }
+        } else {
+            codeContainer.innerHTML = '<p class="text-xs text-red-600">QR library not loaded. Copy the raw text below.</p>';
         }
-    } else {
-        // Fallback if library not loaded
-        codeContainer.innerHTML =
-            '<p class="text-xs text-red-600">QR library not loaded. The raw text below can be copied manually.</p>';
-    }
-
-    openModal('target-qr-modal');
+    }, 100);
 }
 
 function closeTargetQrModal() {
-    closeModal('target-qr-modal');
+    qrPanelTargetId = null;
+    render();
+}
+
+/** Open the inline QR panel for a target by ID. */
+function openInlineTargetQr(targetId, surveyId) {
+    const survey = surveys.find(s => s.id === surveyId);
+    if (!survey) return;
+    const target = (survey.targets || []).find(t => t.id === targetId);
+    if (!target) return;
+    showTargetQrModalFor(target, survey);
 }
 // ------------------------------------------------------
 // Target QR SCAN helpers (import into OPEN survey)
@@ -12615,19 +12834,22 @@ function openTargetQrScanModal() {
         return;
     }
 
-    const statusEl = document.getElementById('target-qr-scan-status');
-    if (statusEl) {
-        statusEl.textContent = 'Initialising camera…';
-    }
+    qrScanPanelOpen = true;
+    render();
 
-    openModal('target-qr-scan-modal');
-    startTargetQrScan();
+    // Start camera after DOM has settled
+    setTimeout(() => {
+        const statusEl = document.getElementById('target-qr-scan-status');
+        if (statusEl) statusEl.textContent = 'Initialising camera…';
+        startTargetQrScan();
+    }, 50);
 }
 
-/** Close the scan modal and stop the camera. */
+/** Close the inline scan panel and stop the camera. */
 function closeTargetQrScanModal() {
     stopTargetQrScan();
-    closeModal('target-qr-scan-modal');
+    qrScanPanelOpen = false;
+    render();
 }
 
 /** Start camera and begin scanning frames for a QR code. */
@@ -12817,8 +13039,8 @@ if (!r.ok) {
         render();   // Re-render current page (likely Settings)
     };
 
-    // Use your existing generic confirmation modal
-    showConfirmationModal(confirmTitle, confirmMessage, doImport);
+    // Import directly — user confirmed by scanning the QR code
+    doImport();
 }
 
 
@@ -13073,11 +13295,285 @@ function renderHomePage() {
     }
 
     <!-- Create Survey -->
-    <button id="new-survey-btn"
-        class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6"
-        style="background-color: rgb(var(--color-secondary));">
-        <i class="fas fa-plus-circle mr-2"></i> Create New Survey
-    </button>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+        <div class="px-4 py-3 ${newSurveyPanelOpen ? 'border-b border-gray-100' : ''} flex items-center justify-between cursor-pointer select-none"
+             onclick="newSurveyPanelOpen ? closeNewSurveyModal() : showNewSurveyModal()">
+            <h3 class="text-xl font-semibold text-gray-700 flex items-center">
+                <i class="fas fa-plus-circle mr-2 text-primary"></i> Create New Survey
+            </h3>
+            <i class="fas ${newSurveyPanelOpen ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400"></i>
+        </div>
+        ${newSurveyPanelOpen ? `
+        <div class="p-4">
+            <form id="new-survey-form">
+                <div class="mb-4">
+                    <label for="survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
+                    <input type="text" id="survey-name" name="surveyName" required
+                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                </div>
+                <div class="mb-4">
+                    <label for="survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
+                    <textarea id="survey-description" name="surveyDescription" rows="3"
+                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"></textarea>
+                </div>
+
+                <!-- Survey photo (optional) -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700">Survey Photo (optional)</label>
+                    <p id="new-survey-photo-status" class="text-xs text-gray-500 mt-1">No photo captured yet.</p>
+                    <div id="new-survey-photo-preview-wrapper" class="mt-2 hidden">
+                        <img id="new-survey-photo-preview" alt="Survey photo preview"
+                            class="w-full max-h-48 object-cover rounded-lg border border-gray-200" />
+                    </div>
+                    <input type="hidden" id="new-survey-photo-data" name="surveyPhotoData">
+                    <input type="file" id="new-survey-photo-input" accept="image/*" class="hidden"
+                        onchange="handleNewSurveyPhotoSelected(event)">
+                    <button type="button" onclick="triggerNewSurveyPhotoInput()"
+                        class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100">
+                        <i class="fas fa-camera mr-2"></i> Take / Choose Photo
+                    </button>
+                </div>
+
+                <!-- Additional Survey Details (all optional) -->
+                <div class="mt-6 border-t pt-4">
+                    <h4 class="text-lg font-semibold text-gray-800 mb-3">Permission &amp; Site Details (optional)</h4>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-blue-50 border-l-4 border-blue-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-blue-800"><i class="fas fa-shield-alt mr-1"></i> Permission &amp; Legality</span>
+                        <i class="fas fa-chevron-down text-blue-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-blue-50 border-l-4 border-blue-300 rounded-b-lg px-3 pb-3 -mt-1">
+                        <div class="mb-3 pt-3">
+                        <label for="survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
+                        <input type="text" id="survey-permission-from" name="permissionFrom"
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                               placeholder="e.g. Farmer Smith, National Trust, Council" />
+                        </div>
+                        <div class="mb-3">
+                        <label for="survey-permission-type" class="block text-sm font-medium text-gray-700">Permission Type</label>
+                        <select id="survey-permission-type" name="permissionType"
+                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                            <option value="">(blank)</option>
+                            <option>Written</option><option>Verbal</option><option>Club / Rally</option><option>Open access</option>
+                        </select>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label for="survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Permission Date Granted</label>
+                                <input type="text" id="survey-permission-date-granted" name="permissionDateGranted"
+                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" placeholder="dd/mm/yy" inputmode="numeric" />
+                            </div>
+                            <div>
+                                <label for="survey-permission-expiry" class="block text-sm font-medium text-gray-700">Permission Expiry / Review Date</label>
+                                <input type="text" id="survey-permission-expiry" name="permissionExpiry"
+                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary" placeholder="dd/mm/yy" inputmode="numeric" />
+                            </div>
+                        </div>
+                        <div>
+                        <label for="survey-permission-notes" class="block text-sm font-medium text-gray-700">Permission Notes</label>
+                        <textarea id="survey-permission-notes" name="permissionNotes" rows="2"
+                                  class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                                  placeholder="e.g. No hedgerows, fill holes, pasture only..."></textarea>
+                        </div>
+                    </div>
+                    </details>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-gray-700"><i class="fas fa-map mr-1"></i> Area / Site</span>
+                        <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
+                        <div>
+                            <label for="survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
+                            <select id="survey-area-type" name="areaType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Field (Pasture)</option><option>Field (Ploughed)</option><option>Beach (Dry)</option>
+                                <option>Beach (Wet / Tidal)</option><option>Woods</option><option>Park</option>
+                                <option>Moor / Heath</option><option>Riverbank / Foreshore</option><option>Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="survey-land-use-current" class="block text-sm font-medium text-gray-700">Land Use (Current)</label>
+                            <select id="survey-land-use-current" name="landUseCurrent" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Agricultural</option><option>Recreational</option><option>Woodland</option>
+                                <option>Coastal</option><option>Urban fringe</option>
+                            </select>
+                        </div>
+                    </div>
+                    </div>
+                    </details>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-gray-700"><i class="fas fa-layer-group mr-1"></i> Soil &amp; Ground</span>
+                        <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3">
+                        <div>
+                            <label for="survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
+                            <select id="survey-soil-type" name="soilType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Clay</option><option>Loam</option><option>Sand</option>
+                                <option>Chalk</option><option>Peat</option><option>Mixed / Unknown</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="survey-ground-condition" class="block text-sm font-medium text-gray-700">Ground Condition</label>
+                            <select id="survey-ground-condition" name="groundCondition" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Dry</option><option>Damp</option><option>Wet</option>
+                                <option>Waterlogged</option><option>Frozen</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="survey-mineralisation-level" class="block text-sm font-medium text-gray-700">Mineralisation</label>
+                            <select id="survey-mineralisation-level" name="mineralisationLevel" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Low</option><option>Medium</option><option>High</option><option>Unknown</option>
+                            </select>
+                        </div>
+                    </div>
+                    </div>
+                    </details>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-sky-50 border-l-4 border-sky-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-sky-800"><i class="fas fa-cloud-sun mr-1"></i> Environment</span>
+                        <i class="fas fa-chevron-down text-sky-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-sky-50 border-l-4 border-sky-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3">
+                        <div>
+                            <label for="survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
+                            <select id="survey-weather" name="weather" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Sunny</option><option>Overcast</option><option>Rain</option>
+                                <option>Windy</option><option>Mixed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="survey-recent-rain" class="block text-sm font-medium text-gray-700">Recent Rain</label>
+                            <select id="survey-recent-rain" name="recentRain" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>None</option><option>Light</option><option>Heavy (24–48h)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="survey-temperature" class="block text-sm font-medium text-gray-700">Temperature (approx.)</label>
+                            <input type="text" id="survey-temperature" name="temperature"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                                   placeholder="e.g. 8°C" />
+                        </div>
+                    </div>
+                    </div>
+                    </details>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-gray-700"><i class="fas fa-compass mr-1"></i> Intent &amp; Context</span>
+                        <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Purpose of Survey (multi-select)</label>
+                            <div class="space-y-1 text-sm text-gray-700">
+                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="General detecting"> <span>General detecting</span></label>
+                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Coin shooting"> <span>Coin shooting</span></label>
+                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Relic hunting"> <span>Relic hunting</span></label>
+                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Beach recovery"> <span>Beach recovery</span></label>
+                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Scouting / Recon"> <span>Scouting / Recon</span></label>
+                                <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Follow-up visit"> <span>Follow-up visit</span></label>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="survey-expected-period" class="block text-sm font-medium text-gray-700">Expected Period</label>
+                            <select id="survey-expected-period" name="expectedPeriod" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Roman</option><option>Medieval</option><option>Post-Medieval</option>
+                                <option>Modern</option><option>Unknown / Mixed</option>
+                            </select>
+                        </div>
+                    </div>
+                    </div>
+                    </details>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-amber-50 border-l-4 border-amber-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-amber-800"><i class="fas fa-exclamation-triangle mr-1"></i> Access &amp; Practical</span>
+                        <i class="fas fa-chevron-down text-amber-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-amber-50 border-l-4 border-amber-300 rounded-b-lg px-3 pb-3 -mt-1">
+                        <div class="mb-3 pt-3">
+                        <label for="survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
+                        <textarea id="survey-access-notes" name="accessNotes" rows="2"
+                                  class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                                  placeholder="Parking, gates, paths, tides, livestock..."></textarea>
+                        </div>
+                        <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hazards / Warnings (multi-select)</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm text-gray-700">
+                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Livestock"> <span>Livestock</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Barbed wire"> <span>Barbed wire</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Glass"> <span>Glass</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Steep slopes"> <span>Steep slopes</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Tides"> <span>Tides</span></label>
+                            <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
+                        </div>
+                        </div>
+                    </div>
+                    </details>
+
+                    <details class="mb-4">
+                    <summary class="flex items-center justify-between bg-green-50 border-l-4 border-green-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                        <span class="text-sm font-bold text-green-800"><i class="fas fa-chart-bar mr-1"></i> Outcome Summary</span>
+                        <i class="fas fa-chevron-down text-green-400 details-chevron"></i>
+                    </summary>
+                    <div class="bg-green-50 border-l-4 border-green-300 rounded-b-lg px-3 pb-3 -mt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3 pt-3">
+                        <div>
+                            <label for="survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
+                            <select id="survey-overall-productivity" name="overallProductivity" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Poor</option><option>Fair</option><option>Good</option><option>Excellent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="survey-would-detect-again" class="block text-sm font-medium text-gray-700">Would Detect Again?</label>
+                            <select id="survey-would-detect-again" name="wouldDetectAgain" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                <option value="">(blank)</option>
+                                <option>Yes</option><option>No</option><option>Maybe</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
+                        <textarea id="survey-observations" name="surveyObservations" rows="3"
+                                  class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                                  placeholder="Anything useful you noticed..."></textarea>
+                    </div>
+                    </div>
+                    </details>
+                </div><!-- close optional sections -->
+
+                <div class="flex gap-3 mt-6">
+                    <button type="button" onclick="closeNewSurveyModal()"
+                            class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
+                    <button type="submit"
+                            class="flex-1 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition duration-150"
+                            style="background-color: rgb(var(--color-secondary));">
+                        Create &amp; Open
+                    </button>
+                </div>
+            </form>
+        </div>
+        ` : ''}
+    </div>
 
     <!-- Active / Closed Surveys -->
     <h3 class="text-2xl font-bold text-gray-700 mb-3">
@@ -13191,7 +13687,256 @@ function renderSurveyCard(survey, isOpen = false) {
     // Actions
     switch (survey.status) {
         case 'Open':
-            actions = `
+            actions = editSurveyPanelOpen ? `
+                <!-- INLINE EDIT SURVEY FORM -->
+                <div class="mt-4 border-t pt-4">
+                    <h4 class="text-lg font-semibold text-gray-800 mb-3">Edit Survey</h4>
+                    <form id="edit-survey-form">
+                        <input type="hidden" id="edit-survey-id" name="surveyId">
+                        <div class="mb-4">
+                            <label for="edit-survey-name" class="block text-sm font-medium text-gray-700">Survey Name *</label>
+                            <input type="text" id="edit-survey-name" name="surveyName" required
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700">Survey Photo (optional)</label>
+                            <p id="edit-survey-photo-status" class="text-xs text-gray-500 mt-1">No photo captured yet.</p>
+                            <div id="edit-survey-photo-preview-wrapper" class="mt-2 hidden">
+                                <img id="edit-survey-photo-preview" alt="Survey photo preview"
+                                    class="w-full max-h-48 object-cover rounded-lg border border-gray-200" />
+                            </div>
+                            <input type="hidden" id="edit-survey-photo-data" name="surveyPhotoData">
+                            <input type="file" id="edit-survey-photo-input" accept="image/*" class="hidden"
+                                onchange="handleEditSurveyPhotoSelected(event)">
+                            <button type="button" onclick="triggerEditSurveyPhotoInput()"
+                                class="mt-3 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100">
+                                <i class="fas fa-camera mr-2"></i> Take / Choose Photo
+                            </button>
+                        </div>
+                        <div class="mb-4">
+                            <label for="edit-survey-description" class="block text-sm font-medium text-gray-700">Description / Location</label>
+                            <textarea id="edit-survey-description" name="surveyDescription" rows="3"
+                                      class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"></textarea>
+                        </div>
+
+                        <div class="mt-4 border-t pt-4">
+                            <h4 class="text-base font-semibold text-gray-800 mb-3">Permission &amp; Site Details (optional)</h4>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-blue-50 border-l-4 border-blue-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-blue-800"><i class="fas fa-shield-alt mr-1"></i> Permission &amp; Legality</span>
+                                <i class="fas fa-chevron-down text-blue-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-blue-50 border-l-4 border-blue-300 rounded-b-lg px-3 pb-3 -mt-1">
+                                <div class="mb-3 pt-3">
+                                    <label for="edit-survey-permission-from" class="block text-sm font-medium text-gray-700">Permission From</label>
+                                    <input type="text" id="edit-survey-permission-from" name="permissionFrom"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="e.g. Farmer Smith" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit-survey-permission-type" class="block text-sm font-medium text-gray-700">Permission Type</label>
+                                    <select id="edit-survey-permission-type" name="permissionType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Written</option><option>Verbal</option><option>Club / Rally</option><option>Open access</option>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mb-3">
+                                    <div>
+                                        <label for="edit-survey-permission-date-granted" class="block text-sm font-medium text-gray-700">Date Granted</label>
+                                        <input type="text" id="edit-survey-permission-date-granted" name="permissionDateGranted"
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="dd/mm/yy" inputmode="numeric" />
+                                    </div>
+                                    <div>
+                                        <label for="edit-survey-permission-expiry" class="block text-sm font-medium text-gray-700">Expiry Date</label>
+                                        <input type="text" id="edit-survey-permission-expiry" name="permissionExpiry"
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="dd/mm/yy" inputmode="numeric" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-permission-notes" class="block text-sm font-medium text-gray-700">Permission Notes</label>
+                                    <textarea id="edit-survey-permission-notes" name="permissionNotes" rows="2"
+                                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="e.g. No hedgerows, fill holes..."></textarea>
+                                </div>
+                            </div>
+                            </details>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-gray-700"><i class="fas fa-map mr-1"></i> Area / Site</span>
+                                <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                            <div class="grid grid-cols-2 gap-4 pt-3">
+                                <div>
+                                    <label for="edit-survey-area-type" class="block text-sm font-medium text-gray-700">Type of Area</label>
+                                    <select id="edit-survey-area-type" name="areaType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Field (Pasture)</option><option>Field (Ploughed)</option><option>Beach (Dry)</option>
+                                        <option>Beach (Wet / Tidal)</option><option>Woods</option><option>Park</option><option>Moor / Heath</option>
+                                        <option>Riverbank / Foreshore</option><option>Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-land-use-current" class="block text-sm font-medium text-gray-700">Land Use</label>
+                                    <select id="edit-survey-land-use-current" name="landUseCurrent" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Agricultural</option><option>Recreational</option>
+                                        <option>Woodland</option><option>Coastal</option><option>Urban fringe</option>
+                                    </select>
+                                </div>
+                            </div>
+                            </div>
+                            </details>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-gray-700"><i class="fas fa-layer-group mr-1"></i> Soil &amp; Ground</span>
+                                <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                            <div class="grid grid-cols-3 gap-4 pt-3">
+                                <div>
+                                    <label for="edit-survey-soil-type" class="block text-sm font-medium text-gray-700">Soil Type</label>
+                                    <select id="edit-survey-soil-type" name="soilType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Clay</option><option>Loam</option><option>Sand</option>
+                                        <option>Chalk</option><option>Peat</option><option>Mixed / Unknown</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-ground-condition" class="block text-sm font-medium text-gray-700">Ground Condition</label>
+                                    <select id="edit-survey-ground-condition" name="groundCondition" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Dry</option><option>Damp</option><option>Wet</option>
+                                        <option>Waterlogged</option><option>Frozen</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-mineralisation-level" class="block text-sm font-medium text-gray-700">Mineralisation</label>
+                                    <select id="edit-survey-mineralisation-level" name="mineralisationLevel" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Low</option><option>Medium</option><option>High</option><option>Unknown</option>
+                                    </select>
+                                </div>
+                            </div>
+                            </div>
+                            </details>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-sky-50 border-l-4 border-sky-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-sky-800"><i class="fas fa-cloud-sun mr-1"></i> Environment</span>
+                                <i class="fas fa-chevron-down text-sky-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-sky-50 border-l-4 border-sky-300 rounded-b-lg px-3 pb-3 -mt-1">
+                            <div class="grid grid-cols-3 gap-4 pt-3">
+                                <div>
+                                    <label for="edit-survey-weather" class="block text-sm font-medium text-gray-700">Weather</label>
+                                    <select id="edit-survey-weather" name="weather" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Sunny</option><option>Overcast</option><option>Rain</option><option>Windy</option><option>Mixed</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-recent-rain" class="block text-sm font-medium text-gray-700">Recent Rain</label>
+                                    <select id="edit-survey-recent-rain" name="recentRain" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>None</option><option>Light</option><option>Heavy (24–48h)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
+                                    <input type="text" id="edit-survey-temperature" name="temperature"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="e.g. 8°C" />
+                                </div>
+                            </div>
+                            </div>
+                            </details>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-gray-50 border-l-4 border-gray-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-gray-700"><i class="fas fa-compass mr-1"></i> Intent &amp; Context</span>
+                                <i class="fas fa-chevron-down text-gray-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-gray-50 border-l-4 border-gray-300 rounded-b-lg px-3 pb-3 -mt-1">
+                            <div class="grid grid-cols-2 gap-4 pt-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Purpose (multi-select)</label>
+                                    <div class="space-y-1 text-sm text-gray-700">
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="General detecting"> <span>General detecting</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Coin shooting"> <span>Coin shooting</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Relic hunting"> <span>Relic hunting</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Beach recovery"> <span>Beach recovery</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Scouting / Recon"> <span>Scouting / Recon</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="purpose" value="Follow-up visit"> <span>Follow-up visit</span></label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-expected-period" class="block text-sm font-medium text-gray-700">Expected Period</label>
+                                    <select id="edit-survey-expected-period" name="expectedPeriod" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Roman</option><option>Medieval</option>
+                                        <option>Post-Medieval</option><option>Modern</option><option>Unknown / Mixed</option>
+                                    </select>
+                                </div>
+                            </div>
+                            </div>
+                            </details>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-amber-50 border-l-4 border-amber-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-amber-800"><i class="fas fa-exclamation-triangle mr-1"></i> Access &amp; Practical</span>
+                                <i class="fas fa-chevron-down text-amber-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-amber-50 border-l-4 border-amber-300 rounded-b-lg px-3 pb-3 -mt-1">
+                                <div class="mb-3 pt-3">
+                                    <label for="edit-survey-access-notes" class="block text-sm font-medium text-gray-700">Access Notes</label>
+                                    <textarea id="edit-survey-access-notes" name="accessNotes" rows="2"
+                                              class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="Parking, gates, paths, tides, livestock..."></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Hazards (multi-select)</label>
+                                    <div class="grid grid-cols-2 gap-1 text-sm text-gray-700">
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Livestock"> <span>Livestock</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Barbed wire"> <span>Barbed wire</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Glass"> <span>Glass</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Steep slopes"> <span>Steep slopes</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="Tides"> <span>Tides</span></label>
+                                        <label class="flex items-center gap-2"><input type="checkbox" name="hazards" value="None"> <span>None</span></label>
+                                    </div>
+                                </div>
+                            </div>
+                            </details>
+
+                            <details class="mb-4">
+                            <summary class="flex items-center justify-between bg-green-50 border-l-4 border-green-300 rounded-lg p-3 cursor-pointer select-none list-none">
+                                <span class="text-sm font-bold text-green-800"><i class="fas fa-chart-bar mr-1"></i> Outcome Summary</span>
+                                <i class="fas fa-chevron-down text-green-400 details-chevron"></i>
+                            </summary>
+                            <div class="bg-green-50 border-l-4 border-green-300 rounded-b-lg px-3 pb-3 -mt-1">
+                            <div class="grid grid-cols-2 gap-4 mb-3 pt-3">
+                                <div>
+                                    <label for="edit-survey-overall-productivity" class="block text-sm font-medium text-gray-700">Overall Productivity</label>
+                                    <select id="edit-survey-overall-productivity" name="overallProductivity" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Poor</option><option>Fair</option><option>Good</option><option>Excellent</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="edit-survey-would-detect-again" class="block text-sm font-medium text-gray-700">Would Detect Again?</label>
+                                    <select id="edit-survey-would-detect-again" name="wouldDetectAgain" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                        <option value="">(blank)</option><option>Yes</option><option>No</option><option>Maybe</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="edit-survey-observations" class="block text-sm font-medium text-gray-700">General Notes / Observations</label>
+                                <textarea id="edit-survey-observations" name="surveyObservations" rows="3"
+                                          class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="Anything useful you noticed..."></textarea>
+                            </div>
+                            </div>
+                            </details>
+                        </div>
+
+                        <div class="flex gap-3 mt-6">
+                            <button type="button" onclick="closeEditSurveyModal()"
+                                    class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
+                            <button type="submit"
+                                    class="flex-1 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90"
+                                    style="background-color: rgb(var(--color-secondary));">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            ` : `
                 <div class="flex gap-2 mt-4">
                     <button
                         class="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg shadow hover:bg-blue-700 transition"
@@ -13221,6 +13966,17 @@ function renderSurveyCard(survey, isOpen = false) {
                     >
                         <i class="fas fa-file-archive mr-1"></i> Export Survey as ZIP
                     </button>
+                    ${exportSurveyConfirmOpen ? `
+                    <div class="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                        <p class="text-sm text-gray-700 mb-3">Export <strong>${survey.name || 'Survey'}</strong> as a ZIP file including all targets, finds and photos?</p>
+                        <div class="flex gap-3">
+                            <button type="button" onclick="exportSurveyConfirmOpen=false;render()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                            <button type="button" onclick="exportSurveyConfirmOpen=false;render();actuallyExportOpenSurvey()"
+                                    class="flex-1 py-2 rounded-lg bg-sky-600 text-white font-semibold text-sm hover:bg-sky-700 shadow">Export</button>
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
                 <div class="mt-2">
                     <button
@@ -13229,6 +13985,17 @@ function renderSurveyCard(survey, isOpen = false) {
                     >
                         <i class="fas fa-share-alt mr-1"></i> Share Survey as ZIP
                     </button>
+                    ${shareSurveyConfirmOpen ? `
+                    <div class="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <p class="text-sm text-gray-700 mb-3">Share <strong>${survey.name || 'Survey'}</strong> as a ZIP via your device's share sheet? Includes your name, GPS location and stamped photos.</p>
+                        <div class="flex gap-3">
+                            <button type="button" onclick="shareSurveyConfirmOpen=false;render()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                            <button type="button" onclick="shareSurveyConfirmOpen=false;render();actuallyShareSurveyAsZip()"
+                                    class="flex-1 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 shadow">Share</button>
+                        </div>
+                    </div>
+                    ` : ''}
                     <p class="text-xs text-amber-700 mt-1 text-center"><i class="fas fa-exclamation-triangle mr-1"></i>Sharing includes your name, GPS location, and stamped photos.</p>
                 </div>
             `;
@@ -13256,14 +14023,22 @@ function renderSurveyCard(survey, isOpen = false) {
                     </button>
                     <button
                         class="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg shadow hover:bg-red-700 transition"
-                        onclick="handleSurveyAction(this)"
-                        data-id="${survey.id}"
-                        data-action="delete"
-                        data-name="${survey.name}"
+                        onclick="openInlineSurveyDelete('${survey.id}')"
                     >
                         <i class="fas fa-trash mr-1"></i> Delete
                     </button>
                 </div>
+                ${expandedSurveyDeleteId === survey.id ? `
+                <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p class="text-sm text-gray-700 mb-3">Delete <strong>${survey.name || 'this survey'}</strong>? This will also delete all its targets, finds and photos. This cannot be undone.</p>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="cancelInlineSurveyDelete()"
+                                class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                        <button type="button" onclick="confirmInlineSurveyDelete('${survey.id}')"
+                                class="flex-1 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 shadow">Delete</button>
+                    </div>
+                </div>
+                ` : ''}
             `;
             break;
 
@@ -13279,14 +14054,22 @@ function renderSurveyCard(survey, isOpen = false) {
                     </button>
                     <button
                         class="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg shadow hover:bg-red-700 transition"
-                        onclick="handleSurveyAction(this)"
-                        data-id="${survey.id}"
-                        data-action="delete"
-                        data-name="${survey.name}"
+                        onclick="openInlineSurveyDelete('${survey.id}')"
                     >
                         <i class="fas fa-trash mr-1"></i> Delete
                     </button>
                </div>
+                ${expandedSurveyDeleteId === survey.id ? `
+                <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p class="text-sm text-gray-700 mb-3">Delete <strong>${survey.name || 'this survey'}</strong>? This will also delete all its targets, finds and photos. This cannot be undone.</p>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="cancelInlineSurveyDelete()"
+                                class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                        <button type="button" onclick="confirmInlineSurveyDelete('${survey.id}')"
+                                class="flex-1 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 shadow">Delete</button>
+                    </div>
+                </div>
+                ` : ''}
             `;
             break;
     }
@@ -13487,10 +14270,92 @@ const emptyMsg = targetsViewMode === 'stakes'
             return `
                 <div class="p-4">
                     <h2 class="text-3xl font-bold text-primary mb-6">Targets: ${openSurvey.name}</h2>
-                    
-                    <button id="add-target-btn" class="w-full text-center text-white font-bold py-3 px-4 rounded-lg shadow-md hover:opacity-90 transition duration-150 mb-6" style="background-color: rgb(var(--color-secondary));">
-                        <i class="fas fa-crosshairs mr-2"></i> Log New Target
-                    </button>
+
+                    <!-- Log New Target inline panel -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+                        <div class="px-4 py-3 ${newTargetPanelOpen ? 'border-b border-gray-100' : ''} flex items-center justify-between cursor-pointer select-none"
+                             onclick="newTargetPanelOpen ? closeNewTargetModal() : showNewTargetModal()">
+                            <h3 class="text-xl font-semibold text-gray-700 flex items-center">
+                                <i class="fas fa-crosshairs mr-2 text-primary"></i> Log New Target
+                            </h3>
+                            <i class="fas ${newTargetPanelOpen ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400"></i>
+                        </div>
+                        ${newTargetPanelOpen ? `
+                        <div class="p-4">
+                            <form id="new-target-form">
+                                <input type="hidden" id="new-target-survey-id" name="targetSurveyId" />
+                                <div id="target-survey-display" class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
+                                    Logging for: <span id="current-target-survey-name" class="text-primary">${openSurvey.name}</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="mb-4 col-span-2">
+                                        <label for="target-description" class="block text-sm font-medium text-gray-700">Description / Find Name *</label>
+                                        <input type="text" id="target-description" name="targetDescription" required
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                    </div>
+                                    <div class="mb-4">
+                                        <label for="target-vdi" class="block text-sm font-medium text-gray-700">VDI</label>
+                                        <input type="text" id="target-vdi" name="targetVDI" placeholder="e.g., 28"
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                    </div>
+                                    <div class="mb-4">
+                                        <label for="target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                                        <input type="text" id="target-depth" name="targetDepth" placeholder="e.g., 4 inches"
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                    </div>
+                                    <div class="mb-4">
+                                        <label for="target-type" class="block text-sm font-medium text-gray-700">Type</label>
+                                        <select id="target-type" name="targetType"
+                                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                            <option value="Unidentified" selected>Unidentified</option>
+                                            <option value="Iron Junk">Iron Junk</option>
+                                            <option value="Modern Junk">Modern Junk</option>
+                                            <option value="Button">Button</option>
+                                            <option value="Coin">Coin</option>
+                                            <option value="Ring">Ring</option>
+                                            <option value="Jewelry">Jewelry</option>
+                                            <option value="Relic">Relic</option>
+                                            <option value="Something else">Something else</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-4 col-span-2">
+                                        <label for="target-coords" class="block text-sm font-medium text-gray-700">GPS Location</label>
+                                        <input type="text" id="target-coords" name="targetCoords" placeholder="Requesting location..."
+                                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                        <input type="hidden" id="target-accuracy" name="targetAccuracy">
+                                        <p id="gps-accuracy-display" class="text-xs text-gray-600 mt-1">
+                                            Accuracy (Radius): <span class="font-semibold text-red-600">N/A</span>
+                                        </p>
+                                    </div>
+                                    <div class="mb-4 col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Target Photo</label>
+                                        <p id="new-target-photo-status" class="text-xs text-gray-600 mb-2">No photo captured yet.</p>
+                                        <div id="new-target-photo-preview-wrapper" class="hidden mb-2">
+                                            <img id="new-target-photo-preview" alt="Target preview"
+                                                 class="w-full max-h-64 object-contain rounded-lg border border-gray-300" />
+                                        </div>
+                                        <input type="hidden" id="target-photo-data" name="targetPhotoData">
+                                        <input type="file" id="new-target-photo-input" accept="image/*" capture="environment"
+                                               class="hidden" onchange="handleNewTargetPhotoSelected(event)">
+                                        <button type="button"
+                                                class="px-3 py-2 text-sm font-semibold rounded-lg shadow text-white"
+                                                style="background-color: rgb(var(--color-secondary));"
+                                                onclick="triggerNewTargetPhotoInput()">
+                                            Take / Choose Photo
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 mt-4">
+                                    <button type="button" onclick="closeNewTargetModal()"
+                                            class="flex-1 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Cancel</button>
+                                    <button type="submit"
+                                            class="flex-1 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition"
+                                            style="background-color: rgb(var(--color-secondary));">Log Target</button>
+                                </div>
+                            </form>
+                        </div>
+                        ` : ''}
+                    </div>
 
 <!-- Sort / view tabs -->
 <div class="mt-3 flex gap-2">
@@ -13780,22 +14645,171 @@ function renderFindsPage() {
                     <div class="mt-4 grid grid-cols-2 gap-2">
                         <button
                             type="button"
-                            class="find-card-edit-btn w-full inline-flex items-center justify-center px-3 py-3 rounded-md
+                            onclick="openEditFindModal('${find.id}')"
+                            class="w-full inline-flex items-center justify-center px-3 py-3 rounded-md
                                    bg-purple-100 text-purple-800 hover:bg-purple-200
                                    border border-purple-300
-                                   text-xs sm:text-sm font-semibold"
-                            data-find-id="${find.id}">
+                                   text-xs sm:text-sm font-semibold">
                             Edit details
                         </button>
                         <button
                             type="button"
-                            class="find-card-delete-btn w-full inline-flex items-center justify-center px-3 py-3 rounded-md
+                            onclick="openInlineFindDelete('${find.id}')"
+                            class="w-full inline-flex items-center justify-center px-3 py-3 rounded-md
                                    bg-red-600 text-white hover:bg-red-700
-                                   text-xs sm:text-sm font-semibold"
-                            data-find-id="${find.id}">
+                                   text-xs sm:text-sm font-semibold">
                             Delete Find
                         </button>
                     </div>
+
+                    ${expandedFindDeleteId === find.id ? `
+                    <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p class="text-sm text-gray-700 mb-3">Permanently delete <strong>${(find.description || 'this find').replace(/`/g, '')}</strong>? This cannot be undone.</p>
+                        <div class="flex gap-3">
+                            <button type="button" onclick="cancelInlineFindDelete()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                            <button type="button" onclick="confirmInlineFindDelete('${find.id}')"
+                                    class="flex-1 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 shadow">Delete</button>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${expandedFindEditId === find.id ? `
+                    <div class="mt-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h4 class="text-base font-semibold text-gray-800 mb-1">Edit Find</h4>
+                        <p class="text-xs text-gray-500 mb-3">Logged: <span id="edit-find-logged-datetime-value" class="font-semibold text-gray-700">Not recorded</span></p>
+                        <form id="edit-find-form" class="space-y-3">
+                            <input type="hidden" id="edit-find-id" name="findId">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Description / Find Name</label>
+                                <textarea id="edit-find-description" name="findDescription" rows="3"
+                                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" required></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Find Photograph</label>
+                                <input type="file" id="edit-find-photo-input" accept="image/*;capture=camera" multiple class="hidden" onchange="handleEditFindPhotoSelected(event)">
+                                <input type="hidden" id="edit-find-photo-data" name="findPhotoData">
+                                <div class="flex items-center gap-3">
+                                    <button type="button" onclick="triggerEditFindPhotoInput()"
+                                            class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold">
+                                        <i class="fas fa-camera mr-1"></i> Take / Choose Photo
+                                    </button>
+                                    <span id="edit-find-photo-status" class="text-xs text-gray-500">No photo captured yet.</span>
+                                </div>
+                                <div id="edit-find-photo-preview-wrapper" class="mt-2 hidden">
+                                    <img id="edit-find-photo-preview" class="w-full h-auto rounded-md border border-gray-300 object-cover" alt="Find photo preview">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Type</label>
+                                <select id="edit-find-type" name="findType" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                    <option value="Unidentified">Unidentified</option>
+                                    <option value="Iron Junk">Iron Junk</option>
+                                    <option value="Modern Junk">Modern Junk</option>
+                                    <option value="Button">Button</option>
+                                    <option value="Coin">Coin</option>
+                                    <option value="Jewellery">Jewellery</option>
+                                    <option value="Relic">Relic</option>
+                                    <option value="Something else">Something else</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Identification</label>
+                                <input type="text" id="edit-find-identification" name="findIdentification"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="e.g. George III halfpenny">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Material</label>
+                                    <select id="edit-find-material" name="findMaterial" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                        <option value="">(blank)</option>
+                                        <option value="Copper alloy">Copper alloy</option>
+                                        <option value="Silver">Silver</option>
+                                        <option value="Gold">Gold</option>
+                                        <option value="Lead">Lead</option>
+                                        <option value="Iron">Iron</option>
+                                        <option value="Aluminium">Aluminium</option>
+                                        <option value="Mixed">Mixed</option>
+                                        <option value="Unknown">Unknown</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Condition</label>
+                                    <select id="edit-find-condition" name="findCondition" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                        <option value="">(blank)</option>
+                                        <option value="Poor">Poor</option>
+                                        <option value="Fair">Fair</option>
+                                        <option value="Good">Good</option>
+                                        <option value="Excellent">Excellent</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Period / Date</label>
+                                <input type="text" id="edit-find-period" name="findPeriod"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="e.g. Roman / Medieval / Victorian">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Weight (g)</label>
+                                    <input type="number" step="0.1" inputmode="decimal" id="edit-find-weight" name="findWeightG"
+                                           class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="optional">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Dimensions (mm)</label>
+                                    <input type="text" id="edit-find-dimensions" name="findDimensionsMm"
+                                           class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="e.g. Ø 18 mm">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Where kept</label>
+                                    <input type="text" id="edit-find-where-kept" name="findWhereKept"
+                                           class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" placeholder="Finds box / coin tray...">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Disposition</label>
+                                    <select id="edit-find-disposition" name="findDisposition" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                        <option value="">(blank)</option>
+                                        <option value="Kept">Kept</option>
+                                        <option value="Returned">Returned</option>
+                                        <option value="Reported">Reported</option>
+                                        <option value="Discarded">Discarded</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="edit-find-possible-treasure" name="findPossibleTreasure" class="h-4 w-4">
+                                <label class="text-sm text-gray-700 select-none" for="edit-find-possible-treasure">Possible treasure</label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">VDI</label>
+                                    <input type="text" id="edit-find-vdi" name="findVDI" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-600 mb-1">Depth</label>
+                                    <input type="text" id="edit-find-depth" name="findDepth" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Coordinates</label>
+                                <input type="text" id="edit-find-coords" name="findCoords" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Accuracy</label>
+                                <input type="text" id="edit-find-accuracy" name="findAccuracy" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                            </div>
+                            <div class="flex gap-3 pt-2">
+                                <button type="button" onclick="closeEditFindModal()"
+                                        class="flex-1 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Cancel</button>
+                                <button type="submit"
+                                        class="flex-1 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90"
+                                        style="background-color: rgb(var(--color-secondary));">Save changes</button>
+                            </div>
+                        </form>
+                    </div>
+                    ` : ''}
                     <!-- Row 2: Add Photo -->
                     <div class="mt-2">
                         <button type="button"
@@ -14239,9 +15253,8 @@ switch (s) {
 
                     <!-- Row 2: QR + Navigation -->
                     <div class="grid grid-cols-3 gap-2">
-                        <button data-action="showQr"
-                            data-id="${target.id}"
-                            data-survey-id="${surveyId}"
+                        <button type="button"
+                            onclick="openInlineTargetQr('${target.id}', '${surveyId}')"
                             class="w-full py-2 mb-2 bg-gray-100 rounded-lg text-sm font-bold text-primary border border-gray-200 active:bg-gray-200">
                             <i class="fas fa-qrcode mr-2"></i> Show QR
                         </button>
@@ -14260,21 +15273,141 @@ switch (s) {
                     <!-- Row 3: Edit / Copy / Delete -->
                     <div class="grid grid-cols-3 gap-2">
                         <button type="button"
-                            data-action="edit" data-id="${target.id}" data-survey-id="${surveyId}"
+                            onclick="showEditTargetModal('${target.id}', '${surveyId}')"
                             class="w-full inline-flex items-center justify-center px-3 py-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-xs sm:text-sm font-semibold">
                             Edit details
                         </button>
                         <button type="button"
-                            data-action="saveFind" data-id="${target.id}" data-survey-id="${surveyId}"
+                            onclick="openInlineTargetCopy('${target.id}')"
                             class="w-full inline-flex items-center justify-center px-3 py-3 rounded-md bg-amber-500 text-white hover:bg-amber-600 text-xs sm:text-sm font-semibold">
                             Copy to finds
                         </button>
                         <button type="button"
-                            data-action="delete" data-id="${target.id}" data-survey-id="${surveyId}"
+                            onclick="openInlineTargetDelete('${target.id}')"
                             class="w-full inline-flex items-center justify-center px-3 py-3 rounded-md bg-red-600 text-white hover:bg-red-700 text-xs sm:text-sm font-semibold">
                             Delete
                         </button>
                     </div>
+
+                    ${expandedTargetCopyId === target.id ? `
+                    <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p class="text-sm text-gray-700 mb-3">Copy <strong>${target.description || 'this target'}</strong> to your Finds library? The original target will then be removed from Targets.</p>
+                        <div class="flex gap-3">
+                            <button type="button" onclick="cancelInlineTargetCopy()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                            <button type="button" onclick="confirmInlineTargetCopy('${target.id}', '${surveyId}')"
+                                    class="flex-1 py-2 rounded-lg bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 shadow">Copy to Finds</button>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${expandedTargetDeleteId === target.id ? `
+                    <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p class="text-sm text-gray-700 mb-3">Permanently delete <strong>${target.description || 'this target'}</strong>? This cannot be undone.</p>
+                        <div class="flex gap-3">
+                            <button type="button" onclick="cancelInlineTargetDelete()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                            <button type="button" onclick="confirmInlineTargetDelete('${target.id}', '${surveyId}')"
+                                    class="flex-1 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 shadow">Delete</button>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${qrPanelTargetId === target.id ? `
+                    <div class="mt-3 p-4 bg-white border border-gray-200 rounded-lg">
+                        <h4 class="text-base font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-qrcode mr-1"></i> Target QR: ${(target.description || 'Unnamed target').replace(/`/g, '')}
+                        </h4>
+                        <div id="target-qr-code-container" class="w-full flex items-center justify-center mb-4" style="min-height:260px;"></div>
+                        <p class="text-xs text-gray-500 mb-2">This QR encodes the main details of this target so it can be imported on another device.</p>
+                        <textarea id="target-qr-raw-text"
+                                  class="w-full h-24 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md p-2 mb-4"
+                                  readonly></textarea>
+                        <button type="button" onclick="closeTargetQrModal()"
+                                class="w-full py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Close</button>
+                    </div>
+                    ` : ''}
+
+                    ${expandedTargetEditId === target.id ? `
+                    <!-- INLINE EDIT TARGET FORM -->
+                    <div class="mt-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h4 class="text-base font-semibold text-gray-800 mb-3">Edit Target Details</h4>
+                        <p class="text-xs text-gray-500 mb-3">
+                            Logged: <span id="edit-target-logged-datetime-value" class="font-semibold text-gray-700">Not recorded</span>
+                        </p>
+                        <form id="edit-target-form">
+                            <input type="hidden" id="edit-target-id" name="targetId">
+                            <input type="hidden" id="edit-survey-id" name="surveyId">
+                            <div id="edit-target-survey-display" class="bg-gray-100 p-2 rounded-md mb-4 text-sm font-semibold text-gray-700">
+                                Editing target in: <span id="current-edit-survey-name" class="text-primary">Loading...</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="mb-4 col-span-2">
+                                    <label for="edit-target-description" class="block text-sm font-medium text-gray-700">Description / Find Name *</label>
+                                    <input type="text" id="edit-target-description" name="targetDescription" required
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                </div>
+                                <div class="mb-4 col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Target Photographs</label>
+                                    <input type="file" id="edit-target-photo-input" accept="image/*;capture=camera"
+                                           class="hidden" multiple onchange="handleEditTargetPhotoSelected(event)">
+                                    <input type="hidden" id="edit-target-photo-data" name="targetPhotoData">
+                                    <div class="flex items-center space-x-3">
+                                        <button type="button"
+                                                class="px-3 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-sm font-semibold"
+                                                onclick="triggerEditTargetPhotoInput()">
+                                            <i class="fas fa-camera mr-1"></i> Take / Choose Photo(s)
+                                        </button>
+                                        <span id="edit-target-photo-status" class="text-xs text-gray-500">No photo captured yet.</span>
+                                    </div>
+                                    <div id="edit-target-photo-preview-wrapper" class="mt-2 hidden w-full"></div>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="edit-target-vdi" class="block text-sm font-medium text-gray-700">VDI</label>
+                                    <input type="text" id="edit-target-vdi" name="targetVDI" placeholder="e.g., 28"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="edit-target-depth" class="block text-sm font-medium text-gray-700">Depth</label>
+                                    <input type="text" id="edit-target-depth" name="targetDepth" placeholder="e.g., 6 inches"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                </div>
+                                <div class="mb-4 col-span-2">
+                                    <label for="edit-target-type" class="block text-sm font-medium text-gray-700">Type of Find *</label>
+                                    <select id="edit-target-type" name="targetType" required
+                                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary bg-white">
+                                        <option value="Unidentified">Unidentified</option>
+                                        <option value="Iron Junk">Iron Junk</option>
+                                        <option value="Modern Junk">Modern Junk</option>
+                                        <option value="Button">Button</option>
+                                        <option value="Coin">Coin</option>
+                                        <option value="Ring">Ring</option>
+                                        <option value="Jewelry">Jewelry</option>
+                                        <option value="Relic">Relic</option>
+                                        <option value="Something else">Something else</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4 col-span-2">
+                                    <label for="edit-target-coords" class="block text-sm font-medium text-gray-700">GPS Coordinates</label>
+                                    <input type="text" id="edit-target-coords" name="targetCoords" placeholder="e.g., 50.2568, -5.2345"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                </div>
+                                <div class="mb-4 col-span-2">
+                                    <label for="edit-target-accuracy" class="block text-sm font-medium text-gray-700">GPS Accuracy (m)</label>
+                                    <input type="text" id="edit-target-accuracy" name="targetAccuracy" placeholder="e.g., 5.0"
+                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-2">
+                                <button type="button" onclick="closeEditTargetModal()"
+                                        class="flex-1 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Cancel</button>
+                                <button type="submit"
+                                        class="flex-1 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition"
+                                        style="background-color: rgb(var(--color-secondary));">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                    ` : ''}
 
                     <!-- Row 4: Add Photo -->
                     <div class="mt-2">
@@ -15334,23 +16467,31 @@ function handleStartTrackClick() {
         return;
     }
 
+    // Read name/description/colour from the inline form fields
+    const nameEl   = document.getElementById('inline-track-name');
+    const descEl   = document.getElementById('inline-track-description');
+    const colourEl = document.getElementById('inline-track-colour');
+
+    const nextIndex = openSurvey.tracks ? openSurvey.tracks.length + 1 : 1;
+    const defName   = nextIndex === 1 ? 'Perimeter' : `Track ${nextIndex}`;
+    const name  = (nameEl  && nameEl.value.trim())  ? nameEl.value.trim()  : defName;
+    const desc  = (descEl  && descEl.value.trim())  ? descEl.value.trim()  : '';
+    const color = (colourEl && colourEl.value)      ? colourEl.value       : pickTrackColor(openSurvey.tracks ? openSurvey.tracks.length : 0);
+
     isTrackingActive = true;
     startLiveMapLocationWatch();
     startCompassAutoRefresh();
 
     ensureSurveyTracksArray(openSurvey);
 
-    const nextIndex = openSurvey.tracks.length + 1;
-    const name = nextIndex === 1 ? 'Perimeter' : `Track ${nextIndex}`;
-
     const newTrack = {
         id: generateId(),
         name,
-        description: '',              // ✅ NEW: GPX supports <desc>
+        description: desc,
         createdAt: Date.now(),
         isRecording: true,
         isVisible: true,
-        color: pickTrackColor(openSurvey.tracks.length), // ✅ keep your colour logic
+        color,
         points: []
     };
 
@@ -15360,11 +16501,9 @@ function handleStartTrackClick() {
     activeTrackId = newTrack.id;
 
     saveSurveysToLocalStorage();
-    showMessage(`Started recording ${name}.`, 'success');
-    render();
-    // After render(), pop the modal so user can name/describe immediately
-    openEditTrackModal(newTrack.id, { isNew: true });
 
+    // Re-render — the section will now show the "tracking ON" state
+    rerenderCompassIfActive();
 }
 
 /**
@@ -15443,54 +16582,129 @@ function renderTracksPanel(openSurvey) {
                 : '';
 
             return `
-                <div class="flex items-center justify-between gap-2 py-1 border-b border-gray-100 last:border-b-0">
-                <div class="flex items-center gap-2 select-none min-w-0 flex-1">
-                        <input
-                            type="checkbox"
-                            class="track-visibility-toggle h-4 w-4 text-primary flex-shrink-0"
-                            data-track-id="${track.id}"
-                            ${isVisible ? 'checked' : ''}
-                            onchange="toggleTrackVisibility('${track.id}', this.checked)"
-                        >
-                        <div class="flex flex-col min-w-0">
-                            <span class="text-sm font-medium text-gray-700 truncate">
-                                ${track.name || 'Track'}
-                            </span>
-                            <span class="text-xs text-gray-500 truncate">
-                                ${pointsCount} points${created ? ` · ${created}` : ''}
-                            </span>
-                            ${desc ? `
-                                <span class="text-[11px] text-gray-400 truncate">
-                                    ${desc}
-                                </span>
-                            ` : ''}
+                <div class="border-b border-gray-100 last:border-b-0">
+
+                ${expandedTrackEditId === track.id ? `
+                    <!-- INLINE EDIT FORM -->
+                    <div class="py-3 px-1">
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Track Name</label>
+                            <input id="inline-edit-track-name-${track.id}"
+                                   type="text"
+                                   value="${(track.name || 'Track').replace(/"/g, '&quot;')}"
+                                   class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm">
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Track Colour</label>
+                            <div class="flex gap-2 flex-wrap" id="inline-edit-track-swatches-${track.id}">
+                                ${[
+                                    { c: 'rgba(59,130,246,0.9)',  label: 'Blue'   },
+                                    { c: 'rgba(239,68,68,0.9)',   label: 'Red'    },
+                                    { c: 'rgba(34,197,94,0.9)',   label: 'Green'  },
+                                    { c: 'rgba(245,158,11,0.9)',  label: 'Amber'  },
+                                    { c: 'rgba(168,85,247,0.9)',  label: 'Purple' },
+                                    { c: 'rgba(20,184,166,0.9)',  label: 'Teal'   },
+                                    { c: 'rgba(236,72,153,0.9)',  label: 'Pink'   },
+                                    { c: 'rgba(100,116,139,0.9)', label: 'Slate'  },
+                                ].map(s => {
+                                    const sel = s.c === (track.color || 'rgba(59,130,246,0.9)');
+                                    return `<button type="button"
+                                        onclick="(function(b){document.querySelectorAll('#inline-edit-track-swatches-${track.id} .et-swatch').forEach(x=>{x.style.borderColor='transparent';x.style.transform='scale(1)'});b.style.borderColor='#1e40af';b.style.transform='scale(1.2)';document.getElementById('inline-edit-track-colour-${track.id}').value='${s.c}'})(this)"
+                                        class="et-swatch w-8 h-8 rounded-full border-2 ${sel ? 'border-blue-800' : 'border-transparent'}"
+                                        style="background:${s.c}${sel ? ';transform:scale(1.2)' : ''}"
+                                        title="${s.label}"></button>`;
+                                }).join('')}
+                            </div>
+                            <input type="hidden" id="inline-edit-track-colour-${track.id}" value="${track.color || 'rgba(59,130,246,0.9)'}">
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button"
+                                    onclick="cancelInlineTrackEdit()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">
+                                Cancel
+                            </button>
+                            <button type="button"
+                                    onclick="saveInlineTrackEdit('${track.id}')"
+                                    class="flex-1 py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 shadow"
+                                    style="background-color:rgb(var(--color-secondary))">
+                                Save
+                            </button>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        ${activeBadge}
-                        <span class="inline-block w-4 h-4 rounded-full flex-shrink-0"
-                              style="background:${track.color || 'rgba(59,130,246,0.9)'}"></span>
-                        <button
-                            type="button"
-                            class="track-edit-btn px-3 py-2 rounded-lg bg-slate-700 text-white text-sm hover:bg-slate-800"
-                            data-track-id="${track.id}"
-                            title="Edit track name & description"
-                            aria-label="Edit track"
-                        >
-                            <i class="fas fa-pen"></i>
-                        </button>
-
-                        <button
-                            type="button"
-                            class="track-delete-btn px-3 py-2 rounded-lg bg-gray-100 hover:bg-red-100 text-red-600 font-bold"
-                            data-track-id="${track.id}"
-                            title="Delete track"
-                            aria-label="Delete track"
-                        >
-                            <i class="fas fa-trash"></i>
-                        </button>
+                ` : expandedTrackDeleteId === track.id ? `
+                    <!-- INLINE DELETE CONFIRM -->
+                    <div class="py-3 px-1">
+                        <p class="text-sm text-gray-700 mb-3">
+                            Delete <strong>${track.name || 'this track'}</strong>? This cannot be undone.
+                        </p>
+                        <div class="flex gap-3">
+                            <button type="button"
+                                    onclick="cancelInlineTrackDelete()"
+                                    class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">
+                                Cancel
+                            </button>
+                            <button type="button"
+                                    onclick="confirmInlineTrackDelete('${track.id}')"
+                                    class="flex-1 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 shadow">
+                                Delete
+                            </button>
+                        </div>
                     </div>
+
+                ` : `
+                    <!-- NORMAL ROW -->
+                    <div class="flex items-center justify-between gap-2 py-1">
+                        <div class="flex items-center gap-2 select-none min-w-0 flex-1">
+                            <input
+                                type="checkbox"
+                                class="track-visibility-toggle h-4 w-4 text-primary flex-shrink-0"
+                                data-track-id="${track.id}"
+                                ${isVisible ? 'checked' : ''}
+                                onchange="toggleTrackVisibility('${track.id}', this.checked)"
+                            >
+                            <div class="flex flex-col min-w-0">
+                                <span class="text-sm font-medium text-gray-700 truncate">
+                                    ${track.name || 'Track'}
+                                </span>
+                                <span class="text-xs text-gray-500 truncate">
+                                    ${pointsCount} points${created ? ` · ${created}` : ''}
+                                </span>
+                                ${desc ? `
+                                    <span class="text-[11px] text-gray-400 truncate">
+                                        ${desc}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            ${activeBadge}
+                            <span class="inline-block w-4 h-4 rounded-full flex-shrink-0"
+                                  style="background:${track.color || 'rgba(59,130,246,0.9)'}"></span>
+                            <button
+                                type="button"
+                                onclick="expandedTrackEditId='${track.id}';rerenderCompassIfActive()"
+                                class="px-3 py-2 rounded-lg bg-slate-700 text-white text-sm hover:bg-slate-800"
+                                title="Edit track name & colour"
+                                aria-label="Edit track"
+                            >
+                                <i class="fas fa-pen"></i>
+                            </button>
+
+                            <button
+                                type="button"
+                                onclick="openInlineTrackDelete('${track.id}')"
+                                class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-red-100 text-red-600 font-bold"
+                                title="Delete track"
+                                aria-label="Delete track"
+                            >
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `}
+
                 </div>
             `;
         }).join('');
@@ -15616,7 +16830,20 @@ if (!openSurvey) {
         <div class="p-4">
             <h2 class="text-3xl font-bold text-primary mb-4">Survey Map</h2>
 
-            <!-- Survey info -->
+            ${gpsLostWarning ? `
+            <div class="mb-4 p-3 bg-red-50 border-2 border-red-400 rounded-xl flex items-center gap-3">
+                <i class="fas fa-satellite-dish text-red-500 text-xl flex-shrink-0"></i>
+                <div>
+                    <p class="font-bold text-red-700 text-sm">GPS Signal Lost</p>
+                    <p class="text-red-600 text-xs">Automatic recovery failed. Use GPS controls in Settings.</p>
+                </div>
+            </div>
+            ` : gpsRecoveryAttempts > 0 ? `
+            <div class="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-3">
+                <i class="fas fa-satellite-dish text-amber-500 text-lg flex-shrink-0"></i>
+                <p class="text-amber-700 text-sm font-semibold">GPS recovering… (attempt ${gpsRecoveryAttempts}/${GPS_MAX_RECOVERIES})</p>
+            </div>
+            ` : ''}
             ${(() => {
                 const _allTargets = Array.isArray(openSurvey.targets) ? openSurvey.targets.filter(t => t && !t.deleted) : [];
                 const _isStake = t => Number(t.vdi) === -100;
@@ -15652,34 +16879,83 @@ if (!openSurvey) {
 
 ${(() => {
     const isOn = !!isAnyTrackRecording();
-    const startDisabled = isAnyTrackRecording();
-    const stopDisabled = !isAnyTrackRecording();
 
     const activeTrack = (openSurvey && Array.isArray(openSurvey.tracks))
         ? openSurvey.tracks.find(t => t && t.isRecording)
         : null;
 
     const statusText = isOn
-        ? `Tracking ON${activeTrack ? ` · Recording: ${activeTrack.name || 'Track'}` : ''}`
+        ? `Tracking ON${activeTrack ? ` \u00b7 Recording: ${activeTrack.name || 'Track'}` : ''}`
         : 'Tracking OFF';
 
-    // Pre-compute toggle values to avoid nested template literals
     const _borderCls  = mapTrackingExpanded ? 'border-b border-gray-100' : '';
     const _chevronCls = mapTrackingExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
     const _statusCls  = isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
-    const _startCls   = startDisabled ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700';
-    const _stopCls    = stopDisabled  ? 'bg-red-600 opacity-40 cursor-not-allowed'   : 'bg-red-600 hover:bg-red-700';
-    const _startDis   = startDisabled ? 'disabled' : '';
-    const _stopDis    = stopDisabled  ? 'disabled' : '';
-    const _bodyHtml   = mapTrackingExpanded
-        ? '<div class="p-4">'
-        + '<div class="grid grid-cols-2 gap-3">'
-        + '<button id="start-track-btn" type="button" ' + _startDis + ' class="py-3 rounded-xl font-bold text-white shadow ' + _startCls + '">🟢 Start Tracking</button>'
-        + '<button id="stop-track-btn" type="button" ' + _stopDis  + ' class="py-3 rounded-xl font-bold text-white shadow ' + _stopCls  + '">🔴 Stop Tracking</button>'
+
+    // Compute defaults for the "ready to start" form
+    const _nextIndex  = (openSurvey && Array.isArray(openSurvey.tracks)) ? openSurvey.tracks.length + 1 : 1;
+    const _defName    = _nextIndex === 1 ? 'Perimeter' : `Track ${_nextIndex}`;
+    const _defColor   = (typeof pickTrackColor === 'function')
+        ? pickTrackColor((openSurvey && Array.isArray(openSurvey.tracks)) ? openSurvey.tracks.length : 0)
+        : 'rgba(59,130,246,0.9)';
+
+    // Colour swatches (shared by both states)
+    const _swatchColors = [
+        { c: 'rgba(59,130,246,0.9)',  label: 'Blue'   },
+        { c: 'rgba(239,68,68,0.9)',   label: 'Red'    },
+        { c: 'rgba(34,197,94,0.9)',   label: 'Green'  },
+        { c: 'rgba(245,158,11,0.9)',  label: 'Amber'  },
+        { c: 'rgba(168,85,247,0.9)',  label: 'Purple' },
+        { c: 'rgba(20,184,166,0.9)',  label: 'Teal'   },
+        { c: 'rgba(236,72,153,0.9)',  label: 'Pink'   },
+        { c: 'rgba(100,116,139,0.9)', label: 'Slate'  },
+    ];
+    const _swatchHtml = _swatchColors.map(s => {
+        const sel = s.c === _defColor;
+        const bdr = sel ? 'border-blue-800' : 'border-transparent';
+        const scl = sel ? ';transform:scale(1.2)' : '';
+        return '<button type="button"'
+            + ' onclick="(function(b){document.querySelectorAll(\'.inline-track-swatch\').forEach(x=>{x.style.borderColor=\'transparent\';x.style.transform=\'scale(1)\'});b.style.borderColor=\'#1e40af\';b.style.transform=\'scale(1.2)\';document.getElementById(\'inline-track-colour\').value=\'' + s.c + '\'})(this)"'
+            + ' class="inline-track-swatch w-8 h-8 rounded-full border-2 ' + bdr + '"'
+            + ' style="background:' + s.c + scl + '"'
+            + ' title="' + s.label + '"></button>';
+    }).join('');
+
+    // Body shown when TRACKING IS OFF (setup form)
+    const _bodyOff = '<div class="p-4">'
+        + '<div class="mb-3">'
+        +   '<label class="block text-sm font-medium text-gray-700 mb-1">Track Name</label>'
+        +   '<input id="inline-track-name" type="text" value="' + _defName.replace(/"/g, '&quot;') + '" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm" placeholder="e.g. Perimeter">'
         + '</div>'
-        + '<p class="text-xs text-gray-500 mt-2">Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn’t squash the survey map.</p>'
+        + '<div class="mb-3">'
+        +   '<label class="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>'
+        +   '<textarea id="inline-track-description" rows="2" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm" placeholder="e.g. Started at gate, worked north\u2026"></textarea>'
         + '</div>'
-        : '';
+        + '<div class="mb-4">'
+        +   '<label class="block text-sm font-medium text-gray-700 mb-2">Track Colour</label>'
+        +   '<div class="flex gap-2 flex-wrap">' + _swatchHtml + '</div>'
+        +   '<input type="hidden" id="inline-track-colour" value="' + _defColor + '">'
+        + '</div>'
+        + '<div class="flex gap-3">'
+        +   '<button type="button" onclick="mapTrackingExpanded=false;rerenderCompassIfActive()" class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>'
+        +   '<button id="start-track-btn" type="button" onclick="handleStartTrackClick()" class="flex-1 py-3 rounded-xl font-bold text-white shadow bg-green-600 hover:bg-green-700">\uD83D\uDFE2 Start Tracking</button>'
+        + '</div>'
+        + '<p class="text-xs text-gray-500 mt-2">Tip: turn tracking <strong>OFF</strong> when you get home so your current location doesn\'t squash the survey map.</p>'
+        + '</div>';
+
+    // Body shown when TRACKING IS ON (status + stop)
+    const _bodyOn = '<div class="p-4">'
+        + '<p class="text-sm font-semibold text-green-700 mb-4 flex items-center gap-2">'
+        +   '<i class="fas fa-circle text-green-500"></i>'
+        +   (activeTrack ? ('Recording: <span class="text-gray-800 ml-1">' + (activeTrack.name || 'Track') + '</span>') : 'Recording\u2026')
+        + '</p>'
+        + '<div class="flex gap-3">'
+        +   '<button type="button" onclick="mapTrackingExpanded=false;rerenderCompassIfActive()" class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>'
+        +   '<button id="stop-track-btn" type="button" onclick="handleStopTrackClick()" class="flex-1 py-3 rounded-xl font-bold text-white shadow bg-red-600 hover:bg-red-700">\uD83D\uDD34 Stop Tracking</button>'
+        + '</div>'
+        + '</div>';
+
+    const _bodyHtml = mapTrackingExpanded ? (isOn ? _bodyOn : _bodyOff) : '';
 
     return `
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-3 overflow-hidden">
@@ -15848,13 +17124,32 @@ ${(() => {
 
             <!-- STAKE button -->
             <div class="mt-1 mb-2">
+                ${stakePanelOpen ? `
+                <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Stake name (optional)</label>
+                    <input id="stake-name-input" type="text" maxlength="40"
+                           class="w-full border border-gray-300 rounded-md p-2 text-sm mb-3"
+                           placeholder="e.g. Gate, Car, North boundary"
+                           autocomplete="off">
+                    <div class="flex gap-2">
+                        <button type="button"
+                                onclick="stakePanelOpen=false;rerenderCompassIfActive()"
+                                class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                        <button type="button"
+                                onclick="(()=>{const n=document.getElementById('stake-name-input');const nm=n?n.value.trim():'';stakePanelOpen=false;quickLogTargetByVDI(-100,'STAKE',{description:nm||'STAKE',type:'Something else'});rerenderCompassIfActive()})()"
+                                class="flex-1 py-2 rounded-lg bg-purple-600 text-white font-semibold text-sm hover:bg-purple-700 shadow">Log Stake</button>
+                    </div>
+                </div>
+                ` : `
                 <button
                     id="stake-target-btn"
                     type="button"
+                    onclick="(()=>{const r=canCreate('targets');if(!r.ok){showMessage(r.reason,'error');return;}stakePanelOpen=true;rerenderCompassIfActive();setTimeout(()=>{const i=document.getElementById('stake-name-input');if(i)i.focus();},50)})()"
                     class="w-full h-11 rounded-xl font-extrabold shadow bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 text-sm"
                     >
                     STAKE
                 </button>
+                `}
             </div>
             </div>
 
@@ -15989,7 +17284,6 @@ ${(() => {
                     + '<div><span class="font-semibold">You:</span> <span id="tile-grid-user-text">No GPS fix</span></div>'
                     + '<div><span class="font-semibold">Coverage:</span> <span id="tile-grid-coverage-text">' + _coveragePct + '%</span></div>'
                     + '</div>'
-                    + (() => { const _isOn = !!isAnyTrackRecording(); const _sd = _isOn; const _stpd = !_isOn; return         '<div class="mt-2 mb-3 border border-gray-100 rounded-lg p-2">'        + '<div class="flex items-center justify-between gap-2 mb-2">'        + '<span class="text-sm font-semibold text-gray-700"><i class="fas fa-route mr-1"></i> Tracking</span>'        + '<span class="text-xs font-semibold px-2 py-0.5 rounded-full ' + (_isOn ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '">' + (_isOn ? 'ON' : 'OFF') + '</span>'        + '</div>'        + '<div class="grid grid-cols-2 gap-2">'        + '<button id="start-track-btn-2" type="button" ' + (_sd ? 'disabled' : '') + ' class="py-2 rounded-lg font-bold text-white text-sm shadow ' + (_sd ? 'bg-green-600 opacity-40 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700') + '">🟢 Start</button>'        + '<button id="stop-track-btn-2" type="button" ' + (_stpd ? 'disabled' : '') + ' class="py-2 rounded-lg font-bold text-white text-sm shadow ' + (_stpd ? 'bg-red-600 opacity-40 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700') + '">🔴 Stop</button>'        + '</div>'        + '</div>'; })()
                     + '<div class="w-full flex justify-center mb-3">'
                     + '<canvas id="tile-grid-canvas" class="border border-gray-300 rounded-lg bg-white" style="touch-action: pan-y; display: block; width: 100%; aspect-ratio: 1 / 1;"></canvas>'
                     + '</div>'
@@ -16139,12 +17433,60 @@ return `
   }
 </p>
                 <p class="text-md text-gray-800 mb-4"><strong>Detector:</strong> ${userProfile.detector}</p>
+
+                ${detectorPresetConfirm ? `
+                <div class="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <p class="text-sm text-gray-700 mb-3">You changed your detector to <strong>${detectorPresetConfirm.detector}</strong>. Update Quick Target Button VDI ranges to the <strong>${detectorPresetConfirm.label}</strong> preset to match?</p>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="detectorPresetConfirm=null;render()"
+                                class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">No thanks</button>
+                        <button type="button" onclick="(()=>{const d=detectorPresetConfirm;detectorPresetConfirm=null;applyDetectorPreset(d.detector,false);showMessage('VDI ranges updated for '+d.detector+'.','success');render()})()"
+                                class="flex-1 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 shadow">Update Ranges</button>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="mt-4 pt-3 border-t border-gray-100">
+                    ${editProfilePanelOpen ? `
+                    <form id="edit-profile-form" class="space-y-4">
+                        <div>
+                            <label for="profile-name" class="block text-sm font-medium text-gray-700">Detectorist Name *</label>
+                            <input type="text" id="profile-name" name="profileName" required
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="profile-ncmd-number" class="block text-sm font-medium text-gray-700">NCMD Membership Number <span class="text-gray-400">(optional)</span></label>
+                            <input type="text" id="profile-ncmd-number" name="profileNcmdNumber" placeholder="e.g. 123456"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="profile-detector" class="block text-sm font-medium text-gray-700">Detector Used</label>
+                            <div class="relative mt-1" id="detector-combo-wrapper">
+                                <input type="text" id="profile-detector" name="profileDetector" autocomplete="off"
+                                       placeholder="Type or select your detector…"
+                                       class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary focus:border-primary"
+                                       oninput="filterDetectorList(this.value)"
+                                       onfocus="showDetectorDropdown()">
+                                <div id="detector-dropdown"
+                                     class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-56 overflow-y-auto"
+                                     style="display:none;"></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" onclick="closeEditProfileModal()"
+                                    class="flex-1 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Cancel</button>
+                            <button type="submit"
+                                    class="flex-1 py-2 text-white font-semibold rounded-lg shadow-md hover:opacity-90 transition"
+                                    style="background-color: rgb(var(--color-secondary));">Save Changes</button>
+                        </div>
+                    </form>
+                    ` : `
                     <button onclick="showEditProfileModal()"
                             class="px-3 py-2 text-white font-bold rounded-md text-sm hover:opacity-90 transition duration-150"
                             style="background-color: ${secondaryColor};">
                         <i class="fas fa-user-edit mr-1"></i> Edit Profile
                     </button>
+                    `}
                 </div>
             </div>
 
@@ -16283,6 +17625,38 @@ return `
                 </button>
             </div>
 
+<!-- GPS Controls -->
+            <div class="mt-6 bg-white p-4 rounded-xl shadow-lg border-l-4 border-blue-500 mb-6">
+                <h4 class="text-lg font-semibold text-blue-700 mb-2">
+                    <i class="fas fa-satellite-dish mr-2"></i>GPS
+                </h4>
+                <p class="text-sm text-gray-600 mb-1">
+                    Status: <strong>${
+                        liveMapWatchId === null    ? 'Not running' :
+                        gpsLostWarning             ? 'Lost — recovery failed' :
+                        gpsRecoveryAttempts > 0    ? 'Recovering (' + gpsRecoveryAttempts + '/' + GPS_MAX_RECOVERIES + ')' :
+                        lastGpsTimestamp !== null   ? 'Active' :
+                                                     'Started — waiting for first fix'
+                    }</strong>
+                </p>
+                ${lastGpsTimestamp !== null && liveMapWatchId !== null && !gpsLostWarning ? `
+                <p class="text-xs text-gray-500 mb-3">Last fix: ${Math.round((Date.now() - lastGpsTimestamp) / 1000)}s ago</p>
+                ` : '<p class="mb-3"></p>'}
+                <div class="flex gap-3">
+                    <button type="button"
+                            onclick="startLiveMapLocationWatch();currentPage='Compass';render()"
+                            class="flex-1 py-2 rounded-lg bg-green-600 text-white font-semibold text-sm hover:bg-green-700 shadow">
+                        <i class="fas fa-play mr-1"></i> Start GPS
+                    </button>
+                    <button type="button"
+                            onclick="stopLiveMapLocationWatch();if(typeof stopCompassAutoRefresh==='function')stopCompassAutoRefresh();render()"
+                            class="flex-1 py-2 rounded-lg bg-red-600 text-white font-semibold text-sm hover:bg-red-700 shadow">
+                        <i class="fas fa-stop mr-1"></i> Stop GPS
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Use these if GPS stops responding during tracking.</p>
+            </div>
+
 <!-- Danger Zone: Reset All Data -->
             <div class="mt-8 border-t border-gray-300 pt-6">
                 <h3 class="text-lg font-semibold text-red-600 mb-3">Danger Zone</h3>
@@ -16301,9 +17675,22 @@ return `
 
                       <button id="maintenance-btn"
                       type="button"
+                      onclick="maintenanceConfirmOpen=true;render()"
                       class="w-full bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-800 transition">
                         <i class="fas fa-broom mr-1"></i> Maintenance: Clean Local Data
                       </button>
+
+                      ${maintenanceConfirmOpen ? `
+                      <div class="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                          <p class="text-sm text-gray-700 mb-3">This will permanently remove any leftover deleted items and tidy local data. Continue?</p>
+                          <div class="flex gap-3">
+                              <button type="button" onclick="maintenanceConfirmOpen=false;render()"
+                                      class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
+                              <button type="button" onclick="(async()=>{maintenanceConfirmOpen=false;saveSurveysToLocalStorage();if(typeof saveFindsToLocalStorage==='function')saveFindsToLocalStorage();showMessage('Maintenance complete.','success');render()})()"
+                                      class="flex-1 py-2 rounded-lg bg-orange-600 text-white font-semibold text-sm hover:bg-orange-700 shadow">Run Maintenance</button>
+                          </div>
+                      </div>
+                      ` : ''}
 
                       <p class="text-xs text-gray-500 mt-2">
                         Removes any leftover “deleted” items and tidies storage.
@@ -17788,10 +19175,15 @@ function exportOpenSurveyWithPhotos() {
         showMessage('No open survey to export.', 'error');
         return;
     }
-
-    showExportConfirmModal(() => {
-        actuallyExportOpenSurvey(); // we keep the function name to avoid changing your button wiring
-    });
+    // On the Home page show the inline confirm panel on the survey card
+    // On any other page (e.g. Exports) just export directly
+    if (currentPage === 'Home') {
+        shareSurveyConfirmOpen  = false;
+        exportSurveyConfirmOpen = true;
+        render();
+    } else {
+        actuallyExportOpenSurvey();
+    }
 }
 
 async function shareSurveyAsZip() {
@@ -17800,12 +19192,9 @@ async function shareSurveyAsZip() {
         showMessage('No open survey to share.', 'error');
         return;
     }
-    showConfirmationModal(
-        'Share Survey as ZIP',
-        `Share <strong>${escapeHtml(openSurvey.name || 'Survey')}</strong> as a ZIP file?<br>
-         <span class="text-sm text-gray-600">The survey will be packaged with all targets, finds, and photos, then shared via your device's share sheet.</span>`,
-        () => actuallyShareSurveyAsZip()
-    );
+    exportSurveyConfirmOpen = false;
+    shareSurveyConfirmOpen  = true;
+    render();
 }
 
 async function buildSurveyZipBlob() {
@@ -18637,19 +20026,7 @@ if (privacyBtn) {
 
     
 
-    // 2. Track Delete Buttons
-    const trackDeleteButtons = document.querySelectorAll('.track-delete-btn');
-    if (trackDeleteButtons && trackDeleteButtons.length > 0) {
-        trackDeleteButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const trackId = btn.getAttribute('data-track-id');
-                deleteTrack(trackId);
-            });
-        });
-    }
-    
+// 2b. Track Edit/Delete Buttons — handled via inline onclick, no delegation needed
 
 // 2c. Track Visibility Toggle Checkboxes
 const trackVisibilityToggles = document.querySelectorAll('.track-visibility-toggle');
@@ -18689,47 +20066,13 @@ if (trackVisibilityToggles && trackVisibilityToggles.length > 0) {
         stopTrackBtn.addEventListener('click', handleStopTrackClick);
     }
 
-    // Duplicate tracking buttons (below map layers)
-    const startTrackBtn2 = document.getElementById('start-track-btn-2');
-    if (startTrackBtn2) {
-        startTrackBtn2.addEventListener('click', handleStartTrackClick);
-    }
-
-    const stopTrackBtn2 = document.getElementById('stop-track-btn-2');
-    if (stopTrackBtn2) {
-        stopTrackBtn2.addEventListener('click', handleStopTrackClick);
-    }
-
-// Track edit (name + description)
-document.querySelectorAll('.track-edit-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const trackId = e.currentTarget.getAttribute('data-track-id');
-        promptEditTrackMeta(trackId);
-    });
-});
-
-// 2b. Track Edit Buttons (name + description modal)
-const trackEditButtons = document.querySelectorAll('.track-edit-btn');
-if (trackEditButtons && trackEditButtons.length > 0) {
-    trackEditButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const trackId = btn.getAttribute('data-track-id');
-            openEditTrackModal(trackId);
-        });
-    });
-}
+// 2b. Track Edit Buttons — handled via inline onclick, no delegation needed
 
   
     // 3. Page Action Buttons (New Survey, Log Target, Export/Import)
-    const newSurveyBtn = document.getElementById('new-survey-btn');
-    if (newSurveyBtn) newSurveyBtn.addEventListener('click', showNewSurveyModal);
+    // New Survey — handled via inline onclick on the collapsible panel header
 
-    const addTargetBtn = document.getElementById('add-target-btn');
-    if (addTargetBtn) addTargetBtn.addEventListener('click', showNewTargetModal);
+    // Log New Target — handled via inline onclick on the collapsible panel header
 
     const exportBtn = document.getElementById('export-data-btn');
     if (exportBtn) exportBtn.addEventListener('click', exportData);
@@ -18806,42 +20149,7 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
     });
 }
 
-// Compass: STAKE button (no prompt, no forced tracking)
-const stakeBtn = document.getElementById('stake-target-btn');
-if (stakeBtn) {
-    stakeBtn.addEventListener('click', () => {
-
-        // LIMITS: stakes are targets too
-        const r = canCreate('targets');
-        if (!r.ok) {
-            showMessage(r.reason, 'error');
-            return;
-        }
-
-        // Ask for a stake name before logging
-        showConfirmationModal(
-            'Name this Stake',
-            `<label class="block text-sm font-medium text-gray-700 mb-1">Stake name (optional)</label>
-             <input id="stake-name-input" type="text" maxlength="40"
-                    class="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-primary focus:border-primary"
-                    placeholder="e.g. Gate, Car, North boundary"
-                    autocomplete="off">`,
-            () => {
-                const nameEl = document.getElementById('stake-name-input');
-                const stakeName = nameEl ? nameEl.value.trim() : '';
-                quickLogTargetByVDI(-100, 'STAKE', {
-                    description: stakeName || 'STAKE',
-                    type: 'Something else'
-                });
-            }
-        );
-        // Auto-focus the input after the modal renders
-        setTimeout(() => {
-            const inp = document.getElementById('stake-name-input');
-            if (inp) inp.focus();
-        }, 50);
-    });
-}
+// Compass: STAKE button — handled via inline onclick in the rendered HTML
         
     // 5. Finds Page Filter Listeners
     const findsSearchInput = document.getElementById('finds-search-input');
@@ -18881,13 +20189,7 @@ if (stakeBtn) {
         });
     }
 
-    // 6. Finds Card Buttons
-    document.querySelectorAll('.find-card-edit-btn').forEach(btn => {
-        btn.addEventListener('click', () => openEditFindModal(btn.getAttribute('data-find-id')));
-    });
-    document.querySelectorAll('.find-card-delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => deleteFind(btn.getAttribute('data-find-id')));
-    });
+    // 6. Find Card Buttons — handled via inline onclick
 
 // 7. Compass Page Range Buttons — use inline onclick="_quickRangeBtnClick(this)" instead
 
@@ -18921,10 +20223,7 @@ if (stakeBtn) {
         };
     }
 
-        const scanTargetQrBtn = document.getElementById('scan-target-qr-btn');
-if (scanTargetQrBtn) {
-    scanTargetQrBtn.addEventListener('click', openTargetQrScanModal);
-}
+    // Scan Target QR — handled via inline onclick on the button
 
 
         const sortByIdBtn = document.getElementById('sort-target-id-btn');
@@ -18953,24 +20252,7 @@ if (toggleStakesBtn) {
     });
 }
 
-    const maintenanceBtn = document.getElementById('maintenance-btn');
-if (maintenanceBtn) {
-  maintenanceBtn.addEventListener('click', () => {
-    showConfirmationModal(
-      'Run Maintenance',
-      'This will permanently remove any leftover deleted items and tidy local data.<br><br>Continue?',
-      async () => {
-        // call your helper(s) here
-        // e.g. purgeDeletedTargetsPermanently(); purgeDeletedFindsPermanently(); etc.
-        // then persist:
-        saveSurveysToLocalStorage();
-        saveFindsToLocalStorage?.();
-        showMessage('Maintenance complete.', 'success');
-        render();
-      }
-    );
-  });
-}
+    // maintenance-btn — handled via inline onclick
 
 
 
@@ -19004,12 +20286,7 @@ async function importSurveyWithPhotosFromFile() {
     }
 
     const file = fileInput.files[0];
-
-    // Clear previous log
-    if (logBox) {
-        logBox.value = '';
-    }
-
+    if (logBox) logBox.value = '';
     log(`Reading file "${file.name}"...`);
 
     let text;
@@ -19017,18 +20294,15 @@ async function importSurveyWithPhotosFromFile() {
         text = await file.text();
         log('File read successfully. Ready to import.');
     } catch (e) {
-       console.error('Error reading survey import file:', e);
+        console.error('Error reading survey import file:', e);
         log(`ERROR: Could not read file (${e.message || 'Unknown error'})`);
         showMessage(`Could not read import file: ${e.message || 'Unknown error'}`, 'error');
         return;
     }
 
-    // Now ask for confirmation using the existing modal
-    showImportConfirmModal(file.name, async () => {
-        log('Starting import...');
-        await performSurveyImport(text, file.name, log);
-        // We stay on Settings so the user can read the log
-    });
+    // Show inline confirm panel instead of modal
+    importSurveyConfirmData = { filename: file.name, text, log };
+    render();
 }
 
         // --- INITIALIZATION & EVENT LISTENERS ---
