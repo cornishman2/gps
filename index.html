@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.6
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.7
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -5178,6 +5178,8 @@ function turnInstructionFromRelativeAngle(relDeg) {
         
 function needsGpsNow() {
     // GPS needed if: user wants to see themselves OR navigation is active OR tracking is recording
+    // Also keep GPS alive while on the Compass page so Hide/Show is instant with no cold-start.
+    if (typeof currentPage !== 'undefined' && currentPage === 'Compass') return true;
     return !!showUserPosition || !!navigationTargetId || isAnyTrackRecording();
 }
 
@@ -20002,13 +20004,32 @@ function attachPageEventListeners() {
 if (gpsBtn) {
     gpsBtn.onclick = () => {
         showUserPosition = !showUserPosition;
-        if (!needsGpsNow()) {
-            if (typeof stopLiveMapLocationWatch === 'function') stopLiveMapLocationWatch();
+        if (showUserPosition) {
+            // Showing: ensure watch is running, then re-render once we have coords.
+            // If we already have smoothed coords from before, re-render immediately.
+            // Either way, also ensure the watch + auto-refresh are running so the
+            // map keeps updating.
+            if (!liveMapWatchId) {
+                startLiveMapLocationWatch();
+                // Watch just (re)started — wait for the first fix before re-rendering,
+                // otherwise the dot won't appear. The auto-refresh interval started by
+                // startLiveMapLocationWatch will trigger the first re-render once a fix
+                // arrives, so we only need an immediate re-render if we already have coords.
+                if (smoothedUserCoords || currentUserCoords) {
+                    if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+                }
+            } else {
+                // Watch already running (position already known) — re-render immediately.
+                if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
+            }
         } else {
-            if (!liveMapWatchId) startLiveMapLocationWatch();
+            // Hiding: only stop the watch if nothing else needs GPS.
+            if (!needsGpsNow()) {
+                if (typeof stopLiveMapLocationWatch === 'function') stopLiveMapLocationWatch();
+            }
+            if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
         }
         showMessage(showUserPosition ? 'Showing your position.' : 'Hiding your position.', 'info');
-        if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     };
 }
 
