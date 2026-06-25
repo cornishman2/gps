@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.15
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.16
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1810,10 +1810,12 @@ document.addEventListener('visibilitychange', function() {
     // to foreground, regardless of which page we're on.
     if (typeof gpsLostWarning !== 'undefined')      gpsLostWarning      = false;
     if (typeof gpsRecoveryAttempts !== 'undefined') gpsRecoveryAttempts = 0;
-    // Refresh the timestamp baseline so watchdog doesn't see a stale gap
-    if (typeof lastGpsTimestamp !== 'undefined' &&
+    // Refresh the watchdog grace timestamp so the watchdog doesn't fire a false alarm
+    // after returning from background. Do NOT touch lastGpsTimestamp — that's only
+    // set by real watchPosition fixes.
+    if (typeof gpsWatchdogGraceTimestamp !== 'undefined' &&
         typeof liveMapWatchId !== 'undefined' && liveMapWatchId !== null) {
-        lastGpsTimestamp = Date.now();
+        gpsWatchdogGraceTimestamp = Date.now();
     }
 
     // Only act if GPS should be running but the watch has been killed by the OS
@@ -1824,10 +1826,10 @@ document.addEventListener('visibilitychange', function() {
                 startLiveMapLocationWatch();
             }
         } else {
-            // Watch ID still exists — reset the watchdog timestamp so it doesn't
+            // Watch ID still exists — reset the watchdog grace timestamp so it doesn't
             // immediately trigger a false "GPS lost" alarm after returning from camera
-            if (typeof lastGpsTimestamp !== 'undefined') {
-                lastGpsTimestamp = Date.now();
+            if (typeof gpsWatchdogGraceTimestamp !== 'undefined') {
+                gpsWatchdogGraceTimestamp = Date.now();
             }
         }
     }
@@ -2889,7 +2891,8 @@ let userProfile = {
         let autoRefreshIntervalId = null; 
 
         // GPS watchdog
-        let lastGpsTimestamp       = null;  // time of last successful GPS fix
+        let lastGpsTimestamp       = null;  // time of last REAL GPS fix (only set by watchPosition success)
+        let gpsWatchdogGraceTimestamp = null; // watchdog grace: set on bg-return/page-switch to prevent false alarms
         let gpsWatchdogTimer       = null;  // setInterval ID — null when not running
         let gpsRecoveryAttempts    = 0;     // auto-recovery attempts this session
         let gpsLostWarning         = false; // true when recovery has failed
@@ -8703,8 +8706,8 @@ if (currentPage !== 'Compass') {
     // Reset watchdog state so it starts clean when we return to Compass
     gpsRecoveryAttempts = 0;
     gpsLostWarning      = false;
-    // Refresh lastGpsTimestamp so watchdog doesn't see stale age on return
-    if (liveMapWatchId !== null) lastGpsTimestamp = Date.now();
+    // Refresh watchdog grace timestamp so watchdog doesn't fire on return to Compass
+    if (liveMapWatchId !== null) gpsWatchdogGraceTimestamp = Date.now();
 }
 
 switch (currentPage) {
@@ -9642,9 +9645,10 @@ function stopLiveMapLocationWatch() {
         clearInterval(gpsWatchdogTimer);
         gpsWatchdogTimer = null;
     }
-    lastGpsTimestamp    = null;
-    gpsRecoveryAttempts = 0;
-    gpsLostWarning      = false;
+    lastGpsTimestamp          = null;
+    gpsWatchdogGraceTimestamp = null;
+    gpsRecoveryAttempts       = 0;
+    gpsLostWarning            = false;
 
     // Clear all live-user map state so it cannot affect the bounding box
     if (currentUserCoords) lastKnownMapCoords = { ...currentUserCoords };
@@ -9665,9 +9669,11 @@ function checkGpsWatchdog() {
     // Only run while on Compass page and GPS is supposed to be active
     if (currentPage !== 'Compass') return; // CRITICAL: don't fire on other pages
     if (liveMapWatchId === null) return;
-    if (lastGpsTimestamp === null) return; // no fix yet — too early to judge
-
-    const silent = Date.now() - lastGpsTimestamp;
+    // Use the later of the real fix time or the grace timestamp (set on bg-return/page-switch)
+    // Don't fire until a real fix has arrived — grace period alone is not enough
+    if (lastGpsTimestamp === null) return; // waiting for first real fix
+    const _watchdogRef = Math.max(lastGpsTimestamp, gpsWatchdogGraceTimestamp || 0);
+    const silent = Date.now() - _watchdogRef;
     if (silent < GPS_LOST_MS) return; // GPS is fine
 
     console.warn('GPS watchdog: no fix for ' + silent + 'ms');
@@ -9682,19 +9688,7 @@ function checkGpsWatchdog() {
             liveMapWatchId = null;
         }
         liveMapWatchId = navigator.geolocation.watchPosition(
-            function(position) {
-                var accuracy = Math.round(position.coords.accuracy * 10) / 10;
-                lastGpsTimestamp = Date.now();
-                if (gpsLostWarning) {
-                    gpsLostWarning      = false;
-                    gpsRecoveryAttempts = 0;
-                    console.log('GPS watchdog: recovered.');
-                    rerenderCompassIfActive();
-                }
-                currentUserCoords   = { lat: position.coords.latitude, lon: position.coords.longitude };
-                currentUserAccuracy = accuracy;
-                lastKnownMapCoords  = { lat: position.coords.latitude, lon: position.coords.longitude };
-            },
+            processLiveGpsPosition,
             function(err) { console.error('GPS watchdog recovery error:', err); },
             { enableHighAccuracy: true, maximumAge: 0 }
         );
@@ -9708,158 +9702,112 @@ function checkGpsWatchdog() {
 }
 
 
+    // ── Shared GPS position processor ────────────────────────────────────────
+    // Single function that stores every GPS fix, called from all watch/get callbacks.
+    function processLiveGpsPosition(position) {
+        const accuracy = Math.round(position.coords.accuracy * 10) / 10;
+
+        lastGpsTimestamp          = Date.now();
+        gpsWatchdogGraceTimestamp = Date.now();
+
+        if (gpsLostWarning) {
+            gpsLostWarning      = false;
+            gpsRecoveryAttempts = 0;
+            rerenderCompassIfActive();
+        }
+
+        currentUserCoords   = { lat: position.coords.latitude, lon: position.coords.longitude };
+        lastKnownMapCoords  = { ...currentUserCoords };
+        currentUserAccuracy = accuracy;
+
+        updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
+        if (smoothedUserCoords) recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
+
+        const now = Date.now();
+        if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 2000) {
+            lastGpsUiRefreshMs = now;
+            updateMapWithUserLocationAndRender();
+        }
+
+        if (navSession && navSession.active && navigationTargetId && smoothedUserCoords) {
+            if (!Array.isArray(navSession.path)) navSession.path = [];
+            const lat = smoothedUserCoords.lat, lon = smoothedUserCoords.lon;
+            if (navSession.lastLat === null || navSession.lastLon === null) {
+                navSession.lastLat = lat; navSession.lastLon = lon; navSession.path.push({ lat, lon });
+            } else {
+                const d = distanceMeters(navSession.lastLat, navSession.lastLon, lat, lon);
+                if (d >= 2) { navSession.lastLat = lat; navSession.lastLon = lon; navSession.path.push({ lat, lon }); }
+            }
+        }
+
+        if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
+            hasRenderedFirstGpsFix = true;
+            const appContent = document.getElementById('app-content');
+            if (appContent) { appContent.innerHTML = renderCompassPage(true); attachPageEventListeners(); }
+        }
+
+        if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
+            logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
+        }
+
+        if (accuracy < bestLiveAccuracy) {
+            bestLiveAccuracy = accuracy;
+        }
+
+        console.log(`GPS fix: ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)} (±${accuracy}m)`);
+    }
+
     function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
-        currentUserCoords = null;
-        currentUserAccuracy = null;
-        smoothedUserCoords = null;
         showMessage('Geolocation is not supported on this device.', 'error');
         return;
     }
 
-  // Fresh run each time we arrive on the Compass page
-bestLiveAccuracy = Infinity;
-smoothedUserCoords = null;
-movementHistory = [];
+    // Fresh state each time
+    bestLiveAccuracy       = Infinity;
+    smoothedUserCoords     = null;
+    movementHistory        = [];
+    currentUserCoords      = null;
+    currentUserAccuracy    = null;
+    hasRenderedFirstGpsFix = false;
 
-// Reset last-known user position to avoid stale data
-currentUserCoords = null;
-currentUserAccuracy = null;
-
-// Ensure first GPS fix triggers a redraw
-hasRenderedFirstGpsFix = false;
-
-    // Start / restart the GPS watch
+    // Clear any existing watch
     if (liveMapWatchId !== null) {
         navigator.geolocation.clearWatch(liveMapWatchId);
         liveMapWatchId = null;
     }
 
-liveMapWatchId = navigator.geolocation.watchPosition(
-        (position) => {
-            const accuracy = Math.round(position.coords.accuracy *10) / 10;
-
-            // Record fix time for watchdog; clear any warning if GPS has recovered
-            lastGpsTimestamp = Date.now();
-            if (gpsLostWarning) {
-                gpsLostWarning      = false;
-                gpsRecoveryAttempts = 0;
-                rerenderCompassIfActive();
-            }
-
-            // Raw latest reading
-            currentUserCoords = {
-                lat: position.coords.latitude,
-                lon: position.coords.longitude
-            };
-            lastKnownMapCoords = { ...currentUserCoords };
-            currentUserAccuracy = accuracy;
-
-            // Update smoothed position used by the map
-            updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
-            // Record this smoothed point into the movement history
-            if (smoothedUserCoords) {
-                recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);   
-            }
-            // Faster UI updates: refresh on GPS fixes (throttled), still keyboard-safe
-            const now = Date.now();
-            if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 2000) { // 2s throttle
-                lastGpsUiRefreshMs = now;
-                updateMapWithUserLocationAndRender();
-            }
-
-// If navigating, record a breadcrumb point (real walked path)
-if (navSession && navSession.active && navigationTargetId && smoothedUserCoords) {
-    if (!Array.isArray(navSession.path)) navSession.path = [];
-
-    const lat = smoothedUserCoords.lat;
-    const lon = smoothedUserCoords.lon;
-
-    // Only add a point if we've moved ~2m or more (reduces jitter)
-    if (navSession.lastLat === null || navSession.lastLon === null) {
-        navSession.lastLat = lat;
-        navSession.lastLon = lon;
-        navSession.path.push({ lat, lon });
-    } else {
-        const d = distanceMeters(navSession.lastLat, navSession.lastLon, lat, lon);
-        if (d >= 2) {
-            navSession.lastLat = lat;
-            navSession.lastLon = lon;
-            navSession.path.push({ lat, lon });
-        }
-    }
-}
-            
-
-        // Force a one-time redraw on first GPS fix so the user dot appears immediately
-if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
-    hasRenderedFirstGpsFix = true;
-
-    // Re-render Compass safely without starting extra loops
-    const appContent = document.getElementById('app-content');
-    if (appContent) {
-        appContent.innerHTML = renderCompassPage(true);
-        attachPageEventListeners();
-    }
-}
-
-
-
-            // NEW: if we’re recording a track, log a point using the smoothed location
-            if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
-                logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
-            }
-
-            // Track best accuracy (for logging/info)
-            if (accuracy < bestLiveAccuracy) {
-                bestLiveAccuracy = accuracy;
-            }
-
-            // ... rest of your logging code stays the same ...
-
-            console.log(
-                `Live Map position (raw): ${currentUserCoords.lat.toFixed(6)}, ` +
-                `${currentUserCoords.lon.toFixed(6)} (acc: ${accuracy.toFixed(1)}m, best: ${bestLiveAccuracy.toFixed(1)}m)`
-            );
-
-            if (smoothedUserCoords) {
-                console.log(
-                    `Live Map position (smoothed): ${smoothedUserCoords.lat.toFixed(6)}, ` +
-                    `${smoothedUserCoords.lon.toFixed(6)}`
-                );
-            }
-        },
-        (error) => {
-            currentUserCoords = null;
-            currentUserAccuracy = null;
-            smoothedUserCoords = null;
-            console.error('Live Map GPS Watch Error:', error);
-        },
-        {
-            enableHighAccuracy: true,
-            maximumAge: 0
-        }
+    // ── One-shot immediate fix (critical for Play Store / Android WebView) ──
+    // watchPosition alone may never fire its first callback in some Android
+    // environments. getCurrentPosition forces an immediate fix attempt.
+    navigator.geolocation.getCurrentPosition(
+        processLiveGpsPosition,
+        err => console.warn('Initial GPS fix failed:', err),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
     );
 
-    // Start the auto-refresh interval (if not already running)
+    // ── Continuous watch for ongoing updates ───────────────────────────────
+    liveMapWatchId = navigator.geolocation.watchPosition(
+        processLiveGpsPosition,
+        (error) => {
+            currentUserCoords   = null;
+            currentUserAccuracy = null;
+            smoothedUserCoords  = null;
+            console.error('Live Map GPS Watch Error:', error);
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+    );
+
+    // Auto-refresh interval
     if (autoRefreshIntervalId === null) {
-        autoRefreshIntervalId = setInterval(() => {
-            updateMapWithUserLocationAndRender();
-        }, 1000); // 3 seconds
+        autoRefreshIntervalId = setInterval(() => { updateMapWithUserLocationAndRender(); }, 1000);
         console.log('Live Map GPS Watch and auto-refresh interval started.');
     }
 
-    // Reset watchdog state for a clean session.
-    // IMPORTANT: Do NOT null out lastGpsTimestamp here if the watch was already
-    // running (e.g. returning to Compass from Settings) — a null timestamp
-    // causes the watchdog to treat the first 6s as uncertain and could
-    // mis-fire. If we just restarted the watch above, set it to now so the
-    // watchdog has a sensible baseline immediately.
-    if (lastGpsTimestamp === null) lastGpsTimestamp = Date.now();
+    if (gpsWatchdogGraceTimestamp === null) gpsWatchdogGraceTimestamp = Date.now();
     gpsRecoveryAttempts = 0;
     gpsLostWarning      = false;
 
-    // Start watchdog (guard against duplicates)
     if (gpsWatchdogTimer === null) {
         gpsWatchdogTimer = setInterval(checkGpsWatchdog, GPS_CHECK_MS);
         console.log('GPS watchdog started.');
@@ -10343,8 +10291,9 @@ function startCompassAutoRefresh() {
     if (!window._compassWatchId && navigator.geolocation) {
         try {
             window._compassWatchId = navigator.geolocation.watchPosition(
-                () => {
-                    // Each GPS update triggers an immediate refresh/render.
+                (position) => {
+                    // Each GPS update stores coords and triggers a refresh/render.
+                    processLiveGpsPosition(position);
                     if (currentPage !== 'Compass') return;
                     updateMapWithUserLocationAndRender();
                 },
@@ -15913,19 +15862,19 @@ const toPercent = (x, y) => {
             return `
                 <div
                     class="absolute map-pin"
-                    style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10; overflow: visible;"
+                    style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${(t.description || '').replace(/"/g,'&quot;')} (${(t.type || '').toLowerCase()==='find' || t.isFind ? 'Find' : 'Target'} ID: ${t.vdi || ''})"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
-                    <div class="relative" style="overflow: visible;">
+                    <div class="relative">
                         ${extraRing}
                         <div
                           class="
-                          ${pinSize}
+                          ${isStake ? 'w-2 h-2' : pinSize}
                           ${(isStake || isFind || !_pinColors) ? (isStake ? 'bg-black' : pinColor) : ''}
                           rounded-full
                           border-2
-                          ${isStake ? 'border-white' : (isFind ? 'border-primary' : '')}
+                          ${isStake ? 'border-black' : (isFind ? 'border-primary' : '')}
                           shadow-lg
                           cursor-pointer
                           ${navigationTargetId && String(navigationTargetId) === String(t.id) ? 'pin-blink' : ''}
@@ -15937,33 +15886,25 @@ const toPercent = (x, y) => {
                           "
                           title="${isStake ? 'Stake marker' : ''}"
                           ></div>
-
-                        <!-- Label: positioned relative to the outer .map-pin div, counter-scaled -->
-                        ${(() => {
-                            const lbl = getMapPinLabelText(t);
-                            if (!lbl) return '';
-                            const safe = String(lbl).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                            const offsetPx = Math.round(10 * invZoom);
-                            return `<span
-                                style="
-                                    position: absolute;
-                                    left: ${offsetPx + 8}px;
-                                    top: 50%;
-                                    transform: translateY(-50%);
-                                    white-space: nowrap;
-                                    font-size: ${Math.round(11 * invZoom)}px;
-                                    font-weight: 600;
-                                    color: #1f2937;
-                                    background: rgba(255,255,255,0.92);
-                                    padding: 1px 4px;
-                                    border-radius: 3px;
-                                    border: 1px solid #d1d5db;
-                                    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-                                    pointer-events: none;
-                                    z-index: 20;
-                                ">${safe}</span>`;
-                        })()}
                     </div>
+
+                    <!-- Label: counter-scale so it stays the same size while zooming -->
+                    ${(() => {
+                        const lbl = getMapPinLabelText(t);
+                        if (!lbl) return '';
+                        const safe = String(lbl).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        return `
+                    <span
+                        class="absolute whitespace-nowrap text-xs font-semibold text-gray-800 bg-white p-1 rounded-sm shadow border border-gray-300 pointer-events-none"
+                        style="
+                            left: 75%;
+                            top: 50%;
+                            transform: translate(4px, -50%) scale(${invZoom});
+                            transform-origin: left center;
+                            z-index: 12;
+                        "
+                    >${safe}</span>`;
+                    })()}
                 </div>
             `;
         })
@@ -16814,20 +16755,19 @@ if (!openSurvey) {
     // GPS watch: needed for showing user position OR navigation OR recording a track
     if (needsGpsNow()) {
         if (!liveMapWatchId) {
-            // Cold start — no watch running yet
             startLiveMapLocationWatch();
-        } else if (!isAutoRefresh) {
-            // Warm return to Compass (e.g. from Settings).
-            // Watch is already running and has coords — just ensure watchdog is alive.
+        } else {
+            // Watch already running (e.g. returned from Settings).
+            // Restart the watchdog if it was paused by render() on page-leave,
+            // and reset state so it starts clean.
             gpsRecoveryAttempts = 0;
             gpsLostWarning      = false;
-            if (lastGpsTimestamp === null) lastGpsTimestamp = Date.now();
+            if (gpsWatchdogGraceTimestamp === null) gpsWatchdogGraceTimestamp = Date.now();
             if (gpsWatchdogTimer === null) {
                 gpsWatchdogTimer = setInterval(checkGpsWatchdog, GPS_CHECK_MS);
                 console.log('GPS watchdog restarted on Compass return.');
             }
         }
-        // isAutoRefresh=true with watch running: do nothing, coords are already live
     } else {
         if (typeof stopLiveMapLocationWatch === 'function') {
             stopLiveMapLocationWatch();
@@ -17695,14 +17635,14 @@ return `
                 </h4>
                 <p class="text-sm text-gray-600 mb-1" id="gps-settings-status">
                     Status: <strong>${
-                        liveMapWatchId === null    ? 'Not running' :
-                        gpsLostWarning             ? 'Lost — recovery failed' :
-                        gpsRecoveryAttempts > 0    ? 'Recovering (' + gpsRecoveryAttempts + '/' + GPS_MAX_RECOVERIES + ')' :
-                        lastGpsTimestamp !== null   ? 'Active' :
-                                                     'Started — waiting for first fix'
+                        liveMapWatchId === null        ? 'Not running' :
+                        gpsLostWarning                 ? 'Lost — recovery failed' :
+                        gpsRecoveryAttempts > 0        ? 'Recovering (' + gpsRecoveryAttempts + '/' + GPS_MAX_RECOVERIES + ')' :
+                        getBestLiveGpsCoordsOrNull()   ? 'Active — fix acquired' :
+                                                         'Started — waiting for first fix'
                     }</strong>
                 </p>
-                <p class="text-xs text-gray-500 mb-3" id="gps-settings-lastfix">${lastGpsTimestamp !== null && liveMapWatchId !== null && !gpsLostWarning ? 'Fixed at ' + new Date(lastGpsTimestamp).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) + ' (' + Math.round((Date.now() - lastGpsTimestamp) / 1000) + 's ago)' : ''}</p>
+                <p class="text-xs text-gray-500 mb-3" id="gps-settings-lastfix">${getBestLiveGpsCoordsOrNull() && liveMapWatchId !== null && !gpsLostWarning && lastGpsTimestamp !== null ? 'Fixed at ' + new Date(lastGpsTimestamp).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) + ' (' + Math.round((Date.now() - lastGpsTimestamp) / 1000) + 's ago)' : ''}</p>
                 <div class="flex gap-3">
                     <button type="button"
                             onclick="startLiveMapLocationWatch();render()"
@@ -19971,17 +19911,17 @@ function attachPageEventListeners() {
                 return;
             }
 
+            var hasRealFix = !!(typeof getBestLiveGpsCoordsOrNull === 'function' && getBestLiveGpsCoordsOrNull());
             var statusText =
-                liveMapWatchId === null                                    ? 'Not running' :
-                gpsLostWarning                                             ? 'Lost — recovery failed' :
-                gpsRecoveryAttempts > 0                                    ? 'Recovering (' + gpsRecoveryAttempts + '/' + GPS_MAX_RECOVERIES + ')' :
-                (currentUserCoords || smoothedUserCoords)                  ? 'Active — fix acquired' :
-                lastGpsTimestamp !== null                                   ? 'Started — waiting for first fix' :
-                                                                             'Started — waiting for first fix';
+                liveMapWatchId === null ? 'Not running' :
+                gpsLostWarning          ? 'Lost — recovery failed' :
+                gpsRecoveryAttempts > 0 ? 'Recovering (' + gpsRecoveryAttempts + '/' + GPS_MAX_RECOVERIES + ')' :
+                hasRealFix              ? 'Active — fix acquired' :
+                                          'Started — waiting for first fix';
 
             statusEl.innerHTML = 'Status: <strong>' + statusText + '</strong>';
 
-            if ((currentUserCoords || smoothedUserCoords) && liveMapWatchId !== null && !gpsLostWarning) {
+            if (hasRealFix && lastGpsTimestamp !== null && liveMapWatchId !== null && !gpsLostWarning) {
                 var t   = new Date(lastGpsTimestamp).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
                 var age = Math.round((Date.now() - lastGpsTimestamp) / 1000);
                 lastfixEl.textContent = 'Fixed at ' + t + ' (' + age + 's ago)';
