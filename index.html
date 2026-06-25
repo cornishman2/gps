@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.17
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.18
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -9702,60 +9702,61 @@ function checkGpsWatchdog() {
 }
 
 
-    // ── Shared GPS position processor ────────────────────────────────────────
-    // Single function that stores every GPS fix, called from all watch/get callbacks.
-    function processLiveGpsPosition(position) {
-        const accuracy = Math.round(position.coords.accuracy * 10) / 10;
+// ── Shared GPS position processor ────────────────────────────────────────
+// Single function that stores every GPS fix, called from all watch/get callbacks.
+// Must be top-level so it is accessible from all callbacks (watchdog, compassWatch etc.)
+function processLiveGpsPosition(position) {
+    const accuracy = Math.round(position.coords.accuracy * 10) / 10;
 
-        lastGpsTimestamp          = Date.now();
-        gpsWatchdogGraceTimestamp = Date.now();
+    lastGpsTimestamp          = Date.now();
+    gpsWatchdogGraceTimestamp = Date.now();
 
-        if (gpsLostWarning) {
-            gpsLostWarning      = false;
-            gpsRecoveryAttempts = 0;
-            rerenderCompassIfActive();
-        }
-
-        currentUserCoords   = { lat: position.coords.latitude, lon: position.coords.longitude };
-        lastKnownMapCoords  = { ...currentUserCoords };
-        currentUserAccuracy = accuracy;
-
-        updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
-        if (smoothedUserCoords) recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
-
-        const now = Date.now();
-        if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 2000) {
-            lastGpsUiRefreshMs = now;
-            updateMapWithUserLocationAndRender();
-        }
-
-        if (navSession && navSession.active && navigationTargetId && smoothedUserCoords) {
-            if (!Array.isArray(navSession.path)) navSession.path = [];
-            const lat = smoothedUserCoords.lat, lon = smoothedUserCoords.lon;
-            if (navSession.lastLat === null || navSession.lastLon === null) {
-                navSession.lastLat = lat; navSession.lastLon = lon; navSession.path.push({ lat, lon });
-            } else {
-                const d = distanceMeters(navSession.lastLat, navSession.lastLon, lat, lon);
-                if (d >= 2) { navSession.lastLat = lat; navSession.lastLon = lon; navSession.path.push({ lat, lon }); }
-            }
-        }
-
-        if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
-            hasRenderedFirstGpsFix = true;
-            const appContent = document.getElementById('app-content');
-            if (appContent) { appContent.innerHTML = renderCompassPage(true); attachPageEventListeners(); }
-        }
-
-        if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
-            logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
-        }
-
-        if (accuracy < bestLiveAccuracy) {
-            bestLiveAccuracy = accuracy;
-        }
-
-        console.log(`GPS fix: ${currentUserCoords.lat.toFixed(6)}, ${currentUserCoords.lon.toFixed(6)} (±${accuracy}m)`);
+    if (gpsLostWarning) {
+        gpsLostWarning      = false;
+        gpsRecoveryAttempts = 0;
+        rerenderCompassIfActive();
     }
+
+    currentUserCoords   = { lat: position.coords.latitude, lon: position.coords.longitude };
+    lastKnownMapCoords  = { ...currentUserCoords };
+    currentUserAccuracy = accuracy;
+
+    updateSmoothedUserCoords(currentUserCoords.lat, currentUserCoords.lon);
+    if (smoothedUserCoords) recordMovementSample(smoothedUserCoords.lat, smoothedUserCoords.lon);
+
+    const now = Date.now();
+    if (currentPage === 'Compass' && (now - lastGpsUiRefreshMs) > 2000) {
+        lastGpsUiRefreshMs = now;
+        updateMapWithUserLocationAndRender();
+    }
+
+    if (navSession && navSession.active && navigationTargetId && smoothedUserCoords) {
+        if (!Array.isArray(navSession.path)) navSession.path = [];
+        const lat = smoothedUserCoords.lat, lon = smoothedUserCoords.lon;
+        if (navSession.lastLat === null || navSession.lastLon === null) {
+            navSession.lastLat = lat; navSession.lastLon = lon; navSession.path.push({ lat, lon });
+        } else {
+            const d = distanceMeters(navSession.lastLat, navSession.lastLon, lat, lon);
+            if (d >= 2) { navSession.lastLat = lat; navSession.lastLon = lon; navSession.path.push({ lat, lon }); }
+        }
+    }
+
+    if (!hasRenderedFirstGpsFix && currentUserCoords && currentPage === 'Compass') {
+        hasRenderedFirstGpsFix = true;
+        const appContent = document.getElementById('app-content');
+        if (appContent) { appContent.innerHTML = renderCompassPage(true); attachPageEventListeners(); }
+    }
+
+    if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
+        logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
+    }
+
+    if (accuracy < bestLiveAccuracy) {
+        bestLiveAccuracy = accuracy;
+    }
+
+    console.log('GPS fix: ' + currentUserCoords.lat.toFixed(6) + ', ' + currentUserCoords.lon.toFixed(6) + ' (±' + accuracy + 'm)');
+}
 
     function startLiveMapLocationWatch() {
     if (!navigator.geolocation) {
