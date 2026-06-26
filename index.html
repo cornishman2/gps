@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.20
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.21
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1840,7 +1840,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '0.0.0';         // change whenever you publish
+const APP_VERSION = '1.21.0';         // change whenever you publish
 const APP_BUILD = '2026-01-14';      // optional, you can keep as a date string
 
         
@@ -8719,8 +8719,9 @@ switch (currentPage) {
         break;
     case 'Finds': {                           // <--- NEW
         // Auto-select the open survey if the filter is still on 'All'
+        // but only if the user hasn't explicitly chosen 'All Surveys'
         const _openForFinds = surveys.find(s => s.status === 'Open');
-        if (_openForFinds && findsFilter.surveyId === 'All') {
+        if (_openForFinds && findsFilter.surveyId === 'All' && !findsFilter.userChoseAll) {
             findsFilter.surveyId = _openForFinds.id;
         }
         contentHtml = renderFindsPage();
@@ -20234,7 +20235,8 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
     }
     if (findsSurveySelect) {
         findsSurveySelect.addEventListener('change', (e) => {
-            findsFilter.surveyId = e.target.value || 'All';
+            findsFilter.surveyId  = e.target.value || 'All';
+            findsFilter.userChoseAll = (findsFilter.surveyId === 'All');
             render();
         });
     }
@@ -20246,7 +20248,7 @@ if (saveNavOverlayBtn && navAboveInput && navBelowInput) {
     }
     if (clearFindsBtn) {
         clearFindsBtn.addEventListener('click', () => {
-            findsFilter = { query: '', type: 'All', surveyId: 'All', date: 'All' };
+            findsFilter = { query: '', type: 'All', surveyId: 'All', date: 'All', userChoseAll: true };
             render();
         });
     }
