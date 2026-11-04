@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.24
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.25
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1826,7 +1826,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.24.0';         // change whenever you publish
+const APP_VERSION = '1.25.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3788,7 +3788,7 @@ function renderHelpPage() {
     <div class="p-4 space-y-4">
 
       <h2 class="text-2xl font-extrabold text-primary mb-1">Help &amp; Getting Started</h2>
-      <p class="text-sm text-gray-500 mb-2">Detekta V1.24 – A Metal Detecting App</p>
+      <p class="text-sm text-gray-500 mb-2">Detekta V1.25 – A Metal Detecting App</p>
       <p class="text-sm text-gray-700 mb-4">
         Detekta is a field-logging and navigation app for metal detectorists.
         It works fully offline and stores everything locally on your device — nothing is sent anywhere.
@@ -3805,6 +3805,7 @@ function renderHelpPage() {
           <div><i class="fas fa-ellipsis-h text-primary mr-2"></i><strong>More</strong> — Settings, Export &amp; Import, Help, and the Targets list</div>
         </div>
         <p class="text-sm text-gray-700 mt-2">If a dig is open when you start Detekta, it opens straight onto the Map.</p>
+        <p class="text-sm text-gray-700 mt-2"><strong>Just Go</strong> (top of the Digs tab) starts a new dig for today with one tap, starts tracking and opens the Map. The place buttons underneath start a new dig at a place you have used before — handy for beaches you visit again and again.</p>
       </div>
 
       <!-- HOME PAGE -->
@@ -3867,7 +3868,7 @@ function renderHelpPage() {
           <span class="inline-block px-2 py-1 rounded bg-teal-100 text-teal-800 font-semibold">Teal – Other</span>
           <span class="inline-block px-2 py-1 rounded bg-gray-100 text-gray-500 font-semibold">Light grey – Junk</span>
         </div>
-        <p class="text-xs text-gray-500 mb-3">Stakes appear as small black squares. Tap any pin to draw a red navigation line from your position to it; tap the same pin again to clear the line.</p>
+        <p class="text-xs text-gray-500 mb-3">Stakes appear as small black squares. Tap any pin to open its card: change its stage (Not dug / Kept / Junk), add a photo, edit it, or draw a line to it. Tap the pin again or ✕ to close the card.</p>
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Map controls</p>
@@ -8713,6 +8714,7 @@ function createDemoSurveyIfNeeded() {
         
 // Stop auto-refresh AND GPS watchdog when leaving the Compass page
 if (currentPage !== 'Compass') {
+    mapPinCardId = null;
     // Stop the safety-net interval
     if (autoRefreshIntervalId) {
         clearInterval(autoRefreshIntervalId);
@@ -12760,6 +12762,13 @@ case 'edit': {
         return;
     }
 
+    // Tapping a pin opens its card (tap again to close)
+    mapPinCardId = (mapPinCardId === targetId) ? null : targetId;
+    rerenderCompassIfActive();
+}
+
+/** Start navigating to a pin (from the pin card). */
+function navigateToPin(targetId) {
     navigationTargetId = (navigationTargetId === targetId) ? null : targetId;
     console.log('Navigation target selected from map:', navigationTargetId);
 
@@ -13300,6 +13309,179 @@ function buildPlaceInputHtml(inputId) {
                 </div>`;
 }
 
+// ---------- JUST GO: one-tap dig start ----------
+function justGo(place) {
+    const r = canCreate('surveys');
+    if (!r.ok) { showMessage(r.reason, 'error'); return; }
+
+    resetLiveTrackingAndRecordingState();
+    const now = Date.now();
+    surveys.forEach(s => { if (s.status === 'Open') { s.status = 'Active'; s.dateLastChanged = now; } });
+
+    const pl = String(place || '').trim();
+    const dayStr = new Date(now).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const dig = {
+        id: generateId(),
+        name: pl ? `${pl} – ${dayStr}` : `Dig – ${dayStr}`,
+        place: pl,
+        description: '',
+        status: 'Open',
+        creationDate: now,
+        dateLastChanged: now,
+        permissionFrom: '', permissionType: '', permissionDateGranted: '', permissionExpiry: '', permissionNotes: '',
+        areaType: '', landUseCurrent: '', soilType: '', groundCondition: '', mineralisationLevel: '',
+        weather: '', recentRain: '', temperature: '', purpose: [], expectedPeriod: '',
+        accessNotes: '', hazards: [], overallProductivity: '', wouldDetectAgain: '', surveyObservations: '',
+        targets: [], finds: [], tracks: [], photos: [], surveyPhotoRef: '', surveyPhotoData: ''
+    };
+    surveys.unshift(dig);
+    saveSurveysToLocalStorage();
+    expandedSurveyIds.add(dig.id);
+    expandedSurveyIds.add('__seen_' + dig.id);
+
+    currentPage = 'Compass';
+    render();
+    // Start recording straight away (GPS starts with it)
+    try { handleStartTrackClick({ name: 'Walk 1' }); } catch (e) { console.warn('Just Go: track start failed', e); }
+    showMessage(`Started "${dig.name}" — tracking is on.`, 'success');
+}
+
+function renderJustGoHtml() {
+    const places = getKnownPlaces().slice(0, 4);
+    const open = surveys.find(s => s.status === 'Open');
+    const esc = v => escapeHtml(v).replace(/'/g, '&#39;');
+    return `
+    <div class="bg-white rounded-xl shadow-lg border-l-4 border-green-500 p-4 mb-6">
+        <button type="button" onclick="justGo('')"
+                class="w-full py-4 rounded-xl text-white text-xl font-extrabold shadow-md hover:opacity-90 active:opacity-80"
+                style="background-color: rgb(var(--color-secondary));">
+            <i class="fas fa-play mr-2"></i> Just Go
+        </button>
+        <p class="text-xs text-gray-500 mt-2 text-center">
+            Starts a new dig for today, starts tracking and opens the Map. Add details later.
+            ${open ? `<br>This will close <strong>${escapeHtml(open.name || 'the open dig')}</strong>.` : ''}
+        </p>
+        ${places.length ? `
+        <p class="text-sm font-semibold text-gray-700 mt-3 mb-2">Or go back to:</p>
+        <div class="flex flex-wrap gap-2">
+            ${places.map(pl => `
+            <button type="button" onclick="justGo(this.dataset.place)" data-place="${esc(pl)}"
+                    class="px-3 py-2 rounded-full bg-sky-100 text-sky-800 font-semibold text-sm border border-sky-200 hover:bg-sky-200">
+                <i class="fas fa-map-pin mr-1"></i>${escapeHtml(pl)}
+            </button>`).join('')}
+        </div>` : ''}
+    </div>`;
+}
+
+// ---------- PIN CARD (tap a pin on the map) ----------
+let mapPinCardId = null;
+const pinCardPhotoCache = {};   // find id -> resolved image URL
+
+function getPinCardPhotoRef(f) {
+    if (Array.isArray(f.photos) && f.photos.length) return f.photos[0];
+    return f.findPhotoData || f.targetPhotoData || f.photoData || '';
+}
+
+function resolvePinCardPhoto(f) {
+    const ref = getPinCardPhotoRef(f);
+    if (!ref) return '';
+    const key = f.id + '|' + ref.slice(0, 40);
+    if (pinCardPhotoCache[key] !== undefined) return pinCardPhotoCache[key];
+    if (ref.startsWith('data:image/')) { pinCardPhotoCache[key] = ref; return ref; }
+    pinCardPhotoCache[key] = '';
+    getPhotoUrlFromRef(ref).then(url => {
+        pinCardPhotoCache[key] = url || '';
+        const img = document.getElementById('pin-card-img');
+        if (img && url) { img.src = url; img.parentElement.classList.remove('hidden'); }
+    }).catch(() => {});
+    return '';
+}
+
+function closePinCard() { mapPinCardId = null; rerenderCompassIfActive(); }
+
+function editFindFromPinCard(findId) {
+    const f = finds.find(x => x && String(x.id) === String(findId));
+    if (!f) return;
+    mapPinCardId = null;
+    currentPage = 'Finds';
+    if (f.surveyId) { findsFilter.surveyId = String(f.surveyId); }
+    findsFilter.stage = 'All';
+    expandedFindIds.add(f.id);
+    openEditFindModal(f.id);
+}
+
+async function deleteStakeFromPinCard(stakeId) {
+    const open = surveys.find(s => s.status === 'Open');
+    if (!open) return;
+    mapPinCardId = null;
+    await deleteTargetPermanently(open.id, stakeId);
+    rerenderCompassIfActive();
+}
+
+function renderPinCardHtml(openSurvey) {
+    if (!mapPinCardId) return '';
+    const btn = 'py-3 rounded-lg font-bold text-sm shadow-sm';
+    const shell = (inner) => `
+    <div class="fixed left-0 right-0 bottom-16 sm:bottom-4 z-40 px-3">
+        <div class="container mx-auto max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 relative">
+            <button type="button" onclick="closePinCard()" title="Close"
+                    class="absolute top-2 right-2 w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
+                <i class="fas fa-times text-gray-600"></i>
+            </button>
+            ${inner}
+        </div>
+    </div>`;
+
+    // Stake?
+    const stake = (Array.isArray(openSurvey.targets) ? openSurvey.targets : []).find(t => t && String(t.id) === String(mapPinCardId));
+    if (stake) {
+        const nm = (stake.description && stake.description !== 'STAKE') ? stake.description : 'Stake';
+        return shell(`
+            <p class="text-xs font-semibold text-gray-500 uppercase">Stake</p>
+            <h3 class="text-xl font-bold text-gray-800 pr-10 mb-3"><i class="fas fa-map-marker-alt mr-1"></i>${escapeHtml(nm)}</h3>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="navigateToPin('${stake.id}')" class="${btn} bg-emerald-600 text-white">
+                    <i class="fas fa-location-arrow mr-1"></i> ${navigationTargetId === stake.id ? 'Stop line' : 'Line to it'}</button>
+                <button type="button" onclick="deleteStakeFromPinCard('${stake.id}')" class="${btn} bg-red-600 text-white">
+                    <i class="fas fa-trash mr-1"></i> Delete</button>
+            </div>`);
+    }
+
+    const f = finds.find(x => x && String(x.id) === String(mapPinCardId));
+    if (!f) { mapPinCardId = null; return ''; }
+    const stage = getFindStage(f);
+    const photoUrl = resolvePinCardPhoto(f);
+    const hasPhotoRef = !!getPinCardPhotoRef(f);
+    const title = (f.description && f.description.trim()) ? f.description : (f.vdi !== '' && f.vdi != null ? `VDI ${f.vdi}` : 'Find');
+    const logged = formatFindLoggedDateTime(f);
+    const stageCls = { Signal: 'bg-blue-500 text-white', Kept: 'bg-green-600 text-white', Junk: 'bg-gray-500 text-white' };
+
+    return shell(`
+        <div class="flex gap-3 pr-10">
+            <div class="${hasPhotoRef ? '' : 'hidden'} flex-none w-20 h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-100"
+                 onclick="openFindPhotoGallery('${f.id}')">
+                <img id="pin-card-img" src="${photoUrl}" alt="" class="w-full h-full object-cover">
+            </div>
+            <div class="min-w-0">
+                <h3 class="text-lg font-bold text-gray-800 truncate">${escapeHtml(title)}</h3>
+                <p class="text-sm text-gray-600">${escapeHtml(f.type || 'Unidentified')}${f.vdi !== '' && f.vdi != null ? ' · VDI ' + escapeHtml(String(f.vdi)) : ''}${f.depth ? ' · ' + escapeHtml(String(f.depth)) : ''}</p>
+                <p class="text-xs text-gray-400">${escapeHtml(logged)}</p>
+            </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3">
+            ${FIND_STAGES.map(st => `<button type="button" onclick="setFindStage('${f.id}','${st}')"
+                class="${btn} ${stage === st ? stageCls[st] : 'bg-gray-200 text-gray-700'}">${FIND_STAGE_LABELS[st]}</button>`).join('')}
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-2">
+            <button type="button" onclick="triggerFindPhotoCapture('${f.id}')" class="${btn} bg-emerald-600 text-white">
+                <i class="fas fa-camera mr-1"></i> Photo</button>
+            <button type="button" onclick="editFindFromPinCard('${f.id}')" class="${btn} bg-blue-600 text-white">
+                <i class="fas fa-pen mr-1"></i> Edit</button>
+            <button type="button" onclick="navigateToPin('${f.id}')" class="${btn} bg-slate-600 text-white">
+                <i class="fas fa-location-arrow mr-1"></i> ${navigationTargetId === f.id ? 'Stop' : 'Line'}</button>
+        </div>`);
+}
+
 function renderHomePage() {
     const totals = getAppTotals();
 
@@ -13390,7 +13572,9 @@ function renderHomePage() {
         </div>
     </div>
 
-    <h2 class="text-3xl font-bold text-primary mb-6">Digs</h2>
+    <h2 class="text-3xl font-bold text-primary mb-4">Digs</h2>
+
+    ${renderJustGoHtml()}
 
     <!-- Open Dig (rendered like any other card, just highlighted) -->
     ${openSurvey
@@ -16116,7 +16300,7 @@ const toPercent = (x, y) => {
                           ${isStake ? 'border-black' : (isFind ? 'border-primary' : '')}
                           shadow-lg
                           cursor-pointer
-                          ${navigationTargetId && String(navigationTargetId) === String(t.id) ? 'pin-blink' : ''}
+                          ${(navigationTargetId && String(navigationTargetId) === String(t.id)) || (mapPinCardId && String(mapPinCardId) === String(t.id)) ? 'pin-blink' : ''}
                           "
                           style="
                           transform: scale(${invZoom});
@@ -16477,7 +16661,8 @@ function logPointToActiveTrack(lat, lon, accuracy) {
     saveSurveysToLocalStorage();
 }
 
-function handleStartTrackClick() {
+function handleStartTrackClick(opts) {
+    const startOpts = (opts && typeof opts === 'object' && !opts.target) ? opts : {};
     const openSurvey = surveys.find(s => s.status === 'Open');
 
     if (!openSurvey) {
@@ -16497,7 +16682,8 @@ function handleStartTrackClick() {
 
     const nextIndex = openSurvey.tracks ? openSurvey.tracks.length + 1 : 1;
     const defName   = nextIndex === 1 ? 'Perimeter' : `Track ${nextIndex}`;
-    const name  = (nameEl  && nameEl.value.trim())  ? nameEl.value.trim()  : defName;
+    const name  = startOpts.name ? String(startOpts.name)
+                : ((nameEl  && nameEl.value.trim())  ? nameEl.value.trim()  : defName);
     const desc  = (descEl  && descEl.value.trim())  ? descEl.value.trim()  : '';
     const color = (colourEl && colourEl.value)      ? colourEl.value       : pickTrackColor(openSurvey.tracks ? openSurvey.tracks.length : 0);
 
@@ -17353,6 +17539,8 @@ ${(() => {
 
             <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
+            ${mapPinCardId ? '<div style="height:220px"></div>' : ''}
+            ${renderPinCardHtml(openSurvey)}
 
 
 
