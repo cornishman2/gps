@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.21
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.22
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1733,7 +1733,7 @@
 
     <h3 class="text-lg font-bold text-primary mb-1" id="tile-grid-modal-heading">Tile Grid</h3>
     <p id="tile-grid-subtitle" class="text-xs text-gray-600 mb-3">
-      1m squares. Your position is shown as a dot. (Coverage marking is ON in Step 3.) • Step 3c build 2026-02-08
+      1m squares. Your position is shown as a dot. (Coverage marking is ON in Step 3.)
     </p>
 
     <div class="w-full flex justify-center">
@@ -1840,8 +1840,8 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.21.0';         // change whenever you publish
-const APP_BUILD = '2026-01-14';      // optional, you can keep as a date string
+const APP_VERSION = '1.22.0';         // change whenever you publish
+const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
 // --- GLOBAL STATE & INITIALIZATION ---
@@ -3048,6 +3048,10 @@ function collectIndexedDbPhotoIdsFromSurvey(survey, { excludeTargetId = null } =
     const ids = new Set();
     if (!survey) return ids;
 
+    if (Array.isArray(survey.photos) && survey.photos.length) {
+        collectIndexedDbPhotoIdsFromRefs(survey.photos).forEach(id => ids.add(id));
+    }
+
     if (survey.surveyPhotoRef) {
         collectIndexedDbPhotoIdsFromRefs(survey.surveyPhotoRef).forEach(id => ids.add(id));
     }
@@ -3143,94 +3147,6 @@ async function deleteFindPermanently(findId) {
     showMessage('Find deleted (including photos).', 'success');
     return true;
 }
- /**
- * Extract IndexedDB photo IDs from any mixture of:
- *  - "idb:123" strings
- *  - arrays of refs ["idb:1","idb:2"]
- *  - null/empty/legacy base64 data URLs (ignored)
- */
-function collectIndexedDbPhotoIdsFromRefs(refsOrSingle) {
-    const ids = new Set();
-
-    const addRef = (ref) => {
-        if (!ref || typeof ref !== 'string') return;
-        if (typeof isIndexedDbPhotoRef === 'function' && isIndexedDbPhotoRef(ref)) {
-            const id = (typeof parsePhotoRef === 'function') ? parsePhotoRef(ref) : null;
-            if (id != null) ids.add(id);
-        }
-    };
-
-    if (Array.isArray(refsOrSingle)) {
-        refsOrSingle.forEach(addRef);
-    } else {
-        addRef(refsOrSingle);
-    }
-
-    return ids;
-}
-
-/**
- * Collect all IndexedDB photo IDs referenced by a survey + its targets.
- */
-function collectIndexedDbPhotoIdsFromSurvey(survey) {
-    const ids = new Set();
-
-    if (!survey) return ids;
-
-    // Survey photo
-    if (survey.surveyPhotoRef) {
-        collectIndexedDbPhotoIdsFromRefs(survey.surveyPhotoRef).forEach(id => ids.add(id));
-    }
-
-    // Targets
-    const targets = Array.isArray(survey.targets) ? survey.targets : [];
-    for (const t of targets) {
-        if (!t) continue;
-
-        // Preferred modern structure: t.photos = ["idb:..", ...]
-        if (Array.isArray(t.photos) && t.photos.length) {
-            collectIndexedDbPhotoIdsFromRefs(t.photos).forEach(id => ids.add(id));
-        }
-
-        // Convenience single-ref fields (if present)
-        if (t.targetPhotoRef) {
-            collectIndexedDbPhotoIdsFromRefs(t.targetPhotoRef).forEach(id => ids.add(id));
-        }
-
-        // Legacy fields sometimes used in older builds
-        if (t.photoRef) {
-            collectIndexedDbPhotoIdsFromRefs(t.photoRef).forEach(id => ids.add(id));
-        }
-    }
-
-    return ids;
-}
-
-/**
- * Collect all IndexedDB photo IDs referenced by a find.
- */
-function collectIndexedDbPhotoIdsFromFind(find) {
-    const ids = new Set();
-    if (!find) return ids;
-
-    // Preferred modern structure
-    if (Array.isArray(find.photos) && find.photos.length) {
-        collectIndexedDbPhotoIdsFromRefs(find.photos).forEach(id => ids.add(id));
-    }
-
-    // Convenience single-ref field (if present)
-    if (find.findPhotoRef) {
-        collectIndexedDbPhotoIdsFromRefs(find.findPhotoRef).forEach(id => ids.add(id));
-    }
-
-    // Legacy fields (rare)
-    if (find.photoRef) {
-        collectIndexedDbPhotoIdsFromRefs(find.photoRef).forEach(id => ids.add(id));
-    }
-
-    return ids;
-}
-
 /**
  * Collect all IndexedDB photo IDs used by the entire app,
  * EXCLUDING a given surveyId (and excluding finds linked to that surveyId).
@@ -3441,6 +3357,11 @@ async function purgeDeletedEverywhere() {
     const collectIdsFromSurvey = (s) => {
         const ids = new Set();
         if (!s) return ids;
+
+        // Multi-photo surveys (must be counted, or purge would delete them)
+        if (Array.isArray(s.photos)) {
+            collectIdsFromRefs(s.photos).forEach(id => ids.add(id));
+        }
 
         if (s.surveyPhotoRef) {
             collectIdsFromRefs(s.surveyPhotoRef).forEach(id => ids.add(id));
@@ -3844,7 +3765,7 @@ function renderHelpPage() {
     <div class="p-4 space-y-4">
 
       <h2 class="text-2xl font-extrabold text-primary mb-1">Help &amp; Getting Started</h2>
-      <p class="text-sm text-gray-500 mb-2">Detekta V2 – A Metal Detecting App</p>
+      <p class="text-sm text-gray-500 mb-2">Detekta V1.22 – A Metal Detecting App</p>
       <p class="text-sm text-gray-700 mb-4">
         Detekta is a field-logging and navigation app for metal detectorists.
         It works fully offline and stores everything locally on your device — nothing is sent anywhere.
@@ -12961,6 +12882,21 @@ function handleTargetQrScanned(text) {
         return;
     }
 
+    // Accept the compact format written by buildTargetQrPayload (k/d/t/dep/c/st)
+    // as well as the older long format (kind: 'geoFind-target').
+    if (payload && payload.k === 'target') {
+        payload = {
+            kind: 'geoFind-target',
+            description: payload.d || '',
+            type: payload.t || '',
+            vdi: payload.vdi || '',
+            depth: payload.dep || '',
+            coordinates: payload.c || '',
+            status: payload.st || '',
+            surveyName: payload.sn || ''
+        };
+    }
+
     if (!payload || payload.kind !== 'geoFind-target') {
         showMessage('The QR code is not a GeoFind Target QR.', 'error');
         return;
@@ -16147,212 +16083,6 @@ const toPercent = (x, y) => {
     `;
 }
         
-    /** Toggles the map state and re-renders immediately. *${(t.isFind
-                        ? String(t.findType || t.findCategory || t.type || 'Find')
-                        : String(
-                            (t.vdi !== undefined && t.vdi !== null && String(t.vdi).trim() !== '')
-                                ? t.vdi
-                                : (t.targetVdi || t.targetVDI || '')
-                        )
-                    ).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
-                </div>
-            `;
-        })
-        .join('');
-
-    // 5. User marker
-    let userHtml = '';
-    if (userCoord) {
-        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
-        const { xPct, yPct } = toPercent(userMeters.x, userMeters.y);
-
-        userHtml = `
-            <div
-                class="absolute ${navigationTargetId ? 'cursor-pointer' : 'pointer-events-none'}"
-                style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
-                title="${navigationTargetId ? 'Tap to clear navigation line' : 'You'}"
-                onclick="${navigationTargetId ? 'handleMapTargetClick(event,&quot;&quot;)' : ''}"
-            >
-                <div
-                <div style="position:relative; width:20px; height:20px; transform:scale(${invZoom}); transform-origin:center;">
-                    ${isAnyTrackRecording() ? `
-                    <div style="
-                        position:absolute; inset:0; border-radius:50%;
-                        border: 2px solid rgba(29,78,216,0.85);
-                        animation: user-dot-ring 0.8s ease-out infinite;
-                    "></div>` : ''}
-                    <div style="
-                        position:absolute; inset:0; border-radius:50%;
-                        background: white;
-                        border: 3px solid #1d4ed8;
-                        box-shadow: 0 0 4px rgba(0,0,0,0.5);
-                        animation: ${isAnyTrackRecording()
-                            ? 'user-dot-tracking 0.8s ease-in-out infinite'
-                            : 'user-dot-idle 2s ease-in-out infinite'};
-                    "></div>
-                </div>
-            </div>
-        `;
-    }
-
-    // 6. Track SVG (if any)
-    let trackSvgHtml = '';
-    if (drawTracks.length) {
-        const trackStrokeWidth = 0.2; // thin stroke matching tile grid visual weight
-        const polylines = drawTracks.map(track => {
-            const pts = track.points
-                .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
-                .map(p => {
-                    const meters = { x: p.lon * mPerDegLon, y: p.lat * M_PER_DEG_LAT };
-                    const pct = toPercent(meters.x, meters.y);
-                    return `${pct.xPct.toFixed(3)},${pct.yPct.toFixed(3)}`;
-                })
-                .join(' ');
-
-            const stroke = track.color || '#2563eb';
-            let trackLabelHtml = '';
-            if (showMapTrackLabels && track.name && !track.isRecording) {
-                const midPts = track.points.filter(p => p && isFinite(p.lat) && isFinite(p.lon));
-                if (midPts.length > 0) {
-                    const mid = midPts[Math.floor(midPts.length / 2)];
-                    const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
-                    const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    trackLabelHtml = `<text x="${mp.xPct.toFixed(3)}" y="${mp.yPct.toFixed(3)}"
-                        font-size="3" fill="${stroke}" font-family="Arial" font-weight="bold"
-                        text-anchor="middle" dy="-0.8"
-                        style="paint-order:stroke;stroke:white;stroke-width:1;stroke-linejoin:round;"
-                        >${safe}</text>`;
-                }
-            }
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="${trackStrokeWidth}" points="${pts}" />${trackLabelHtml}`;
-        }).join('');
-
-        trackSvgHtml = `
-            <svg
-                class="absolute inset-0 w-full h-full pointer-events-none"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                style="z-index: 6;"
-            >
-                ${polylines}
-            </svg>
-        `;
-    }
-
-    // 7. Navigation line (ONLY if userCoord exists!)
-    let navLineHtml = '';
-
-    // Need nav target percentages if nav target exists
-    let navTargetXPercent = null;
-    let navTargetYPercent = null;
-    let navTargetLat = null;
-    let navTargetLon = null;
-    let navTargetAccuracy = null;
-
-    if (navigationTargetId) {
-        const navTarget = parsedCoords.find(t => t.id === navigationTargetId);
-        if (navTarget) {
-            navTargetLat = navTarget.lat;
-            navTargetLon = navTarget.lon;
-            navTargetAccuracy = navTarget.accuracy;
-
-            const navMeters = { x: navTargetLon * mPerDegLon, y: navTargetLat * M_PER_DEG_LAT };
-            const navPct = toPercent(navMeters.x, navMeters.y);
-            navTargetXPercent = navPct.xPct;
-            navTargetYPercent = navPct.yPct;
-        }
-    }
-
-    if (
-        navigationTargetId &&
-        userCoord &&
-        navTargetXPercent !== null &&
-        navTargetYPercent !== null
-    ) {
-        const userMeters = { x: userCoord.lon * mPerDegLon, y: userCoord.lat * M_PER_DEG_LAT };
-        const userPct = toPercent(userMeters.x, userMeters.y);
-
-        navLineHtml = `
-            <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 15;">
-                <line
-                    x1="${userPct.xPct.toFixed(2)}%"
-                    y1="${userPct.yPct.toFixed(2)}%"
-                    x2="${navTargetXPercent.toFixed(2)}%"
-                    y2="${navTargetYPercent.toFixed(2)}%"
-                    stroke="rgba(239, 68, 68, 0.9)"
-                    stroke-width="2"
-                />
-            </svg>
-        `;
-    }
-
-    // 8. Map HTML
-    const transformStyle = `
-        transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
-        transform-origin: center center;
-    `;
-
-    const mapSize = Math.min(window.innerWidth - 32, 480);
-    const heightStyle = isMapFullscreen ? 'calc(100vh - 140px)' : mapSize + 'px';
-
-    return `
-        <div class="relative w-full bg-gray-50 rounded-xl border border-gray-200 overflow-hidden"
-             style="height: ${heightStyle};"
-             id="target-map-container"
-        >
-            <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
-                ${trackSvgHtml}
-                ${navLineHtml}
-                ${pinsHtml}
-                ${userHtml}
-            </div>
-</div>
-
-            
-
-<!-- Map layer toggles (draw only; bounds still include all) -->
-<div class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-    <div class="text-sm font-semibold text-gray-700 mb-2">Map layers</div>
-  <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-tracks-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTracks=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTracks ? 'checked' : ''}>
-            <span>Show Tracks</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-track-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTrackLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTrackLabels ? 'checked' : ''}>
-            <span>Track Labels</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-targets-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTargets=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTargets ? 'checked' : ''}>
-            <span>Show Targets</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-target-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapTargetLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapTargetLabels ? 'checked' : ''}>
-            <span>Target Labels</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-finds-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapFinds=cb.checked;rerenderCompassIfActive();})(this)" ${showMapFinds ? 'checked' : ''}>
-            <span>Show Finds</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-find-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapFindLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapFindLabels ? 'checked' : ''}>
-            <span>Find Labels</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-stakes-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakes=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakes ? 'checked' : ''}>
-            <span>Show Stakes</span>
-        </label>
-        <label class="flex items-center gap-2 select-none">
-            <input id="map-show-stake-labels-cb" type="checkbox" class="h-4 w-4" onchange="(function(cb){showMapStakeLabels=cb.checked;rerenderCompassIfActive();})(this)" ${showMapStakeLabels ? 'checked' : ''}>
-            <span>Stake Labels</span>
-        </label>
-  </div>
-</div>
-
-
-    `;
-}
-        
     /** Toggles the map state and re-renders immediately. */
 function toggleMapFullscreen(event) {
     // Prevent accidental fullscreen toggles when clicking UI controls/pins
@@ -17689,7 +17419,7 @@ return `
                           <div class="flex gap-3">
                               <button type="button" onclick="maintenanceConfirmOpen=false;render()"
                                       class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
-                              <button type="button" onclick="(async()=>{maintenanceConfirmOpen=false;saveSurveysToLocalStorage();if(typeof saveFindsToLocalStorage==='function')saveFindsToLocalStorage();showMessage('Maintenance complete.','success');render()})()"
+                              <button type="button" onclick="(async()=>{maintenanceConfirmOpen=false;render();await purgeDeletedEverywhere();})()"
                                       class="flex-1 py-2 rounded-lg bg-orange-600 text-white font-semibold text-sm hover:bg-orange-700 shadow">Run Maintenance</button>
                           </div>
                       </div>
@@ -18753,7 +18483,7 @@ function buildSurveyReportHtml({detectoristName, surveyName, generatedStr, appVe
 <body>
     <div class="header">
         <div>
-            <div class="brand">DETETKA – Metal Detecting App</div>
+            <div class="brand">DETEKTA – Metal Detecting App</div>
             <div class="report-title">Survey Report</div>
         </div>
         <div class="muted" style="text-align:right">
@@ -19132,6 +18862,7 @@ async function exportSurveyReportPdf() {
             appVersionStr,
             detailsRowsHtml,
             summaryRowHtml,
+            targetsRowsHtml,
             findsRowsHtml,
             surveyPhotosHtml,
             findsPerFindPagesHtml,
@@ -19614,7 +19345,7 @@ if (payload.survey) {
             if (currentPage === 'Home') render();
         }
 
-
+    } catch (e) {
         console.error('Error exporting open survey ZIP:', e);
         log(`ERROR: ${e.message || 'Unknown error'}`);
         showMessage(`Could not export open survey: ${e.message || 'Unknown error'}`, 'error');
