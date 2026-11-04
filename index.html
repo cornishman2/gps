@@ -143,7 +143,7 @@
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.28
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.30
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <div class="hidden sm:flex space-x-2">
@@ -1826,7 +1826,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.28.0';         // change whenever you publish
+const APP_VERSION = '1.30.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3600,152 +3600,12 @@ function getNavTabForPage(page) {
     });
 }
         
-// -------------------- App Limits / Expiry (Tester build controls) --------------------
-// -------------------- App Limits / Expiry (Tester build controls) --------------------
-
-function isUnlimitedUser() {
-    return false; // No bypass in the public release
-}
-window.APP_LIMITS_STORAGE_KEY ??= 'detekta_app_limits_v1';
-window.APP_RUNS_STORAGE_KEY   ??= 'detekta_app_runs_v1';
-
-function getDefaultAppLimits() {
-    return {
-        maxSurveys: 4,
-        maxTargets: 50,
-        maxFinds: 80,
-        expiryDate: '2027-06-01' // ISO YYYY-MM-DD
-    };
+// No limits: Detekta has no caps on digs, finds or stakes, and no expiry date.
+// canCreate() is kept so existing call sites stay simple; it always allows.
+function canCreate(type) {
+    return { ok: true, reason: '', type };
 }
 
-function loadAppLimits() {
-    const defaults = getDefaultAppLimits();
-    try {
-        const raw = localStorage.getItem(APP_LIMITS_STORAGE_KEY);
-        if (!raw) return { ...defaults };
-
-        const obj = JSON.parse(raw) || {};
-        // Blank/undefined means "no limit" except defaults apply if key missing entirely.
-        // If you want "blank" to persist as unlimited, store null.
-        return {
-            maxSurveys: (obj.maxSurveys === null) ? null : (Number.isFinite(+obj.maxSurveys) ? +obj.maxSurveys : defaults.maxSurveys),
-            maxTargets: (obj.maxTargets === null) ? null : (Number.isFinite(+obj.maxTargets) ? +obj.maxTargets : defaults.maxTargets),
-            maxFinds:   (obj.maxFinds   === null) ? null : (Number.isFinite(+obj.maxFinds)   ? +obj.maxFinds   : defaults.maxFinds),
-            expiryDate: (obj.expiryDate === null) ? null : (typeof obj.expiryDate === 'string' && obj.expiryDate.trim() ? obj.expiryDate.trim() : defaults.expiryDate)
-        };
-    } catch {
-        return { ...defaults };
-    }
-}
-
-function saveAppLimits(limits) {
-    const normIntOrNull = (v) => {
-        const s = String(v ?? '').trim();
-        if (!s) return null;                 // blank => unlimited
-        const n = Math.max(0, Math.floor(+s));
-        return Number.isFinite(n) ? n : null;
-    };
-    const normDateOrNull = (v) => {
-        const s = String(v ?? '').trim();
-        if (!s) return null;                 // blank => no expiry
-        // Expect YYYY-MM-DD
-        return s;
-    };
-
-    const toSave = {
-        maxSurveys: normIntOrNull(limits.maxSurveys),
-        maxTargets: normIntOrNull(limits.maxTargets),
-        maxFinds:   normIntOrNull(limits.maxFinds),
-        expiryDate: normDateOrNull(limits.expiryDate)
-    };
-    localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(toSave));
-    return loadAppLimits(); // return normalised
-}
-
-function getAppRunCount() {
-    const n = parseInt(localStorage.getItem(APP_RUNS_STORAGE_KEY) || '0', 10);
-    return Number.isFinite(n) ? n : 0;
-}
-
-function incrementAppRunCount() {
-    const n = getAppRunCount() + 1;
-    localStorage.setItem(APP_RUNS_STORAGE_KEY, String(n));
-    return n;
-}
-
-function isExpired(limits = loadAppLimits()) {
-    if (typeof isUnlimitedUser === 'function' && isUnlimitedUser()) return false;
-    if (!limits.expiryDate) return false;
-    const today = new Date();
-    const exp = new Date(limits.expiryDate + 'T00:00:00');
-    // expired if today is on/after expiry date
-    return today >= exp;
-}
-
-/**
- * Returns { ok, reason, type } where type: 'surveys'|'targets'|'finds'|'expired'
- */
-function canCreate(type, openSurvey = null) {
-    // Unlimited mode bypasses all limits/expiry for the special tester account.
-    if (typeof isUnlimitedUser === 'function' && isUnlimitedUser()) {
-        return { ok: true, reason: '', type: type };
-    }
-
-    const limits = loadAppLimits();
-
-    if (isExpired(limits)) {
-        return { ok: false, reason: `This version of Detekta expired on ${limits.expiryDate}. Your data is safe and can be exported. Please check the Play Store for the latest version.`, type: 'expired' };
-    }
-
-    // Count surveys
-    const surveysCount = Array.isArray(surveys) ? surveys.length : 0;
-
-    // Count targets/finds (prefer open dig if supplied, else all)
-    const allTargets = [];
-    const allFinds = [];
-
-    if (Array.isArray(surveys)) {
-        surveys.forEach(s => {
-            (Array.isArray(s.targets) ? s.targets : []).forEach(t => allTargets.push(t));
-            (Array.isArray(s.finds) ? s.finds : []).forEach(f => allFinds.push(f));
-        });
-    }
-
-    const targetsCount = allTargets.length;   // stakes only now
-    const findsCount   = Array.isArray(finds) ? finds.filter(f => f && !f.deleted).length : allFinds.length;
-
-    if (type === 'surveys' && limits.maxSurveys !== null && surveysCount >= limits.maxSurveys) {
-        return { ok: false, reason: `You've reached the limit of ${limits.maxSurveys} digs in the free version. Delete an old dig to create a new one, or export your data first.`, type: 'surveys' };
-    }
-    if (type === 'targets' && limits.maxTargets !== null && targetsCount >= limits.maxTargets) {
-        return { ok: false, reason: `You've reached the limit of ${limits.maxTargets} stakes in the free version. Your existing data is safe and can be exported.`, type: 'targets' };
-    }
-    if (type === 'finds' && limits.maxFinds !== null && findsCount >= limits.maxFinds) {
-        return { ok: false, reason: `You've reached the limit of ${limits.maxFinds} finds in the free version. Your existing data is safe and can be exported.`, type: 'finds' };
-    }
-
-    return { ok: true, reason: '', type: type };
-}
-
-function enforceCanCreateOrWarn(type) {
-    if (typeof canCreate !== 'function') return true; // limits not wired yet
-    const r = canCreate(type);
-
-    if (r.ok) return true;
-
-    // Prefer long message if you have it
-    if (typeof showMessageLong === 'function') {
-        showMessageLong(r.reason || 'Limit reached.', 'error', 7000);
-    } else if (typeof showMessage === 'function') {
-        showMessage(r.reason || 'Limit reached.', 'error');
-    } else {
-        alert(r.reason || 'Limit reached.');
-    }
-
-    // If expired, you may also want to bounce user to Settings/Home
-    return false;
-}
-        
 function renderMorePage() {
     const item = (page, icon, title, sub, colour) => `
         <button type="button" onclick="currentPage='${page}';render();window.scrollTo(0,0);"
@@ -3775,7 +3635,7 @@ function renderHelpPage() {
     <div class="p-4 space-y-4">
 
       <h2 class="text-2xl font-extrabold text-primary mb-1">Help &amp; Getting Started</h2>
-      <p class="text-sm text-gray-500 mb-2">Detekta V1.28 – A Metal Detecting App</p>
+      <p class="text-sm text-gray-500 mb-2">Detekta V1.30 – A Metal Detecting App</p>
       <p class="text-sm text-gray-700 mb-4">
         Detekta is a field-logging app for metal detectorists.
         It works fully offline and stores everything locally on your device — nothing is sent anywhere.
@@ -3793,7 +3653,7 @@ function renderHelpPage() {
         </div>
         <p class="text-sm text-gray-700 mt-2">If a dig is open when you start Detekta, it opens straight onto the Map.</p>
         <p class="text-sm text-gray-700 mt-2"><strong>Just Go</strong> (top of the Digs tab) starts a new dig for today with one tap, starts tracking and opens the Map. The place buttons underneath start a new dig at a place you have used before — handy for beaches you visit again and again.</p>
-        <p class="text-sm text-gray-700 mt-2"><strong>Place map:</strong> choose a place in the Digs or Finds filter (or open a dig that has been visited more than once) and tap <strong>Map of all finds at …</strong>. It shows every find from every visit on one map. <em>Colour by visit</em> shows whether the productive spots move between visits — useful on beaches after storms.</p>
+        <p class="text-sm text-gray-700 mt-2"><strong>Place map:</strong> choose a place in the Digs or Finds filter (or expand any dig card that has a place) and tap <strong>Map of all finds at …</strong>. It shows every find from every visit on one map. <em>Colour by visit</em> shows whether the productive spots move between visits — useful on beaches after storms.</p>
       </div>
 
       <!-- HOME PAGE -->
@@ -3840,7 +3700,7 @@ function renderHelpPage() {
         <p class="text-sm text-gray-700 mb-3">The main field screen. Shows a north-up plot of all targets, finds, stakes, and recorded tracks for the open dig. The current dig name and target / find counts are shown above the map. If no dig is open, the page shows a prompt directing you to the Digs page to open or create one.</p>
         <p class="text-sm font-bold text-gray-700 mb-1">Detect and Scout</p>
         <p class="text-sm text-gray-700 mb-2">Two buttons at the top of the Map switch between modes. <strong>Detect</strong> shows the coloured quick buttons, camera buttons and STAKE for logging finds. <strong>Scout</strong> replaces them with two big buttons, <strong>IRON</strong> and <strong>GOOD SIGNAL</strong>, for walking a field fast. Each tap drops a small dot (dark grey for iron, green for a good signal) that is saved with the dig. Clusters of iron show where people have been. <strong>Undo last</strong> removes a mis-tap, and <strong>Grid here</strong> drops a 15 m grid centred on you and switches back to Detect.</p>
-        <p class="text-sm text-gray-700 mb-3">Underneath the map, <strong>More map tools</strong> opens the pan buttons, tile grid controls, map layers (including Scouting dots), current GPS and the list of tracks.</p>
+        <p class="text-sm text-gray-700 mb-3">Underneath the map, the arrow buttons pan the map. In Detect mode the tile grid controls and Tile Grid panel are shown straight away under the logging buttons. <strong>More map tools</strong> opens the map layers (including Scouting dots), current GPS and the list of tracks.</p>
 
         <p class="text-sm font-bold text-gray-700 mb-1">Not-dug pin colours (fill = VDI range, border = blue)</p>
         <div class="flex flex-wrap gap-1 text-xs mb-3">
@@ -4021,11 +3881,8 @@ function renderHelpPage() {
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Totals</p>
-        <p class="text-sm text-gray-700 mb-3">A live summary grid showing counts across all digs: digs, targets, finds, tracks, stakes, and photos, plus the amount of device storage used and how much remains available.</p>
+        <p class="text-sm text-gray-700 mb-3">A live summary grid showing counts across all digs: digs, finds, kept finds, tracks, stakes, and photos, plus the amount of device storage used and how much remains available.</p>
 
-        <hr class="border-t border-gray-100 my-3">
-        <p class="text-sm font-bold text-gray-700 mb-1">App Limits</p>
-        <p class="text-sm text-gray-700 mb-3">Displays any active limits on digs, targets, and finds, and the expiry date of the free version. Blank fields mean unlimited. When limits are reached or the app has expired, no new digs, targets, or finds can be created, but all existing data remains safe and can be exported.</p>
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">About</p>
@@ -7486,7 +7343,7 @@ async function performSurveyZipImport(zip, jsonText, filename, log) {
 
     // ---------- LIMITS: compute remaining slots ONCE for this import ----------
     // Reason: canCreate() won't "see" imported items until we merge at the end.
-    const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : null;
+    const limits = null;   // no limits
 
     const countExistingTargets = () => {
         let n = 0;
@@ -13355,6 +13212,18 @@ function renderPlaceMapPage() {
 // ---------- SCOUTING (fast walk: iron / good-signal dots, saved with the dig) ----------
 function setMapMode(mode) {
     mapMode = (mode === 'scout') ? 'scout' : 'detect';
+    if (mapMode === 'detect') {
+        tileGridExpanded = true;
+        const dig = getCompassOpenSurvey();
+        if (dig) {
+            ensureSurveyGridTileDefaults(dig);
+            const t = dig.gridTile;
+            if (t && !t.enabled && isFinite(Number(t.centerLat)) && isFinite(Number(t.centerLon))) {
+                t.enabled = true;
+                saveSurveysToLocalStorage();
+            }
+        }
+    }
     try { localStorage.setItem('detekta_map_mode', mapMode); } catch (e) {}
     rerenderCompassIfActive();
 }
@@ -13400,7 +13269,7 @@ function gridHere() {
     saveSurveysToLocalStorage();
     mapMode = 'detect';
     try { localStorage.setItem('detekta_map_mode', 'detect'); } catch (e) {}
-    mapToolsExpanded = true; tileGridExpanded = true;
+    tileGridExpanded = true;
     showMessage('15 m grid placed around you. Detect it in parallel lines.', 'success');
     rerenderCompassIfActive();
 }
@@ -14612,7 +14481,7 @@ function renderSurveyCard(survey, isOpen = false) {
 
                 ${detailsHtml}
 
-                ${survey.place && getPlaceDigs(survey.place).length > 1 ? placeMapButtonHtml(survey.place, 'Home') : ''}
+                ${survey.place ? placeMapButtonHtml(survey.place, 'Home') : ''}
 
                 <div class="mt-3 overflow-x-auto">
                     <table class="w-full text-sm">
@@ -16651,6 +16520,23 @@ if (!openSurvey) {
                 >${showUserPosition ? 'Hide' : 'Show'}</button>
             </div>
 
+            <!-- Row 2: Map pan -->
+            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">◀</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▲</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▼</button>
+                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
+                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▶</button>
+            </div>
+
+
             ${mapMode === 'scout' ? renderScoutPanelHtml(openSurvey) : ''}
             <div style="${mapMode === 'scout' ? 'display:none' : ''}">
                     ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
@@ -16686,36 +16572,9 @@ if (!openSurvey) {
                 `}
             </div>
             
-            </div>
-
-            <!-- More map tools -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mt-3 overflow-hidden">
-                <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none"
-                     onclick="mapToolsExpanded=!mapToolsExpanded;rerenderCompassIfActive();">
-                    <span class="text-lg font-semibold text-gray-700"><i class="fas fa-tools mr-2 text-primary"></i>More map tools</span>
-                    <span class="flex items-center gap-2">
-                        <span class="text-xs text-gray-400">Pan, grid, layers, tracks</span>
-                        <i class="fas ${mapToolsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400"></i>
-                    </span>
-                </div>
-            </div>
-            <div style="${mapToolsExpanded ? '' : 'display:none'}">
-            <!-- Row 2: Map pan -->
-            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">◀</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▲</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▼</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▶</button>
-            </div>
-
+            
+            <!-- Tile grid (always shown in Detect mode) -->
+            <div class="mt-3"></div>
             <!-- Row 3: Tile size + Hide/Show -->
             ${(() => {
                 const _s = getCompassOpenSurvey();
@@ -16901,6 +16760,20 @@ if (!openSurvey) {
                     + '</div>';
             })()}
 
+            </div>
+
+            <!-- More map tools -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mt-3 overflow-hidden">
+                <div class="px-4 py-3 flex items-center justify-between cursor-pointer select-none"
+                     onclick="mapToolsExpanded=!mapToolsExpanded;rerenderCompassIfActive();">
+                    <span class="text-lg font-semibold text-gray-700"><i class="fas fa-tools mr-2 text-primary"></i>More map tools</span>
+                    <span class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400">Layers, GPS, tracks</span>
+                        <i class="fas ${mapToolsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-gray-400"></i>
+                    </span>
+                </div>
+            </div>
+            <div style="${mapToolsExpanded ? '' : 'display:none'}">
 <!-- Map layer toggles (draw only; bounds still include all) -->
 <div id="map-layers-details" class="mt-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
   <div class="flex items-center justify-between cursor-pointer select-none"
@@ -17045,25 +16918,6 @@ function renderSettingsPage() {
     </div>`;
 
 
-    // Limits (Tester build) - display only
-    // Assumes you have loadAppLimits() + isExpired(); falls back to your defaults if not present yet.
-    const limits = (typeof loadAppLimits === 'function') ? loadAppLimits() : {
-        maxSurveys: 4,
-        maxTargets: 50,
-        maxFinds: 80,
-        expiryDate: '2027-06-01'
-    };
-
-    const valOrBlank = (v) => (v === null || v === undefined || v === '') ? '' : String(v);
-    const expired = (typeof isExpired === 'function') ? isExpired(limits) : false;
-
-    // Display strings (blank means unlimited / no expiry)
-    const displayMaxSurveys = valOrBlank(limits.maxSurveys);
-    const displayMaxTargets = valOrBlank(limits.maxTargets);
-    const displayMaxFinds   = valOrBlank(limits.maxFinds);
-    const displayExpiryDate = valOrBlank(limits.expiryDate);
-
-    
     // Quick Target button ranges (Step 1: editable table in Settings)
     const quickRanges = (typeof loadQuickTargetRanges === 'function') ? loadQuickTargetRanges() : [];
     const quickTargetRowsHtml = Array.isArray(quickRanges) ? quickRanges.map((r, idx) => {
@@ -17236,37 +17090,7 @@ return `
             <!-- 4. TOTALS -->
             ${totalsSection}
 
-            <!-- 5. APP LIMITS -->
-<div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-emerald-500">
-  <div class="flex items-start justify-between gap-3">
-    <div>
-      <h4 class="text-lg font-semibold text-emerald-700 mb-1">App Limits</h4>
-      <p class="text-sm text-gray-600">These limits are set by the build. Blank means <strong>unlimited</strong>.</p>
-    </div>
-    ${expired ? `<div class="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-1 rounded-md">EXPIRED</div>` : ``}
-  </div>
-  <div class="mt-4 space-y-3">
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-surveys">Max number of digs</label>
-      <input id="limits-max-surveys" type="text" readonly class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700" value="${displayMaxSurveys}" placeholder="Unlimited" />
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-targets">Max number of stakes</label>
-      <input id="limits-max-targets" type="text" readonly class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700" value="${displayMaxTargets}" placeholder="Unlimited" />
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-max-finds">Max number of finds</label>
-      <input id="limits-max-finds" type="text" readonly class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700" value="${displayMaxFinds}" placeholder="Unlimited" />
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1" for="limits-expiry-date">Expiration date</label>
-      <input id="limits-expiry-date" type="text" readonly class="w-full border border-gray-200 rounded-lg p-2 bg-gray-50 text-gray-700" value="${displayExpiryDate}" placeholder="No expiry" />
-      <p class="text-xs text-gray-500 mt-1">If expired, no new digs, finds, or stakes can be created.</p>
-    </div>
-  </div>
-</div>
-
-            <!-- 6. ABOUT -->
+            <!-- 5. ABOUT -->
 <div class="bg-white p-4 rounded-xl shadow-lg mb-6 border-l-4 border-indigo-500">
   <h4 class="text-lg font-semibold text-indigo-700 mb-2">About</h4>
   <p class="text-sm text-gray-700"><strong>${APP_NAME}</strong></p>
@@ -19998,6 +19822,7 @@ async function importSurveyWithPhotosFromFile() {
             });
         });
         
+    try { localStorage.removeItem('detekta_app_limits_v1'); localStorage.removeItem('detekta_app_runs_v1'); } catch (e) {}
     loadDataFromLocalStorage();
     createDemoSurveyIfNeeded();
     migrateTargetsToFinds();
@@ -20938,34 +20763,6 @@ function resetQuickTargetSettingsToDefaults() {
     }
 }
 
-
-const APP_LIMITS_STORAGE_KEY = 'detekta_app_limits_v1';
-
-function bootstrapAppLimitsIfMissing() {
-    if (localStorage.getItem(APP_LIMITS_STORAGE_KEY)) return;
-
-    const testerDefaults = {
-        maxSurveys: 4,
-        maxTargets: 50,
-        maxFinds: 80,
-        expiryDate: '2027-06-01'
-    };
-
-    localStorage.setItem(APP_LIMITS_STORAGE_KEY, JSON.stringify(testerDefaults));
-}
-
-try {
-    if (typeof bootStrapAppLimitsIfmissing === 'function') {
-        bootStrapAppLimitsIfmissing();
-    }
-} catch (e) {
-    console.warn('bootStrapAppLimitsIfmissing failed:', e);
-}
-
-// Optional: count launches (you already have incrementAppRunCount())
-try {
-    if (typeof incrementAppRunCount === 'function') incrementAppRunCount();
-} catch (e) {}
 
     // Open straight onto the Map if a dig is already open
     if (Array.isArray(surveys) && surveys.some(s => s && s.status === 'Open')) {
