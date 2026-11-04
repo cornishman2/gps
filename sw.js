@@ -1,10 +1,13 @@
-const CACHE_NAME = "detekta-cache-v14"; // <-- bump this on every deployment
+const CACHE_NAME = "detekta-cache-v15"; // <-- bump this on every deployment
+// Since V1.31 every library is built into index.html, so this list is
+// everything the app needs to run with no signal.
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
   "./assets/icon-192.png",
   "./assets/icon-512.png",
+  "./assets/dig-it-hero.png",
   "./assets/screenshot-home1.jpg",
   "./assets/screenshot-home2.jpg",
   "./assets/screenshot-map.jpg",
@@ -16,11 +19,17 @@ const APP_SHELL = [
   "./assets/screenshot-settings.jpg",
   "./assets/screenshot-quick-targets.jpg"
 ];
-// Install: pre-cache app shell
+// Install: pre-cache app shell.
+// Each file is added on its own, so one missing picture can't stop the
+// whole app being saved for offline use.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      .then((cache) => Promise.all(
+        APP_SHELL.map((url) => cache.add(url).catch((err) => {
+          console.warn("SW: could not pre-cache", url, err);
+        }))
+      ))
       .then(() => self.skipWaiting())
   );
 });
@@ -47,7 +56,10 @@ async function networkFirst(request) {
     }
     return fresh;
   } catch (err) {
-    const cached = await cache.match(request);
+    // Offline: the saved copy of this address, or failing that the saved app page
+    const cached = (await cache.match(request, { ignoreSearch: true }))
+      || (await cache.match("./index.html"))
+      || (await cache.match("./"));
     return cached || Promise.reject(err);
   }
 }
