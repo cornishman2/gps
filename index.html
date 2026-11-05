@@ -258,7 +258,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.34
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.35
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -1947,7 +1947,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.34.0';         // change whenever you publish
+const APP_VERSION = '1.35.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3756,7 +3756,7 @@ function renderHelpPage() {
     <div class="p-4 space-y-4">
 
       <h2 class="text-2xl font-extrabold text-primary mb-1">Help &amp; Getting Started</h2>
-      <p class="text-sm text-gray-500 mb-2">Detekta V1.34 – A Metal Detecting App</p>
+      <p class="text-sm text-gray-500 mb-2">Detekta V1.35 – A Metal Detecting App</p>
       <p class="text-sm text-gray-700 mb-4">
         Detekta is a field-logging app for metal detectorists.
         It works fully offline and stores everything locally on your device — nothing is sent anywhere.
@@ -4088,7 +4088,7 @@ function renderHelpPage() {
           </div>
           <div class="flex gap-3 items-start">
             <span class="flex-none w-6 h-6 rounded-full bg-blue-700 text-white text-xs font-bold flex items-center justify-center mt-0.5">8</span>
-            <div><strong>Stop tracking when you leave the field.</strong> Tap Stop before you go home so your return journey is not added to the dig map. While tracking, the screen stays on so the phone doesn't lock itself (you can turn this off in Settings).</div>
+            <div><strong>Stop tracking when you leave the field.</strong> Tap Stop before you go home. If you forget, Detekta notices when you start driving, stops tracking and leaves the drive off your track. While tracking, the screen stays on so the phone doesn't lock itself. Both can be turned off in Settings.</div>
           </div>
           <div class="flex gap-3 items-start">
             <span class="flex-none w-6 h-6 rounded-full bg-blue-700 text-white text-xs font-bold flex items-center justify-center mt-0.5">9</span>
@@ -9717,6 +9717,95 @@ function checkGpsWatchdog() {
 }
 
 
+// --- AUTO-STOP TRACKING WHEN DRIVING ---
+// Stops the track if you are clearly travelling faster than walking pace, so
+// the drive home is not added to the dig map. Two ways it can trigger:
+//  1. Sustained speed: over 15 km/h for at least 45 s and 150 m. Short slow
+//     moments (traffic lights, junctions) under 20 s don't reset the count.
+//  2. A jump after a gap (phone locked or app in the background): the next
+//     fix is far away — over 2 km, or over 500 m at faster than walking pace.
+// The driving part is removed from the track and the dig stays open.
+const DRIVE_SPEED_KMH      = 15;
+const DRIVE_MIN_SECONDS    = 45;
+const DRIVE_MIN_METRES     = 150;
+const DRIVE_SLOW_GRACE_S   = 20;
+const JUMP_GAP_SECONDS     = 60;
+const JUMP_FAR_METRES      = 2000;
+const JUMP_FAST_METRES     = 500;
+let driveDetect = { lastFix: null, fastSince: null, lastFastAt: null, fastDist: 0 };
+
+function resetDriveDetect() {
+    driveDetect = { lastFix: null, fastSince: null, lastFastAt: null, fastDist: 0 };
+}
+function isAutoStopDrivingEnabled() {
+    try { return localStorage.getItem('detekta_auto_stop_driving') !== '0'; } catch (e) { return true; }
+}
+function setAutoStopDrivingEnabled(on) {
+    try { localStorage.setItem('detekta_auto_stop_driving', on ? '1' : '0'); } catch (e) {}
+    resetDriveDetect();
+    if (currentPage === 'Settings') render();
+}
+
+/** Called with every GPS fix. Returns true if tracking was stopped. */
+function checkForDriving(lat, lon, accuracy, reportedSpeedMs) {
+    const now = Date.now();
+    const prev = driveDetect.lastFix;
+    driveDetect.lastFix = { lat, lon, t: now };
+    if (!isAutoStopDrivingEnabled() || !isAnyTrackRecording() || !prev) return false;
+
+    const dt = (now - prev.t) / 1000;
+    if (dt <= 0) return false;
+    const d = distanceMeters(prev.lat, prev.lon, lat, lon);
+    const impliedKmh = (d / dt) * 3.6;
+
+    // 2. Jump after a gap
+    if (dt >= JUMP_GAP_SECONDS && (d >= JUMP_FAR_METRES || (d >= JUMP_FAST_METRES && impliedKmh > DRIVE_SPEED_KMH))) {
+        autoStopTrackForDriving(prev.t, 'jump', d);
+        return true;
+    }
+
+    // Ignore vague fixes: they can't tell walking from driving
+    if (typeof accuracy === 'number' && accuracy > 50) return false;
+
+    // Prefer the phone's own speed reading (more reliable than position jumps)
+    const kmh = (typeof reportedSpeedMs === 'number' && isFinite(reportedSpeedMs) && reportedSpeedMs >= 0)
+        ? reportedSpeedMs * 3.6 : impliedKmh;
+
+    if (kmh > DRIVE_SPEED_KMH) {
+        if (driveDetect.fastSince === null) { driveDetect.fastSince = prev.t; driveDetect.fastDist = 0; }
+        driveDetect.lastFastAt = now;
+        driveDetect.fastDist += d;
+        if ((now - driveDetect.fastSince) / 1000 >= DRIVE_MIN_SECONDS && driveDetect.fastDist >= DRIVE_MIN_METRES) {
+            autoStopTrackForDriving(driveDetect.fastSince, 'speed', driveDetect.fastDist);
+            return true;
+        }
+    } else if (driveDetect.fastSince !== null) {
+        if ((now - driveDetect.lastFastAt) / 1000 > DRIVE_SLOW_GRACE_S) {
+            driveDetect.fastSince = null; driveDetect.lastFastAt = null; driveDetect.fastDist = 0;
+        } else {
+            driveDetect.fastDist += d;
+        }
+    }
+    return false;
+}
+
+/** Remove the driving part of the track, then stop tracking. */
+function autoStopTrackForDriving(drivingStartedAt, reason, metres) {
+    const active = getActiveTrack();
+    if (!active) return;
+    const track = active.track;
+    const pts = Array.isArray(track.points) ? track.points : [];
+    const keepUntil = Number(drivingStartedAt) + 250;   // keep the last walking point
+    const kept = pts.filter(pt => !(pt && Number(pt.time) > keepUntil));
+    const removed = pts.length - kept.length;
+    track.points = kept;
+    track.autoStopped = { at: Date.now(), reason, removedPoints: removed, metres: Math.round(metres || 0) };
+    saveSurveysToLocalStorage();
+    resetDriveDetect();
+    console.log(`Auto-stop (${reason}): removed ${removed} driving points from ${track.name || 'track'}`);
+    handleStopTrackClick({ auto: reason });
+}
+
 // ── Shared GPS position processor ────────────────────────────────────────
 // Single function that stores every GPS fix, called from all watch/get callbacks.
 // Must be top-level so it is accessible from all callbacks (watchdog, compassWatch etc.)
@@ -9751,7 +9840,10 @@ function processLiveGpsPosition(position) {
         if (appContent) { appContent.innerHTML = renderCompassPage(true); attachPageEventListeners(); }
     }
 
-    if (smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
+    // Driving? Stop the track before this fix is added to it
+    const stoppedForDriving = checkForDriving(currentUserCoords.lat, currentUserCoords.lon, accuracy, position.coords.speed);
+
+    if (!stoppedForDriving && smoothedUserCoords && activeTrackId && activeTrackSurveyId) {
         logPointToActiveTrack(smoothedUserCoords.lat, smoothedUserCoords.lon, accuracy);
     }
 
@@ -16447,6 +16539,7 @@ function handleStartTrackClick(opts) {
 
     activeTrackSurveyId = openSurvey.id;
     activeTrackId = newTrack.id;
+    resetDriveDetect();
 
     saveSurveysToLocalStorage();
     syncScreenWakeLock();
@@ -16458,7 +16551,8 @@ function handleStartTrackClick(opts) {
 /**
  * Stop recording the active track (if any).
  */
-function handleStopTrackClick() {
+function handleStopTrackClick(opts) {
+    const autoReason = (opts && typeof opts === 'object' && opts.auto) ? opts.auto : '';
     const active = getActiveTrack();
     if (!active) {
         showMessage('No active track to stop.', 'warning');
@@ -16480,8 +16574,8 @@ function handleStopTrackClick() {
     // Finished for the day? Offer a backup while it's fresh in mind.
     if (stoppedSurvey && stoppedSurvey.status === 'Open' && digNeedsBackup(stoppedSurvey)) {
         setTimeout(() => showBackupPrompt({
-            title: 'Finished for today?',
-            message: 'Back up this dig now so your finds are safe if anything happens to your phone.',
+            title: autoReason ? 'Tracking stopped — you seem to be driving' : 'Finished for today?',
+            message: (autoReason ? 'The drive was left off your track. ' : '') + 'Back up this dig now so your finds are safe if anything happens to your phone.',
             mainLabel: 'Back up now',
             onMain: backupOpenDigNow,
             otherLabel: 'Not yet',
@@ -16500,7 +16594,11 @@ function handleStopTrackClick() {
         }
     }
 
-    showMessage(`Stopped recording ${name}.`, 'info');
+    if (autoReason) {
+        showMessage(`Tracking stopped — you seem to be driving. The drive was left off ${name}.`, 'warning');
+    } else {
+        showMessage(`Stopped recording ${name}.`, 'info');
+    }
     render();
 }
 
@@ -17508,7 +17606,7 @@ return `
 
 <!-- Keep screen on -->
             <div class="mt-6 border-t border-gray-200 pt-5">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">Screen</h3>
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Tracking</h3>
                 <label class="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" class="mt-1 h-5 w-5" ${isKeepScreenOnEnabled() ? 'checked' : ''}
                            onchange="setKeepScreenOnEnabled(this.checked)">
@@ -17516,6 +17614,14 @@ return `
                         <span class="font-semibold text-gray-800">Keep the screen on while tracking</span>
                         <span class="block text-sm text-gray-600">Stops the phone locking itself during a dig, so tracking and logging carry on. Uses a little more battery. The screen can still be turned off with the power button.</span>
                         ${isWakeLockSupported() ? '' : '<span class="block text-sm text-amber-700 mt-1">This phone or browser does not support keeping the screen on.</span>'}
+                    </span>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer mt-4">
+                    <input type="checkbox" class="mt-1 h-5 w-5" ${isAutoStopDrivingEnabled() ? 'checked' : ''}
+                           onchange="setAutoStopDrivingEnabled(this.checked)">
+                    <span>
+                        <span class="font-semibold text-gray-800">Stop tracking when driving</span>
+                        <span class="block text-sm text-gray-600">If you travel faster than 15 km/h for about 45 seconds, or the phone suddenly finds itself far away after being locked, tracking stops and the drive is left off your track. Turn this off if you cycle between spots on a beach.</span>
                     </span>
                 </label>
             </div>
