@@ -258,7 +258,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.35
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.36
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -1947,7 +1947,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.35.0';         // change whenever you publish
+const APP_VERSION = '1.36.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3756,7 +3756,7 @@ function renderHelpPage() {
     <div class="p-4 space-y-4">
 
       <h2 class="text-2xl font-extrabold text-primary mb-1">Help &amp; Getting Started</h2>
-      <p class="text-sm text-gray-500 mb-2">Detekta V1.35 – A Metal Detecting App</p>
+      <p class="text-sm text-gray-500 mb-2">Detekta V1.36 – A Metal Detecting App</p>
       <p class="text-sm text-gray-700 mb-4">
         Detekta is a field-logging app for metal detectorists.
         It works fully offline and stores everything locally on your device — nothing is sent anywhere.
@@ -4088,7 +4088,7 @@ function renderHelpPage() {
           </div>
           <div class="flex gap-3 items-start">
             <span class="flex-none w-6 h-6 rounded-full bg-blue-700 text-white text-xs font-bold flex items-center justify-center mt-0.5">8</span>
-            <div><strong>Stop tracking when you leave the field.</strong> Tap Stop before you go home. If you forget, Detekta notices when you start driving, stops tracking and leaves the drive off your track. While tracking, the screen stays on so the phone doesn't lock itself. Both can be turned off in Settings.</div>
+            <div><strong>Stop tracking when you leave the field.</strong> Tap Stop before you go home. If you forget, Detekta notices when you speed up: the walk back to the car goes on a separate <em>Leaving</em> track, the drive is removed, and you can delete the Leaving track with one tap. While tracking, the screen stays on so the phone doesn't lock itself. Both can be turned off in Settings.</div>
           </div>
           <div class="flex gap-3 items-start">
             <span class="flex-none w-6 h-6 rounded-full bg-blue-700 text-white text-xs font-bold flex items-center justify-center mt-0.5">9</span>
@@ -9718,13 +9718,20 @@ function checkGpsWatchdog() {
 
 
 // --- AUTO-STOP TRACKING WHEN DRIVING ---
-// Stops the track if you are clearly travelling faster than walking pace, so
-// the drive home is not added to the dig map. Two ways it can trigger:
-//  1. Sustained speed: over 15 km/h for at least 45 s and 150 m. Short slow
-//     moments (traffic lights, junctions) under 20 s don't reset the count.
-//  2. A jump after a gap (phone locked or app in the background): the next
-//     fix is far away — over 2 km, or over 500 m at faster than walking pace.
-// The driving part is removed from the track and the dig stays open.
+// 1. Leaving? As soon as you move faster than walking pace (8 km/h) for 10 s,
+//    the dig track is closed at your last walking point and a new track,
+//    "Leaving (auto)", carries on recording.
+// 2. False alarm? Back at walking pace for a minute: the Leaving track is
+//    quietly joined back onto the dig track and recording carries on there.
+// 3. Driving? Over 15 km/h for 45 s and 150 m (short stops at lights under
+//    20 s don't count): tracking stops, the driving part is removed from the
+//    Leaving track, and you are offered to delete what is left of it.
+// 4. Phone locked, then found far away (over 2 km, or over 500 m at faster
+//    than walking pace): tracking stops straight away.
+const LEAVE_SPEED_KMH      = 8;
+const LEAVE_MIN_SECONDS    = 10;
+const LEAVE_SLOW_GRACE_S   = 5;
+const REJOIN_SLOW_SECONDS  = 60;
 const DRIVE_SPEED_KMH      = 15;
 const DRIVE_MIN_SECONDS    = 45;
 const DRIVE_MIN_METRES     = 150;
@@ -9732,11 +9739,20 @@ const DRIVE_SLOW_GRACE_S   = 20;
 const JUMP_GAP_SECONDS     = 60;
 const JUMP_FAR_METRES      = 2000;
 const JUMP_FAST_METRES     = 500;
-let driveDetect = { lastFix: null, fastSince: null, lastFastAt: null, fastDist: 0 };
+const LEAVING_TRACK_NAME   = 'Leaving (auto)';
+let driveDetect = null;
 
 function resetDriveDetect() {
-    driveDetect = { lastFix: null, fastSince: null, lastFastAt: null, fastDist: 0 };
+    driveDetect = {
+        lastFix: null,
+        leaveSince: null, leaveLastFastAt: null,          // 8 km/h counter
+        driveSince: null, driveLastFastAt: null, driveDist: 0,   // 15 km/h counter
+        split: null,                                       // { origId, leavingId } while on the Leaving track
+        slowSince: null                                    // walking-pace timer while on the Leaving track
+    };
 }
+resetDriveDetect();
+
 function isAutoStopDrivingEnabled() {
     try { return localStorage.getItem('detekta_auto_stop_driving') !== '0'; } catch (e) { return true; }
 }
@@ -9746,64 +9762,172 @@ function setAutoStopDrivingEnabled(on) {
     if (currentPage === 'Settings') render();
 }
 
-/** Called with every GPS fix. Returns true if tracking was stopped. */
+/** Close the dig track at the last walking point and carry on in a new "Leaving" track. */
+function splitTrackForLeaving(leftAt) {
+    const active = getActiveTrack();
+    if (!active) return;
+    const { survey, track } = active;
+    const keepUntil = Number(leftAt) + 250;
+    const pts = Array.isArray(track.points) ? track.points : [];
+    const moved = pts.filter(pt => pt && Number(pt.time) > keepUntil);
+    track.points = pts.filter(pt => !(pt && Number(pt.time) > keepUntil));
+    track.isRecording = false;
+    const last = track.points[track.points.length - 1];
+
+    const leaving = {
+        id: generateId(),
+        name: LEAVING_TRACK_NAME,
+        description: 'Started automatically when you moved faster than walking pace.',
+        createdAt: Date.now(),
+        isRecording: true,
+        isVisible: true,
+        color: '#6b7280',
+        isLeavingTrack: true,
+        splitFromTrackId: track.id,
+        // start from the last walking point so the two tracks join up on the map
+        points: (last ? [{ ...last }] : []).concat(moved)
+    };
+    ensureSurveyTracksArray(survey);
+    survey.tracks.push(leaving);
+    activeTrackId = leaving.id;
+    driveDetect.split = { origId: track.id, leavingId: leaving.id };
+    driveDetect.slowSince = null;
+    saveSurveysToLocalStorage();
+    console.log(`Leaving? Split ${track.name || 'track'}; ${moved.length} points moved to "${LEAVING_TRACK_NAME}"`);
+    rerenderCompassIfActive();
+}
+
+/** False alarm: put the Leaving track's points back on the dig track and record there again. */
+function rejoinLeavingTrack() {
+    const sp = driveDetect.split;
+    if (!sp) return;
+    const survey = surveys.find(s => s.id === activeTrackSurveyId);
+    const orig = survey && (survey.tracks || []).find(t => t.id === sp.origId);
+    const leaving = survey && (survey.tracks || []).find(t => t.id === sp.leavingId);
+    if (!survey || !orig || !leaving) { driveDetect.split = null; return; }
+    const extra = (leaving.points || []).slice(1);   // first point is a copy of orig's last
+    orig.points = (orig.points || []).concat(extra);
+    orig.isRecording = true;
+    survey.tracks = survey.tracks.filter(t => t.id !== leaving.id);
+    activeTrackId = orig.id;
+    driveDetect.split = null;
+    driveDetect.slowSince = null;
+    driveDetect.leaveSince = null;
+    saveSurveysToLocalStorage();
+    console.log(`False alarm: rejoined ${extra.length} points to ${orig.name || 'track'}`);
+    rerenderCompassIfActive();
+}
+
+/** Called with every GPS fix. Returns true if this fix should not be added to the track. */
 function checkForDriving(lat, lon, accuracy, reportedSpeedMs) {
     const now = Date.now();
     const prev = driveDetect.lastFix;
     driveDetect.lastFix = { lat, lon, t: now };
     if (!isAutoStopDrivingEnabled() || !isAnyTrackRecording() || !prev) return false;
 
+    // The Leaving track was stopped or deleted by hand
+    if (driveDetect.split && activeTrackId !== driveDetect.split.leavingId) driveDetect.split = null;
+
     const dt = (now - prev.t) / 1000;
     if (dt <= 0) return false;
     const d = distanceMeters(prev.lat, prev.lon, lat, lon);
     const impliedKmh = (d / dt) * 3.6;
 
-    // 2. Jump after a gap
+    // Jump after a gap (phone locked / app in the background)
     if (dt >= JUMP_GAP_SECONDS && (d >= JUMP_FAR_METRES || (d >= JUMP_FAST_METRES && impliedKmh > DRIVE_SPEED_KMH))) {
         autoStopTrackForDriving(prev.t, 'jump', d);
         return true;
     }
 
-    // Ignore vague fixes: they can't tell walking from driving
+    // Vague fixes can't tell walking from driving
     if (typeof accuracy === 'number' && accuracy > 50) return false;
 
     // Prefer the phone's own speed reading (more reliable than position jumps)
     const kmh = (typeof reportedSpeedMs === 'number' && isFinite(reportedSpeedMs) && reportedSpeedMs >= 0)
         ? reportedSpeedMs * 3.6 : impliedKmh;
 
+    // 15 km/h counter: confirms driving
     if (kmh > DRIVE_SPEED_KMH) {
-        if (driveDetect.fastSince === null) { driveDetect.fastSince = prev.t; driveDetect.fastDist = 0; }
-        driveDetect.lastFastAt = now;
-        driveDetect.fastDist += d;
-        if ((now - driveDetect.fastSince) / 1000 >= DRIVE_MIN_SECONDS && driveDetect.fastDist >= DRIVE_MIN_METRES) {
-            autoStopTrackForDriving(driveDetect.fastSince, 'speed', driveDetect.fastDist);
-            return true;
-        }
-    } else if (driveDetect.fastSince !== null) {
-        if ((now - driveDetect.lastFastAt) / 1000 > DRIVE_SLOW_GRACE_S) {
-            driveDetect.fastSince = null; driveDetect.lastFastAt = null; driveDetect.fastDist = 0;
+        if (driveDetect.driveSince === null) { driveDetect.driveSince = prev.t; driveDetect.driveDist = 0; }
+        driveDetect.driveLastFastAt = now;
+        driveDetect.driveDist += d;
+    } else if (driveDetect.driveSince !== null) {
+        if ((now - driveDetect.driveLastFastAt) / 1000 > DRIVE_SLOW_GRACE_S) {
+            driveDetect.driveSince = null; driveDetect.driveLastFastAt = null; driveDetect.driveDist = 0;
         } else {
-            driveDetect.fastDist += d;
+            driveDetect.driveDist += d;
         }
+    }
+
+    // 8 km/h counter: starts the Leaving track
+    if (kmh > LEAVE_SPEED_KMH) {
+        if (driveDetect.leaveSince === null) driveDetect.leaveSince = prev.t;
+        driveDetect.leaveLastFastAt = now;
+        driveDetect.slowSince = null;
+    } else {
+        if (driveDetect.leaveSince !== null && (now - driveDetect.leaveLastFastAt) / 1000 > LEAVE_SLOW_GRACE_S) {
+            driveDetect.leaveSince = null; driveDetect.leaveLastFastAt = null;
+        }
+        if (driveDetect.split) {
+            if (driveDetect.slowSince === null) driveDetect.slowSince = now;
+            if ((now - driveDetect.slowSince) / 1000 >= REJOIN_SLOW_SECONDS) {
+                rejoinLeavingTrack();
+                return false;
+            }
+        }
+    }
+
+    if (driveDetect.driveSince !== null &&
+        (now - driveDetect.driveSince) / 1000 >= DRIVE_MIN_SECONDS && driveDetect.driveDist >= DRIVE_MIN_METRES) {
+        // Make sure there is a Leaving track to hold the walk-out
+        if (!driveDetect.split) splitTrackForLeaving(Math.min(driveDetect.leaveSince ?? driveDetect.driveSince, driveDetect.driveSince));
+        autoStopTrackForDriving(driveDetect.driveSince, 'speed', driveDetect.driveDist);
+        return true;
+    }
+
+    if (!driveDetect.split && driveDetect.leaveSince !== null && (now - driveDetect.leaveSince) / 1000 >= LEAVE_MIN_SECONDS) {
+        splitTrackForLeaving(driveDetect.leaveSince);
     }
     return false;
 }
 
-/** Remove the driving part of the track, then stop tracking. */
+/** Remove the driving part from the active (Leaving) track, then stop tracking. */
 function autoStopTrackForDriving(drivingStartedAt, reason, metres) {
     const active = getActiveTrack();
     if (!active) return;
-    const track = active.track;
+    const { survey, track } = active;
+    const keepUntil = Number(drivingStartedAt) + 250;
     const pts = Array.isArray(track.points) ? track.points : [];
-    const keepUntil = Number(drivingStartedAt) + 250;   // keep the last walking point
     const kept = pts.filter(pt => !(pt && Number(pt.time) > keepUntil));
     const removed = pts.length - kept.length;
     track.points = kept;
     track.autoStopped = { at: Date.now(), reason, removedPoints: removed, metres: Math.round(metres || 0) };
+
+    let leavingTrackId = '';
+    if (track.isLeavingTrack) {
+        if (kept.length < 2) {
+            // Nothing left worth keeping: drop it and leave the dig track as it was
+            survey.tracks = survey.tracks.filter(t => t.id !== track.id);
+            const orig = survey.tracks.find(t => t.id === track.splitFromTrackId);
+            if (orig) { orig.isRecording = true; activeTrackId = orig.id; }
+        } else {
+            leavingTrackId = track.id;
+        }
+    }
     saveSurveysToLocalStorage();
     resetDriveDetect();
-    console.log(`Auto-stop (${reason}): removed ${removed} driving points from ${track.name || 'track'}`);
-    handleStopTrackClick({ auto: reason });
+    console.log(`Auto-stop (${reason}): removed ${removed} driving points`);
+    handleStopTrackClick({ auto: reason, leavingTrackId });
+}
+
+/** Delete the Leaving track from the prompt after an auto-stop. */
+function deleteLeavingTrack(trackId) {
+    const found = findTrackById(trackId);
+    if (!found) return;
+    found.survey.tracks = (found.survey.tracks || []).filter(t => t.id !== trackId);
+    saveSurveysToLocalStorage();
+    showMessage('Leaving track deleted.', 'success');
+    render();
 }
 
 // ── Shared GPS position processor ────────────────────────────────────────
@@ -13694,7 +13818,7 @@ async function backupOpenDigNow() {
 }
 
 /** A simple prompt with a main action, an optional second action and cancel. */
-function showBackupPrompt({ title, message, mainLabel, onMain, otherLabel, onOther, cancelLabel = 'Cancel' }) {
+function showBackupPrompt({ title, message, mainLabel, onMain, otherLabel, onOther, cancelLabel = 'Cancel', titleIcon = 'fa-save', mainIcon = 'fa-file-archive', mainColour = 'bg-green-600' }) {
     const old = document.getElementById('backup-prompt');
     if (old) old.remove();
     const wrap = document.createElement('div');
@@ -13703,10 +13827,10 @@ function showBackupPrompt({ title, message, mainLabel, onMain, otherLabel, onOth
     wrap.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
     wrap.innerHTML = `
         <div class="bg-white rounded-xl shadow-lg p-5 w-full" style="max-width:420px;">
-            <h3 class="text-lg font-bold text-gray-900 mb-2"><i class="fas fa-save mr-2 text-amber-600"></i>${title}</h3>
+            <h3 class="text-lg font-bold text-gray-900 mb-2"><i class="fas ${titleIcon} mr-2 text-amber-600"></i>${title}</h3>
             <p class="text-sm text-gray-700 mb-4">${message}</p>
-            <button type="button" data-k="main" class="w-full mb-2 py-3 rounded-xl bg-green-600 text-white font-bold shadow">
-                <i class="fas fa-file-archive mr-1"></i> ${mainLabel}</button>
+            <button type="button" data-k="main" class="w-full mb-2 py-3 rounded-xl ${mainColour} text-white font-bold shadow">
+                <i class="fas ${mainIcon} mr-1"></i> ${mainLabel}</button>
             ${otherLabel ? `<button type="button" data-k="other" class="w-full mb-2 py-3 rounded-xl bg-gray-200 text-gray-800 font-bold">${otherLabel}</button>` : ''}
             ${cancelLabel ? `<button type="button" data-k="cancel" class="w-full py-2 rounded-xl text-gray-600 font-semibold">${cancelLabel}</button>` : ''}
         </div>`;
@@ -16553,6 +16677,7 @@ function handleStartTrackClick(opts) {
  */
 function handleStopTrackClick(opts) {
     const autoReason = (opts && typeof opts === 'object' && opts.auto) ? opts.auto : '';
+    const leavingTrackId = (opts && typeof opts === 'object' && opts.leavingTrackId) ? opts.leavingTrackId : '';
     const active = getActiveTrack();
     if (!active) {
         showMessage('No active track to stop.', 'warning');
@@ -16572,16 +16697,33 @@ function handleStopTrackClick(opts) {
     syncScreenWakeLock();
 
     // Finished for the day? Offer a backup while it's fresh in mind.
-    if (stoppedSurvey && stoppedSurvey.status === 'Open' && digNeedsBackup(stoppedSurvey)) {
+    const offerBackup = (title) => {
+        if (stoppedSurvey && stoppedSurvey.status === 'Open' && digNeedsBackup(stoppedSurvey)) {
+            showBackupPrompt({
+                title,
+                message: (autoReason && !leavingTrackId ? 'The drive was left off your track. ' : '') + 'Back up this dig now so your finds are safe if anything happens to your phone.',
+                mainLabel: 'Back up now',
+                onMain: backupOpenDigNow,
+                otherLabel: 'Not yet',
+                onOther: null,
+                cancelLabel: ''
+            });
+        }
+    };
+    if (leavingTrackId) {
+        // Driving: offer to delete the walk-out track first, then the backup
         setTimeout(() => showBackupPrompt({
-            title: autoReason ? 'Tracking stopped — you seem to be driving' : 'Finished for today?',
-            message: (autoReason ? 'The drive was left off your track. ' : '') + 'Back up this dig now so your finds are safe if anything happens to your phone.',
-            mainLabel: 'Back up now',
-            onMain: backupOpenDigNow,
-            otherLabel: 'Not yet',
-            onOther: null,
+            title: 'Tracking stopped — you seem to be driving',
+            message: `The drive was removed. Your walk out from your last detecting spot is on its own track, <strong>${LEAVING_TRACK_NAME}</strong>. Delete it so your dig track ends where you stopped detecting?`,
+            titleIcon: 'fa-car',
+            mainLabel: 'Delete leaving track', mainIcon: 'fa-trash-alt', mainColour: 'bg-red-600',
+            onMain: () => { deleteLeavingTrack(leavingTrackId); setTimeout(() => offerBackup('Back up this dig?'), 300); },
+            otherLabel: 'Keep it',
+            onOther: () => setTimeout(() => offerBackup('Back up this dig?'), 300),
             cancelLabel: ''
         }), 300);
+    } else {
+        setTimeout(() => offerBackup(autoReason ? 'Tracking stopped — you seem to be driving' : 'Finished for today?'), 300);
     }
 
     // Keep GPS running if user position is shown OR navigation target exists
@@ -16595,7 +16737,9 @@ function handleStopTrackClick(opts) {
     }
 
     if (autoReason) {
-        showMessage(`Tracking stopped — you seem to be driving. The drive was left off ${name}.`, 'warning');
+        showMessage(leavingTrackId
+            ? 'Tracking stopped — you seem to be driving.'
+            : `Tracking stopped — you seem to be driving. The drive was left off ${name}.`, 'warning');
     } else {
         showMessage(`Stopped recording ${name}.`, 'info');
     }
@@ -17621,7 +17765,7 @@ return `
                            onchange="setAutoStopDrivingEnabled(this.checked)">
                     <span>
                         <span class="font-semibold text-gray-800">Stop tracking when driving</span>
-                        <span class="block text-sm text-gray-600">If you travel faster than 15 km/h for about 45 seconds, or the phone suddenly finds itself far away after being locked, tracking stops and the drive is left off your track. Turn this off if you cycle between spots on a beach.</span>
+                        <span class="block text-sm text-gray-600">When you move faster than walking pace, Detekta starts a separate <em>Leaving</em> track. If you then drive (over 15 km/h for about 45 seconds), tracking stops, the drive is removed and you can delete the Leaving track. If it was a false alarm, the Leaving track joins back onto your dig track after a minute at walking pace. Turn this off if you cycle between spots.</span>
                     </span>
                 </label>
             </div>
