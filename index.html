@@ -325,7 +325,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.37
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.38
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2014,7 +2014,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.37.0';         // change whenever you publish
+const APP_VERSION = '1.38.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3823,7 +3823,7 @@ function renderHelpPage() {
     <div class="p-4 space-y-4">
 
       <h2 class="text-2xl font-extrabold text-primary mb-1">Help &amp; Getting Started</h2>
-      <p class="text-sm text-gray-500 mb-2">Detekta V1.37 – A Metal Detecting App</p>
+      <p class="text-sm text-gray-500 mb-2">Detekta V1.38 – A Metal Detecting App</p>
       <p class="text-sm text-gray-700 mb-4">
         Detekta is a field-logging app for metal detectorists.
         It works fully offline and stores everything locally on your device — nothing is sent anywhere.
@@ -3970,9 +3970,9 @@ function renderHelpPage() {
       <!-- MAP BACKGROUNDS -->
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-globe-europe"></i> Map Backgrounds</h3>
-        <p class="text-sm text-gray-700 mb-2">Under the Map choose <strong>Plain</strong>, <strong>Satellite</strong> or <strong>Outdoor</strong>. Satellite shows hedges, gates and old field boundaries; Outdoor shows footpaths and field edges. Your pins, tracks, grid and dots sit on top and move with it. Each dig remembers its choice, and the Place map has its own.</p>
+        <p class="text-sm text-gray-700 mb-2">Under the Map choose <strong>Plain</strong>, <strong>Satellite</strong>, <strong>Outdoor</strong>, <strong>Old OS</strong> or <strong>LiDAR</strong>. Satellite shows hedges, gates and cropmarks; Outdoor shows footpaths and field edges; Old OS is the Ordnance Survey six-inch map of 1888–1913, showing lost cottages, wells, paths and field boundaries; LiDAR (England only) shows the shape of the ground — ridge and furrow, barrows, banks, ditches and house platforms. Your pins, tracks, grid and dots sit on top and move with it. Each dig remembers its choice, and the Place map has its own.</p>
         <p class="text-sm text-gray-700 mb-2">Map pictures need signal the first time; after that, places you have viewed are kept on your phone and show without signal. They are not included in backups.</p>
-        <p class="text-sm text-gray-700">Detekta's built-in map key has a free monthly allowance shared by all users. If it runs out, backgrounds pause until the next month. To avoid that, get your own free key from MapTiler and paste it in <strong>Settings → Map backgrounds</strong>.</p>
+        <p class="text-sm text-gray-700">Outdoor and LiDAR are free. Satellite and Old OS use Detekta's built-in MapTiler key, whose free monthly allowance is shared by all users. If it runs out, those two pause until the next month. To avoid that, get your own free key from MapTiler and paste it in <strong>Settings → Map backgrounds</strong>.</p>
       </div>
 
       <!-- BRIGHT SUNLIGHT -->
@@ -16060,10 +16060,34 @@ function stopMapPan() {
 // - Uses the app's built-in key unless the user has entered their own.
 // =====================================================================
 const DETEKTA_DEFAULT_MAPTILER_KEY = 'UX5ikZObTRxSPyClatt2';
+// Backgrounds. 'maptiler' ones use the key (and its quota); the others are free with no key.
 const MAP_BG_STYLES = {
-    satellite: { label: 'Satellite', id: 'satellite' },
-    outdoor:   { label: 'Outdoor',   id: 'outdoor-v2' }
+    satellite: { label: 'Satellite', icon: 'fa-globe-europe', maptiler: true,
+                 credit: '<a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>',
+                 style: () => `https://api.maptiler.com/maps/satellite/style.json?key=${encodeURIComponent(getMapTilerKey())}` },
+    outdoor:   { label: 'Outdoor', icon: 'fa-mountain', maptiler: false,
+                 credit: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+                 style: () => 'https://tiles.openfreemap.org/styles/liberty' },
+    oldos:     { label: 'Old OS', icon: 'fa-scroll', maptiler: true,
+                 credit: 'OS six-inch 1888–1913 reproduced with the permission of the <a href="https://maps.nls.uk/" target="_blank" rel="noopener">National Library of Scotland</a> · <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a>',
+                 build: () => ({
+                     version: 8,
+                     sources: { os: { type: 'raster', tileSize: 256,
+                                      url: `https://api.maptiler.com/tiles/uk-osgb10k1888/tiles.json?key=${encodeURIComponent(getMapTilerKey())}` } },
+                     layers: [ { id: 'paper', type: 'background', paint: { 'background-color': '#f4efe1' } },
+                               { id: 'os', type: 'raster', source: 'os' } ]
+                 }) },
+    lidar:     { label: 'LiDAR', icon: 'fa-water', maptiler: false,
+                 credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a> · England only',
+                 build: () => ({
+                     version: 8,
+                     sources: { lidar: { type: 'raster', tileSize: 256, minzoom: 10, maxzoom: 20,
+                                         tiles: ['https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms?service=WMS&request=GetMap&version=1.3.0&layers=Lidar_Composite_Hillshade_DTM_1m&styles=hillshade&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] } },
+                     layers: [ { id: 'ground', type: 'background', paint: { 'background-color': '#ececec' } },
+                               { id: 'lidar', type: 'raster', source: 'lidar' } ]
+                 }) }
 };
+const MAP_BG_ORDER = ['none', 'satellite', 'outdoor', 'oldos', 'lidar'];
 const MAP_TILE_CACHE = 'detekta-map-pictures-v1';
 const MAP_TILE_CACHE_MAX = 6000;            // pictures kept on the phone (oldest removed first)
 const MAP_FALLBACK_ATTRIBUTION = '<a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>';
@@ -16161,7 +16185,7 @@ async function fetchMapJson(url, signal) {
     try { if (window.caches) cache = await caches.open(MAP_TILE_CACHE); } catch (e) { cache = null; }
     try {
         const res = await fetch(url, { signal, mode: 'cors' });
-        if (res.status === 401 || res.status === 403 || res.status === 429) noteMapRefused();
+        if ((res.status === 401 || res.status === 403 || res.status === 429) && /api\.maptiler\.com/.test(url)) noteMapRefused();
         if (res.ok) {
             const txt = await res.text();
             if (cache) { try { await cache.put(cacheKey, new Response(txt, { headers: { 'Content-Type': 'application/json' } })); } catch (e) {} }
@@ -16185,7 +16209,7 @@ async function fetchMapPicture(url, signal) {
         try { const hit = await cache.match(cacheKey); if (hit) return await hit.arrayBuffer(); } catch (e) {}
     }
     const res = await fetch(url, { signal, mode: 'cors' });
-    if (res.status === 401 || res.status === 403 || res.status === 429) noteMapRefused();
+    if ((res.status === 401 || res.status === 403 || res.status === 429) && /api\.maptiler\.com/.test(url)) noteMapRefused();
     if (!res.ok) {
         if (res.status === 204 || res.status === 404) return new ArrayBuffer(0);   // no picture here (e.g. sea)
         const err = new Error('Map picture ' + res.status); err.status = res.status; throw err;
@@ -16226,8 +16250,11 @@ function isWebGLAvailable() {
     } catch (e) { return false; }
 }
 
-function bgStyleUrl(bg) {
-    return `https://api.maptiler.com/maps/${MAP_BG_STYLES[bg].id}/style.json?key=${encodeURIComponent(getMapTilerKey())}`;
+/** The style for a background: fetched (MapTiler satellite, OpenFreeMap) or built here. */
+function loadBgStyle(bg) {
+    const def = MAP_BG_STYLES[bg];
+    if (def.build) return Promise.resolve(def.build());
+    return fetchMapJson(def.style());
 }
 
 function ensureBgMap() {
@@ -16258,7 +16285,9 @@ function ensureBgMap() {
             center: [0, 0], zoom: 1,
             transformRequest: (url) => {
                 // tiles and fonts go through the personal cache
-                if (/^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//.test(url)) {
+                if (/^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//.test(url) ||
+                    /^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/.test(url) ||
+                    /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i.test(url)) {
                     return { url: url.replace(/^https:\/\//, 'detektamap://') };
                 }
                 return { url };
@@ -16271,7 +16300,8 @@ function ensureBgMap() {
     bgMapHolder.style.width = ''; bgMapHolder.style.height = '';
     bgMap.on('error', (e) => {
         const st = e && e.error && (e.error.status || (e.error.cause && e.error.cause.status));
-        if (st === 401 || st === 403 || st === 429) noteMapRefused();
+        const def = MAP_BG_STYLES[(bgMapStyleKey || '').split(':')[0]];
+        if ((st === 401 || st === 403 || st === 429) && def && def.maptiler) noteMapRefused();
     });
     bgMap.on('sourcedata', (e) => {
         if (!e || !e.isSourceLoaded) return;
@@ -16282,7 +16312,9 @@ function ensureBgMap() {
                 const src = bgMap.getSource(id);
                 if (src && src.attribution) parts.add(src.attribution);
             });
-            const html = parts.size ? Array.from(parts).join(' ') : MAP_FALLBACK_ATTRIBUTION;
+            const def = MAP_BG_STYLES[(bgMapStyleKey || '').split(':')[0]];
+            const html = (def && def.build) ? def.credit
+                       : (parts.size ? Array.from(parts).join(' ') : ((def && def.credit) || MAP_FALLBACK_ATTRIBUTION));
             if (html !== bgMapAttribution) {
                 bgMapAttribution = html;
                 const a = document.getElementById('bg-map-attrib');
@@ -16315,11 +16347,15 @@ function syncBgMap() {
     if (!ensureBgMap()) return;
 
     // Load the style for this background (and key)
-    const styleKey = bg + ':' + getMapTilerKey();
+    const styleKey = bg + ':' + (MAP_BG_STYLES[bg].maptiler ? getMapTilerKey() : '');
     if (styleKey !== bgMapStyleKey && Date.now() >= bgMapStyleRetryAfter) {
+        if ((bgMapStyleKey || '').split(':')[0] !== bg) {
+            bgMapAttribution = '';
+            if (!MAP_BG_STYLES[bg].maptiler && bgMapProblem.startsWith('refused')) bgMapProblem = '';
+        }
         bgMapStyleKey = styleKey;
         const wanted = styleKey;
-        fetchMapJson(bgStyleUrl(bg))
+        loadBgStyle(bg)
             .then(style => { if (bgMapStyleKey === wanted) bgMap.setStyle(style, { diff: false }); })
             .catch(e => {
                 console.warn('Map background style not available:', e && e.message);
@@ -16369,19 +16405,22 @@ function renderBgMapNoteHtml() {
 
 /** The None / Satellite / Outdoor buttons, the note and the credit line. */
 function renderBgMapControlsHtml(current, setter) {
-    const btn = (v, label, icon) => `
+    const btn = (v) => {
+        const label = v === 'none' ? 'Plain' : MAP_BG_STYLES[v].label;
+        const icon = v === 'none' ? 'fa-square' : MAP_BG_STYLES[v].icon;
+        return `
         <button type="button" onclick="${setter}('${v}')"
-                class="flex-1 py-2 rounded-lg text-sm font-bold ${current === v ? 'text-white' : 'bg-gray-200 text-gray-700'}"
+                class="py-2 rounded-lg text-xs font-bold leading-tight ${current === v ? 'text-white' : 'bg-gray-200 text-gray-700'}"
                 style="${current === v ? 'background-color: rgb(var(--color-primary));' : ''}">
-            <i class="fas ${icon} mr-1"></i>${label}</button>`;
+            <i class="fas ${icon} mb-1 text-base" style="--fa-display:block;"></i>${label}</button>`;
+    };
+    const credit = current !== 'none' ? (bgMapAttribution || MAP_BG_STYLES[current].credit || MAP_FALLBACK_ATTRIBUTION) : '';
     return `
     <div class="mt-2 mb-2">
-        <div class="flex gap-2">
-            ${btn('none', 'Plain', 'fa-square')}
-            ${btn('satellite', 'Satellite', 'fa-globe-europe')}
-            ${btn('outdoor', 'Outdoor', 'fa-mountain')}
+        <div class="grid grid-cols-5 gap-1">
+            ${MAP_BG_ORDER.map(btn).join('')}
         </div>
-        ${current !== 'none' ? renderBgMapNoteHtml() + `<p id="bg-map-attrib" class="text-xs text-gray-500 mt-1">${bgMapAttribution || MAP_FALLBACK_ATTRIBUTION}</p>` : ''}
+        ${current !== 'none' ? renderBgMapNoteHtml() + `<p id="bg-map-attrib" class="text-xs text-gray-500 mt-1">${credit}</p>` : ''}
     </div>`;
 }
 
@@ -16390,7 +16429,7 @@ function renderMapBackgroundSettingsHtml() {
     return `
             <div class="mt-6 border-t border-gray-200 pt-5">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">Map backgrounds</h3>
-                <p class="text-sm text-gray-600 mb-2">Satellite and Outdoor backgrounds come from MapTiler. Detekta has a built-in key whose free monthly allowance is shared by everyone who uses it. If it runs out, backgrounds pause until the next month. With your own free key they always work for you.</p>
+                <p class="text-sm text-gray-600 mb-2"><strong>Satellite</strong> and <strong>Old OS</strong> come from MapTiler. Detekta has a built-in key whose free monthly allowance is shared by everyone who uses it. If it runs out, these two pause until the next month. With your own free key they always work for you. <strong>Outdoor</strong> (OpenFreeMap) and <strong>LiDAR</strong> (Environment Agency) are free and need no key.</p>
                 <p class="text-sm font-semibold ${own ? 'text-green-700' : 'text-gray-700'} mb-2">
                     <i class="fas ${own ? 'fa-check-circle' : 'fa-key'} mr-1"></i>${own ? 'Using your own key.' : 'Using the built-in key.'}</p>
                 <label class="block text-sm font-semibold text-gray-700 mb-1" for="maptiler-key-input">Your MapTiler key (optional)</label>
