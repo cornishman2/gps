@@ -1,4 +1,4 @@
-const CACHE_NAME = "detekta-cache-v32"; // <-- bump this on every deployment
+const CACHE_NAME = "detekta-cache-v33"; // <-- bump this on every deployment
 // Since V1.31 every library is built into index.html, so this list is
 // everything the app needs to run with no signal.
 const APP_SHELL = [
@@ -14,6 +14,8 @@ const APP_SHELL = [
   "./assets/shot-map-lidar.jpg",
   "./assets/shot-scout.jpg",
   "./assets/shot-pin-card.jpg",
+  "./assets/shot-fullscreen.jpg",
+  "./assets/shot-explore.jpg",
   "./assets/shot-map-grid.jpg",
   "./assets/shot-finds.jpg",
   "./assets/shot-find-card.jpg",
