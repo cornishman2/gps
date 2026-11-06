@@ -351,7 +351,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.49
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.50
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2040,7 +2040,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.49.0';         // change whenever you publish
+const APP_VERSION = '1.50.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3547,7 +3547,7 @@ async function purgeDeletedEverywhere() {
         } else {
             log('Scanning IndexedDB for orphaned photos...');
 
-            const referenced = collectAllReferencedPhotoIds(); // Set<number>
+            const referenced = collectAllPhotoIdsInUse(); // Set<number> - every field that can hold a photo
 
             // Read ALL keys from the store
             const db = await openPhotoDB();
@@ -3575,20 +3575,12 @@ async function purgeDeletedEverywhere() {
             log(`Referenced blobs: ${referencedStr.size}`);
             log(`Orphan blobs:     ${orphanKeysStr.length}`);
 
-            let deletedCount = 0;
-            for (const kStr of orphanKeysStr) {
-                const id = (/^\d+$/).test(kStr) ? Number(kStr) : kStr;
-                try {
-                    await deletePhotoBlob(id);
-                    deletedCount++;
-                } catch (e) {
-                    console.warn('Failed to delete orphan photo blob', id, e);
-                }
-            }
+            // V1.50: photos are NEVER deleted automatically. Unattached ones are listed in
+            // Settings → Unattached photos, where you can look at each one, attach it or delete it.
+            purgeDeletedEverywhere.lastUnattached = orphanKeysStr.length;
+            log(`Unattached photos kept for review: ${orphanKeysStr.length}`);
 
-            log(`Orphan deletions completed: ${deletedCount}/${orphanKeysStr.length}`);
 
-            try { db.close(); } catch (_) {}
         }
     } catch (e) {
         console.warn('Orphan photo cleanup failed:', e);
@@ -3599,7 +3591,8 @@ async function purgeDeletedEverywhere() {
     // 3) Final UI refresh
     // -----------------------------
     try {
-        showMessage('Purge complete (deleted records removed; orphan photos cleaned).', 'success');
+        const n = purgeDeletedEverywhere.lastUnattached || 0;
+        showMessage(n ? `Maintenance complete. ${n} photo${n === 1 ? ' is' : 's are'} not attached to anything — see Unattached photos.` : 'Maintenance complete.', 'success');
     } catch (_) {}
 
     try { render(); } catch (_) {}
@@ -5877,6 +5870,9 @@ function resetAllAppData() {
 
         // Clear IndexedDB photo database
         indexedDB.deleteDatabase('geoFindDB');
+        _dataIdbReady = false;           // nothing may be saved again before the restart
+        try { if (_dataDbPromise) _dataDbPromise.then(db => db.close()).catch(() => {}); } catch (_) {}
+        indexedDB.deleteDatabase(DATA_DB_NAME);
 
         alert("All local app data has been deleted.\nThe app will now restart.");
         location.reload();
@@ -5890,8 +5886,11 @@ function resetAllAppData() {
  * Opens (or creates) our photo database.
  * Returns a Promise that resolves to the DB instance.
  */
+let _photoDbPromise = null;
 function openPhotoDB() {
-    return new Promise((resolve, reject) => {
+    // One shared connection (a new one for every photo was slow and leaked connections)
+    if (_photoDbPromise) return _photoDbPromise;
+    _photoDbPromise = new Promise((resolve, reject) => {
         const request = indexedDB.open(PHOTO_DB_NAME, PHOTO_DB_VERSION);
 
         request.onupgradeneeded = (event) => {
@@ -5902,9 +5901,14 @@ function openPhotoDB() {
             }
         };
 
-        request.onsuccess = () => resolve(request.result);
-        request.onerror   = () => reject(request.error);
+        request.onsuccess = () => {
+            const db = request.result;
+            db.onversionchange = () => { try { db.close(); } catch (_) {} _photoDbPromise = null; };
+            resolve(db);
+        };
+        request.onerror   = () => { _photoDbPromise = null; reject(request.error); };
     });
+    return _photoDbPromise;
 }
 
 /**
@@ -5921,9 +5925,12 @@ async function savePhotoBlob(blob) {
             blob,
             createdAt: Date.now()
         });
-
-        request.onsuccess = () => resolve(request.result); // numeric ID
-        request.onerror   = () => reject(request.error);
+        let newId = null;
+        request.onsuccess = () => { newId = request.result; };
+        // Only report success once the photo is really written to storage
+        tx.oncomplete = () => resolve(newId);
+        tx.onerror    = () => reject(tx.error || request.error);
+        tx.onabort    = () => reject(tx.error || new Error('Photo save aborted'));
     });
 }
 
@@ -5955,9 +5962,10 @@ async function deletePhotoBlob(id) {
         const tx    = db.transaction(PHOTO_STORE_NAME, 'readwrite');
         const store = tx.objectStore(PHOTO_STORE_NAME);
 
-        const request = store.delete(id);
-        request.onsuccess = () => resolve(true);
-        request.onerror   = () => reject(request.error);
+        store.delete(id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror    = () => reject(tx.error);
+        tx.onabort    = () => reject(tx.error);
     });
 }
 
@@ -5965,6 +5973,23 @@ async function deletePhotoBlob(id) {
 // ========================
 //  PHOTO REFERENCE HELPERS
 // ========================
+
+/** Every photo id used anywhere (digs, finds, stakes - including deleted-but-not-purged ones). */
+function collectAllPhotoIdsInUse({ visibleOnly = false } = {}) {
+    const ids = new Set();
+    const walk = (v, depth) => {
+        if (depth > 6 || v == null) return;
+        if (typeof v === 'string') { if (isIndexedDbPhotoRef(v)) { const id = parsePhotoRef(v); if (id != null) ids.add(id); } return; }
+        if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
+        if (typeof v === 'object') {
+            if (visibleOnly && v.deleted === true) return;
+            for (const k in v) { if (k === 'points' || k === 'scoutDots' || k === 'tileGrid' || k === 'coveredTiles') continue; walk(v[k], depth + 1); }
+        }
+    };
+    walk(surveys, 0);
+    walk(finds, 0);
+    return ids;
+}
 
 /**
  * Build a reference string from a numeric ID, eg "idb:5".
@@ -6141,6 +6166,146 @@ function targetToFind(t, survey) {
  * Move any non-stake entries out of survey.targets into the Finds list.
  * Safe to call any time (on load, after imports, after GPX/QR adds).
  */
+// ======================================================================
+// UNATTACHED PHOTOS (V1.50) - find photos that are stored but linked to
+// nothing, look at them, and attach them to a find or dig, or delete them.
+// Builds its own window so the app's re-drawing can't disturb it.
+// ======================================================================
+let _unattachedUrls = [];
+function _uaEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function _uaPlaceTime(t) { const v = Number(t && (t.time || t.dateLogged || t.createdAt)); return isFinite(v) && v > 0 ? v : null; }
+function _uaFmt(ms) { try { return new Date(ms).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } }
+
+async function listUnattachedPhotos() {
+    const used = collectAllPhotoIdsInUse({ visibleOnly: true });  // photos on deleted places count as unattached
+    const db = await openPhotoDB();
+    const recs = await new Promise((resolve, reject) => {
+        const out = [];
+        const tx = db.transaction(PHOTO_STORE_NAME, 'readonly');
+        const rq = tx.objectStore(PHOTO_STORE_NAME).openCursor();
+        rq.onsuccess = () => {
+            const c = rq.result;
+            if (!c) return resolve(out);
+            if (!used.has(c.key)) out.push({ id: c.key, createdAt: (c.value && c.value.createdAt) || 0, blob: c.value && c.value.blob });
+            c.continue();
+        };
+        rq.onerror = () => reject(rq.error);
+    });
+    recs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return recs;
+}
+
+function _uaTargets() {
+    const out = [];
+    const digName = id => { const s = (surveys || []).find(x => x && x.id === id); return s ? (s.name || 'Untitled dig') : ''; };
+    (Array.isArray(finds) ? finds : []).forEach(f => {
+        if (!f || f.deleted === true) return;
+        const t = Number(f.time || f.dateCreated || f.creationDate) || null;
+        const nm = f.description || f.type || 'Unnamed find';
+        out.push({ value: 'find|' + f.id, label: 'Find: ' + nm + (f.surveyId ? ' — ' + digName(f.surveyId) : ''), time: t });
+    });
+    (Array.isArray(surveys) ? surveys : []).forEach(s => {
+        if (!s || s.deleted === true) return;
+        out.push({ value: 'dig|' + s.id, label: 'Dig: ' + (s.name || 'Untitled'), time: Number(s.dateCreated) || null });
+    });
+    return out;
+}
+
+async function openUnattachedPhotosPanel() {
+    closeUnattachedPhotosPanel();
+    const ov = document.createElement('div');
+    ov.id = 'unattached-photos-panel';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:12px;overflow:auto';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:16px"><p>Looking for unattached photos…</p></div>';
+    document.body.appendChild(ov);
+    let list = [];
+    try { list = await listUnattachedPhotos(); }
+    catch (e) { ov.firstChild.innerHTML = '<p>Could not read the photo storage: ' + _uaEsc(e && e.message) + '</p><button type="button" onclick="closeUnattachedPhotosPanel()" class="mt-3 w-full py-2 rounded-lg bg-gray-200 font-semibold">Close</button>'; return; }
+    const targets = _uaTargets();
+    const box = ov.firstChild;
+    let html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 class="text-lg font-bold text-primary">Unattached photos (' + list.length + ')</h3>'
+        + '<button type="button" onclick="closeUnattachedPhotosPanel()" class="px-3 py-1 rounded-lg bg-gray-200 font-semibold">Close</button></div>';
+    if (!list.length) {
+        html += '<p class="text-sm text-gray-700 mt-3">Every photo stored on this phone is attached to a find or dig. Nothing to recover.</p>';
+    } else {
+        html += '<p class="text-sm text-gray-700 mt-2 mb-3">These photos are stored on this phone but not attached to anything. For each one, choose where it belongs and tap <strong>Attach</strong>. The list starts with the finds logged closest in time to the photo.</p>'
+            + '<button type="button" onclick="deleteAllUnattachedPhotos()" class="w-full mb-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-200 font-semibold text-sm"><i class="fas fa-trash-alt mr-1"></i> Delete all ' + list.length + ' unattached photos…</button>';
+        list.forEach(rec => {
+            let url = '';
+            try { if (rec.blob) { url = URL.createObjectURL(rec.blob); _unattachedUrls.push(url); } } catch (_) {}
+            const when = rec.createdAt ? _uaFmt(rec.createdAt) : 'unknown date';
+            const sorted = targets.slice().sort((a, b) => {
+                const da = (a.time && rec.createdAt) ? Math.abs(a.time - rec.createdAt) : Infinity;
+                const db_ = (b.time && rec.createdAt) ? Math.abs(b.time - rec.createdAt) : Infinity;
+                return da - db_;
+            });
+            const opts = sorted.map(t => '<option value="' + _uaEsc(t.value) + '">' + _uaEsc(t.label) + (t.time ? ' (' + _uaEsc(_uaFmt(t.time)) + ')' : '') + '</option>').join('');
+            html += '<div id="ua-row-' + rec.id + '" style="border:1px solid #e5e7eb;border-radius:10px;padding:8px;margin-bottom:10px">'
+                + (url ? '<img src="' + url + '" alt="Unattached photo" style="width:100%;max-height:260px;object-fit:contain;border-radius:8px;background:#f3f4f6">' : '<p class="text-sm text-gray-500">(this photo cannot be shown)</p>')
+                + '<p class="text-xs text-gray-600 mt-1">Saved ' + _uaEsc(when) + (rec.blob && rec.blob.size ? ' · ' + Math.round(rec.blob.size / 1024) + ' KB' : '') + '</p>'
+                + (targets.length ? '<select id="ua-sel-' + rec.id + '" class="w-full mt-2 p-2 border border-gray-300 rounded-lg text-sm">' + opts + '</select>' : '<p class="text-sm text-gray-600 mt-2">There are no finds or digs to attach it to.</p>')
+                + '<div style="display:flex;gap:8px;margin-top:8px">'
+                + (targets.length ? '<button type="button" onclick="attachUnattachedPhoto(' + rec.id + ')" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm"><i class="fas fa-link mr-1"></i> Attach</button>' : '')
+                + '<button type="button" onclick="deleteUnattachedPhoto(' + rec.id + ')" class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold text-sm"><i class="fas fa-trash-alt mr-1"></i> Delete</button>'
+                + '</div></div>';
+        });
+    }
+    box.innerHTML = html;
+}
+function closeUnattachedPhotosPanel() {
+    const el = document.getElementById('unattached-photos-panel');
+    if (el) el.remove();
+    _unattachedUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch (_) {} });
+    _unattachedUrls = [];
+}
+function _uaRowDone(id, text) {
+    const row = document.getElementById('ua-row-' + id);
+    if (row) row.innerHTML = '<p class="text-sm text-green-700 font-semibold"><i class="fas fa-check mr-1"></i>' + _uaEsc(text) + '</p>';
+}
+async function attachUnattachedPhoto(id) {
+    const sel = document.getElementById('ua-sel-' + id);
+    if (!sel || !sel.value) return;
+    const parts = sel.value.split('|');
+    const ref = makePhotoRef(id);
+    let name;
+    if (parts[0] === 'dig') {
+        const s = (surveys || []).find(x => x && String(x.id) === parts[1]);
+        if (!s) { showMessage('Dig not found.', 'error'); return; }
+        if (!Array.isArray(s.photos)) s.photos = s.surveyPhotoRef ? [s.surveyPhotoRef] : [];
+        if (!s.photos.includes(ref)) s.photos.push(ref);
+        if (!s.surveyPhotoRef) s.surveyPhotoRef = ref;
+        s.dateLastChanged = Date.now();
+        name = 'dig “' + (s.name || 'Untitled') + '”';
+    } else {
+        const f = (finds || []).find(x => x && String(x.id) === parts[1]);
+        if (!f) { showMessage('Find not found.', 'error'); return; }
+        if (!Array.isArray(f.photos)) f.photos = [];
+        if (!f.photos.includes(ref)) f.photos.push(ref);
+        if (!f.findPhotoRef) f.findPhotoRef = ref;
+        f.findPhotoData = ''; f.targetPhotoData = '';
+        f.updatedAt = Date.now();
+        name = '“' + (f.description || f.type || 'find') + '”';
+    }
+    const ok = await saveDataNow();
+    if (!ok) { showMessage('Could not save — the phone refused to save.', 'error'); return; }
+    _uaRowDone(id, 'Attached to ' + name);
+    showMessage('Photo attached to ' + name + '.', 'success');
+}
+async function deleteUnattachedPhoto(id) {
+    if (!confirm('Delete this photo permanently?')) return;
+    if (collectAllPhotoIdsInUse().has(id)) { showMessage('That photo is now in use, so it was kept.', 'info'); return; }
+    try { await deletePhotoBlob(id); _uaRowDone(id, 'Deleted'); } catch (e) { showMessage('Delete failed.', 'error'); }
+}
+async function deleteAllUnattachedPhotos() {
+    const list = await listUnattachedPhotos();
+    if (!list.length) return;
+    if (!confirm('Permanently delete all ' + list.length + ' unattached photos?\n\nLook through them first - once deleted they cannot be recovered.')) return;
+    let n = 0;
+    for (const r of list) { try { await deletePhotoBlob(r.id); n++; } catch (_) {} }
+    showMessage(n + ' unattached photos deleted.', 'success');
+    openUnattachedPhotosPanel();
+}
+
 function migrateTargetsToFinds() {
     let moved = 0;
     if (!Array.isArray(finds)) finds = [];
@@ -7445,12 +7610,9 @@ function formatSurveyPermissionDate(value) {
  */
         /** Saves the current digs and profile data to Local Storage. */
 function saveFindsToLocalStorage() {
-    try {
-        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
-    } catch (e) {
-        console.error("Error saving Finds to Local Storage:", e);
-        // No toast here – we don't want to confuse the user
-    }
+    // (name kept from older versions; digs and finds now go to IndexedDB - see "SAVING DIGS AND FINDS")
+    _dataDirty = true;
+    if (_dataIdbReady && !_dataSaveTimer) _dataSaveTimer = setTimeout(() => { _dataSaveTimer = null; flushDataSave(); }, 700);
 }
 
 function createFindFromTarget(target, survey) {
@@ -7548,13 +7710,157 @@ function createFindFromTarget(target, survey) {
     return true;
 }
         
-function saveSurveysToLocalStorage() {
+// ======================================================================
+// SAVING DIGS AND FINDS (V1.50)
+// Digs, finds and tracks used to live only in localStorage, which browsers
+// limit to about 5 MB. Once that is full every save fails: a new photo is
+// stored but the find's link to it is not, so after a restart it is gone.
+// Now they are kept in IndexedDB (no practical limit). localStorage keeps a
+// copy only while it is small, so the app still starts instantly.
+// ======================================================================
+const DATA_DB_NAME = 'detektaDataDB';
+const DATA_STORE_NAME = 'kv';
+const DATA_LS_MIRROR_MAX_CHARS = 1500000;   // keep localStorage free for settings
+let _dataDbPromise = null;
+let _dataIdbReady = false;      // true once the saved copy has been read at start-up
+let _dataDirty = false;
+let _dataSaveTimer = null;
+let _dataSaveChain = Promise.resolve(true);
+let _dataLastSaveOk = true;
+
+function openDataDB() {
+    if (_dataDbPromise) return _dataDbPromise;
+    _dataDbPromise = new Promise((resolve, reject) => {
+        let req;
+        try { req = indexedDB.open(DATA_DB_NAME, 1); } catch (e) { reject(e); return; }
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(DATA_STORE_NAME)) db.createObjectStore(DATA_STORE_NAME);
+        };
+        req.onsuccess = () => {
+            const db = req.result;
+            db.onversionchange = () => { try { db.close(); } catch (_) {} _dataDbPromise = null; };
+            resolve(db);
+        };
+        req.onerror = () => { _dataDbPromise = null; reject(req.error); };
+    });
+    return _dataDbPromise;
+}
+async function dataDbGet(key) {
+    const db = await openDataDB();
+    return new Promise((resolve, reject) => {
+        const rq = db.transaction(DATA_STORE_NAME, 'readonly').objectStore(DATA_STORE_NAME).get(key);
+        rq.onsuccess = () => resolve(rq.result);
+        rq.onerror = () => reject(rq.error);
+    });
+}
+async function dataDbPut(key, value) {
+    const db = await openDataDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DATA_STORE_NAME, 'readwrite');
+        tx.objectStore(DATA_STORE_NAME).put(value, key);
+        tx.oncomplete = () => resolve(true);          // only when it is really written
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error('Save aborted'));
+    });
+}
+
+/** A save problem stays on screen until it is fixed: it must not be missed. */
+function showSaveProblemBanner(show, detail) {
+    let el = document.getElementById('save-problem-banner');
+    if (!show) { if (el) el.remove(); return; }
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'save-problem-banner';
+        el.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:10000;background:#b91c1c;color:#fff;padding:10px 12px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.35)';
+        document.body.appendChild(el);
+    }
+    el.innerHTML = '<strong>Detekta could not save your changes.</strong> The phone\'s storage refused them'
+        + (detail ? ' (' + String(detail).replace(/[<>&]/g, '') + ')' : '')
+        + '. Please back up your digs now and free some space on the phone. '
+        + '<button type="button" onclick="saveDataNow()" style="margin-left:6px;background:#fff;color:#b91c1c;border-radius:6px;padding:2px 8px;font-weight:700">Try again</button>';
+}
+
+/** Writes digs and finds now. Resolves true when they are safely stored. */
+function flushDataSave() {
+    if (_dataSaveTimer) { clearTimeout(_dataSaveTimer); _dataSaveTimer = null; }
+    _dataSaveChain = _dataSaveChain.then(async () => {
+        if (!_dataIdbReady || !_dataDirty) return _dataLastSaveOk;
+        _dataDirty = false;
+        const savedAt = Date.now();
+        let sj, fj;
+        try { sj = JSON.stringify(surveys); fj = JSON.stringify(finds); } catch (e) { console.error('Could not prepare data for saving', e); _dataLastSaveOk = false; return false; }
+        let idbOk = false, lsOk = false, problem = '';
+        try { await dataDbPut('data', { surveys: sj, finds: fj, savedAt }); idbOk = true; }
+        catch (e) { console.error('Saving to IndexedDB failed:', e); problem = (e && (e.name || e.message)) || 'database error'; }
+        try {
+            if (sj.length + fj.length <= DATA_LS_MIRROR_MAX_CHARS || !idbOk) {
+                localStorage.setItem('geoFindSurveys', sj);
+                localStorage.setItem('geoFindFinds', fj);
+                localStorage.setItem('detektaDataSavedAt', String(savedAt));
+                localStorage.removeItem('detektaDataInIdb');
+                lsOk = true;
+            } else {
+                throw new Error('too big for the quick-start copy');
+            }
+        } catch (e) {
+            // Too big (or full): drop the quick-start copy so it can't be mistaken for the latest data
+            try { localStorage.removeItem('geoFindSurveys'); localStorage.removeItem('geoFindFinds'); localStorage.removeItem('detektaDataSavedAt'); } catch (_) {}
+            try { if (idbOk) localStorage.setItem('detektaDataInIdb', '1'); } catch (_) {}
+            if (!idbOk) problem = problem || ((e && e.name) || 'storage full');
+        }
+        const ok = idbOk || lsOk;
+        _dataLastSaveOk = ok;
+        if (!ok) _dataDirty = true;
+        showSaveProblemBanner(!ok, problem);
+        return ok;
+    }).catch(e => { console.error(e); _dataLastSaveOk = false; return false; });
+    return _dataSaveChain;
+}
+/** Save immediately and wait for the result (used before saying "Photo added"). */
+async function saveDataNow() {
+    _dataDirty = true;
+    return await flushDataSave();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDataSave(); });
+window.addEventListener('pagehide', () => flushDataSave());
+
+/** Called once at start-up: use the newest saved copy of the digs and finds. */
+async function loadDataFromDataDbAtStartup() {
+    const waited = localStorage.getItem('detektaDataInIdb') === '1';
     try {
-        localStorage.setItem('geoFindSurveys', JSON.stringify(surveys));
+        const rec = await dataDbGet('data');
+        const lsAt = Number(localStorage.getItem('detektaDataSavedAt') || 0);
+        if (rec && typeof rec.surveys === 'string' && (waited || !localStorage.getItem('geoFindSurveys') || (rec.savedAt || 0) > lsAt)) {
+            const s = JSON.parse(rec.surveys), f = JSON.parse(rec.finds || '[]');
+            if (Array.isArray(s)) {
+                surveys = s;
+                finds = Array.isArray(f) ? f : [];
+                try { if (typeof clearStaleRecordingTracksOnLoad === 'function') clearStaleRecordingTracksOnLoad(); } catch (_) {}
+                try { migrateTargetsToFinds(); } catch (_) {}
+                _dataDirty = false;
+                if (waited && currentPage === 'Home' && surveys.some(x => x && x.status === 'Open')) currentPage = 'Compass';
+            }
+        } else {
+            _dataDirty = true;     // first run of V1.50: copy the localStorage data into the database
+        }
+    } catch (e) {
+        console.error('Could not read digs from IndexedDB:', e);
+        _dataDirty = true;
+    }
+    _dataIdbReady = true;
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
+    await flushDataSave();
+    try { render(); updateActiveNavButtons(); } catch (_) {}
+}
+
+function saveSurveysToLocalStorage() {
+    // (name kept from older versions; digs and finds now go to IndexedDB, see above)
+    _dataDirty = true;
+    if (_dataIdbReady && !_dataSaveTimer) _dataSaveTimer = setTimeout(() => { _dataSaveTimer = null; flushDataSave(); }, 700);
+    try {
         localStorage.setItem('geoFindProfile', JSON.stringify(userProfile));
         localStorage.setItem('geoFindUserId', userId);
-        // CRITICAL: Also save finds here to ensure they persist on refresh
-        localStorage.setItem('geoFindFinds', JSON.stringify(finds));
     } catch (e) {
         console.error("Error saving to Local Storage:", e);
         // Only show message for actual localStorage errors (like quota exceeded)
@@ -10600,6 +10906,7 @@ function ensureGallerySwipeHandlers() {
     // ======================================
 // CARD THUMBNAIL INITIALISER (Targets & Finds)
 // ======================================
+const MISSING_PHOTO_SVG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="90" viewBox="0 0 120 90"><rect width="120" height="90" fill="#f3f4f6"/><text x="60" y="42" font-family="Arial" font-size="12" fill="#6b7280" text-anchor="middle">Photo</text><text x="60" y="58" font-family="Arial" font-size="12" fill="#6b7280" text-anchor="middle">missing</text></svg>');
 async function initialiseCardThumbnails() {
     const thumbImgs = document.querySelectorAll('img[data-photo-ref]');
     if (!thumbImgs.length) return;
@@ -10621,14 +10928,21 @@ async function initialiseCardThumbnails() {
                 url = ref;
             }
 
+            if (!url) {
+                // Cover photo missing: use the next photo of the same find/dig that still exists
+                const alts = (img.getAttribute('data-photo-alts') || '').split(' ').filter(r => r && r !== ref);
+                for (const alt of alts) {
+                    try { url = await getPhotoUrlFromRef(alt); } catch (_) { url = ''; }
+                    if (url) break;
+                }
+            }
             if (url) {
                 img.src = url;
             } else {
-                // If we couldn't resolve anything, hide the broken image
-                const container = img.closest('.mt-3');
-                if (container) {
-                    container.classList.add('hidden');
-                }
+                // Missing from storage: show a "missing" tile for THIS photo only.
+                // (It used to hide the whole gallery, so one missing photo hid all the others.)
+                img.src = MISSING_PHOTO_SVG;
+                img.title = 'This photo is missing from storage';
             }
         } catch (e) {
             console.error('Error resolving thumbnail for ref', ref, e);
@@ -14175,6 +14489,7 @@ function renderSurveyCard(survey, isOpen = false) {
                     <img
                         src=""
                         data-photo-ref="${thumbRef}"
+                        data-photo-alts="${(Array.isArray(survey.photos) ? survey.photos : []).filter(r => typeof r === 'string' && r.startsWith('idb:')).join(' ')}"
                         data-photo-kind="survey"
                         data-survey-id="${survey.id}"
                         alt="Dig photo"
@@ -14519,6 +14834,7 @@ function renderFindsPage() {
                         <img
                             src=""
                             data-photo-ref="${thumbRef}"
+                            data-photo-alts="${(Array.isArray(find.photos) ? find.photos : []).filter(r => typeof r === 'string' && r.startsWith('idb:')).join(' ')}"
                             data-photo-kind="find"
                             data-find-id="${find.id}"
                             alt="Find photo"
@@ -18228,7 +18544,7 @@ ${renderMapBackgroundSettingsHtml()}
 
                       ${maintenanceConfirmOpen ? `
                       <div class="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                          <p class="text-sm text-gray-700 mb-3">This will permanently remove any leftover deleted items and tidy local data. Continue?</p>
+                          <p class="text-sm text-gray-700 mb-3">This will permanently remove digs, finds and tracks you have already deleted. Photos are never deleted by Maintenance. Continue?</p>
                           <div class="flex gap-3">
                               <button type="button" onclick="maintenanceConfirmOpen=false;render()"
                                       class="flex-1 py-2 rounded-lg bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300">Cancel</button>
@@ -18239,7 +18555,15 @@ ${renderMapBackgroundSettingsHtml()}
                       ` : ''}
 
                       <p class="text-xs text-gray-500 mt-2">
-                        Removes any leftover “deleted” items and tidies storage.
+                        Removes any leftover “deleted” items. Photos are never deleted by Maintenance.
+                      </p>
+
+                      <button type="button" onclick="openUnattachedPhotosPanel()"
+                      class="w-full mt-4 bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                        <i class="fas fa-images mr-1"></i> Unattached photos
+                      </button>
+                      <p class="text-xs text-gray-500 mt-2">
+                        Finds photos that are stored on this phone but not attached to any find or dig, for example after a failed save in older versions. You can look at each one and attach it to the right find, or delete it.
                       </p>
 
             </div>
@@ -20803,13 +21127,17 @@ async function handleFindCardPhotoSelected(event) {
     // Save the new photo to IDB and append
     try {
         const newRefs = await saveDataUrlsAsPhotoRefs([photoData]);
-        find.photos.push(newRefs.length > 0 ? newRefs[0] : photoData);
-    } catch (_) {
-        find.photos.push(photoData);
+        if (!newRefs[0]) throw new Error('not stored');
+        find.photos.push(newRefs[0]);
+        if (!find.findPhotoRef) find.findPhotoRef = newRefs[0];
+    } catch (e) {
+        console.error('Photo could not be stored', e);
+        showMessage('Photo NOT saved — the phone refused to store it.', 'error');
+        return;
     }
 
-    saveFindsToLocalStorage();
-    showMessage('Photo added to find.', 'success');
+    const ok = await saveDataNow();
+    showMessage(ok ? 'Photo added to find.' : 'Photo NOT saved — the phone refused to save. Back up your digs and free some space.', ok ? 'success' : 'error');
     if (typeof render === 'function') render();
 }
 
@@ -20861,14 +21189,17 @@ async function handleTargetCardPhotoSelected(event) {
     // Save the new photo to IDB and append
     try {
         const newRefs = await saveDataUrlsAsPhotoRefs([photoData]);
-        target.photos.push(newRefs.length > 0 ? newRefs[0] : photoData);
-    } catch (_) {
-        target.photos.push(photoData);
+        if (!newRefs[0]) throw new Error('not stored');
+        target.photos.push(newRefs[0]);
+    } catch (e) {
+        console.error('Photo could not be stored', e);
+        showMessage('Photo NOT saved — the phone refused to store it.', 'error');
+        return;
     }
 
     survey.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-    showMessage('Photo added.', 'success');
+    const ok = await saveDataNow();
+    showMessage(ok ? 'Photo added.' : 'Photo NOT saved — the phone refused to save. Back up your digs and free some space.', ok ? 'success' : 'error');
     if (typeof render === 'function') render();
 }
 
@@ -20902,11 +21233,17 @@ async function handleSurveyPhotoSelected(event) {
         return;
     }
 
+    // Store the picture in the photo database (it used to be put inside the dig data,
+    // which made the digs much bigger and filled the storage sooner)
+    let digRef = '';
+    try { digRef = (await saveDataUrlsAsPhotoRefs([photoData]))[0] || ''; } catch (e) { console.error(e); }
+    if (!digRef) { showMessage('Photo NOT saved — the phone refused to store it.', 'error'); return; }
     if (!Array.isArray(survey.photos)) survey.photos = [];
-    survey.photos.push(photoData);
+    survey.photos.push(digRef);
+    if (!survey.surveyPhotoRef) survey.surveyPhotoRef = digRef;
     survey.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-    showMessage('Photo added to dig.', 'success');
+    const ok = await saveDataNow();
+    showMessage(ok ? 'Photo added to dig.' : 'Photo NOT saved — the phone refused to save. Back up your digs and free some space.', ok ? 'success' : 'error');
     if (typeof render === 'function') render();
 }
 
@@ -21379,6 +21716,7 @@ function resetQuickTargetSettingsToDefaults() {
     }
     render();
     updateActiveNavButtons();    // highlights Home
+    loadDataFromDataDbAtStartup();   // V1.50: digs and finds are kept in IndexedDB
 
 // ── FIRST-USE PRIVACY & LEGAL NOTICE ──────────────────────────────────────
 (function showFirstUseNoticeIfNeeded() {
