@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.64
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.62
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.64.0';         // change whenever you publish
+const APP_VERSION = '1.62.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -2180,7 +2180,6 @@ function setGridTileToCurrentGps(sizeM) {
     saveSurveysToLocalStorage();
 
     showMessage(`Grid tile (${survey.gridTile.sizeM}m) placed at your position (SW corner).`, 'success');
-    zoomMapToGrid();   // show the new grid big enough to see (it could hide under your position dot on a big dig)
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
 }
@@ -2226,7 +2225,6 @@ function rotateTile(deltaDeg) {
     survey.gridTile.originLon      = survey.gridTile.centerLon;
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
-    keepMapViewThroughResize();
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
 }
 
@@ -3858,8 +3856,7 @@ function renderHelpPage() {
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
-          <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. Then <strong>drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the south-west corner (your flag). The map can still be dragged and pinched (even if it is locked) so you can zoom in to line the grid up with a hedge or field edge. A label shows the angle and how far the corner has moved. <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back.</div>
-          <div><strong>W N S E</strong> (just above the map) — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
+          <div><strong>W N S E</strong> — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
           <div><strong>↺ / ↻ rotate buttons</strong> — rotate the tile 5° anti-clockwise or clockwise around the <strong>south-west corner</strong>, so that corner stays fixed on your flag while the rest of the tile swings around it. <strong>0°</strong> resets to north-aligned (also around the SW corner). Same availability rules as W N S E.</div>
           <div><strong>Complete</strong> — mark the current tile as done. It is saved as a coloured area on the dig map. You can complete a tile even with no painted coverage.</div>
           <div><strong>Clear</strong> — wipe the painted coverage of the current tile without marking it complete.</div>
@@ -12973,7 +12970,7 @@ function keepMapViewThroughResize() {
         const el = document.getElementById('target-map-container');
         if (!el || !bgMapView || bgMapView.containerId !== 'target-map-container' || !bgMapView.getCentreAndScale) return;
         const v = bgMapView.getCentreAndScale(el.clientWidth);
-        if (v && isFinite(v.lat) && isFinite(v.lon) && v.metresPerPixel > 0) pendingMapView = { ...v, w: el.clientWidth, fs: isMapFullscreen, until: Date.now() + 1500 };
+        if (v && isFinite(v.lat) && isFinite(v.lon) && v.metresPerPixel > 0) pendingMapView = { ...v, until: Date.now() + 1500 };
     } catch (e) { pendingMapView = null; }
 }
 function enterMapFullscreen() {
@@ -13071,14 +13068,11 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
                     class="fs-ctl w-12 h-12 rounded-xl flex items-center justify-center ${showUserPosition ? 'fs-ctl-on' : ''}">
                 <i class="fas fa-location-arrow"></i></button>
             ${mapLockBtnHtml('').replace('w-11 h-11', 'w-12 h-12')}
-            ${gridAdjustBtnHtml('', true)}
         </div>
 
         <!-- Bottom: logging -->
         <div style="position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;">
-            ${gridAdjusting
-                ? `<div class="mb-2">${gridFineButtonsHtml(true)}</div>${gridAdjustBarHtml(true)}`
-                : mapMode === 'scout'
+            ${mapMode === 'scout'
                 ? `<div class="fs-scout">${renderScoutPanelHtml(openSurvey)}</div>`
                 : `<div class="fs-panel rounded-xl p-2">
                        ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
@@ -13096,180 +13090,6 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
         ${renderPinCardHtml(openSurvey)}
     </div>`;
 }
-
-
-// ---- Adjust the grid on the map (V1.63): drag the tile to move it, drag the corner handle to rotate it ----
-let gridAdjusting = false;      // adjust mode is on
-let gridAdjustSaved = null;     // the tile as it was, for Cancel
-let tileDrag = null;            // a drag in progress
-function gridTileIsAdjustable() {
-    const s = getCompassOpenSurvey();
-    const t = s && s.gridTile;
-    return !!(t && t.enabled && isFinite(Number(t.centerLat)) && isFinite(Number(t.centerLon)) && !isAnyTrackRecording());
-}
-/** Centre of a tile whose south-west corner is at (swLat, swLon), turned rotDeg clockwise about that corner (as rotateTile). */
-function gridTileCentreFromSw(swLat, swLon, rotDeg, sizeM) {
-    const half = (Number(sizeM) || 15) / 2;
-    const r = -rotDeg * Math.PI / 180;
-    const dx = half * Math.cos(r) - half * Math.sin(r);
-    const dy = half * Math.sin(r) + half * Math.cos(r);
-    return { lat: swLat + dy / 110574, lon: swLon + dx / (111320 * Math.cos(swLat * Math.PI / 180)) };
-}
-function gridTileSw(t) {
-    const sw = { lat: Number(t.swLat), lon: Number(t.swLon) };
-    if (isFinite(sw.lat) && isFinite(sw.lon)) return sw;
-    // older tiles without a stored corner: work it out from the centre
-    const c = gridTileCentreFromSw(0, 0, Number(t.rotationDeg) || 0, t.sizeM);
-    return { lat: Number(t.centerLat) - c.lat, lon: Number(t.centerLon) - c.lon * Math.cos(0) / Math.cos(Number(t.centerLat) * Math.PI / 180) };
-}
-/** Put the tile at a new corner and angle (clears its painted squares if it really moved). */
-function setGridTilePlacement(swLat, swLon, rotDeg) {
-    const s = getCompassOpenSurvey(); if (!s || !s.gridTile) return;
-    const t = s.gridTile;
-    rotDeg = ((Math.round(rotDeg) % 360) + 360) % 360;
-    const old = gridTileSw(t);
-    if (Math.abs(old.lat - swLat) < 1e-9 && Math.abs(old.lon - swLon) < 1e-9 && (Number(t.rotationDeg) || 0) === rotDeg) return;
-    const c = gridTileCentreFromSw(swLat, swLon, rotDeg, t.sizeM);
-    t.swLat = swLat; t.swLon = swLon; t.rotationDeg = rotDeg;
-    t.centerLat = c.lat; t.centerLon = c.lon;
-    const n = Math.round(Number(t.sizeM) || 15);
-    t.coverageBits = '0'.repeat(n * n); t.coverageColors = {};
-    t.originLat = c.lat; t.originLon = c.lon;
-    s.dateLastChanged = Date.now();
-    saveSurveysToLocalStorage();
-}
-/** Centre the map on the grid, zoomed so the grid is about a third of the map's width. */
-function zoomMapToGrid() {
-    try {
-        const s = getCompassOpenSurvey(); const t = s && s.gridTile;
-        if (!t || !isFinite(Number(t.centerLat)) || !isFinite(Number(t.centerLon))) return;
-        const el = document.getElementById('target-map-container');
-        const w = (el && el.clientWidth) || (isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480));
-        pendingMapView = { lat: Number(t.centerLat), lon: Number(t.centerLon), metresPerPixel: (Number(t.sizeM) || 15) * 3 / w,
-                           w, fs: isMapFullscreen, until: Date.now() + 1500 };
-    } catch (e) { pendingMapView = null; }
-}
-/** How wide the grid is on screen now, in pixels (0 if not drawn). */
-function gridTileScreenPx() {
-    const o = document.getElementById('active-tile-overlay');
-    return o ? o.getBoundingClientRect().width : 0;
-}
-function startGridAdjust() {
-    if (!gridTileIsAdjustable()) { showMessage(isAnyTrackRecording() ? 'Stop tracking to adjust the grid.' : 'Place the grid first (10m / 15m / 20m).', 'warning'); return; }
-    const t = getCompassOpenSurvey().gridTile;
-    gridAdjustSaved = JSON.parse(JSON.stringify(t));
-    if (!isFinite(Number(t.swLat))) { const sw = gridTileSw(t); t.swLat = sw.lat; t.swLon = sw.lon; }
-    gridAdjusting = true;
-    if (gridTileScreenPx() < 80) zoomMapToGrid(); else keepMapViewThroughResize();
-    render();
-}
-function finishGridAdjust(cancel) {
-    const s = getCompassOpenSurvey();
-    if (cancel && s && gridAdjustSaved) { s.gridTile = gridAdjustSaved; saveSurveysToLocalStorage(); }
-    gridAdjusting = false; gridAdjustSaved = null; tileDrag = null;
-    keepMapViewThroughResize();
-    render();
-    showMessage(cancel ? 'Grid put back.' : 'Grid saved.', cancel ? 'info' : 'success');
-}
-function gridAdjustReadoutText() {
-    const s = getCompassOpenSurvey(); const t = s && s.gridTile;
-    if (!t) return '';
-    const rot = Number(t.rotationDeg) || 0;
-    let moved = 0;
-    if (gridAdjustSaved) {
-        const a = gridTileSw(t), b = gridTileSw(gridAdjustSaved);
-        moved = Math.hypot((a.lat - b.lat) * 110574, (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180));
-    }
-    return `${rot}° · corner moved ${moved.toFixed(1)} m`;
-}
-/** The fine move and rotate buttons (one row, just above the map). */
-function gridFineButtonsHtml(dark) {
-    if (!gridTileIsAdjustable()) return '';
-    const cls = dark ? 'fs-ctl' : 'bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white';
-    const rcls = dark ? 'fs-ctl' : 'bg-gray-200 hover:bg-gray-300 active:bg-gray-400';
-    const mv = d => `<button type="button" class="flex-1 h-10 rounded-lg ${cls} font-bold text-sm shadow select-none" title="Move the grid 1 m ${({W:'west',N:'north',S:'south',E:'east'})[d]}"
-        ontouchstart="event.preventDefault();_startGridMove('${d}',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-        onmousedown="_startGridMove('${d}',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">${d}</button>`;
-    const rt = (deg, label, title) => `<button type="button" class="flex-1 h-10 rounded-lg ${rcls} font-bold ${label === '0°' ? 'text-sm' : 'text-lg'} shadow select-none" title="${title}" onclick="rotateTile(${deg})">${label}</button>`;
-    return `<div class="flex gap-1">${mv('W')}${mv('N')}${mv('S')}${mv('E')}
-        ${rt(-5, '↺', 'Rotate 5° anticlockwise')}${rt(0, '0°', 'Square to north')}${rt(5, '↻', 'Rotate 5° clockwise')}</div>`;
-}
-/** Adjust-mode bar over the map: what has changed, Cancel and Done. */
-function gridAdjustBarHtml(overMap) {
-    if (!gridAdjusting) return '';
-    return `<div class="${overMap ? 'fs-panel' : 'bg-white border border-gray-200'} rounded-xl px-2 py-2 shadow" style="pointer-events:auto;">
-        <div class="text-xs text-gray-700 mb-1 text-center"><i class="fas fa-arrows-alt mr-1"></i>Drag the grid to move it · drag <i class="fas fa-sync-alt"></i> to rotate</div>
-        <div class="flex items-center gap-2">
-            <span id="grid-adjust-readout" class="flex-1 text-sm font-semibold text-gray-800">${gridAdjustReadoutText()}</span>
-            <button type="button" onclick="finishGridAdjust(true)" class="px-3 h-10 rounded-lg bg-gray-200 font-bold text-sm">Cancel</button>
-            <button type="button" onclick="finishGridAdjust(false)" class="px-4 h-10 rounded-lg bg-green-600 text-white font-bold text-sm">Done</button>
-        </div></div>`;
-}
-/** The corner button that starts adjust mode. */
-function gridAdjustBtnHtml(extraStyle, big) {
-    if (!gridTileIsAdjustable() && !gridAdjusting) return '';
-    return `<button type="button" onclick="${gridAdjusting ? 'finishGridAdjust(false)' : 'startGridAdjust()'}" title="${gridAdjusting ? 'Finish adjusting the grid' : 'Adjust the grid (drag to move or rotate)'}"
-        class="fs-ctl ${extraStyle ? 'absolute ' : ''}${big ? 'w-12 h-12' : 'w-11 h-11'} rounded-xl flex items-center justify-center ${gridAdjusting ? 'fs-ctl-on' : ''}" ${extraStyle ? `style="${extraStyle}"` : ''}>
-        <i class="fas fa-vector-square"></i></button>`;
-}
-// Drag handling (started from the map's pointerdown handler)
-function startTileAdjustDrag(e, kind) {
-    const s = getCompassOpenSurvey(); const t = s && s.gridTile;
-    const el = document.getElementById('target-map-container');
-    if (!t || !el || !bgMapView || !bgMapView.toPct) return false;
-    const w = el.clientWidth, v = bgMapView.getCentreAndScale(w);
-    const sw = gridTileSw(t);
-    const rect = el.getBoundingClientRect();
-    const p = bgMapView.toPct(sw.lat, sw.lon), z = mapZoom || 1;
-    const pivot = { x: rect.left + rect.width * (50 + (p.xPct - 50) * z + (mapOffsetX || 0)) / 100,
-                    y: rect.top + rect.height * (50 + (p.yPct - 50) * z + (mapOffsetY || 0)) / 100 };
-    tileDrag = { kind, id: e.pointerId, x0: e.clientX, y0: e.clientY, sw0: sw, rot0: Number(t.rotationDeg) || 0, mpp: v.metresPerPixel,
-                 pivot, a0: Math.atan2(e.clientY - pivot.y, e.clientX - pivot.x), moved: false, sw: sw, rot: Number(t.rotationDeg) || 0 };
-    mapGestureActive = true;
-    pendingMapView = null;
-    return true;
-}
-document.addEventListener('pointermove', (e) => {
-    if (!tileDrag || e.pointerId !== tileDrag.id) return;
-    e.preventDefault();
-    const s = getCompassOpenSurvey(); const t = s && s.gridTile; if (!t) return;
-    const dx = e.clientX - tileDrag.x0, dy = e.clientY - tileDrag.y0;
-    if (!tileDrag.moved && Math.hypot(dx, dy) < 4) return;
-    tileDrag.moved = true;
-    if (tileDrag.kind === 'move') {
-        const east = dx * tileDrag.mpp, north = -dy * tileDrag.mpp;
-        tileDrag.sw = { lat: tileDrag.sw0.lat + north / 110574, lon: tileDrag.sw0.lon + east / (111320 * Math.cos(tileDrag.sw0.lat * Math.PI / 180)) };
-    } else {
-        const a = Math.atan2(e.clientY - tileDrag.pivot.y, e.clientX - tileDrag.pivot.x);
-        tileDrag.rot = ((Math.round(tileDrag.rot0 + (a - tileDrag.a0) * 180 / Math.PI) % 360) + 360) % 360;
-    }
-    // show it straight away, without redrawing the page
-    const c = gridTileCentreFromSw(tileDrag.sw.lat, tileDrag.sw.lon, tileDrag.rot, t.sizeM);
-    const ov = document.getElementById('active-tile-overlay');
-    if (ov && bgMapView && bgMapView.toPct) {
-        const p = bgMapView.toPct(c.lat, c.lon);
-        ov.style.left = p.xPct + '%'; ov.style.top = p.yPct + '%';
-        ov.style.transform = `translate(-50%, -50%) rotate(${tileDrag.rot}deg)`;
-    }
-    const ro = document.getElementById('grid-adjust-readout');
-    if (ro && gridAdjustSaved) {
-        const b = gridTileSw(gridAdjustSaved);
-        const m = Math.hypot((tileDrag.sw.lat - b.lat) * 110574, (tileDrag.sw.lon - b.lon) * 111320 * Math.cos(b.lat * Math.PI / 180));
-        ro.textContent = `${tileDrag.rot}° · corner moved ${m.toFixed(1)} m`;
-    }
-}, { capture: true, passive: false });
-function endTileAdjustDrag(e) {
-    if (!tileDrag || e.pointerId !== tileDrag.id) return;
-    const d = tileDrag; tileDrag = null; mapGestureActive = false;
-    if (d.moved) {
-        fsSuppressClick = true; setTimeout(() => { fsSuppressClick = false; }, 350);
-        keepMapViewThroughResize();
-        setGridTilePlacement(d.sw.lat, d.sw.lon, d.rot);
-        rerenderCompassIfActive();
-    }
-}
-document.addEventListener('pointerup', endTileAdjustDrag, true);
-document.addEventListener('pointercancel', endTileAdjustDrag, true);
 
 // ---- Drag to pan, pinch to zoom (Map tab and full screen; not while the map is locked) ----
 let mapLocked = (() => { try { return localStorage.getItem('detekta_map_locked') === '1'; } catch (e) { return false; } })();
@@ -13298,11 +13118,7 @@ function fsApplyTransform() {
     syncBgMap();
 }
 document.addEventListener('pointerdown', (e) => {
-    if (currentPage === 'Compass' && gridAdjusting && !tileDrag && e.target && e.target.closest && !e.target.closest('button')) {
-        const onHandle = e.target.closest('#tile-rotate-handle'), onTile = e.target.closest('#active-tile-overlay');
-        if ((onHandle || onTile) && startTileAdjustDrag(e, onHandle ? 'rotate' : 'move')) { e.preventDefault(); return; }
-    }
-    if (currentPage !== 'Compass' || (mapLocked && !gridAdjusting)) return;
+    if (currentPage !== 'Compass' || mapLocked) return;
     if (e.target && e.target.closest && e.target.closest('#target-map-container') && !e.target.closest('button')) pendingMapView = null;
     if (e.target && e.target.closest && e.target.closest('button')) return;   // the corner buttons
     const c = e.target && e.target.closest ? e.target.closest('#target-map-container') : null;
@@ -13360,7 +13176,7 @@ function fsPointerEnd(e) {
 }
 document.addEventListener('pointerup', fsPointerEnd, true);
 document.addEventListener('wheel', (e) => {
-    if (currentPage !== 'Compass' || (mapLocked && !gridAdjusting)) return;
+    if (currentPage !== 'Compass' || mapLocked) return;
     if (!(e.target && e.target.closest && e.target.closest('#target-map-container'))) return;
     e.preventDefault();
     const z0 = mapZoom || 1;
@@ -13437,7 +13253,6 @@ function gridHere() {
     try { localStorage.setItem('detekta_map_mode', 'detect'); } catch (e) {}
     tileGridExpanded = true;
     showMessage('15 m grid placed around you. Detect it in parallel lines.', 'success');
-    zoomMapToGrid();
     rerenderCompassIfActive();
 }
 
@@ -17304,7 +17119,6 @@ const toPercent = (x, y) => {
         containerId: 'target-map-container',
         bg: getDigMapBg(openSurveyForMap),
         overlay: getDigOverlay(openSurveyForMap),
-        toPct: (lat, lon) => toPercent(lon * mPerDegLon, lat * M_PER_DEG_LAT),
         getCentreAndScale: (w) => {
             const z = mapZoom || 1;
             const xPctC = 50 - (mapOffsetX || 0) / z;
@@ -17321,8 +17135,7 @@ const toPercent = (x, y) => {
         if (Date.now() > pendingMapView.until) pendingMapView = null;
         else {
             try {
-                const w = (pendingMapView.fs === isMapFullscreen && pendingMapView.w) ? pendingMapView.w
-                        : (isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480));
+                const w = isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480);
                 const z = Math.max(MAP_ZOOM_MIN, Math.min(20000, (mapWidthMeters / usableXPct) / (pendingMapView.metresPerPixel * w / 100)));
                 const p = toPercent(pendingMapView.lon * mPerDegLon, pendingMapView.lat * M_PER_DEG_LAT);
                 mapZoom = z;
@@ -17590,17 +17403,7 @@ const toPercent = (x, y) => {
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
             const sizeM = Number(tile.sizeM) || 15;
             const flash = isAnyTrackRecording() ? '' : 'animation: tile-border-flash 1s ease-in-out infinite;';
-            const style = gridAdjusting
-                ? `background: rgba(239,68,68,0.12); z-index: 21; pointer-events: auto; cursor: move; touch-action: none;`
-                : `background: rgba(239,68,68,0.05); z-index: 21;`;
-            // adjust mode: a round handle on the north-west corner (clear of the corner buttons); dragging it turns the tile about its south-west corner
-            const rotateHandle = gridAdjusting ? `<div id="tile-rotate-handle" title="Drag to rotate"
-                style="position:absolute;left:0;top:0;width:44px;height:44px;transform:translate(-50%,-50%) scale(var(--iz, 1));
-                       pointer-events:auto;cursor:grab;touch-action:none;display:flex;align-items:center;justify-content:center;z-index:2;">
-                <div style="width:30px;height:30px;border-radius:50%;background:#fff;border:3px solid #ef4444;box-shadow:0 1px 4px rgba(0,0,0,.4);
-                            display:flex;align-items:center;justify-content:center;color:#ef4444;font-size:13px;"><i class="fas fa-sync-alt"></i></div></div>
-                <div style="position:absolute;left:0;bottom:0;width:14px;height:14px;transform:translate(-50%,50%) scale(var(--iz, 1));border-radius:50%;
-                            background:#ef4444;border:2px solid #fff;pointer-events:none;" title="South-west corner (your flag)"></div>` : '';
+            const style = `background: rgba(239,68,68,0.05); z-index: 8;`;
             // The 1 m cells (as in the Tile Grid panel) and the ones you have walked over
             const n = Math.max(1, Math.round(sizeM));
             const cellPct = 100 / n;
@@ -17616,12 +17419,7 @@ const toPercent = (x, y) => {
             // cell lines fade in once a cell is more than 4 px across on screen
             const cellLineOpacity = (widthPct) => `clamp(0, calc((${((widthPct / 100) * mapW / n).toFixed(3)} / var(--iz, 1) - 4) / 4), 1)`;
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0,
-                (wp) => tileSvg(n, 'rgb(239,68,68)', 3, !!flash && !gridAdjusting, painted, cellLineOpacity(wp)) + rotateHandle
-                    + `<div style="position:absolute;left:50%;top:50%;pointer-events:none;white-space:nowrap;
-                            transform:translate(-50%,-50%) rotate(${-(Number(tile.rotationDeg) || 0)}deg) scale(var(--iz, 1));
-                            opacity: clamp(0, calc((36 - ${((wp / 100) * mapW).toFixed(3)} / var(--iz, 1)) / 12), 1);
-                            background:#ef4444;color:#fff;font:700 11px Arial,sans-serif;padding:2px 6px;border-radius:999px;
-                            border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);"><i class="fas fa-th"></i> Grid</div>`);
+                (wp) => tileSvg(n, 'rgb(239,68,68)', 3, !!flash, painted, cellLineOpacity(wp)));
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -17687,7 +17485,7 @@ const toPercent = (x, y) => {
 
     return `
         <div class="relative w-full bg-gray-50 ${isMapFullscreen ? '' : 'rounded-xl border border-gray-200'} overflow-hidden"
-             style="height: ${heightStyle};${(!mapLocked || isMapFullscreen || gridAdjusting) ? ' touch-action: none;' : ' touch-action: pan-y;'}"
+             style="height: ${heightStyle};${(!mapLocked || isMapFullscreen) ? ' touch-action: none;' : ' touch-action: pan-y;'}"
              id="target-map-container"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
@@ -17798,7 +17596,6 @@ function logPointToActiveTrack(lat, lon, accuracy) {
 }
 
 function handleStartTrackClick(opts) {
-    if (gridAdjusting) { gridAdjusting = false; gridAdjustSaved = null; tileDrag = null; }
     if (!mapLocked) { mapLocked = true; try { localStorage.setItem('detekta_map_locked', '1'); } catch (e) {} }
     const startOpts = (opts && typeof opts === 'object' && !opts.target) ? opts : {};
     const openSurvey = surveys.find(s => s.status === 'Open');
@@ -18300,9 +18097,6 @@ if (!openSurvey) {
             ${renderMapBackupNudgeHtml(openSurvey)}
             ${(() => { const u = smoothedUserCoords || currentUserCoords; return u ? renderMonumentWarningHtml(u.lat, u.lon) : ''; })()}
 
-            <!-- Fine grid buttons: just above the map, so you can see the grid while you use them -->
-            ${mapMode !== 'scout' && gridTileIsAdjustable() ? `<div class="mb-2">${gridFineButtonsHtml(false)}</div>` : ''}
-            ${gridAdjusting ? `<div class="mb-2">${gridAdjustBarHtml()}</div>` : ''}
             <!-- Map -->
             <div class="relative bg-white rounded-xl shadow-sm border border-gray-200 mb-2 overflow-hidden">
                 ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
@@ -18319,8 +18113,6 @@ if (!openSurvey) {
                         class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center ${showUserPosition ? 'fs-ctl-on' : ''}" style="top:164px;right:8px;z-index:3;">
                     <i class="fas fa-location-arrow"></i></button>
                 ${mapLockBtnHtml('top:216px;right:8px;z-index:3;')}
-                ${gridAdjustBtnHtml('top:268px;right:8px;z-index:3;')}
-
             </div>
             ${renderBgMapControlsHtml(getDigMapBg(openSurvey), 'setDigMapBg', getDigOverlay(openSurvey), 'dig')}
             ${isShowMonuments() && smFeatures.size ? `<p class="text-xs text-gray-500 -mt-1 mb-2">${SM_CREDIT}</p>` : ''}
@@ -18388,7 +18180,59 @@ if (!openSurvey) {
                 </button>
             </div>
 
-            <!-- (The grid's move and rotate buttons are now just above the map, V1.63) -->
+            <!-- Row 4: Grid move -->
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                    if (!_ok) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">W</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">N</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">S</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">E</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
+                            ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+                            onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
+                    `;
+                })()}
+            </div>
+            <!-- Row 5: Tile rotation -->
+            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
+                ${(() => {
+                    const _s = getCompassOpenSurvey();
+                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
+                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
+                    const _gridShown  = _gt && _gt.enabled;
+                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
+                    if (!_ok) return `
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↺</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-sm shadow select-none cursor-not-allowed">0°</button>
+                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↻</button>
+                    `;
+                    return `
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                            onclick="rotateTile(-5)">↺</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
+                            onclick="rotateTile(0)">0°</button>
+                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
+                            onclick="rotateTile(5)">↻</button>
+                    `;
+                })()}
+            </div>
             ${(() => {
                 const _survey = openSurvey;
                 ensureSurveyGridTileDefaults(_survey);
@@ -20848,7 +20692,6 @@ window._doGridMove = function() {
     // Re-render every 3 ticks for visual feedback without overwhelming the browser
     window._gridMoveTickCount = (window._gridMoveTickCount || 0) + 1;
     if (window._gridMoveTickCount % 3 === 0) {
-        keepMapViewThroughResize();
         if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
     // Fast DOM update: move the active tile div directly without full re-render
@@ -20885,7 +20728,6 @@ window._stopGridMove = function() {
     if (window._gridMoveTimer) {
         clearInterval(window._gridMoveTimer);
         window._gridMoveTimer = null;
-        keepMapViewThroughResize();
         if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
     window._currentGridDir = null;
