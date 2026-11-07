@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.68
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.69
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.68.0';         // change whenever you publish
+const APP_VERSION = '1.69.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -13142,7 +13142,8 @@ function gridAdjustBarHtml() {
     return `<div class="bg-white border border-gray-200 rounded-xl px-2 py-2 shadow-sm mb-2">
         <div class="flex items-center gap-2">
             <i class="fas fa-vector-square text-red-500"></i>
-            <span id="grid-adjust-readout" class="flex-1 text-sm font-semibold text-gray-800">${gridAdjustReadoutText()}</span>
+            <span class="flex-1 leading-tight"><span id="grid-adjust-readout" class="text-sm font-semibold text-gray-800">${gridAdjustReadoutText()}</span>
+                <span class="block text-xs text-gray-500">Drag the grid to move it</span></span>
             <button type="button" onclick="finishGridAdjust(true)" class="px-3 h-10 rounded-lg bg-gray-200 font-bold text-sm">Cancel</button>
             <button type="button" onclick="finishGridAdjust(false)" class="px-4 h-10 rounded-lg bg-green-600 text-white font-bold text-sm">Done</button>
         </div></div>`;
@@ -13154,6 +13155,77 @@ function gridAdjustBtnHtml(extraStyle) {
         class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center ${gridAdjusting ? 'fs-ctl-on' : ''}" style="${extraStyle}">
         <i class="fas fa-vector-square"></i></button>`;
 }
+
+
+// ---- Adjusting the grid, step 2 (V1.69): drag the grid to move it ----
+let tileDrag = null;            // a drag in progress
+/** Centre of a grid whose south-west corner is at (swLat, swLon), turned rotDeg clockwise about that corner (as rotateTile). */
+function gridTileCentreFromSw(swLat, swLon, rotDeg, sizeM) {
+    const half = (Number(sizeM) || 15) / 2, r = -rotDeg * Math.PI / 180;
+    const dx = half * Math.cos(r) - half * Math.sin(r), dy = half * Math.sin(r) + half * Math.cos(r);
+    return { lat: swLat + dy / 110574, lon: swLon + dx / (111320 * Math.cos(swLat * Math.PI / 180)) };
+}
+/** Put the grid at a new corner and angle (clears its covered squares, as the buttons do). */
+function setGridTilePlacement(swLat, swLon, rotDeg) {
+    const s = getCompassOpenSurvey(); if (!s || !s.gridTile) return;
+    const t = s.gridTile;
+    const c = gridTileCentreFromSw(swLat, swLon, rotDeg, t.sizeM);
+    t.swLat = swLat; t.swLon = swLon; t.rotationDeg = rotDeg;
+    t.centerLat = c.lat; t.centerLon = c.lon;
+    const n = Math.round(Number(t.sizeM) || 15);
+    t.coverageBits = '0'.repeat(n * n); t.coverageColors = {};
+    t.originLat = c.lat; t.originLon = c.lon;
+    s.dateLastChanged = Date.now();
+    saveSurveysToLocalStorage();
+}
+function startTileDrag(e) {
+    const s = getCompassOpenSurvey(); const t = s && s.gridTile;
+    const el = document.getElementById('target-map-container');
+    if (!t || !el || !bgMapView || !bgMapView.toPct || !bgMapView.getCentreAndScale) return false;
+    const v = bgMapView.getCentreAndScale(el.clientWidth);
+    if (!(v && v.metresPerPixel > 0)) return false;
+    tileDrag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, sw0: gridTileSw(t), rot: Number(t.rotationDeg) || 0,
+                 mpp: v.metresPerPixel, moved: false, sw: null };
+    mapGestureActive = true;      // no page redraws mid-drag
+    pendingMapView = null;
+    return true;
+}
+document.addEventListener('pointermove', (e) => {
+    if (!tileDrag || e.pointerId !== tileDrag.id) return;
+    e.preventDefault();
+    const s = getCompassOpenSurvey(); const t = s && s.gridTile; if (!t) return;
+    const dx = e.clientX - tileDrag.x0, dy = e.clientY - tileDrag.y0;
+    if (!tileDrag.moved && Math.hypot(dx, dy) < 4) return;
+    tileDrag.moved = true;
+    const east = dx * tileDrag.mpp, north = -dy * tileDrag.mpp;
+    tileDrag.sw = { lat: tileDrag.sw0.lat + north / 110574,
+                    lon: tileDrag.sw0.lon + east / (111320 * Math.cos(tileDrag.sw0.lat * Math.PI / 180)) };
+    // show it straight away, without redrawing the page
+    const c = gridTileCentreFromSw(tileDrag.sw.lat, tileDrag.sw.lon, tileDrag.rot, t.sizeM);
+    const ov = document.getElementById('active-tile-overlay');
+    if (ov && bgMapView && bgMapView.toPct) {
+        const p = bgMapView.toPct(c.lat, c.lon);
+        ov.style.left = p.xPct.toFixed(6) + '%'; ov.style.top = p.yPct.toFixed(6) + '%';
+    }
+    const ro = document.getElementById('grid-adjust-readout');
+    if (ro && gridAdjustSaved) {
+        const b = gridTileSw(gridAdjustSaved);
+        const m = Math.hypot((tileDrag.sw.lat - b.lat) * 110574, (tileDrag.sw.lon - b.lon) * 111320 * Math.cos(b.lat * Math.PI / 180));
+        ro.textContent = `${tileDrag.rot}° · corner moved ${m.toFixed(1)} m`;
+    }
+}, { capture: true, passive: false });
+function endTileDrag(e) {
+    if (!tileDrag || e.pointerId !== tileDrag.id) return;
+    const d = tileDrag; tileDrag = null; mapGestureActive = false;
+    if (d.moved && d.sw) {
+        fsSuppressClick = true; setTimeout(() => { fsSuppressClick = false; }, 350);
+        keepMapViewThroughResize();      // note the view first: saving can redraw the map
+        setGridTilePlacement(d.sw.lat, d.sw.lon, d.rot);
+        rerenderCompassIfActive();
+    }
+}
+document.addEventListener('pointerup', endTileDrag, true);
+document.addEventListener('pointercancel', endTileDrag, true);
 
 /** The grid's move and rotate buttons, in one row just above the map (V1.66). Only when a grid is placed and shown and you are not tracking. */
 function gridFineButtonsHtml() {
@@ -13201,6 +13273,8 @@ function fsApplyTransform() {
     syncBgMap();
 }
 document.addEventListener('pointerdown', (e) => {
+    if (currentPage === 'Compass' && gridAdjusting && !tileDrag && e.target && e.target.closest
+        && e.target.closest('#active-tile-overlay') && startTileDrag(e)) { e.preventDefault(); return; }
     if (currentPage !== 'Compass' || mapLocked) return;
     if (e.target && e.target.closest && e.target.closest('#target-map-container') && !e.target.closest('button')) pendingMapView = null;
     if (e.target && e.target.closest && e.target.closest('button')) return;   // the corner buttons
@@ -17206,6 +17280,7 @@ const toPercent = (x, y) => {
         containerId: 'target-map-container',
         bg: getDigMapBg(openSurveyForMap),
         overlay: getDigOverlay(openSurveyForMap),
+        toPct: (lat, lon) => toPercent(lon * mPerDegLon, lat * M_PER_DEG_LAT),
         getCentreAndScale: (w) => {
             const z = mapZoom || 1;
             const xPctC = 50 - (mapOffsetX || 0) / z;
@@ -17494,7 +17569,9 @@ const toPercent = (x, y) => {
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
             const sizeM = Number(tile.sizeM) || 15;
             const flash = isAnyTrackRecording() ? '' : 'animation: tile-border-flash 1s ease-in-out infinite;';
-            const style = gridAdjusting ? `background: rgba(239,68,68,0.15); z-index: 8;` : `background: rgba(239,68,68,0.05); z-index: 8;`;
+            const style = gridAdjusting
+                ? `background: rgba(239,68,68,0.15); z-index: 8; pointer-events: auto; touch-action: none; cursor: move;`
+                : `background: rgba(239,68,68,0.05); z-index: 8;`;
             // The 1 m cells (as in the Tile Grid panel) and the ones you have walked over
             const n = Math.max(1, Math.round(sizeM));
             const cellPct = 100 / n;
@@ -17688,7 +17765,7 @@ function logPointToActiveTrack(lat, lon, accuracy) {
 }
 
 function handleStartTrackClick(opts) {
-    if (gridAdjusting) { gridAdjusting = false; gridAdjustSaved = null; }
+    if (gridAdjusting) { gridAdjusting = false; gridAdjustSaved = null; tileDrag = null; }
     if (!mapLocked) { mapLocked = true; try { localStorage.setItem('detekta_map_locked', '1'); } catch (e) {} }
     const startOpts = (opts && typeof opts === 'object' && !opts.target) ? opts : {};
     const openSurvey = surveys.find(s => s.status === 'Open');
