@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.72
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.73
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.72.0';         // change whenever you publish
+const APP_VERSION = '1.73.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3857,7 +3857,7 @@ function renderHelpPage() {
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
-          <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. A bar above the map shows the grid's angle and how far its corner has moved. <strong>Drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the bottom-left corner (the red dot — your flag). <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back. Zoom in first: a small grid is hard to grab. In full screen the Adjust button is in the right-hand column, and while adjusting the panel at the bottom shows the arrow and rotate buttons.</div>
+          <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. A bar above the map shows the grid's angle and how far its corner (the flag) has moved. <strong>Drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the bottom-left corner (the red dot — your flag). <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back. Zoom in first: a small grid is hard to grab. In full screen the Adjust button is in the right-hand column, and while adjusting the panel at the bottom shows the arrow and rotate buttons.</div>
           <div><strong>W N S E</strong> (in the row just above the map, with the rotate buttons) — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
           <div><strong>↺ / ↻ rotate buttons</strong> — rotate the tile 5° anti-clockwise or clockwise around the <strong>south-west corner</strong>, so that corner stays fixed on your flag while the rest of the tile swings around it. <strong>0°</strong> resets to north-aligned (also around the SW corner). Same availability rules as W N S E.</div>
           <div><strong>Complete</strong> — mark the current tile as done. It is saved as a coloured area on the dig map. You can complete a tile even with no painted coverage.</div>
@@ -13154,7 +13154,7 @@ function gridAdjustReadoutText() {
         const a = gridTileSw(t), b = gridTileSw(gridAdjustSaved);
         moved = Math.hypot((a.lat - b.lat) * 110574, (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180));
     }
-    return `${Number(t.rotationDeg) || 0}° · corner moved ${moved.toFixed(1)} m`;
+    return `${Number(t.rotationDeg) || 0}° · moved ${moved.toFixed(1)} m`;
 }
 /** The bar above the map while adjusting: a plain card (no see-through blur). */
 function gridAdjustBarHtml() {
@@ -13162,7 +13162,7 @@ function gridAdjustBarHtml() {
     return `<div class="bg-white border border-gray-200 rounded-xl px-2 py-2 shadow-sm mb-2">
         <div class="flex items-center gap-2">
             <i class="fas fa-vector-square text-red-500"></i>
-            <span class="flex-1 leading-tight"><span id="grid-adjust-readout" class="text-sm font-semibold text-gray-800">${gridAdjustReadoutText()}</span>
+            <span class="flex-1 min-w-0 leading-tight"><span id="grid-adjust-readout" class="text-sm font-semibold text-gray-800 whitespace-nowrap">${gridAdjustReadoutText()}</span>
                 <span class="block text-xs text-gray-500">Drag the grid to move it · drag <i class="fas fa-sync-alt"></i> to rotate</span></span>
             <button type="button" onclick="finishGridAdjust(true)" class="px-3 h-10 rounded-lg bg-gray-200 font-bold text-sm">Cancel</button>
             <button type="button" onclick="finishGridAdjust(false)" class="px-4 h-10 rounded-lg bg-green-600 text-white font-bold text-sm">Done</button>
@@ -13246,7 +13246,7 @@ document.addEventListener('pointermove', (e) => {
     if (ro && gridAdjustSaved) {
         const b = gridTileSw(gridAdjustSaved);
         const m = Math.hypot((tileDrag.sw.lat - b.lat) * 110574, (tileDrag.sw.lon - b.lon) * 111320 * Math.cos(b.lat * Math.PI / 180));
-        ro.textContent = `${tileDrag.rot}° · corner moved ${m.toFixed(1)} m`;
+        ro.textContent = `${tileDrag.rot}° · moved ${m.toFixed(1)} m`;
     }
 }, { capture: true, passive: false });
 function endTileDrag(e) {
