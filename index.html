@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.59
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.60
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.59.0';         // change whenever you publish
+const APP_VERSION = '1.60.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -16975,6 +16975,23 @@ function renderTargetPlot(targets, userCoordsOrNull = null) {
         });
     }
 
+    // The grid tile and completed tiles count towards the map's view, so "fit everything" shows them
+    // (before V1.60 a tile away from the finds, or on a dig with nothing logged yet, was off the map)
+    try {
+        const tileDig = getCompassOpenSurvey();
+        const addSquare = (lat, lon, sizeM) => {
+            lat = Number(lat); lon = Number(lon); sizeM = Number(sizeM) || 15;
+            if (!isFinite(lat) || !isFinite(lon)) return;
+            const r = sizeM / 2 * 1.42;   // room for a rotated tile
+            const dLat = r / M_PER_DEG_LAT, dLon = r / (M_PER_DEG_LON_AT_EQUATOR * Math.cos(lat * Math.PI / 180));
+            [[lat - dLat, lon - dLon], [lat + dLat, lon + dLon]].forEach(([a, o]) => allCoords.push({
+                id: 'tile-bound', lat: a, lon: o, type: 'TileBound', description: '', vdi: '', status: '',
+                accuracy: 0, centerOnMap: false, isFind: false, isUser: false }));
+        };
+        if (tileDig && tileDig.gridTile && tileDig.gridTile.enabled) addSquare(tileDig.gridTile.centerLat, tileDig.gridTile.centerLon, tileDig.gridTile.sizeM);
+        if (tileDig && Array.isArray(tileDig.gridTileCompletedAreas)) tileDig.gridTileCompletedAreas.forEach(a => a && addSquare(a.centerLat, a.centerLon, a.sizeM));
+    } catch (e) { console.warn('tile bounds', e); }
+
     // Add user position ONLY if caller provided coords
     if (hasUserGPS) {
         userCoord = {
@@ -17137,6 +17154,7 @@ const toPercent = (x, y) => {
     if (t.isUser) return false;
     if (t.type === 'Track') return false;
     if (t.type === 'Scout') return false;
+    if (t.type === 'TileBound') return false;
     // draw-only toggles (bounds still includes all coords)
     if (t.isFind) return !!showMapFinds;
     if (isStakeTarget(t)) return !!showMapStakes;
