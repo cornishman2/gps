@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.60
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.61
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.60.0';         // change whenever you publish
+const APP_VERSION = '1.61.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -12960,7 +12960,21 @@ let fsBgPanelOpen = false;            // background chooser open in full screen
 let mapGestureActive = false;         // finger(s) on the map: don't redraw the page
 let fsUsingBrowserFullscreen = false;
 
+// ---- Keep the view when the map changes shape (full screen and back) ----
+// The pan is stored as a share of the map box, and the box changes shape, so the same numbers pointed somewhere else.
+// Before the change we note the point in the centre and the scale; the next drawings (for about 1.5 s, while the
+// phone settles into or out of full screen) put that point back in the centre at the same scale.
+let pendingMapView = null;
+function keepMapViewThroughResize() {
+    try {
+        const el = document.getElementById('target-map-container');
+        if (!el || !bgMapView || bgMapView.containerId !== 'target-map-container' || !bgMapView.getCentreAndScale) return;
+        const v = bgMapView.getCentreAndScale(el.clientWidth);
+        if (v && isFinite(v.lat) && isFinite(v.lon) && v.metresPerPixel > 0) pendingMapView = { ...v, until: Date.now() + 1500 };
+    } catch (e) { pendingMapView = null; }
+}
 function enterMapFullscreen() {
+    keepMapViewThroughResize();
     isMapFullscreen = true;
     fsBgPanelOpen = false;
     // Hide the browser's own bars too, where the phone allows it
@@ -12973,6 +12987,7 @@ function enterMapFullscreen() {
     render();
 }
 function exitMapFullscreen() {
+    keepMapViewThroughResize();
     isMapFullscreen = false;
     fsBgPanelOpen = false;
     try {
@@ -13104,6 +13119,7 @@ function fsApplyTransform() {
 }
 document.addEventListener('pointerdown', (e) => {
     if (currentPage !== 'Compass' || mapLocked) return;
+    if (e.target && e.target.closest && e.target.closest('#target-map-container') && !e.target.closest('button')) pendingMapView = null;
     if (e.target && e.target.closest && e.target.closest('button')) return;   // the corner buttons
     const c = e.target && e.target.closest ? e.target.closest('#target-map-container') : null;
     if (!c) return;
@@ -15463,6 +15479,7 @@ function resetMapView(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
 
     // Reset zoom + pan
+    pendingMapView = null;
     mapZoom = 1;
     mapOffsetX = 0;
     mapOffsetY = 0;
@@ -17113,6 +17130,21 @@ const toPercent = (x, y) => {
         }
     };
 
+    // Full screen and back: put the noted point back in the centre at the same scale
+    if (pendingMapView) {
+        if (Date.now() > pendingMapView.until) pendingMapView = null;
+        else {
+            try {
+                const w = isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480);
+                const z = Math.max(MAP_ZOOM_MIN, Math.min(20000, (mapWidthMeters / usableXPct) / (pendingMapView.metresPerPixel * w / 100)));
+                const p = toPercent(pendingMapView.lon * mPerDegLon, pendingMapView.lat * M_PER_DEG_LAT);
+                mapZoom = z;
+                mapOffsetX = (50 - p.xPct) * z;
+                mapOffsetY = (50 - p.yPct) * z;
+            } catch (e) { pendingMapView = null; }
+        }
+    }
+
     // Scheduled Monuments inside the plotted area (whole plot, before zoom)
     let monumentsHtml = '';
     try {
@@ -17445,7 +17477,7 @@ const toPercent = (x, y) => {
     // 8. Map HTML
     const transformStyle = `
         transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
-        transform-origin: center center; --iz: ${invZoom};
+        transform-origin: center center; --iz: ${1 / (mapZoom || 1)};
     `;
 
     const mapSize = Math.min(window.innerWidth - 32, 480);
