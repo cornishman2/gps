@@ -1,4 +1,4 @@
-const CACHE_NAME = "detekta-cache-v40"; // <-- bump this on every deployment
+const CACHE_NAME = "detekta-cache-v41"; // <-- bump this on every deployment
 // Since V1.31 every library is built into index.html, so this list is
 // everything the app needs to run with no signal.
 const APP_SHELL = [
