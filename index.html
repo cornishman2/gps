@@ -196,9 +196,9 @@ return maplibregl$1;
     50%       { opacity: 0.15; }
   }
   .pin-blink { animation: detekta-pin-blink 0.75s ease-in-out infinite; }
-  @keyframes tile-border-flash {
-    0%, 100% { border-color: rgba(239,68,68,0.95); }
-    50%       { border-color: rgba(239,68,68,0.05); }
+  @keyframes tile-border-flash {   /* the tile's edge is an SVG outline (V1.58) */
+    0%, 100% { stroke-opacity: 0.95; }
+    50%       { stroke-opacity: 0.1; }
   }
   .tile-border-flash { animation: tile-border-flash 1s ease-in-out infinite; }
 
@@ -289,7 +289,8 @@ return maplibregl$1;
   html.hc .map-pin span { border: 2px solid #000 !important; color: #000 !important; font-weight: 700; box-shadow: none !important; }
   html.hc .scout-dot-iron { width: 11px !important; height: 11px !important; background: #000 !important; border: 2px solid #fff !important; box-shadow: 0 0 0 1px #000 !important; }
   html.hc .scout-dot-good { border: 3px solid #000 !important; box-shadow: none !important; }
-  html.hc #target-map-container polyline { stroke-width: 0.55; }
+  html.hc #target-map-container polyline.track-line { stroke-width: calc(4px * var(--iz, 1)) !important; }
+  html.hc #target-map-container polyline.track-edge { stroke-width: calc(7px * var(--iz, 1)) !important; stroke: #000; stroke-opacity: 1; }
   html.hc .place-pin { border: 3px solid #000 !important; box-shadow: 0 0 0 2px #fff !important; }
 
   /* Old OS fade slider: big enough for a thumb, and horizontal drags don't scroll the page */
@@ -340,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.57
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.58
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2032,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.57.0';         // change whenever you publish
+const APP_VERSION = '1.58.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3851,7 +3852,7 @@ function renderHelpPage() {
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Tile Grid</p>
-        <p class="text-sm text-gray-700 mb-2">The Tile Grid is a collapsible panel on the Map page. It overlays a square grid on the dig map and shades cells as your GPS passes through them, helping you cover a field systematically.</p>
+        <p class="text-sm text-gray-700 mb-2">The Tile Grid is a collapsible panel on the Map page. It overlays a square grid on the dig map and shades cells as your GPS passes through them, helping you cover a field systematically. The dig map shows the tile with a red edge, its 1 m squares (once you zoom in far enough to see them) and the squares you have covered.</p>
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
@@ -13095,7 +13096,10 @@ let fsGesture = null;
 let fsSuppressClick = false;
 function fsApplyTransform() {
     const inner = document.querySelector('#target-map-container .map-inner-layer');
-    if (inner) inner.style.transform = `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
+    if (inner) {
+        inner.style.transform = `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
+        inner.style.setProperty('--iz', String(1 / (mapZoom || 1)));   // keeps pins, labels and lines the same size on screen
+    }
     syncBgMap();
 }
 document.addEventListener('pointerdown', (e) => {
@@ -17199,7 +17203,7 @@ const toPercent = (x, y) => {
                           ${(mapPinCardId && String(mapPinCardId) === String(t.id)) ? 'pin-blink' : ''}
                           "
                           style="
-                          transform: scale(${invZoom});
+                          transform: scale(var(--iz, ${invZoom}));
                           transform-origin: center;
                           ${(!isStake && !isFind && _pinColors) ? 'background-color:' + _pinColors.fill + '; border-color:' + _pinColors.border + ';' : ''}
                           "
@@ -17218,7 +17222,7 @@ const toPercent = (x, y) => {
                         style="
                             left: 75%;
                             top: 50%;
-                            transform: translate(4px, -50%) scale(${invZoom});
+                            transform: translate(4px, -50%) scale(var(--iz, ${invZoom}));
                             transform-origin: left center;
                             z-index: 12;
                         "
@@ -17242,7 +17246,7 @@ const toPercent = (x, y) => {
                 title="You"
             >
                 <div
-                <div style="position:relative; width:20px; height:20px; transform:scale(${invZoom}); transform-origin:center;">
+                <div style="position:relative; width:20px; height:20px; transform:scale(var(--iz, ${invZoom})); transform-origin:center;">
                     ${isAnyTrackRecording() ? `
                     <div style="
                         position:absolute; inset:0; border-radius:50%;
@@ -17275,7 +17279,16 @@ const toPercent = (x, y) => {
         const completed = (survey && Array.isArray(survey.gridTileCompletedAreas)) ? survey.gridTileCompletedAreas : [];
         const tile = survey && survey.gridTile ? survey.gridTile : null;
 
-        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, divId, rotationDeg) => {
+        /** A tile's picture: painted cells, the 1 m cell lines (fading out when too small to see) and the edge, in tile units. */
+        const tileSvg = (n, edgeColour, edgePx, flash, paintedRects, cellLineOpacity) => `
+            <svg viewBox="0 0 ${n} ${n}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;">
+                ${paintedRects || ''}
+                ${cellLineOpacity ? `<path d="${Array.from({ length: n - 1 }, (_, i) => `M${i + 1} 0V${n}M0 ${i + 1}H${n}`).join('')}" fill="none"
+                    stroke="rgba(239,68,68,0.5)" vector-effect="non-scaling-stroke" style="stroke-width:calc(1px * var(--iz, 1)); opacity:${cellLineOpacity};"/>` : ''}
+                <rect x="0" y="0" width="${n}" height="${n}" fill="none" stroke="${edgeColour}" stroke-opacity="0.95" vector-effect="non-scaling-stroke"
+                    style="stroke-width:calc(${edgePx}px * var(--iz, 1));${flash ? ' animation: tile-border-flash 1s ease-in-out infinite;' : ''}"/>
+            </svg>`;
+        const buildRectDiv = (centerLat, centerLon, sizeM, style, labelText, divId, rotationDeg, innerHtml) => {
             const half = sizeM / 2;
             const cx = Number(centerLon) * mPerDegLon;
             const cy = Number(centerLat) * M_PER_DEG_LAT;
@@ -17290,7 +17303,7 @@ const toPercent = (x, y) => {
 
             const width = (pBR.xPct - pTL.xPct);
             const height = (pBR.yPct - pTL.yPct);
-            const fontPx = (10 * invZoom);
+            const fontPx = 10;   // (scaled by --iz below)
 
             return `
                 <div class="absolute pointer-events-none"
@@ -17299,11 +17312,11 @@ const toPercent = (x, y) => {
                             width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
                             transform: translate(-50%, -50%) rotate(${rot}deg);
                             transform-origin: center center;
-                            ${style}; border-radius: 2px;">
+                            ${style}">${typeof innerHtml === 'function' ? innerHtml(width) : (innerHtml || '')}
                     ${labelText ? `
                     <div class="absolute"
-                         style="left:50%; top:-10px; transform:translateX(-50%) rotate(${-rot}deg);
-                                font-size:${fontPx.toFixed(2)}px;
+                         style="left:50%; top:0; transform:translate(-50%, -100%) rotate(${-rot}deg) scale(var(--iz, 1)); transform-origin: bottom center;
+                                font-size:${fontPx}px;
                                 padding:2px 6px; border-radius:999px;
                                 background: rgba(255,255,255,0.92);
                                 border: 1px solid rgba(34,197,94,0.35);
@@ -17322,8 +17335,8 @@ const toPercent = (x, y) => {
                 .map((a, idx) => {
                     const sizeM = Number(a.sizeM) || 15;
                     const rot = Number(a.rotationDeg) || 0;
-                    const style = `border: 0.5px solid rgba(34,197,94,0.95); background: rgba(34,197,94,0.18); z-index: 7;`;
-                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, '', undefined, rot);
+                    const style = `background: rgba(34,197,94,0.25); z-index: 7;`;
+                    return buildRectDiv(Number(a.centerLat), Number(a.centerLon), sizeM, style, '', undefined, rot, tileSvg(1, 'rgb(22,163,74)', 2, false, '', ''));
                 })
                 .join('');
         }
@@ -17333,8 +17346,23 @@ const toPercent = (x, y) => {
         if (tile && tile.enabled && isFinite(Number(tile.centerLat)) && isFinite(Number(tile.centerLon))) {
             const sizeM = Number(tile.sizeM) || 15;
             const flash = isAnyTrackRecording() ? '' : 'animation: tile-border-flash 1s ease-in-out infinite;';
-            const style = `border: 0.5px solid rgba(239,68,68,0.95); background: rgba(239,68,68,0.04); z-index: 8; ${flash}`;
-            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0);
+            const style = `background: rgba(239,68,68,0.05); z-index: 8;`;
+            // The 1 m cells (as in the Tile Grid panel) and the ones you have walked over
+            const n = Math.max(1, Math.round(sizeM));
+            const cellPct = 100 / n;
+            let painted = '';
+            const bits = typeof tile.coverageBits === 'string' && tile.coverageBits.length === n * n ? tile.coverageBits : '';
+            for (let i = 0; i < bits.length; i++) {
+                if (bits[i] !== '1') continue;
+                const row = Math.floor(i / n), col = i % n;
+                const fill = (tile.coverageColors && tile.coverageColors[row + ',' + col]) || 'rgba(34,197,94,0.45)';
+                painted += `<rect x="${col}" y="${row}" width="1" height="1" fill="${fill}"/>`;
+            }
+            const mapW = isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480);
+            // cell lines fade in once a cell is more than 4 px across on screen
+            const cellLineOpacity = (widthPct) => `clamp(0, calc((${((widthPct / 100) * mapW / n).toFixed(3)} / var(--iz, 1) - 4) / 4), 1)`;
+            activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0,
+                (wp) => tileSvg(n, 'rgb(239,68,68)', 3, !!flash, painted, cellLineOpacity(wp)));
         }
 
         gridTileHtml = completedHtml + activeHtml;
@@ -17344,7 +17372,8 @@ const toPercent = (x, y) => {
     }
 
     if (drawTracks.length) {
-        const trackStrokeWidth = 0.2; // thin stroke matching tile grid visual weight
+        // Drawn the same thickness on screen at every zoom (non-scaling stroke), with a white edge
+        let trackLabelsHtml = '';
         const polylines = drawTracks.map(track => {
             const pts = track.points
                 .filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number')
@@ -17363,14 +17392,14 @@ const toPercent = (x, y) => {
                     const mid = midPts[Math.floor(midPts.length / 2)];
                     const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
                     const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    trackLabelHtml = `<text x="${mp.xPct.toFixed(3)}" y="${mp.yPct.toFixed(3)}"
-                        font-size="3" fill="${stroke}" font-family="Arial" font-weight="bold"
-                        text-anchor="middle" dy="-0.8"
-                        style="paint-order:stroke;stroke:white;stroke-width:1;stroke-linejoin:round;"
-                        >${safe}</text>`;
+                    trackLabelsHtml += `<div class="absolute pointer-events-none" style="left:${mp.xPct.toFixed(3)}%;top:${mp.yPct.toFixed(3)}%;z-index:6;
+                        transform:translate(-50%,-50%) scale(var(--iz, ${invZoom})) translateY(-12px);white-space:nowrap;
+                        font:700 11px Arial,sans-serif;color:${stroke};
+                        text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 3px #fff;">${safe}</div>`;
                 }
             }
-            return `<polyline fill="none" stroke="${stroke}" stroke-width="${trackStrokeWidth}" points="${pts}" />${trackLabelHtml}`;
+            return `<polyline class="track-edge" fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="5" style="stroke-width:calc(5px * var(--iz, 1))" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" points="${pts}" />`
+                 + `<polyline class="track-line" fill="none" stroke="${stroke}" stroke-width="3" style="stroke-width:calc(3px * var(--iz, 1))" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" points="${pts}" />`;
         }).join('');
 
         trackSvgHtml = `
@@ -17381,7 +17410,7 @@ const toPercent = (x, y) => {
                 style="z-index: 6;"
             >
                 ${polylines}
-            </svg>
+            </svg>${trackLabelsHtml}
         `;
     }
 
@@ -17391,7 +17420,7 @@ const toPercent = (x, y) => {
     // 8. Map HTML
     const transformStyle = `
         transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
-        transform-origin: center center;
+        transform-origin: center center; --iz: ${invZoom};
     `;
 
     const mapSize = Math.min(window.innerWidth - 32, 480);
@@ -17411,7 +17440,7 @@ const toPercent = (x, y) => {
                     const good = c.scoutKind === 'good';
                     return `<div class="absolute pointer-events-none rounded-full ${good ? 'scout-dot-good' : 'scout-dot-iron'}"
                         style="left:${pp.xPct.toFixed(2)}%;top:${pp.yPct.toFixed(2)}%;width:${good ? 10 : 7}px;height:${good ? 10 : 7}px;
-                               transform:translate(-50%,-50%) scale(${invZoom});z-index:9;
+                               transform:translate(-50%,-50%) scale(var(--iz, ${invZoom}));z-index:9;
                                background:${good ? '#22c55e' : 'rgba(55,65,81,0.75)'};
                                ${good ? 'border:2px solid white;box-shadow:0 0 2px rgba(0,0,0,.5);' : ''}"></div>`;
                 }).join('') : ''}
