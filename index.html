@@ -340,7 +340,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.55
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.56
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2032,7 +2032,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.55.0';         // change whenever you publish
+const APP_VERSION = '1.56.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3808,11 +3808,12 @@ function renderHelpPage() {
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Map controls</p>
         <div class="text-sm text-gray-700 space-y-1 mb-3">
-          <div><strong>+ / −</strong> — zoom in and out.</div>
-          <div><strong>Reset</strong> — return to the default view fitting all pins.</div>
-          <div><i class="fas fa-expand"></i> <strong>Full screen</strong> — the button in the map's corner makes the map fill the screen, with the controls floating over it; drag to move, pinch to zoom.</div>
-          <div><strong>Show / Hide</strong> — toggle your live GPS position dot on the map. The dot pulses gently when idle and emits a sonar ring when tracking is active.</div>
-          <div><strong>◀ ▲ ▼ ▶</strong> — pan the map. Hold any button to pan continuously.</div>
+          <div><strong>Drag</strong> to move the map and <strong>pinch</strong> to zoom (on a computer, the mouse wheel zooms). The buttons in the map's corner:</div>
+          <div><i class="fas fa-expand"></i> <strong>Full screen</strong> — the map fills the screen, with the controls floating over it.</div>
+          <div><i class="fas fa-binoculars"></i> <strong>Explore from here</strong> — opens Explore on the same place and zoom.</div>
+          <div><i class="fas fa-expand-arrows-alt"></i> <strong>Fit everything</strong> — return to the view fitting all pins.</div>
+          <div><i class="fas fa-location-arrow"></i> <strong>My position</strong> — show or hide your live GPS dot. It pulses gently when idle and sends out a sonar ring while tracking.</div>
+          <div><i class="fas fa-lock"></i> <strong>Lock</strong> — stops touches moving or zooming the map, so it can't be knocked while you detect; tapping a pin still opens its card, and a finger on the map scrolls the page. The map <strong>locks itself when you start tracking</strong>; tap the padlock to unlock it.</div>
         </div>
 
         <hr class="border-t border-gray-100 my-3">
@@ -13046,12 +13047,11 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
 
         <!-- Right: zoom and position -->
         <div style="position:absolute;right:8px;top:42%;transform:translateY(-50%);z-index:5;" class="flex flex-col gap-2">
-            ${sideBtn('zoomMapIn(event)', '+', 'Zoom in')}
-            ${sideBtn('zoomMapOut(event)', '−', 'Zoom out')}
             ${sideBtn('resetMapView(event)', '<i class="fas fa-expand-arrows-alt text-base"></i>', 'Fit everything')}
             <button id="toggle-gps-btn" type="button" title="${showUserPosition ? 'Hide' : 'Show'} my position"
                     class="fs-ctl w-12 h-12 rounded-xl flex items-center justify-center ${showUserPosition ? 'fs-ctl-on' : ''}">
                 <i class="fas fa-location-arrow"></i></button>
+            ${mapLockBtnHtml('').replace('w-11 h-11', 'w-12 h-12')}
         </div>
 
         <!-- Bottom: logging -->
@@ -13075,7 +13075,21 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
     </div>`;
 }
 
-// ---- Drag to pan, pinch to zoom (full screen only) ----
+// ---- Drag to pan, pinch to zoom (Map tab and full screen; not while the map is locked) ----
+let mapLocked = (() => { try { return localStorage.getItem('detekta_map_locked') === '1'; } catch (e) { return false; } })();
+function setMapLocked(on, quiet) {
+    mapLocked = !!on;
+    try { localStorage.setItem('detekta_map_locked', mapLocked ? '1' : '0'); } catch (e) {}
+    if (!quiet) showMessage(mapLocked ? 'Map locked — touches can’t move it. Tap a pin to see it.' : 'Map unlocked — drag to move, pinch to zoom.', 'info');
+    render();
+}
+function toggleMapLock() { setMapLocked(!mapLocked); }
+/** Lock button for the map corner / full-screen column. */
+function mapLockBtnHtml(extraStyle) {
+    return `<button type="button" onclick="toggleMapLock()" title="${mapLocked ? 'Unlock the map' : 'Lock the map'}" aria-pressed="${mapLocked}"
+        class="fs-ctl ${extraStyle ? 'absolute ' : ''}w-11 h-11 rounded-xl flex items-center justify-center ${mapLocked ? 'fs-ctl-on' : ''}" ${extraStyle ? `style="${extraStyle}"` : ''}>
+        <i class="fas ${mapLocked ? 'fa-lock' : 'fa-lock-open'}"></i></button>`;
+}
 const fsPointers = new Map();
 let fsGesture = null;
 let fsSuppressClick = false;
@@ -13085,8 +13099,9 @@ function fsApplyTransform() {
     syncBgMap();
 }
 document.addEventListener('pointerdown', (e) => {
-    if (!isMapFullscreen) return;
-    const c = e.target && e.target.closest ? e.target.closest('#fs-map #target-map-container') : null;
+    if (currentPage !== 'Compass' || mapLocked) return;
+    if (e.target && e.target.closest && e.target.closest('button')) return;   // the corner buttons
+    const c = e.target && e.target.closest ? e.target.closest('#target-map-container') : null;
     if (!c) return;
     fsPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const pts = Array.from(fsPointers.values());
@@ -13140,9 +13155,18 @@ function fsPointerEnd(e) {
     }
 }
 document.addEventListener('pointerup', fsPointerEnd, true);
+document.addEventListener('wheel', (e) => {
+    if (currentPage !== 'Compass' || mapLocked) return;
+    if (!(e.target && e.target.closest && e.target.closest('#target-map-container'))) return;
+    e.preventDefault();
+    const z0 = mapZoom || 1;
+    const z = Math.max(MAP_ZOOM_MIN, Math.min(MAP_ZOOM_MAX, z0 * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    mapOffsetX *= z / z0; mapOffsetY *= z / z0; mapZoom = z;
+    fsApplyTransform();
+}, { passive: false, capture: true });
 document.addEventListener('pointercancel', fsPointerEnd, true);
 document.addEventListener('click', (e) => {
-    if (fsSuppressClick && e.target && e.target.closest && e.target.closest('#fs-map #target-map-container')) {
+    if (fsSuppressClick && e.target && e.target.closest && e.target.closest('#target-map-container')) {
         e.stopPropagation(); e.preventDefault();
         fsSuppressClick = false;
     }
@@ -17361,7 +17385,7 @@ const toPercent = (x, y) => {
 
     return `
         <div class="relative w-full bg-gray-50 ${isMapFullscreen ? '' : 'rounded-xl border border-gray-200'} overflow-hidden"
-             style="height: ${heightStyle};${isMapFullscreen ? ' touch-action: none;' : ''}"
+             style="height: ${heightStyle};${(!mapLocked || isMapFullscreen) ? ' touch-action: none;' : ' touch-action: pan-y;'}"
              id="target-map-container"
         >
             <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
@@ -17472,6 +17496,7 @@ function logPointToActiveTrack(lat, lon, accuracy) {
 }
 
 function handleStartTrackClick(opts) {
+    if (!mapLocked) { mapLocked = true; try { localStorage.setItem('detekta_map_locked', '1'); } catch (e) {} }
     const startOpts = (opts && typeof opts === 'object' && !opts.target) ? opts : {};
     const openSurvey = surveys.find(s => s.status === 'Open');
 
@@ -17981,6 +18006,13 @@ if (!openSurvey) {
                 <button type="button" onclick="exploreFromMap()" title="Explore from here"
                         class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center" style="top:60px;right:8px;z-index:3;">
                     <i class="fas fa-binoculars"></i></button>
+                <button type="button" onclick="resetMapView(event)" title="Fit everything"
+                        class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center" style="top:112px;right:8px;z-index:3;">
+                    <i class="fas fa-expand-arrows-alt"></i></button>
+                <button id="toggle-gps-btn" type="button" title="${showUserPosition ? 'Hide' : 'Show'} my position"
+                        class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center ${showUserPosition ? 'fs-ctl-on' : ''}" style="top:164px;right:8px;z-index:3;">
+                    <i class="fas fa-location-arrow"></i></button>
+                ${mapLockBtnHtml('top:216px;right:8px;z-index:3;')}
             </div>
             ${renderBgMapControlsHtml(getDigMapBg(openSurvey), 'setDigMapBg', getDigOverlay(openSurvey), 'dig')}
             ${isShowMonuments() && smFeatures.size ? `<p class="text-xs text-gray-500 -mt-1 mb-2">${SM_CREDIT}</p>` : ''}
@@ -17993,31 +18025,6 @@ if (!openSurvey) {
 
 
 
-            <!-- Row 1: Zoom / GPS -->
-            <div class="map-zoom-controls mt-2 mb-1 flex gap-2 justify-center">
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapIn(event)">+</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="zoomMapOut(event)">−</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none" onclick="resetMapView(event)">Reset</button>
-                <button id="toggle-gps-btn" type="button" class="flex-1 h-11 rounded-xl font-bold text-white text-sm shadow hover:opacity-90 select-none"
-                    style="background-color: rgb(var(--color-secondary));"
-                >${showUserPosition ? 'Hide' : 'Show'}</button>
-            </div>
-
-            <!-- Row 2: Map pan -->
-            <div class="map-zoom-controls mt-1 mb-1 flex gap-2 justify-center">
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('left',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('left',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">◀</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('up',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('up',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▲</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('down',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('down',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▼</button>
-                <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                    onmousedown="startMapPan('right',event)" onmouseup="stopMapPan()" onmouseleave="stopMapPan()"
-                    ontouchstart="startMapPan('right',event)" ontouchend="stopMapPan()" ontouchcancel="stopMapPan()">▶</button>
-            </div>
 
 
             ${mapMode === 'scout' ? renderScoutPanelHtml(openSurvey) : ''}
