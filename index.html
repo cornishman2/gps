@@ -351,7 +351,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.50
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.51
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2040,7 +2040,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.50.0';         // change whenever you publish
+const APP_VERSION = '1.51.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -16068,7 +16068,41 @@ function openExplore(fromPage) {
     currentPage = 'Explore';
     render();
 }
+// --- Your position on the Explore map (blue dot) ---
+// Explore follows the GPS itself while it is open (the Map page's GPS may be switched off meanwhile).
+let exploreWatchId = null, exploreUserMarker = null, exploreLastUser = null;
+function showExploreUser(lat, lon) {
+    exploreLastUser = { lat, lon };
+    if (!exploreMap || typeof maplibregl === 'undefined') return;
+    if (!exploreUserMarker) {
+        const el = document.createElement('div');
+        el.title = 'You are here';
+        // The pulse goes on an inner circle: MapLibre positions the outer one with 'transform',
+        // which an animation on the same element would override (pinning it to the corner).
+        el.style.cssText = 'position:relative;width:20px;height:20px;pointer-events:none;';
+        el.innerHTML = '<div style="position:absolute;inset:0;border-radius:50%;background:#3b82f6;border:2px solid #fff;box-shadow:0 0 0 2px #3b82f6;animation:user-dot-idle 2s ease-in-out infinite;"></div>';
+        exploreUserMarker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([lon, lat]).addTo(exploreMap);
+    } else {
+        exploreUserMarker.setLngLat([lon, lat]);
+    }
+}
+function startExploreGps() {
+    const c = (typeof smoothedUserCoords !== 'undefined' && smoothedUserCoords) || (typeof currentUserCoords !== 'undefined' && currentUserCoords) || exploreLastUser;
+    if (c && isFinite(c.lat)) showExploreUser(c.lat, c.lon);
+    if (exploreWatchId !== null || !navigator.geolocation) return;
+    try {
+        exploreWatchId = navigator.geolocation.watchPosition(p => {
+            if (currentPage !== 'Explore') { stopExploreGps(); return; }   // left Explore another way
+            showExploreUser(p.coords.latitude, p.coords.longitude);
+        }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 60000 });
+    } catch (e) { exploreWatchId = null; }
+}
+function stopExploreGps() {
+    if (exploreWatchId !== null) { try { navigator.geolocation.clearWatch(exploreWatchId); } catch (e) {} exploreWatchId = null; }
+}
+
 function closeExplore() {
+    stopExploreGps();
     try { if (exploreMap) { const c = exploreMap.getCenter(); saveExploreView(c.lat, c.lng, exploreMap.getZoom()); } } catch (e) {}
     exploreResults = []; exploreStakeBoxOpen = false; exploreSelected = null;
     currentPage = exploreFromPage && exploreFromPage !== 'Explore' ? exploreFromPage : 'Home';
@@ -16196,6 +16230,7 @@ function ensureExploreMap(slot) {
 function syncExploreMap() {
     const slot = document.getElementById('explore-map-slot');
     if (!slot) return;
+    setTimeout(startExploreGps, 0);
     if (!ensureExploreMap(slot)) {
         slot.innerHTML = '<p class="p-6 text-center text-gray-600">This phone or browser cannot show the map.</p>';
         return;
@@ -16214,7 +16249,7 @@ function setExploreLidar(v) {
 function exploreZoom(d) { if (exploreMap) exploreMap.easeTo({ zoom: exploreMap.getZoom() + d, duration: 250 }); }
 function exploreGoToMe() {
     const go = (lat, lon) => { if (exploreMap) exploreMap.flyTo({ center: [lon, lat], zoom: Math.max(exploreMap.getZoom(), 16) }); };
-    const c = (typeof smoothedUserCoords !== 'undefined' && smoothedUserCoords) || (typeof currentUserCoords !== 'undefined' && currentUserCoords) || null;
+    const c = (typeof smoothedUserCoords !== 'undefined' && smoothedUserCoords) || (typeof currentUserCoords !== 'undefined' && currentUserCoords) || exploreLastUser || null;
     if (c && isFinite(c.lat)) { go(c.lat, c.lon); return; }
     if (!navigator.geolocation) { showMessage('No GPS on this device.', 'error'); return; }
     showMessage('Finding your position…', 'info');
