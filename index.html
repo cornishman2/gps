@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.70
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.71
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.70.0';         // change whenever you publish
+const APP_VERSION = '1.71.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3857,7 +3857,7 @@ function renderHelpPage() {
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
-          <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. A bar above the map shows the grid's angle and how far its corner has moved. <strong>Drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the bottom-left corner (the red dot — your flag). <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back. Zoom in first: a small grid is hard to grab.</div>
+          <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. A bar above the map shows the grid's angle and how far its corner has moved. <strong>Drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the bottom-left corner (the red dot — your flag). <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back. Zoom in first: a small grid is hard to grab. In full screen the Adjust button is in the right-hand column, and while adjusting the panel at the bottom shows the arrow and rotate buttons.</div>
           <div><strong>W N S E</strong> (in the row just above the map, with the rotate buttons) — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
           <div><strong>↺ / ↻ rotate buttons</strong> — rotate the tile 5° anti-clockwise or clockwise around the <strong>south-west corner</strong>, so that corner stays fixed on your flag while the rest of the tile swings around it. <strong>0°</strong> resets to north-aligned (also around the SW corner). Same availability rules as W N S E.</div>
           <div><strong>Complete</strong> — mark the current tile as done. It is saved as a coloured area on the dig map. You can complete a tile even with no painted coverage.</div>
@@ -13070,11 +13070,14 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
                     class="fs-ctl w-12 h-12 rounded-xl flex items-center justify-center ${showUserPosition ? 'fs-ctl-on' : ''}">
                 <i class="fas fa-location-arrow"></i></button>
             ${mapLockBtnHtml('').replace('w-11 h-11', 'w-12 h-12')}
+            ${mapMode !== 'scout' ? gridAdjustBtnHtml('', true) : ''}
         </div>
 
         <!-- Bottom: logging -->
         <div style="position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;">
-            ${mapMode === 'scout'
+            ${gridAdjusting && mapMode !== 'scout'
+                ? `${gridFineButtonsHtml()}${gridAdjustBarHtml()}`
+                : mapMode === 'scout'
                 ? `<div class="fs-scout">${renderScoutPanelHtml(openSurvey)}</div>`
                 : `<div class="fs-panel rounded-xl p-2">
                        ${buildCompassPhotoBtnsHtml(getQuickTargetRangesEffective())}
@@ -13150,10 +13153,10 @@ function gridAdjustBarHtml() {
         </div></div>`;
 }
 /** The corner button that switches adjust mode on and off. */
-function gridAdjustBtnHtml(extraStyle) {
+function gridAdjustBtnHtml(extraStyle, big) {
     if (!gridTileIsAdjustable() && !gridAdjusting) return '';
     return `<button type="button" onclick="${gridAdjusting ? 'finishGridAdjust(false)' : 'startGridAdjust()'}" title="${gridAdjusting ? 'Finish adjusting the grid' : 'Adjust the grid'}"
-        class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center ${gridAdjusting ? 'fs-ctl-on' : ''}" style="${extraStyle}">
+        class="fs-ctl ${extraStyle ? 'absolute ' : ''}${big ? 'w-12 h-12' : 'w-11 h-11'} rounded-xl flex items-center justify-center ${gridAdjusting ? 'fs-ctl-on' : ''}" ${extraStyle ? `style="${extraStyle}"` : ''}>
         <i class="fas fa-vector-square"></i></button>`;
 }
 
