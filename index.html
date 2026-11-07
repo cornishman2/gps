@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.63
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.64
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.63.0';         // change whenever you publish
+const APP_VERSION = '1.64.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -2180,6 +2180,7 @@ function setGridTileToCurrentGps(sizeM) {
     saveSurveysToLocalStorage();
 
     showMessage(`Grid tile (${survey.gridTile.sizeM}m) placed at your position (SW corner).`, 'success');
+    zoomMapToGrid();   // show the new grid big enough to see (it could hide under your position dot on a big dig)
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     else render();
 }
@@ -13076,7 +13077,7 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
         <!-- Bottom: logging -->
         <div style="position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;">
             ${gridAdjusting
-                ? `<div class="mb-2">${gridFineButtonsHtml(true)}</div>${gridAdjustBarHtml()}`
+                ? `<div class="mb-2">${gridFineButtonsHtml(true)}</div>${gridAdjustBarHtml(true)}`
                 : mapMode === 'scout'
                 ? `<div class="fs-scout">${renderScoutPanelHtml(openSurvey)}</div>`
                 : `<div class="fs-panel rounded-xl p-2">
@@ -13137,13 +13138,29 @@ function setGridTilePlacement(swLat, swLon, rotDeg) {
     s.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
 }
+/** Centre the map on the grid, zoomed so the grid is about a third of the map's width. */
+function zoomMapToGrid() {
+    try {
+        const s = getCompassOpenSurvey(); const t = s && s.gridTile;
+        if (!t || !isFinite(Number(t.centerLat)) || !isFinite(Number(t.centerLon))) return;
+        const el = document.getElementById('target-map-container');
+        const w = (el && el.clientWidth) || (isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480));
+        pendingMapView = { lat: Number(t.centerLat), lon: Number(t.centerLon), metresPerPixel: (Number(t.sizeM) || 15) * 3 / w,
+                           w, fs: isMapFullscreen, until: Date.now() + 1500 };
+    } catch (e) { pendingMapView = null; }
+}
+/** How wide the grid is on screen now, in pixels (0 if not drawn). */
+function gridTileScreenPx() {
+    const o = document.getElementById('active-tile-overlay');
+    return o ? o.getBoundingClientRect().width : 0;
+}
 function startGridAdjust() {
     if (!gridTileIsAdjustable()) { showMessage(isAnyTrackRecording() ? 'Stop tracking to adjust the grid.' : 'Place the grid first (10m / 15m / 20m).', 'warning'); return; }
     const t = getCompassOpenSurvey().gridTile;
     gridAdjustSaved = JSON.parse(JSON.stringify(t));
     if (!isFinite(Number(t.swLat))) { const sw = gridTileSw(t); t.swLat = sw.lat; t.swLon = sw.lon; }
     gridAdjusting = true;
-    keepMapViewThroughResize();
+    if (gridTileScreenPx() < 80) zoomMapToGrid(); else keepMapViewThroughResize();
     render();
 }
 function finishGridAdjust(cancel) {
@@ -13178,9 +13195,9 @@ function gridFineButtonsHtml(dark) {
         ${rt(-5, '↺', 'Rotate 5° anticlockwise')}${rt(0, '0°', 'Square to north')}${rt(5, '↻', 'Rotate 5° clockwise')}</div>`;
 }
 /** Adjust-mode bar over the map: what has changed, Cancel and Done. */
-function gridAdjustBarHtml() {
+function gridAdjustBarHtml(overMap) {
     if (!gridAdjusting) return '';
-    return `<div class="fs-panel rounded-xl px-2 py-2 shadow-lg" style="pointer-events:auto;">
+    return `<div class="${overMap ? 'fs-panel' : 'bg-white border border-gray-200'} rounded-xl px-2 py-2 shadow" style="pointer-events:auto;">
         <div class="text-xs text-gray-700 mb-1 text-center"><i class="fas fa-arrows-alt mr-1"></i>Drag the grid to move it · drag <i class="fas fa-sync-alt"></i> to rotate</div>
         <div class="flex items-center gap-2">
             <span id="grid-adjust-readout" class="flex-1 text-sm font-semibold text-gray-800">${gridAdjustReadoutText()}</span>
@@ -13420,6 +13437,7 @@ function gridHere() {
     try { localStorage.setItem('detekta_map_mode', 'detect'); } catch (e) {}
     tileGridExpanded = true;
     showMessage('15 m grid placed around you. Detect it in parallel lines.', 'success');
+    zoomMapToGrid();
     rerenderCompassIfActive();
 }
 
@@ -17573,8 +17591,8 @@ const toPercent = (x, y) => {
             const sizeM = Number(tile.sizeM) || 15;
             const flash = isAnyTrackRecording() ? '' : 'animation: tile-border-flash 1s ease-in-out infinite;';
             const style = gridAdjusting
-                ? `background: rgba(239,68,68,0.12); z-index: 11; pointer-events: auto; cursor: move; touch-action: none;`
-                : `background: rgba(239,68,68,0.05); z-index: 8;`;
+                ? `background: rgba(239,68,68,0.12); z-index: 21; pointer-events: auto; cursor: move; touch-action: none;`
+                : `background: rgba(239,68,68,0.05); z-index: 21;`;
             // adjust mode: a round handle on the north-west corner (clear of the corner buttons); dragging it turns the tile about its south-west corner
             const rotateHandle = gridAdjusting ? `<div id="tile-rotate-handle" title="Drag to rotate"
                 style="position:absolute;left:0;top:0;width:44px;height:44px;transform:translate(-50%,-50%) scale(var(--iz, 1));
@@ -17598,7 +17616,12 @@ const toPercent = (x, y) => {
             // cell lines fade in once a cell is more than 4 px across on screen
             const cellLineOpacity = (widthPct) => `clamp(0, calc((${((widthPct / 100) * mapW / n).toFixed(3)} / var(--iz, 1) - 4) / 4), 1)`;
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0,
-                (wp) => tileSvg(n, 'rgb(239,68,68)', 3, !!flash && !gridAdjusting, painted, cellLineOpacity(wp)) + rotateHandle);
+                (wp) => tileSvg(n, 'rgb(239,68,68)', 3, !!flash && !gridAdjusting, painted, cellLineOpacity(wp)) + rotateHandle
+                    + `<div style="position:absolute;left:50%;top:50%;pointer-events:none;white-space:nowrap;
+                            transform:translate(-50%,-50%) rotate(${-(Number(tile.rotationDeg) || 0)}deg) scale(var(--iz, 1));
+                            opacity: clamp(0, calc((36 - ${((wp / 100) * mapW).toFixed(3)} / var(--iz, 1)) / 12), 1);
+                            background:#ef4444;color:#fff;font:700 11px Arial,sans-serif;padding:2px 6px;border-radius:999px;
+                            border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);"><i class="fas fa-th"></i> Grid</div>`);
         }
 
         gridTileHtml = completedHtml + activeHtml;
