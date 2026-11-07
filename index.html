@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.65
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.66
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.65.0';         // change whenever you publish
+const APP_VERSION = '1.66.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -2225,6 +2225,7 @@ function rotateTile(deltaDeg) {
     survey.gridTile.originLon      = survey.gridTile.centerLon;
     survey.dateLastChanged = Date.now();
     saveSurveysToLocalStorage();
+    keepMapViewThroughResize();
     if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
 }
 
@@ -3856,7 +3857,7 @@ function renderHelpPage() {
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
-          <div><strong>W N S E</strong> — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
+          <div><strong>W N S E</strong> (in the row just above the map, with the rotate buttons) — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
           <div><strong>↺ / ↻ rotate buttons</strong> — rotate the tile 5° anti-clockwise or clockwise around the <strong>south-west corner</strong>, so that corner stays fixed on your flag while the rest of the tile swings around it. <strong>0°</strong> resets to north-aligned (also around the SW corner). Same availability rules as W N S E.</div>
           <div><strong>Complete</strong> — mark the current tile as done. It is saved as a coloured area on the dig map. You can complete a tile even with no painted coverage.</div>
           <div><strong>Clear</strong> — wipe the painted coverage of the current tile without marking it complete.</div>
@@ -13091,6 +13092,19 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
     </div>`;
 }
 
+/** The grid's move and rotate buttons, in one row just above the map (V1.66). Only when a grid is placed and shown and you are not tracking. */
+function gridFineButtonsHtml() {
+    const s = getCompassOpenSurvey();
+    const t = s && s.gridTile;
+    if (!(t && t.enabled && isFinite(Number(t.centerLat)) && isFinite(Number(t.centerLon)) && !isAnyTrackRecording())) return '';
+    const mv = d => `<button type="button" class="flex-1 h-10 rounded-lg bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none" title="Move the grid 1 m ${({W:'west',N:'north',S:'south',E:'east'})[d]}"
+        ontouchstart="event.preventDefault();_startGridMove('${d}',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
+        onmousedown="_startGridMove('${d}',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">${d}</button>`;
+    const rt = (deg, label, title) => `<button type="button" class="flex-1 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold ${label === '0°' ? 'text-sm' : 'text-lg'} shadow select-none" title="${title}" onclick="rotateTile(${deg})">${label}</button>`;
+    return `<div class="flex gap-1 mb-2">${mv('W')}${mv('N')}${mv('S')}${mv('E')}
+        ${rt(-5, '↺', 'Rotate 5° anticlockwise')}${rt(0, '0°', 'Square to north')}${rt(5, '↻', 'Rotate 5° clockwise')}</div>`;
+}
+
 // ---- Drag to pan, pinch to zoom (Map tab and full screen; not while the map is locked) ----
 let mapLocked = (() => { try { return localStorage.getItem('detekta_map_locked') === '1'; } catch (e) { return false; } })();
 function setMapLocked(on, quiet) {
@@ -18111,6 +18125,8 @@ if (!openSurvey) {
             ${renderMapBackupNudgeHtml(openSurvey)}
             ${(() => { const u = smoothedUserCoords || currentUserCoords; return u ? renderMonumentWarningHtml(u.lat, u.lon) : ''; })()}
 
+            <!-- The grid's move and rotate buttons: just above the map, so you can see the grid while you use them -->
+            ${mapMode !== 'scout' ? gridFineButtonsHtml() : ''}
             <!-- Map -->
             <div class="relative bg-white rounded-xl shadow-sm border border-gray-200 mb-2 overflow-hidden">
                 ${renderTargetPlot(pointsForPlot, showUserPosition ? (smoothedUserCoords || currentUserCoords) : null)}
@@ -18194,59 +18210,7 @@ if (!openSurvey) {
                 </button>
             </div>
 
-            <!-- Row 4: Grid move -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                ${(() => {
-                    const _s = getCompassOpenSurvey();
-                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
-                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
-                    const _gridShown  = _gt && _gt.enabled;
-                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
-                    if (!_ok) return `
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">W</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">N</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">S</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-slate-200 text-slate-400 font-bold text-sm shadow select-none cursor-not-allowed">E</button>
-                    `;
-                    return `
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('W',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('W',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">W</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('N',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('N',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">N</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('S',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('S',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">S</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-bold text-sm shadow select-none"
-                            ontouchstart="event.preventDefault();_startGridMove('E',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
-                            onmousedown="_startGridMove('E',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">E</button>
-                    `;
-                })()}
-            </div>
-            <!-- Row 5: Tile rotation -->
-            <div class="map-zoom-controls mt-1 mb-2 flex gap-2 justify-center">
-                ${(() => {
-                    const _s = getCompassOpenSurvey();
-                    const _gt = _s && _s.gridTile ? _s.gridTile : null;
-                    const _gridPlaced = _gt && isFinite(Number(_gt.centerLat)) && isFinite(Number(_gt.centerLon));
-                    const _gridShown  = _gt && _gt.enabled;
-                    const _ok = !isAnyTrackRecording() && _gridPlaced && _gridShown;
-                    if (!_ok) return `
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↺</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-sm shadow select-none cursor-not-allowed">0°</button>
-                        <button type="button" disabled class="flex-1 h-11 rounded-xl bg-gray-100 text-gray-400 font-bold text-lg shadow select-none cursor-not-allowed">↻</button>
-                    `;
-                    return `
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
-                            onclick="rotateTile(-5)">↺</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-sm shadow select-none"
-                            onclick="rotateTile(0)">0°</button>
-                        <button type="button" class="flex-1 h-11 rounded-xl bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold text-lg shadow select-none"
-                            onclick="rotateTile(5)">↻</button>
-                    `;
-                })()}
-            </div>
+            <!-- (The grid's move and rotate buttons are just above the map since V1.66) -->
             ${(() => {
                 const _survey = openSurvey;
                 ensureSurveyGridTileDefaults(_survey);
@@ -20706,6 +20670,7 @@ window._doGridMove = function() {
     // Re-render every 3 ticks for visual feedback without overwhelming the browser
     window._gridMoveTickCount = (window._gridMoveTickCount || 0) + 1;
     if (window._gridMoveTickCount % 3 === 0) {
+        keepMapViewThroughResize();
         if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
     // Fast DOM update: move the active tile div directly without full re-render
@@ -20742,6 +20707,7 @@ window._stopGridMove = function() {
     if (window._gridMoveTimer) {
         clearInterval(window._gridMoveTimer);
         window._gridMoveTimer = null;
+        keepMapViewThroughResize();
         if (typeof rerenderCompassIfActive === 'function') rerenderCompassIfActive();
     }
     window._currentGridDir = null;
