@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.66
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.67
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.66.0';         // change whenever you publish
+const APP_VERSION = '1.67.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -12971,7 +12971,7 @@ function keepMapViewThroughResize() {
         const el = document.getElementById('target-map-container');
         if (!el || !bgMapView || bgMapView.containerId !== 'target-map-container' || !bgMapView.getCentreAndScale) return;
         const v = bgMapView.getCentreAndScale(el.clientWidth);
-        if (v && isFinite(v.lat) && isFinite(v.lon) && v.metresPerPixel > 0) pendingMapView = { ...v, until: Date.now() + 1500 };
+        if (v && isFinite(v.lat) && isFinite(v.lon) && v.metresPerPixel > 0) pendingMapView = { ...v, w: el.clientWidth, fs: isMapFullscreen, until: Date.now() + 1500 };
     } catch (e) { pendingMapView = null; }
 }
 function enterMapFullscreen() {
@@ -17159,7 +17159,8 @@ const toPercent = (x, y) => {
         if (Date.now() > pendingMapView.until) pendingMapView = null;
         else {
             try {
-                const w = isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480);
+                const w = (pendingMapView.fs === isMapFullscreen && pendingMapView.w) ? pendingMapView.w
+                        : (isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480));
                 const z = Math.max(MAP_ZOOM_MIN, Math.min(20000, (mapWidthMeters / usableXPct) / (pendingMapView.metresPerPixel * w / 100)));
                 const p = toPercent(pendingMapView.lon * mPerDegLon, pendingMapView.lat * M_PER_DEG_LAT);
                 mapZoom = z;
