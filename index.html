@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.62
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.65
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.62.0';         // change whenever you publish
+const APP_VERSION = '1.65.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -13109,11 +13109,17 @@ function mapLockBtnHtml(extraStyle) {
 const fsPointers = new Map();
 let fsGesture = null;
 let fsSuppressClick = false;
+/** The plot layer is drawn this many times the map's size (a power of 2 near the zoom), so small things keep their precision. */
+function mapLayerBaseFor(z) { return Math.pow(2, Math.max(0, Math.min(16, Math.ceil(Math.log2(Math.max(1, z || 1)))))); }
+function mapInnerTransform(B) {
+    return `translate(-50%, -50%) translate(${(mapOffsetX || 0) / B}%, ${(mapOffsetY || 0) / B}%) scale(${(mapZoom || 1) / B})`;
+}
 function fsApplyTransform() {
     const inner = document.querySelector('#target-map-container .map-inner-layer');
     if (inner) {
-        inner.style.transform = `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
-        inner.style.setProperty('--iz', String(1 / (mapZoom || 1)));   // keeps pins, labels and lines the same size on screen
+        const B = Number(inner.dataset.base) || 1;
+        inner.style.transform = mapInnerTransform(B);
+        inner.style.setProperty('--iz', String(B / (mapZoom || 1)));   // keeps pins, labels and lines the same size on screen
     }
     syncBgMap();
 }
@@ -13160,6 +13166,11 @@ function fsPointerEnd(e) {
     if (!fsPointers.has(e.pointerId)) return;
     fsPointers.delete(e.pointerId);
     if (fsPointers.size === 0) {
+        try {
+            const inner = document.querySelector('#target-map-container .map-inner-layer');
+            const B = inner ? (Number(inner.dataset.base) || 1) : 1;
+            if (inner && mapLayerBaseFor(mapZoom) !== B) setTimeout(() => { if (!mapGestureActive) rerenderCompassIfActive(); }, 0);
+        } catch (_) {}
         if (fsGesture && fsGesture.moved) {
             fsSuppressClick = true;            // a drag that ends on a pin must not open it
             setTimeout(() => { fsSuppressClick = false; }, 350);
@@ -15514,8 +15525,7 @@ function panMap(dir, event) {
     const container = document.getElementById('target-map-container');
     if (container) {
         const inner = container.querySelector('.map-inner-layer');
-        if (inner) inner.style.transform =
-            `translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom})`;
+        if (inner) { const B = Number(inner.dataset.base) || 1; inner.style.transform = mapInnerTransform(B); }
     }
     syncBgMap();
 }
@@ -17179,6 +17189,9 @@ const toPercent = (x, y) => {
 
 
 
+    // Size of the plot layer for this drawing (see mapLayerBaseFor)
+    const layerBase = mapLayerBaseFor(mapZoom);
+
     // 4. Build pin HTML (targets + finds)
     const pinsHtml = coordsMeters
         .filter(t => {
@@ -17232,7 +17245,7 @@ const toPercent = (x, y) => {
                 // (an SVG circle: a CSS border is rounded up to 1 px before zooming, so it became a fat ring)
                 extraRing = `
                     <svg class="absolute pointer-events-none" viewBox="0 0 2 2" overflow="visible"
-                         style="width:${ringPx.toFixed(2)}px; height:${ringPx.toFixed(2)}px; left:50%; top:50%; transform:translate(-50%,-50%);">
+                         style="width:${(ringPx * layerBase).toFixed(3)}px; height:${(ringPx * layerBase).toFixed(3)}px; left:50%; top:50%; transform:translate(-50%,-50%);">
                         <circle cx="1" cy="1" r="1" fill="rgba(96,165,250,0.08)" stroke="rgba(37,99,235,0.45)" vector-effect="non-scaling-stroke"
                                 style="stroke-width:calc(1px * var(--iz, 1))"/>
                     </svg>
@@ -17242,7 +17255,7 @@ const toPercent = (x, y) => {
             return `
                 <div
                     class="absolute map-pin"
-                    style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 10;"
+                    style="left:${xPct.toFixed(6)}%; top:${yPct.toFixed(6)}%; transform: translate(-50%, -50%); z-index: 10;"
                     title="${(t.description || '').replace(/"/g,'&quot;')} (${t.isFind ? (t.stage === 'Junk' ? 'Junk' : 'Find') : (isStake ? 'Stake' : 'Not dug')} VDI: ${t.vdi || ''})"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
@@ -17299,7 +17312,7 @@ const toPercent = (x, y) => {
         userHtml = `
             <div
                 class="absolute pointer-events-none"
-                style="left:${xPct.toFixed(2)}%; top:${yPct.toFixed(2)}%; transform: translate(-50%, -50%); z-index: 20;"
+                style="left:${xPct.toFixed(6)}%; top:${yPct.toFixed(6)}%; transform: translate(-50%, -50%); z-index: 20;"
                 title="You"
             >
                 <div
@@ -17365,8 +17378,8 @@ const toPercent = (x, y) => {
             return `
                 <div class="absolute pointer-events-none"
                      ${divId ? `id="${divId}"` : ''}
-                     style="left:${pCentre.xPct.toFixed(2)}%; top:${pCentre.yPct.toFixed(2)}%;
-                            width:${width.toFixed(2)}%; height:${height.toFixed(2)}%;
+                     style="left:${pCentre.xPct.toFixed(6)}%; top:${pCentre.yPct.toFixed(6)}%;
+                            width:${width.toFixed(6)}%; height:${height.toFixed(6)}%;
                             transform: translate(-50%, -50%) rotate(${rot}deg);
                             transform-origin: center center;
                             ${style}">${typeof innerHtml === 'function' ? innerHtml(width) : (innerHtml || '')}
@@ -17417,7 +17430,7 @@ const toPercent = (x, y) => {
             }
             const mapW = isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480);
             // cell lines fade in once a cell is more than 4 px across on screen
-            const cellLineOpacity = (widthPct) => `clamp(0, calc((${((widthPct / 100) * mapW / n).toFixed(3)} / var(--iz, 1) - 4) / 4), 1)`;
+            const cellLineOpacity = (widthPct) => `clamp(0, calc((${((widthPct / 100) * mapW * layerBase / n).toFixed(4)} / var(--iz, 1) - 4) / 4), 1)`;
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0,
                 (wp) => tileSvg(n, 'rgb(239,68,68)', 3, !!flash, painted, cellLineOpacity(wp)));
         }
@@ -17437,7 +17450,7 @@ const toPercent = (x, y) => {
                 .map(p => {
                     const meters = { x: p.lon * mPerDegLon, y: p.lat * M_PER_DEG_LAT };
                     const pct = toPercent(meters.x, meters.y);
-                    return `${pct.xPct.toFixed(3)},${pct.yPct.toFixed(3)}`;
+                    return `${pct.xPct.toFixed(6)},${pct.yPct.toFixed(6)}`;
                 })
                 .join(' ');
 
@@ -17449,7 +17462,7 @@ const toPercent = (x, y) => {
                     const mid = midPts[Math.floor(midPts.length / 2)];
                     const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
                     const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    trackLabelsHtml += `<div class="absolute pointer-events-none" style="left:${mp.xPct.toFixed(3)}%;top:${mp.yPct.toFixed(3)}%;z-index:6;
+                    trackLabelsHtml += `<div class="absolute pointer-events-none" style="left:${mp.xPct.toFixed(6)}%;top:${mp.yPct.toFixed(6)}%;z-index:6;
                         transform:translate(-50%,-50%) scale(var(--iz, ${invZoom})) translateY(-12px);white-space:nowrap;
                         font:700 11px Arial,sans-serif;color:${stroke};
                         text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 3px #fff;">${safe}</div>`;
@@ -17476,8 +17489,9 @@ const toPercent = (x, y) => {
 
     // 8. Map HTML
     const transformStyle = `
-        transform: translate(${mapOffsetX}%, ${mapOffsetY}%) scale(${mapZoom});
-        transform-origin: center center; --iz: ${1 / (mapZoom || 1)};
+        left: 50%; top: 50%; width: ${layerBase * 100}%; height: ${layerBase * 100}%;
+        transform: ${mapInnerTransform(layerBase)};
+        transform-origin: center center; --iz: ${layerBase / (mapZoom || 1)};
     `;
 
     const mapSize = Math.min(window.innerWidth - 32, 480);
@@ -17488,7 +17502,7 @@ const toPercent = (x, y) => {
              style="height: ${heightStyle};${(!mapLocked || isMapFullscreen) ? ' touch-action: none;' : ' touch-action: pan-y;'}"
              id="target-map-container"
         >
-            <div class="map-inner-layer absolute inset-0" style="${transformStyle}">
+            <div class="map-inner-layer absolute" data-base="${layerBase}" style="${transformStyle}">
                 ${monumentsHtml}
                 ${gridTileHtml}
                 ${trackSvgHtml}
@@ -17496,7 +17510,7 @@ const toPercent = (x, y) => {
                     const pp = toPercent(c.x, c.y);
                     const good = c.scoutKind === 'good';
                     return `<div class="absolute pointer-events-none rounded-full ${good ? 'scout-dot-good' : 'scout-dot-iron'}"
-                        style="left:${pp.xPct.toFixed(2)}%;top:${pp.yPct.toFixed(2)}%;width:${good ? 10 : 7}px;height:${good ? 10 : 7}px;
+                        style="left:${pp.xPct.toFixed(6)}%;top:${pp.yPct.toFixed(6)}%;width:${good ? 10 : 7}px;height:${good ? 10 : 7}px;
                                transform:translate(-50%,-50%) scale(var(--iz, ${invZoom}));z-index:9;
                                background:${good ? '#22c55e' : 'rgba(55,65,81,0.75)'};
                                ${good ? 'border:2px solid white;box-shadow:0 0 2px rgba(0,0,0,.5);' : ''}"></div>`;
