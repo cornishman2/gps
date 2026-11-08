@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.74
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.75
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.74.0';         // change whenever you publish
+const APP_VERSION = '1.75.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -13340,7 +13340,7 @@ document.addEventListener('pointerdown', (e) => {
         fsGesture = { x0: e.clientX, y0: e.clientY, offX0: mapOffsetX, offY0: mapOffsetY, w: c.clientWidth || 1, h: c.clientHeight || 1, moved: false, pinch: null };
     } else if (pts.length === 2 && fsGesture) {
         const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-        fsGesture.pinch = { d0: d, z0: mapZoom || 1, offX0: mapOffsetX, offY0: mapOffsetY, zMax: getMapZoomMax() };
+        fsGesture.pinch = { d0: d, z0: mapZoom || 1, offX0: mapOffsetX, offY0: mapOffsetY, zMax: getMapZoomMax(), zMin: getMapZoomMin() };
         fsGesture.moved = true;
         mapGestureActive = true;
     }
@@ -13351,7 +13351,7 @@ document.addEventListener('pointermove', (e) => {
     const pts = Array.from(fsPointers.values());
     if (fsGesture.pinch && pts.length >= 2) {
         const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-        const z = Math.max(MAP_ZOOM_MIN, Math.min(fsGesture.pinch.zMax || MAP_ZOOM_MAX, fsGesture.pinch.z0 * d / fsGesture.pinch.d0));
+        const z = Math.max(fsGesture.pinch.zMin || MAP_ZOOM_MIN, Math.min(fsGesture.pinch.zMax || MAP_ZOOM_MAX, fsGesture.pinch.z0 * d / fsGesture.pinch.d0));
         const k = z / fsGesture.pinch.z0;          // keep the centre of the screen fixed
         mapZoom = z;
         mapOffsetX = fsGesture.pinch.offX0 * k;
@@ -13396,7 +13396,7 @@ document.addEventListener('wheel', (e) => {
     if (!(e.target && e.target.closest && e.target.closest('#target-map-container'))) return;
     e.preventDefault();
     const z0 = mapZoom || 1;
-    const z = Math.max(MAP_ZOOM_MIN, Math.min(getMapZoomMax(), z0 * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    const z = Math.max(getMapZoomMin(), Math.min(getMapZoomMax(), z0 * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
     mapOffsetX *= z / z0; mapOffsetY *= z / z0; mapZoom = z;
     fsApplyTransform();
 }, { passive: false, capture: true });
@@ -15622,6 +15622,19 @@ function getMapZoomMax() {
         return Math.max(MAP_ZOOM_MAX, Math.min(20000, metresAcrossAtZoom1 / MAP_CLOSEST_METRES));
     } catch (e) { return MAP_ZOOM_MAX; }
 }
+/** How far the Map tab can zoom out: until about 20 km fills the map (and always at least to half the fit-everything view). */
+const MAP_FARTHEST_METRES = 20000;
+function getMapZoomMin() {
+    try {
+        if (!bgMapView || bgMapView.containerId !== 'target-map-container' || !bgMapView.getCentreAndScale) return MAP_ZOOM_MIN;
+        const el = document.getElementById('target-map-container');
+        const w = el ? el.clientWidth : 0;
+        if (!w) return MAP_ZOOM_MIN;
+        const metresAcrossAtZoom1 = bgMapView.getCentreAndScale(w).metresPerPixel * (mapZoom || 1) * w;
+        if (!(metresAcrossAtZoom1 > 0)) return MAP_ZOOM_MIN;
+        return Math.min(MAP_ZOOM_MIN, Math.max(0.0005, metresAcrossAtZoom1 / MAP_FARTHEST_METRES));
+    } catch (e) { return MAP_ZOOM_MIN; }
+}
 const MAP_ZOOM_STEP = 0.25;
 
 let mapAspectRatio = 1; // width/height of the map container (measured from DOM)
@@ -15688,7 +15701,7 @@ function zoomMapIn(event) {
 
 function zoomMapOut(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    mapZoom = Math.max(MAP_ZOOM_MIN, mapZoom / 1.25);
+    mapZoom = Math.max(getMapZoomMin(), mapZoom / 1.25);
     rerenderCompassIfActive();
 }
 
@@ -17359,7 +17372,7 @@ const toPercent = (x, y) => {
         }
         if (mapViewAnchor && !pendingMapView) {
             const w = mapWidthEstimate();
-            const z = Math.max(MAP_ZOOM_MIN, Math.min(20000, (mapWidthMeters / usableXPct) / (mapViewAnchor.metresPerPixel * w / 100)));
+            const z = Math.max(0.0005, Math.min(20000, (mapWidthMeters / usableXPct) / (mapViewAnchor.metresPerPixel * w / 100)));
             const p = toPercent(mapViewAnchor.lon * mPerDegLon, mapViewAnchor.lat * M_PER_DEG_LAT);
             mapZoom = z;
             mapOffsetX = (50 - p.xPct) * z;
@@ -17374,7 +17387,7 @@ const toPercent = (x, y) => {
             try {
                 const w = (pendingMapView.fs === isMapFullscreen && pendingMapView.w) ? pendingMapView.w
                         : (isMapFullscreen ? window.innerWidth : Math.min(window.innerWidth - 32, 480));
-                const z = Math.max(MAP_ZOOM_MIN, Math.min(20000, (mapWidthMeters / usableXPct) / (pendingMapView.metresPerPixel * w / 100)));
+                const z = Math.max(0.0005, Math.min(20000, (mapWidthMeters / usableXPct) / (pendingMapView.metresPerPixel * w / 100)));
                 const p = toPercent(pendingMapView.lon * mPerDegLon, pendingMapView.lat * M_PER_DEG_LAT);
                 mapZoom = z;
                 mapOffsetX = (50 - p.xPct) * z;
