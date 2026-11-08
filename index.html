@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.75
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.77
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.75.0';         // change whenever you publish
+const APP_VERSION = '1.77.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3882,6 +3882,7 @@ function renderHelpPage() {
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-binoculars"></i> Explore — research at home</h3>
         <p class="text-sm text-gray-700 mb-2">Open the <strong>Explore</strong> tab (it reopens where you last left it), or tap the <i class="fas fa-binoculars"></i> button on the Map — in full screen too — to explore from exactly the place and zoom you are looking at. If the Map shows LiDAR, Explore opens on LiDAR; otherwise on the Outdoor map (Satellite and Old OS are not in Explore because they have a monthly limit). Type a place name, an Ordnance Survey grid reference (for example <em>SW 7654 4321</em>, 4 to 10 figures) or coordinates (<em>50.338, -5.142</em> or degrees and minutes), and the map flies there. Drag to move and pinch to zoom.</p>
         <p class="text-sm text-gray-700 mb-2">The slider fades between the ordinary map and <strong>LiDAR</strong> (England only — zoom in to see it). Place and road names stay on top. The red cross marks the centre, and the grid reference and coordinates of that point are shown underneath.</p>
+        <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown (from all your digs — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates), and so are your <strong>grids</strong> — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab.</p>
         <p class="text-sm text-gray-700 mb-2">Put the cross on something interesting and tap <strong>STAKE HERE</strong>. Name it, then add it to the open dig or to a <em>research dig</em> for that place. When you later start a dig at the same place (Just Go → the place button), your research stakes appear on the Map so you can walk straight to them. Tap a stake in Explore to see it or delete it.</p>
         <p class="text-sm text-gray-700">Explore uses only free maps, so it never uses up the map allowance. Place search uses OpenStreetMap and needs signal; grid references and coordinates work without it. Always check that you have permission to detect, and that a site is not a Scheduled Monument, before you go.</p>
       </div>
@@ -16357,6 +16358,7 @@ let exploreSearchText = '';
 let exploreSearching = false;
 let exploreStakeBoxOpen = false;
 let exploreSelected = null;       // { surveyId, id } of a tapped stake
+let exploreSelectedFind = null;   // id of a tapped find (V1.77)
 let exploreLastPlace = '';        // short name of the last place searched for
 let exploreSelectedMonument = null; // { name, link } of a tapped Scheduled Monument
 
@@ -16470,10 +16472,21 @@ function exploreFromMap() {
     try { updateActiveNavButtons(); } catch (e) {}
 }
 
+/** Leave Explore and open the tapped find in Finds (where it can be edited, moved to another dig or deleted). */
+function exploreOpenSelectedFind() {
+    const id = exploreSelectedFind;
+    if (!id) return;
+    stopExploreGps();
+    try { if (exploreMap) { const c = exploreMap.getCenter(); saveExploreView(c.lat, c.lng, exploreMap.getZoom()); } } catch (e) {}
+    exploreSelectedFind = null; exploreSelected = null; exploreSelectedMonument = null;
+    editFindFromPinCard(id);
+    render();
+    try { updateActiveNavButtons(); } catch (e) {}
+}
 function closeExplore() {
     stopExploreGps();
     try { if (exploreMap) { const c = exploreMap.getCenter(); saveExploreView(c.lat, c.lng, exploreMap.getZoom()); } } catch (e) {}
-    exploreResults = []; exploreStakeBoxOpen = false; exploreSelected = null;
+    exploreResults = []; exploreStakeBoxOpen = false; exploreSelected = null; exploreSelectedFind = null;
     currentPage = exploreFromPage && exploreFromPage !== 'Explore' ? exploreFromPage : 'Home';
     render();
 }
@@ -16489,6 +16502,8 @@ function buildExploreStyle(base) {
     st.sources['ex-stakes'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-finds'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-sm'] = { type: 'geojson', data: smExploreGeoJson() };
+    st.sources['ex-grids'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
+    st.sources['ex-tracks'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     // LiDAR goes under the labels, so place and road names stay readable on top
     const firstSymbol = st.layers.findIndex(l => l.type === 'symbol');
     const lidarLayer = { id: 'ex-lidar', type: 'raster', source: 'ex-lidar', paint: { 'raster-opacity': getExploreLidar() / 100 } };
@@ -16501,6 +16516,15 @@ function buildExploreStyle(base) {
         { id: 'ex-sm-label', type: 'symbol', source: 'ex-sm', minzoom: 14,
           layout: { visibility: smVis, 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 11, 'text-max-width': 10, 'symbol-placement': 'point' },
           paint: { 'text-color': '#991b1b', 'text-halo-color': '#ffffff', 'text-halo-width': 2 } },
+        // Your routes (white edge, as on the Map tab) and grids: read-only here, adjusted on the Map tab (V1.76)
+        { id: 'ex-tracks-edge', type: 'line', source: 'ex-tracks', layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': '#ffffff', 'line-opacity': 0.85, 'line-width': 5 } },
+        { id: 'ex-tracks', type: 'line', source: 'ex-tracks', layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': ['get', 'colour'], 'line-width': 3 } },
+        { id: 'ex-grids-fill', type: 'fill', source: 'ex-grids',
+          paint: { 'fill-color': ['case', ['get', 'current'], '#ef4444', '#22c55e'], 'fill-opacity': ['case', ['get', 'current'], 0.08, 0.22] } },
+        { id: 'ex-grids-line', type: 'line', source: 'ex-grids',
+          paint: { 'line-color': ['case', ['get', 'current'], '#ef4444', '#16a34a'], 'line-width': ['case', ['get', 'current'], 3, 2] } },
         // Finds, not-dug signals and stakes drawn exactly as on the Map tab (see getMapPinStyle)
         { id: 'ex-finds', type: 'circle', source: 'ex-finds', minzoom: 10,
           paint: { 'circle-radius': ['/', ['-', ['get', 'size'], 4], 2], 'circle-color': ['get', 'fill'], 'circle-stroke-color': ['get', 'border'], 'circle-stroke-width': 2 } },
@@ -16535,9 +16559,36 @@ function exploreData() {
         let label = '';
         try { label = (typeof getMapPinLabelText === 'function') ? getMapPinLabelText(p) : ''; } catch (e) {}
         fs.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
-            properties: { label: label || '', fill: st.fill, border: st.border, size: st.size } });
+            properties: { id: String(f.id), label: label || '', fill: st.fill, border: st.border, size: st.size } });
     });
-    return { stakes: { type: 'FeatureCollection', features: stakes }, finds: { type: 'FeatureCollection', features: fs } };
+    // Grids: each dig's current grid (red) and its completed grids (green), as squares turned to their angle
+    const grids = [], tracks = [];
+    const square = (cLat, cLon, sizeM, rotDeg) => {
+        const half = (Number(sizeM) || 15) / 2, r = (Number(rotDeg) || 0) * Math.PI / 180;
+        const mLon = 111320 * Math.cos(cLat * Math.PI / 180);
+        const ring = [[-half, -half], [half, -half], [half, half], [-half, half], [-half, -half]].map(([x, y]) => {
+            const e = x * Math.cos(r) + y * Math.sin(r), n = -x * Math.sin(r) + y * Math.cos(r);   // turned clockwise, as on the Map tab
+            return [cLon + e / mLon, cLat + n / 110574];
+        });
+        return { type: 'Polygon', coordinates: [ring] };
+    };
+    (surveys || []).forEach(s => {
+        try {
+            const t = s.gridTile;
+            if (t && t.enabled && isFinite(Number(t.centerLat)) && isFinite(Number(t.centerLon)))
+                grids.push({ type: 'Feature', geometry: square(Number(t.centerLat), Number(t.centerLon), t.sizeM, t.rotationDeg), properties: { current: true } });
+            (Array.isArray(s.gridTileCompletedAreas) ? s.gridTileCompletedAreas : []).forEach(a => {
+                if (a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)))
+                    grids.push({ type: 'Feature', geometry: square(Number(a.centerLat), Number(a.centerLon), a.sizeM, a.rotationDeg), properties: { current: false } });
+            });
+            (s.tracks || []).forEach(tr => {
+                const coords = (tr.points || []).filter(p => p && isFinite(p.lat) && isFinite(p.lon)).map(p => [p.lon, p.lat]);
+                if (coords.length >= 2) tracks.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { colour: tr.color || '#2563eb' } });
+            });
+        } catch (e) {}
+    });
+    return { stakes: { type: 'FeatureCollection', features: stakes }, finds: { type: 'FeatureCollection', features: fs },
+             grids: { type: 'FeatureCollection', features: grids }, tracks: { type: 'FeatureCollection', features: tracks } };
 }
 function refreshExploreData() {
     if (!exploreMap || !exploreStyleLoaded) return;
@@ -16545,6 +16596,8 @@ function refreshExploreData() {
         const d = exploreData();
         exploreMap.getSource('ex-stakes')?.setData(d.stakes);
         exploreMap.getSource('ex-finds')?.setData(d.finds);
+        exploreMap.getSource('ex-grids')?.setData(d.grids);
+        exploreMap.getSource('ex-tracks')?.setData(d.tracks);
     } catch (e) {}
 }
 function ensureExploreMap(slot) {
@@ -16587,18 +16640,25 @@ function ensureExploreMap(slot) {
         const hit = exploreMap.queryRenderedFeatures([[e.point.x - 12, e.point.y - 12], [e.point.x + 12, e.point.y + 12]], { layers: ['ex-stakes'] });
         if (hit && hit.length) {
             exploreSelected = { id: hit[0].properties.id, surveyId: hit[0].properties.surveyId };
-            exploreSelectedMonument = null;
+            exploreSelectedMonument = null; exploreSelectedFind = null;
             exploreStakeBoxOpen = false;
+            render();
+            return;
+        }
+        const fh = exploreMap.queryRenderedFeatures([[e.point.x - 12, e.point.y - 12], [e.point.x + 12, e.point.y + 12]], { layers: ['ex-finds'] });
+        if (fh && fh.length) {
+            exploreSelectedFind = fh[0].properties.id;
+            exploreSelected = null; exploreSelectedMonument = null; exploreStakeBoxOpen = false;
             render();
             return;
         }
         const sm = isShowMonuments() ? exploreMap.queryRenderedFeatures(e.point, { layers: ['ex-sm-fill'] }) : [];
         if (sm && sm.length) {
             exploreSelectedMonument = { name: sm[0].properties.name, link: sm[0].properties.link };
-            exploreSelected = null;
+            exploreSelected = null; exploreSelectedFind = null;
             render();
-        } else if (exploreSelected || exploreSelectedMonument) {
-            exploreSelected = null; exploreSelectedMonument = null; render();
+        } else if (exploreSelected || exploreSelectedMonument || exploreSelectedFind) {
+            exploreSelected = null; exploreSelectedMonument = null; exploreSelectedFind = null; render();
         }
     });
     fetchMapJson(EXPLORE_MAP_STYLE)
@@ -16801,6 +16861,29 @@ function renderExplorePage() {
             <button type="button" onclick="exploreDeleteSelected()" class="w-full mt-2 py-2 rounded-lg bg-red-600 text-white font-bold text-sm"><i class="fas fa-trash-alt mr-1"></i>Delete stake</button>
         </div>`;
     })() : '';
+    const findCard = exploreSelectedFind ? (() => {
+        const f = (finds || []).find(x => x && String(x.id) === String(exploreSelectedFind));
+        if (!f) return '';
+        const dig = surveys.find(s => String(s.id) === String(f.surveyId));
+        const c = parseLatLonStr(f.coordinates);
+        const ts = Number(f.dateCreated || f.time || f.createdAt || f.dateLastChanged) || 0;
+        const when = ts ? new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+        const title = f.description || f.type || 'Find';
+        const sub = [f.type && f.type !== title ? f.type : '', f.vdi !== undefined && f.vdi !== '' ? 'VDI ' + f.vdi : '', when].filter(Boolean).join(' · ');
+        return `
+        <div class="fs-panel rounded-xl p-3 mb-2">
+            <div class="flex items-start gap-2">
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-semibold text-gray-600 uppercase truncate">Find · ${dig ? escapeHtml(dig.name || 'Dig') : 'no dig (its dig was deleted)'}</p>
+                    <p class="text-lg font-bold text-gray-900 truncate"><i class="fas fa-coins mr-1 text-yellow-600"></i>${escapeHtml(title)}</p>
+                    ${sub ? `<p class="text-xs text-gray-600">${escapeHtml(sub)}</p>` : ''}
+                    ${c ? renderCopyCoordsHtml(c.lat, c.lon, { cls: 'mt-1' }) : ''}
+                </div>
+                <button type="button" onclick="exploreSelectedFind=null;render()" class="fs-ctl w-9 h-9 rounded-full flex items-center justify-center" title="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <button type="button" onclick="exploreOpenSelectedFind()" class="w-full mt-2 py-2 rounded-lg bg-primary text-white font-bold text-sm"><i class="fas fa-pen mr-1"></i>Open in Finds</button>
+        </div>`;
+    })() : '';
     const smCard = exploreSelectedMonument ? `
         <div class="fs-panel rounded-xl p-3 mb-2" style="border:2px solid #dc2626;">
             <div class="flex items-start gap-2">
@@ -16874,7 +16957,7 @@ function renderExplorePage() {
 
         <!-- bottom: position, LiDAR slider, stake button -->
         <div style="position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:5;">
-            ${sel}${smCard}
+            ${sel}${findCard}${smCard}
             <div class="fs-panel rounded-xl p-2">
                 <p id="explore-readout" class="text-sm text-gray-900 text-center mb-1">—</p>
                 <div class="flex items-center gap-2 px-1 mb-2">
