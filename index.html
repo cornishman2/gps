@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.79
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.80
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.79.0';         // change whenever you publish
+const APP_VERSION = '1.80.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -12133,6 +12133,13 @@ async function handleSurveyAction(button) {
 
             case 'close':
                 if (!button.dataset.skipBackup && survey.status === 'Open' && digNeedsBackup(survey)) {
+                    if (isAutoBackupOnCloseEnabled()) {
+                        // Settings: back up straight away, then close; if the backup isn't saved the dig stays open
+                        showMessage(`Backing up '${name}'…`, 'info');
+                        if (await backupOpenDigNow()) handleSurveyAction({ dataset: { id: survey.id, action: 'close', name, skipBackup: '1' } });
+                        else showMessage(`The backup of '${name}' was not saved, so the dig is still open.`, 'warning');
+                        return;
+                    }
                     showBackupPrompt({
                         title: 'Back up before closing?',
                         message: `<strong>${escapeHtml(survey.name || 'This dig')}</strong> has not been backed up since its last changes.`,
@@ -13584,6 +13591,13 @@ function daysAgoText(ts) {
     if (days <= 0) return 'today';
     if (days === 1) return 'yesterday';
     return days + ' days ago';
+}
+
+/** Settings: back up automatically when closing a dig that has changed since its last backup (V1.80; off by default). */
+function isAutoBackupOnCloseEnabled() { try { return localStorage.getItem('detekta_auto_backup_on_close') === '1'; } catch (e) { return false; } }
+function setAutoBackupOnCloseEnabled(on) {
+    try { localStorage.setItem('detekta_auto_backup_on_close', on ? '1' : '0'); } catch (e) {}
+    showMessage(on ? 'Digs will be backed up automatically when you close them.' : 'You will be asked before closing a dig that is not backed up.', 'info');
 }
 
 /** Back up the open dig. Resolves true if the ZIP was saved. */
@@ -19032,6 +19046,19 @@ return `
                     <span>
                         <span class="font-semibold text-gray-800">Stop tracking when driving</span>
                         <span class="block text-sm text-gray-600">When you move faster than walking pace, Detekta starts a separate <em>Leaving</em> track. If you then drive (over 15 km/h for about 45 seconds), tracking stops, the drive is removed and you can delete the Leaving track. If it was a false alarm, the Leaving track joins back onto your dig track after a minute at walking pace. Turn this off if you cycle between spots.</span>
+                    </span>
+                </label>
+            </div>
+
+<!-- Backups -->
+            <div class="mt-6 border-t border-gray-200 pt-5">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Backups</h3>
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" class="mt-1 h-5 w-5" ${isAutoBackupOnCloseEnabled() ? 'checked' : ''}
+                           onchange="setAutoBackupOnCloseEnabled(this.checked)">
+                    <span>
+                        <span class="font-semibold text-gray-800">Back up automatically when closing a dig</span>
+                        <span class="block text-sm text-gray-600">When you close a dig that has changed since its last backup, Detekta backs it up straight away instead of asking first. Your phone may still show its usual save or download step. If the backup isn't saved, the dig stays open. Digs with no changes close at once.</span>
                     </span>
                 </label>
             </div>
