@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.77
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.78
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.77.0';         // change whenever you publish
+const APP_VERSION = '1.78.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3882,7 +3882,7 @@ function renderHelpPage() {
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-binoculars"></i> Explore — research at home</h3>
         <p class="text-sm text-gray-700 mb-2">Open the <strong>Explore</strong> tab (it reopens where you last left it), or tap the <i class="fas fa-binoculars"></i> button on the Map — in full screen too — to explore from exactly the place and zoom you are looking at. If the Map shows LiDAR, Explore opens on LiDAR; otherwise on the Outdoor map (Satellite and Old OS are not in Explore because they have a monthly limit). Type a place name, an Ordnance Survey grid reference (for example <em>SW 7654 4321</em>, 4 to 10 figures) or coordinates (<em>50.338, -5.142</em> or degrees and minutes), and the map flies there. Drag to move and pinch to zoom.</p>
         <p class="text-sm text-gray-700 mb-2">The slider fades between the ordinary map and <strong>LiDAR</strong> (England only — zoom in to see it). Place and road names stay on top. The red cross marks the centre, and the grid reference and coordinates of that point are shown underneath.</p>
-        <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown (from all your digs — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates), and so are your <strong>grids</strong> — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab.</p>
+        <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown from all your digs (not the demo dig). The open dig's look as on the Map; other digs' finds, routes and grids are smaller and faded — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates. Your <strong>grids</strong> are shown too — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab.</p>
         <p class="text-sm text-gray-700 mb-2">Put the cross on something interesting and tap <strong>STAKE HERE</strong>. Name it, then add it to the open dig or to a <em>research dig</em> for that place. When you later start a dig at the same place (Just Go → the place button), your research stakes appear on the Map so you can walk straight to them. Tap a stake in Explore to see it or delete it.</p>
         <p class="text-sm text-gray-700">Explore uses only free maps, so it never uses up the map allowance. Place search uses OpenStreetMap and needs signal; grid references and coordinates work without it. Always check that you have permission to detect, and that a site is not a Scheduled Monument, before you go.</p>
       </div>
@@ -16518,19 +16518,23 @@ function buildExploreStyle(base) {
           paint: { 'text-color': '#991b1b', 'text-halo-color': '#ffffff', 'text-halo-width': 2 } },
         // Your routes (white edge, as on the Map tab) and grids: read-only here, adjusted on the Map tab (V1.76)
         { id: 'ex-tracks-edge', type: 'line', source: 'ex-tracks', layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#ffffff', 'line-opacity': 0.85, 'line-width': 5 } },
+          paint: { 'line-color': '#ffffff', 'line-opacity': ['case', ['get', 'other'], 0.35, 0.85], 'line-width': ['case', ['get', 'other'], 4, 5] } },
         { id: 'ex-tracks', type: 'line', source: 'ex-tracks', layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': ['get', 'colour'], 'line-width': 3 } },
+          paint: { 'line-color': ['get', 'colour'], 'line-width': ['case', ['get', 'other'], 2, 3], 'line-opacity': ['case', ['get', 'other'], 0.45, 1] } },
         { id: 'ex-grids-fill', type: 'fill', source: 'ex-grids',
-          paint: { 'fill-color': ['case', ['get', 'current'], '#ef4444', '#22c55e'], 'fill-opacity': ['case', ['get', 'current'], 0.08, 0.22] } },
+          paint: { 'fill-color': ['case', ['get', 'current'], '#ef4444', '#22c55e'],
+                   'fill-opacity': ['*', ['case', ['get', 'current'], 0.08, 0.22], ['case', ['get', 'other'], 0.5, 1]] } },
         { id: 'ex-grids-line', type: 'line', source: 'ex-grids',
-          paint: { 'line-color': ['case', ['get', 'current'], '#ef4444', '#16a34a'], 'line-width': ['case', ['get', 'current'], 3, 2] } },
+          paint: { 'line-color': ['case', ['get', 'current'], '#ef4444', '#16a34a'], 'line-width': ['case', ['get', 'other'], 1.5, ['case', ['get', 'current'], 3, 2]],
+                   'line-opacity': ['case', ['get', 'other'], 0.45, 1] } },
         // Finds, not-dug signals and stakes drawn exactly as on the Map tab (see getMapPinStyle)
         { id: 'ex-finds', type: 'circle', source: 'ex-finds', minzoom: 10,
-          paint: { 'circle-radius': ['/', ['-', ['get', 'size'], 4], 2], 'circle-color': ['get', 'fill'], 'circle-stroke-color': ['get', 'border'], 'circle-stroke-width': 2 } },
+          paint: { 'circle-radius': ['*', ['/', ['-', ['get', 'size'], 4], 2], ['case', ['get', 'other'], 0.7, 1]],
+                   'circle-color': ['get', 'fill'], 'circle-stroke-color': ['get', 'border'], 'circle-stroke-width': ['case', ['get', 'other'], 1, 2],
+                   'circle-opacity': ['case', ['get', 'other'], 0.5, 1], 'circle-stroke-opacity': ['case', ['get', 'other'], 0.5, 1] } },
         { id: 'ex-stakes', type: 'circle', source: 'ex-stakes',
           paint: { 'circle-radius': ['/', ['-', ['get', 'size'], 4], 2], 'circle-color': ['get', 'fill'], 'circle-stroke-color': ['get', 'border'], 'circle-stroke-width': 2 } },
-        { id: 'ex-find-labels', type: 'symbol', source: 'ex-finds', minzoom: 14,
+        { id: 'ex-find-labels', type: 'symbol', source: 'ex-finds', minzoom: 14, filter: ['!', ['get', 'other']],
           layout: { 'text-field': ['get', 'label'], 'text-font': font, 'text-size': 12, 'text-offset': [0.9, 0], 'text-anchor': 'left', 'text-allow-overlap': false, 'text-optional': true },
           paint: { 'text-color': '#1f2937', 'text-halo-color': '#ffffff', 'text-halo-width': 2 } },
         { id: 'ex-stake-labels', type: 'symbol', source: 'ex-stakes', minzoom: 12,
@@ -16541,7 +16545,12 @@ function buildExploreStyle(base) {
 }
 function exploreData() {
     const stakes = [], fs = [];
-    (surveys || []).forEach(s => (s.targets || []).forEach(t => {
+    // The demo dig is for trying the app out: none of it belongs on Explore (V1.78)
+    const realDigs = (surveys || []).filter(s => s && !s.isDemo);
+    const digById = new Map(realDigs.map(s => [String(s.id), s]));
+    const openDig = getCompassOpenSurvey();
+    const openId = openDig && !openDig.isDemo ? String(openDig.id) : '';
+    realDigs.forEach(s => (s.targets || []).forEach(t => {
         if (!isStakeTarget(t)) return;
         const c = parseLatLonStr(t.coordinates); if (!c) return;
         const name = (t.description && t.description !== 'STAKE') ? t.description : 'Stake';
@@ -16553,13 +16562,15 @@ function exploreData() {
     }));
     (finds || []).forEach(f => {
         if (!f || f.deleted) return;
+        if (!digById.has(String(f.surveyId))) return;      // demo finds, and finds whose dig no longer exists
         const c = parseLatLonStr(f.coordinates); if (!c) return;
         const p = findToMapPoint(f);
         const st = getMapPinStyle(p);
         let label = '';
         try { label = (typeof getMapPinLabelText === 'function') ? getMapPinLabelText(p) : ''; } catch (e) {}
         fs.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
-            properties: { id: String(f.id), label: label || '', fill: st.fill, border: st.border, size: st.size } });
+            properties: { id: String(f.id), label: label || '', fill: st.fill, border: st.border, size: st.size,
+                          other: String(f.surveyId) !== openId } });
     });
     // Grids: each dig's current grid (red) and its completed grids (green), as squares turned to their angle
     const grids = [], tracks = [];
@@ -16572,18 +16583,26 @@ function exploreData() {
         });
         return { type: 'Polygon', coordinates: [ring] };
     };
-    (surveys || []).forEach(s => {
+    const seenGrid = new Set();   // the same square is drawn once, however many times it is stored
+    const addGrid = (cLat, cLon, sizeM, rotDeg, props) => {
+        const key = [cLat.toFixed(7), cLon.toFixed(7), Number(sizeM) || 15, Number(rotDeg) || 0].join('|');
+        if (seenGrid.has(key)) return;
+        seenGrid.add(key);
+        grids.push({ type: 'Feature', geometry: square(cLat, cLon, sizeM, rotDeg), properties: props });
+    };
+    realDigs.forEach(s => {
         try {
+            const other = String(s.id) !== openId;
             const t = s.gridTile;
             if (t && t.enabled && isFinite(Number(t.centerLat)) && isFinite(Number(t.centerLon)))
-                grids.push({ type: 'Feature', geometry: square(Number(t.centerLat), Number(t.centerLon), t.sizeM, t.rotationDeg), properties: { current: true } });
+                addGrid(Number(t.centerLat), Number(t.centerLon), t.sizeM, t.rotationDeg, { current: true, other });
             (Array.isArray(s.gridTileCompletedAreas) ? s.gridTileCompletedAreas : []).forEach(a => {
                 if (a && isFinite(Number(a.centerLat)) && isFinite(Number(a.centerLon)))
-                    grids.push({ type: 'Feature', geometry: square(Number(a.centerLat), Number(a.centerLon), a.sizeM, a.rotationDeg), properties: { current: false } });
+                    addGrid(Number(a.centerLat), Number(a.centerLon), a.sizeM, a.rotationDeg, { current: false, other });
             });
             (s.tracks || []).forEach(tr => {
                 const coords = (tr.points || []).filter(p => p && isFinite(p.lat) && isFinite(p.lon)).map(p => [p.lon, p.lat]);
-                if (coords.length >= 2) tracks.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { colour: tr.color || '#2563eb' } });
+                if (coords.length >= 2) tracks.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: { colour: tr.color || '#2563eb', other } });
             });
         } catch (e) {}
     });
