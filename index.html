@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.81
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.82
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.81.0';         // change whenever you publish
+const APP_VERSION = '1.82.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3826,7 +3826,7 @@ function renderHelpPage() {
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Tracking</p>
         <p class="text-sm text-gray-700 mb-2">The green <strong>Start tracking</strong> button sits just under the Detect / Scout buttons; it turns red (<strong>Stop tracking</strong>) while recording.</p>
-        <p class="text-sm text-gray-700 mb-2"><i class="fas fa-lock"></i> <strong>Pocket lock</strong> (under Stop tracking) turns the screen black and makes it ignore every touch, so a phone bouncing on a lanyard or in a pocket can't press anything. Tracking carries on, and the screen shows the time, how long you've been tracking and the distance walked. To unlock, <strong>hold the padlock for 5 seconds</strong>. While tracking it also locks itself after 30 seconds without a touch (you can turn that off in Settings).</p>
+        <p class="text-sm text-gray-700 mb-2"><i class="fas fa-lock"></i> <strong>Pocket lock</strong> (under Stop tracking) turns the screen black and makes it ignore every touch, so a phone bouncing on a lanyard or in a pocket can't press anything. Tracking carries on, and the screen shows the time, how long you've been tracking and the distance walked. To unlock, <strong>hold the padlock for 5 seconds</strong>, touching nothing else: any other touch on the screen starts the count again. While tracking it also locks itself after 30 seconds without a touch (you can turn that off in Settings).</p>
         <div class="text-sm text-gray-700 space-y-1 mb-3">
           <div>Tap <strong>Start</strong> (or <strong>Start Tracking</strong>) to begin recording your walk as a coloured line on the map.</div>
           <div>The first track on a dig is automatically named <strong>Perimeter</strong>; subsequent tracks are Track 2, Track 3, and so on.</div>
@@ -5691,6 +5691,7 @@ let pocketEnteredFs = false;
 let pocketTimer = null;
 let pocketHold = null;
 let pocketLastTouch = Date.now();
+const pocketTouches = new Set();   // fingers (or anything else) on the screen while locked
 function isPocketAutoLockEnabled() { try { return localStorage.getItem('detekta_pocket_autolock') !== '0'; } catch (e) { return true; } }
 function setPocketAutoLockEnabled(on) {
     try { localStorage.setItem('detekta_pocket_autolock', on ? '1' : '0'); } catch (e) {}
@@ -5727,8 +5728,18 @@ function pocketBlock(e) {
     const onPad = e.target && e.target.closest && e.target.closest('#pocket-unlock');
     if (e.cancelable) e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'pointerdown' && onPad && !pocketHold) pocketStartHold(e.pointerId);
-    if ((e.type === 'pointerup' || e.type === 'pointercancel') && pocketHold && e.pointerId === pocketHold.id) pocketCancelHold();
+    if (e.type === 'pointerdown') {
+        pocketTouches.add(e.pointerId);
+        // The countdown only runs while the padlock is the only thing touching the screen:
+        // a second touch anywhere (another finger, a bump against your chest) starts it again from the beginning
+        if (pocketHold && e.pointerId !== pocketHold.id) pocketCancelHold('Only touch the padlock — start again');
+        else if (onPad && !pocketHold && pocketTouches.size === 1) pocketStartHold(e.pointerId);
+        else if (onPad && pocketTouches.size > 1) pocketCancelHold('Only touch the padlock — start again');
+    }
+    if (e.type === 'pointerup' || e.type === 'pointercancel') {
+        pocketTouches.delete(e.pointerId);
+        if (pocketHold && e.pointerId === pocketHold.id) pocketCancelHold();
+    }
     if (e.type === 'pointermove' && pocketHold && e.pointerId === pocketHold.id && !onPad) pocketCancelHold();
 }
 function pocketStartHold(id) {
@@ -5745,16 +5756,21 @@ function pocketStartHold(id) {
     };
     pocketHold.raf = requestAnimationFrame(step);
 }
-function pocketCancelHold() {
+function pocketCancelHold(msg) {
     if (pocketHold && pocketHold.raf) cancelAnimationFrame(pocketHold.raf);
     pocketHold = null;
     const ring = document.getElementById('pocket-ring'); if (ring) ring.style.strokeDashoffset = '283';
-    const hint = document.getElementById('pocket-hint'); if (hint) hint.textContent = 'Hold the padlock for 5 seconds to unlock';
+    const hint = document.getElementById('pocket-hint');
+    if (hint) {
+        hint.textContent = msg || 'Hold the padlock for 5 seconds to unlock';
+        if (msg) setTimeout(() => { if (!pocketHold && hint.isConnected) hint.textContent = 'Hold the padlock for 5 seconds to unlock'; }, 2500);
+    }
 }
 /** Turn the pocket lock on or off. */
 function pocketLock(on) {
     if (on && !pocketLocked) {
         pocketLocked = true;
+        pocketTouches.clear();
         const c = document.createElement('div');
         c.id = 'pocket-lock';
         c.setAttribute('role', 'dialog'); c.setAttribute('aria-label', 'Screen locked');
@@ -5787,6 +5803,7 @@ function pocketLock(on) {
         pocketTimer = setInterval(pocketUpdateText, 1000);
     } else if (!on && pocketLocked) {
         pocketLocked = false;
+        pocketTouches.clear();
         pocketCancelHold();
         if (pocketTimer) { clearInterval(pocketTimer); pocketTimer = null; }
         const c = document.getElementById('pocket-lock'); if (c) c.remove();
