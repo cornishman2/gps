@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.84
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.85
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.84.0';         // change whenever you publish
+const APP_VERSION = '1.85.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3859,6 +3859,7 @@ function renderHelpPage() {
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
+          <div><i class="fas fa-border-all"></i> <strong>Square to grid</strong> — the button at the top-left of the map turns the map so the grid's edges line up with the screen, so "up the screen" is along your grid lines. The button then becomes a <strong>north arrow</strong> showing which way north is; tap it to put north back at the top. The angle comes from the grid, not the phone's compass, so it never wobbles. The W N S E buttons still move the grid by real compass directions.</div>
           <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. A bar above the map shows the grid's angle and how far its corner (the flag) has moved. <strong>Drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the bottom-left corner (the red dot — your flag). <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back. Zoom in first: a small grid is hard to grab. In full screen the Adjust button is in the right-hand column, and while adjusting the panel at the bottom shows the arrow and rotate buttons.</div>
           <div><strong>W N S E</strong> (in the row just above the map, with the rotate buttons) — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
           <div><strong>↺ / ↻ rotate buttons</strong> — rotate the tile 5° anti-clockwise or clockwise around the <strong>south-west corner</strong>, so that corner stays fixed on your flag while the rest of the tile swings around it. <strong>0°</strong> resets to north-aligned (also around the SW corner). Same availability rules as W N S E.</div>
@@ -13244,6 +13245,7 @@ function renderFullscreenMapHtml(openSurvey, pointsForPlot) {
                 <i class="fas fa-location-arrow"></i></button>
             ${mapLockBtnHtml('').replace('w-11 h-11', 'w-12 h-12')}
             ${mapMode !== 'scout' ? gridAdjustBtnHtml('', true) : ''}
+            ${mapRotateBtnHtml('', true)}
         </div>
 
         <!-- Bottom: logging -->
@@ -13306,6 +13308,7 @@ function startGridAdjust() {
     if (!gridTileIsAdjustable()) { showMessage(isAnyTrackRecording() ? 'Stop tracking to adjust the grid.' : 'Place the grid first (10m / 15m / 20m).', 'warning'); return; }
     const t = getCompassOpenSurvey().gridTile;
     if (t.swLat == null) { const sw = gridTileSw(t); t.swLat = sw.lat; t.swLon = sw.lon; }
+    if (mapGridUp) { mapGridUp = false; showMessage('Map turned back to north-up while you adjust the grid.', 'info'); }
     gridAdjustSaved = JSON.parse(JSON.stringify(t));
     gridAdjusting = true;
     if (gridTileScreenPx() < 80) zoomMapToGrid(); else keepMapViewThroughResize();   // too small to grab: zoom to it
@@ -13466,10 +13469,45 @@ function mapLockBtnHtml(extraStyle) {
 const fsPointers = new Map();
 let fsGesture = null;
 let fsSuppressClick = false;
+// ---- Map rotation (V1.85): "Square to grid" turns the map so the grid lines up with the screen ----
+let mapGridUp = false;
+/** How far the Map tab is turned on screen, in degrees clockwise (0 = north at the top). Comes from the grid's angle only. */
+function mapScreenRotationDeg() {
+    if (!mapGridUp) return 0;
+    try {
+        const s = getCompassOpenSurvey(); const t = s && s.gridTile;
+        if (!t || !t.enabled || !isFinite(Number(t.centerLat))) return 0;
+        const r = Number(t.rotationDeg) || 0;
+        return r ? -r : 0;
+    } catch (e) { return 0; }
+}
+function toggleMapGridUp() {
+    mapGridUp = !mapGridUp;
+    if (mapGridUp && !mapScreenRotationDeg()) showMessage('The grid is already square to north, so the map stays north-up.', 'info');
+    keepMapViewThroughResize();
+    render();
+}
+/** Top-left button: the grid icon (square the map to the grid) or, when turned, a north arrow (back to north-up). */
+function mapRotateBtnHtml(extraStyle, big) {
+    const rot = mapScreenRotationDeg();
+    const s = getCompassOpenSurvey(); const t = s && s.gridTile;
+    if (!rot && !(t && t.enabled && isFinite(Number(t.centerLat)))) return '';
+    const size = big ? 'w-12 h-12' : 'w-11 h-11';
+    const pos = extraStyle ? `absolute ` : '';
+    if (rot) return `<button type="button" onclick="toggleMapGridUp()" title="North is this way — tap to put north at the top"
+            class="fs-ctl ${pos}${size} rounded-xl flex flex-col items-center justify-center fs-ctl-on" ${extraStyle ? `style="${extraStyle}"` : ''}>
+            <span style="display:inline-flex;flex-direction:column;align-items:center;transform:rotate(${rot}deg);line-height:1;">
+                <span style="font:700 10px Arial,sans-serif;">N</span><i class="fas fa-long-arrow-alt-up" style="font-size:16px;"></i></span></button>`;
+    return `<button type="button" onclick="toggleMapGridUp()" title="Square the map to the grid"
+            class="fs-ctl ${pos}${size} rounded-xl flex items-center justify-center" ${extraStyle ? `style="${extraStyle}"` : ''}>
+            <i class="fas fa-border-all" style="transform:rotate(${-(Number(t.rotationDeg) || 0)}deg);"></i></button>`;
+}
+
 /** The plot layer is drawn this many times the map's size (a power of 2 near the zoom), so small things keep their precision. */
 function mapLayerBaseFor(z) { return Math.pow(2, Math.max(0, Math.min(16, Math.ceil(Math.log2(Math.max(1, z || 1)))))); }
 function mapInnerTransform(B) {
-    return `translate(-50%, -50%) translate(${(mapOffsetX || 0) / B}%, ${(mapOffsetY || 0) / B}%) scale(${(mapZoom || 1) / B})`;
+    const rot = mapScreenRotationDeg();
+    return `translate(-50%, -50%)${rot ? ` rotate(${rot}deg)` : ''} translate(${(mapOffsetX || 0) / B}%, ${(mapOffsetY || 0) / B}%) scale(${(mapZoom || 1) / B})`;
 }
 function fsApplyTransform() {
     const inner = document.querySelector('#target-map-container .map-inner-layer');
@@ -13477,6 +13515,7 @@ function fsApplyTransform() {
         const B = Number(inner.dataset.base) || 1;
         inner.style.transform = mapInnerTransform(B);
         inner.style.setProperty('--iz', String(B / (mapZoom || 1)));   // keeps pins, labels and lines the same size on screen
+        inner.style.setProperty('--unrot', (-mapScreenRotationDeg()) + 'deg');   // keeps pins and labels upright
     }
     anchorMapView(false);   // you moved it: hold this view
     syncBgMap();
@@ -13519,8 +13558,10 @@ document.addEventListener('pointermove', (e) => {
     if (!fsGesture.moved && Math.hypot(dx, dy) < 8) return;   // still a tap
     fsGesture.moved = true;
     mapGestureActive = true;
-    mapOffsetX = fsGesture.offX0 + dx / fsGesture.w * 100;
-    mapOffsetY = fsGesture.offY0 + dy / fsGesture.h * 100;
+    const rr = -mapScreenRotationDeg() * Math.PI / 180;           // screen movement -> movement along the turned map
+    const mx = dx * Math.cos(rr) - dy * Math.sin(rr), my = dx * Math.sin(rr) + dy * Math.cos(rr);
+    mapOffsetX = fsGesture.offX0 + mx / fsGesture.w * 100;
+    mapOffsetY = fsGesture.offY0 + my / fsGesture.h * 100;
     fsApplyTransform();
 }, true);
 function fsPointerEnd(e) {
@@ -16328,7 +16369,10 @@ function syncBgMap() {
     const c = view.getCentreAndScale(w, hgt);   // { lat, lon, metresPerPixel }
     if (!c || !isFinite(c.lat) || !isFinite(c.lon) || !(c.metresPerPixel > 0)) return;
     const z = Math.log2(40075016.686 * Math.cos(c.lat * Math.PI / 180) / (512 * c.metresPerPixel));
-    bgMap.jumpTo({ center: [c.lon, c.lat], zoom: Math.max(0, Math.min(24, z)), bearing: 0, pitch: 0 });
+    const rot = (view.containerId === 'target-map-container') ? mapScreenRotationDeg() : 0;
+    const sq = (110574 / 111319.49).toFixed(5);
+    bgMapHolder.style.transform = rot ? `rotate(${rot}deg) scaleY(${sq}) rotate(${-rot}deg)` : `scaleY(${sq})`;
+    bgMap.jumpTo({ center: [c.lon, c.lat], zoom: Math.max(0, Math.min(24, z)), bearing: -rot, pitch: 0 });
 }
 
 // Re-attach after every page redraw
@@ -17711,7 +17755,9 @@ const toPercent = (x, y) => {
         if (followYou && hasUserGPS && effectiveUserCoords && !mapGestureActive) {
             const u = toPercent(effectiveUserCoords.lon * mPerDegLon, effectiveUserCoords.lat * M_PER_DEG_LAT);
             const z = mapZoom || 1;
-            const sx = 50 + (u.xPct - 50) * z + (mapOffsetX || 0), sy = 50 + (u.yPct - 50) * z + (mapOffsetY || 0);
+            let sx = 50 + (u.xPct - 50) * z + (mapOffsetX || 0), sy = 50 + (u.yPct - 50) * z + (mapOffsetY || 0);
+            const rr = mapScreenRotationDeg() * Math.PI / 180;
+            if (rr) { const vx = sx - 50, vy = sy - 50; sx = 50 + vx * Math.cos(rr) - vy * Math.sin(rr); sy = 50 + vx * Math.sin(rr) + vy * Math.cos(rr); }
             if (sx < -5 || sx > 105 || sy < -5 || sy > 105) { mapOffsetX = (50 - u.xPct) * z; mapOffsetY = (50 - u.yPct) * z; }
         }
     } catch (e) {}
@@ -17784,7 +17830,7 @@ const toPercent = (x, y) => {
             return `
                 <div
                     class="absolute map-pin"
-                    style="left:${xPct.toFixed(6)}%; top:${yPct.toFixed(6)}%; transform: translate(-50%, -50%); z-index: 10;"
+                    style="left:${xPct.toFixed(6)}%; top:${yPct.toFixed(6)}%; transform: translate(-50%, -50%) rotate(var(--unrot, 0deg)); z-index: 10;"
                     title="${(t.description || '').replace(/"/g,'&quot;')} (${t.isFind ? (t.stage === 'Junk' ? 'Junk' : 'Find') : (isStake ? 'Stake' : 'Not dug')} VDI: ${t.vdi || ''})"
                     onclick="handleMapTargetClick(event, '${t.id || ''}')"
                 >
@@ -17914,7 +17960,7 @@ const toPercent = (x, y) => {
                             ${style}">${typeof innerHtml === 'function' ? innerHtml(width) : (innerHtml || '')}
                     ${labelText ? `
                     <div class="absolute"
-                         style="left:50%; top:0; transform:translate(-50%, -100%) rotate(${-rot}deg) scale(var(--iz, 1)); transform-origin: bottom center;
+                         style="left:50%; top:0; transform:translate(-50%, -100%) rotate(${-rot}deg) rotate(var(--unrot, 0deg)) scale(var(--iz, 1)); transform-origin: bottom center;
                                 font-size:${fontPx}px;
                                 padding:2px 6px; border-radius:999px;
                                 background: rgba(255,255,255,0.92);
@@ -17977,7 +18023,7 @@ const toPercent = (x, y) => {
             activeHtml = buildRectDiv(Number(tile.centerLat), Number(tile.centerLon), sizeM, style, '', 'active-tile-overlay', tile.rotationDeg || 0,
                 (wp) => tileSvg(n, 'rgb(239,68,68)', gridAdjusting ? 4 : 3, !!flash && !gridAdjusting, painted, cellLineOpacity(wp)) + rotateHandle
                     + `<div class="tile-small-label" style="position:absolute;left:50%;top:50%;pointer-events:none;white-space:nowrap;z-index:3;
-                            transform:translate(-50%,-50%) rotate(${-(Number(tile.rotationDeg) || 0)}deg) scale(var(--iz, 1));
+                            transform:translate(-50%,-50%) rotate(${-(Number(tile.rotationDeg) || 0)}deg) rotate(var(--unrot, 0deg)) scale(var(--iz, 1));
                             opacity: clamp(0, calc((36 - ${((wp / 100) * mapW * layerBase).toFixed(4)} / var(--iz, 1)) / 12), 1);
                             background:#ef4444;color:#fff;font:700 11px Arial,sans-serif;padding:2px 6px;border-radius:999px;
                             border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);"><i class="fas fa-th"></i> Grid</div>`);
@@ -18011,7 +18057,7 @@ const toPercent = (x, y) => {
                     const mp = toPercent(mid.lon * mPerDegLon, mid.lat * M_PER_DEG_LAT);
                     const safe = String(track.name).replace(/</g,'&lt;').replace(/>/g,'&gt;');
                     trackLabelsHtml += `<div class="absolute pointer-events-none" style="left:${mp.xPct.toFixed(6)}%;top:${mp.yPct.toFixed(6)}%;z-index:6;
-                        transform:translate(-50%,-50%) scale(var(--iz, ${invZoom})) translateY(-12px);white-space:nowrap;
+                        transform:translate(-50%,-50%) rotate(var(--unrot, 0deg)) scale(var(--iz, ${invZoom})) translateY(-12px);white-space:nowrap;
                         font:700 11px Arial,sans-serif;color:${stroke};
                         text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 3px #fff;">${safe}</div>`;
                 }
@@ -18039,7 +18085,7 @@ const toPercent = (x, y) => {
     const transformStyle = `
         left: 50%; top: 50%; width: ${layerBase * 100}%; height: ${layerBase * 100}%;
         transform: ${mapInnerTransform(layerBase)};
-        transform-origin: center center; --iz: ${layerBase / (mapZoom || 1)};
+        transform-origin: center center; --iz: ${layerBase / (mapZoom || 1)}; --unrot: ${-mapScreenRotationDeg()}deg;
     `;
 
     const mapSize = Math.min(window.innerWidth - 32, 480);
@@ -18681,6 +18727,7 @@ if (!openSurvey) {
                         class="fs-ctl absolute w-11 h-11 rounded-xl flex items-center justify-center ${showUserPosition ? 'fs-ctl-on' : ''}" style="top:164px;right:8px;z-index:3;">
                     <i class="fas fa-location-arrow"></i></button>
                 ${mapLockBtnHtml('top:216px;right:8px;z-index:3;')}
+                ${isMapFullscreen ? '' : mapRotateBtnHtml('top:8px;left:8px;z-index:3;')}
                 ${isMapFullscreen ? '' : gridAdjustBtnHtml('top:268px;right:8px;z-index:3;')}
             </div>
             ${renderBgMapControlsHtml(getDigMapBg(openSurvey), 'setDigMapBg', getDigOverlay(openSurvey), 'dig')}
