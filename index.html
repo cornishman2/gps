@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.85
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.86
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.85.0';         // change whenever you publish
+const APP_VERSION = '1.86.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3859,7 +3859,7 @@ function renderHelpPage() {
         <div class="text-sm text-gray-700 space-y-1 mb-2">
           <div><strong>10m / 15m / 20m</strong> — place a grid of that size with your current GPS position at the <strong>south-west (bottom-left) corner</strong>. Stand where you want the corner flag, tap the button, and push a flag into the ground at your feet — that corner will be accurate. Rotation is reset to north-aligned on each fresh placement. These buttons are disabled while tracking is active (stop tracking first to reposition a grid).</div>
           <div><strong>Show / Hide</strong> — toggle the grid overlay. Completed tiles remain visible as green areas on the dig map even when the grid is hidden.</div>
-          <div><i class="fas fa-border-all"></i> <strong>Square to grid</strong> — the button at the top-left of the map turns the map so the grid's edges line up with the screen, so "up the screen" is along your grid lines. The button then becomes a <strong>north arrow</strong> showing which way north is; tap it to put north back at the top. The angle comes from the grid, not the phone's compass, so it never wobbles. The W N S E buttons still move the grid by real compass directions.</div>
+          <div><i class="fas fa-border-all"></i> <strong>Square to grid</strong> — the button at the top-left of the map turns the map so the grid's edges line up with the screen, so "up the screen" is along your grid lines. The button then becomes a <strong>north arrow</strong> showing which way north is; tap it to put north back at the top. The angle comes from the grid, not the phone's compass, so it never wobbles. The W N S E buttons still move the grid by real compass directions. You can adjust the grid on a turned map: the map holds its angle while you adjust, and squares up to the grid again when you tap Done.</div>
           <div><i class="fas fa-vector-square"></i> <strong>Adjust the grid</strong> — the button in the map's corner. A bar above the map shows the grid's angle and how far its corner (the flag) has moved. <strong>Drag the grid</strong> to move it, and drag the round <i class="fas fa-sync-alt"></i> handle on its top-left corner to <strong>rotate</strong> it about the bottom-left corner (the red dot — your flag). <strong>Done</strong> keeps the change; <strong>Cancel</strong> puts the grid back. Zoom in first: a small grid is hard to grab. In full screen the Adjust button is in the right-hand column, and while adjusting the panel at the bottom shows the arrow and rotate buttons.</div>
           <div><strong>W N S E</strong> (in the row just above the map, with the rotate buttons) — nudge the entire tile one metre in any direction. Only available when the grid is placed, shown, and tracking is off.</div>
           <div><strong>↺ / ↻ rotate buttons</strong> — rotate the tile 5° anti-clockwise or clockwise around the <strong>south-west corner</strong>, so that corner stays fixed on your flag while the rest of the tile swings around it. <strong>0°</strong> resets to north-aligned (also around the SW corner). Same availability rules as W N S E.</div>
@@ -13308,7 +13308,7 @@ function startGridAdjust() {
     if (!gridTileIsAdjustable()) { showMessage(isAnyTrackRecording() ? 'Stop tracking to adjust the grid.' : 'Place the grid first (10m / 15m / 20m).', 'warning'); return; }
     const t = getCompassOpenSurvey().gridTile;
     if (t.swLat == null) { const sw = gridTileSw(t); t.swLat = sw.lat; t.swLon = sw.lon; }
-    if (mapGridUp) { mapGridUp = false; showMessage('Map turned back to north-up while you adjust the grid.', 'info'); }
+    mapRotationHeld = mapGridUp ? mapScreenRotationDeg() : null;   // hold the map's angle while adjusting
     gridAdjustSaved = JSON.parse(JSON.stringify(t));
     gridAdjusting = true;
     if (gridTileScreenPx() < 80) zoomMapToGrid(); else keepMapViewThroughResize();   // too small to grab: zoom to it
@@ -13317,7 +13317,7 @@ function startGridAdjust() {
 function finishGridAdjust(cancel) {
     const s = getCompassOpenSurvey();
     if (cancel && s && gridAdjustSaved) { s.gridTile = gridAdjustSaved; s.dateLastChanged = Date.now(); saveSurveysToLocalStorage(); }
-    gridAdjusting = false; gridAdjustSaved = null;
+    gridAdjusting = false; gridAdjustSaved = null; mapRotationHeld = null;   // a squared map now lines up with the grid again
     keepMapViewThroughResize();
     render();
     showMessage(cancel ? 'Grid put back where it was.' : 'Grid saved.', cancel ? 'info' : 'success');
@@ -13406,7 +13406,9 @@ document.addEventListener('pointermove', (e) => {
         // screen angles grow clockwise (y points down), as the grid's rotation does; whole degrees
         tileDrag.rot = ((Math.round(tileDrag.rot0 + (a - tileDrag.a0) * 180 / Math.PI) % 360) + 360) % 360;
     } else {
-        const east = dx * tileDrag.mpp, north = -dy * tileDrag.mpp;
+        const rr = -mapScreenRotationDeg() * Math.PI / 180;       // screen movement -> movement on the (turned) map
+        const mx = dx * Math.cos(rr) - dy * Math.sin(rr), my = dx * Math.sin(rr) + dy * Math.cos(rr);
+        const east = mx * tileDrag.mpp, north = -my * tileDrag.mpp;
         tileDrag.sw = { lat: tileDrag.sw0.lat + north / 110574,
                         lon: tileDrag.sw0.lon + east / (111320 * Math.cos(tileDrag.sw0.lat * Math.PI / 180)) };
     }
@@ -13447,8 +13449,9 @@ function gridFineButtonsHtml() {
         ontouchstart="event.preventDefault();_startGridMove('${d}',1)" ontouchend="_stopGridMove()" ontouchcancel="_stopGridMove()"
         onmousedown="_startGridMove('${d}',1)" onmouseup="_stopGridMove()" onmouseleave="_stopGridMove()">${d}</button>`;
     const rt = (deg, label, title) => `<button type="button" class="flex-1 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 active:bg-gray-400 font-bold ${label === '0°' ? 'text-sm' : 'text-lg'} shadow select-none" title="${title}" onclick="rotateTile(${deg})">${label}</button>`;
-    return `<div class="flex gap-1 mb-2">${mv('W')}${mv('N')}${mv('S')}${mv('E')}
-        ${rt(-5, '↺', 'Rotate 5° anticlockwise')}${rt(0, '0°', 'Square to north')}${rt(5, '↻', 'Rotate 5° clockwise')}</div>`;
+    return `<div class="${mapScreenRotationDeg() ? 'mb-1' : 'mb-2'} flex gap-1">${mv('W')}${mv('N')}${mv('S')}${mv('E')}
+        ${rt(-5, '↺', 'Rotate 5° anticlockwise')}${rt(0, '0°', 'Square to north')}${rt(5, '↻', 'Rotate 5° clockwise')}</div>
+        ${mapScreenRotationDeg() ? '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-compass mr-1"></i>The map is turned: W N S E move the grid by compass direction.</p>' : ''}`;
 }
 
 // ---- Drag to pan, pinch to zoom (Map tab and full screen; not while the map is locked) ----
@@ -13471,9 +13474,11 @@ let fsGesture = null;
 let fsSuppressClick = false;
 // ---- Map rotation (V1.85): "Square to grid" turns the map so the grid lines up with the screen ----
 let mapGridUp = false;
+let mapRotationHeld = null;   // while adjusting the grid: the map's angle when you started (V1.86)
 /** How far the Map tab is turned on screen, in degrees clockwise (0 = north at the top). Comes from the grid's angle only. */
 function mapScreenRotationDeg() {
     if (!mapGridUp) return 0;
+    if (gridAdjusting && mapRotationHeld !== null) return mapRotationHeld;
     try {
         const s = getCompassOpenSurvey(); const t = s && s.gridTile;
         if (!t || !t.enabled || !isFinite(Number(t.centerLat))) return 0;
@@ -18204,7 +18209,7 @@ function logPointToActiveTrack(lat, lon, accuracy) {
 }
 
 function handleStartTrackClick(opts) {
-    if (gridAdjusting) { gridAdjusting = false; gridAdjustSaved = null; tileDrag = null; }
+    if (gridAdjusting) { gridAdjusting = false; gridAdjustSaved = null; tileDrag = null; mapRotationHeld = null; }
     if (!mapLocked) { mapLocked = true; try { localStorage.setItem('detekta_map_locked', '1'); } catch (e) {} }
     const startOpts = (opts && typeof opts === 'object' && !opts.target) ? opts : {};
     const openSurvey = surveys.find(s => s.status === 'Open');
