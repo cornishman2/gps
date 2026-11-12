@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40">
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.86
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.87
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.86.0';         // change whenever you publish
+const APP_VERSION = '1.87.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3884,7 +3884,7 @@ function renderHelpPage() {
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-binoculars"></i> Explore — research at home</h3>
         <p class="text-sm text-gray-700 mb-2">Open the <strong>Explore</strong> tab (it reopens where you last left it), or tap the <i class="fas fa-binoculars"></i> button on the Map — in full screen too — to explore from exactly the place and zoom you are looking at. If the Map shows LiDAR, Explore opens on LiDAR; otherwise on the Outdoor map (Satellite and Old OS are not in Explore because they have a monthly limit). Type a place name, an Ordnance Survey grid reference (for example <em>SW 7654 4321</em>, 4 to 10 figures) or coordinates (<em>50.338, -5.142</em> or degrees and minutes), and the map flies there. Drag to move and pinch to zoom.</p>
         <p class="text-sm text-gray-700 mb-2">The slider fades between the ordinary map and <strong>LiDAR</strong> (England only — zoom in to see it). Place and road names stay on top. The red cross marks the centre, and the grid reference and coordinates of that point are shown underneath.</p>
-        <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown from all your digs (not the demo dig). The open dig's look as on the Map; other digs' finds and routes are smaller and faded — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates. The open dig's <strong>grids</strong> are shown too — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab.</p>
+        <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown from all your digs (not the demo dig). The open dig's look as on the Map; other digs' finds and routes are smaller and faded — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates. The open dig's <strong>grids</strong> are shown too — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab. If the Map tab is <strong>squared to the grid</strong>, Explore is turned the same way, with the same north arrow to put north back at the top (which also turns the Map tab back).</p>
         <p class="text-sm text-gray-700 mb-2">Put the cross on something interesting and tap <strong>STAKE HERE</strong>. Name it, then add it to the open dig or to a <em>research dig</em> for that place. When you later start a dig at the same place (Just Go → the place button), your research stakes appear on the Map so you can walk straight to them. Tap a stake in Explore to see it or delete it.</p>
         <p class="text-sm text-gray-700">Explore uses only free maps, so it never uses up the map allowance. Place search uses OpenStreetMap and needs signal; grid references and coordinates work without it. Always check that you have permission to detect, and that a site is not a Scheduled Monument, before you go.</p>
       </div>
@@ -16664,7 +16664,7 @@ function exploreFromMap() {
     if (typeof isMapFullscreen !== 'undefined' && isMapFullscreen) { try { exitMapFullscreen(false); } catch (e) { try { exitMapFullscreen(); } catch (_) {} } }
     if (v && isFinite(v.lat) && isFinite(v.lon) && isFinite(v.zoom)) {
         saveExploreView(v.lat, v.lon, v.zoom);
-        try { if (exploreMap) exploreMap.jumpTo({ center: [v.lon, v.lat], zoom: v.zoom }); } catch (e) {}
+        try { if (exploreMap) exploreMap.jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: exploreBearing() }); } catch (e) {}
     }
     // Carry the Map tab's map across where Explore can show it. Explore has only the free maps
     // (Outdoor, with LiDAR faded over it): Satellite and Old OS have a monthly limit.
@@ -16842,7 +16842,7 @@ function ensureExploreMap(slot) {
     exploreMap = new maplibregl.Map({
         container: exploreHolder,
         style: { version: 8, sources: {}, layers: [] },
-        center: [v.lon, v.lat], zoom: v.zoom, maxZoom: 20,
+        center: [v.lon, v.lat], zoom: v.zoom, maxZoom: 20, bearing: exploreBearing(),
         attributionControl: false, fadeDuration: 0,
         dragRotate: false, pitchWithRotate: false, touchPitch: false,
         transformRequest: (url) => {
@@ -16899,6 +16899,11 @@ function ensureExploreMap(slot) {
         });
     return true;
 }
+/** Explore's turn (a map bearing): the same as the Map tab's when it is squared to the grid, otherwise north-up. */
+function exploreBearing() { const r = mapScreenRotationDeg(); return r ? -r : 0; }
+function applyExploreBearing() {
+    try { if (exploreMap && Math.abs(exploreMap.getBearing() - exploreBearing()) > 0.01) exploreMap.jumpTo({ bearing: exploreBearing() }); } catch (e) {}
+}
 function syncExploreMap() {
     const slot = document.getElementById('explore-map-slot');
     if (!slot) return;
@@ -16910,6 +16915,7 @@ function syncExploreMap() {
     }
     if (exploreHolder.parentElement !== slot) slot.appendChild(exploreHolder);
     try { exploreMap.resize(); } catch (e) {}
+    applyExploreBearing();
     refreshExploreData();
     updateExploreReadout();
 }
@@ -17181,6 +17187,7 @@ function renderExplorePage() {
             <button type="button" onclick="exploreZoom(1)" title="Zoom in" class="fs-ctl w-12 h-12 rounded-xl font-bold text-lg">+</button>
             <button type="button" onclick="exploreZoom(-1)" title="Zoom out" class="fs-ctl w-12 h-12 rounded-xl font-bold text-lg">−</button>
             <button type="button" onclick="exploreGoToMe()" title="Go to my position" class="fs-ctl w-12 h-12 rounded-xl flex items-center justify-center"><i class="fas fa-location-arrow"></i></button>
+            ${mapRotateBtnHtml('', true)}
             <button type="button" onclick="setShowMonuments(!isShowMonuments())" title="Scheduled Monuments ${isShowMonuments() ? 'on' : 'off'}"
                     class="fs-ctl w-12 h-12 rounded-xl flex items-center justify-center" style="${isShowMonuments() ? 'color:#fff;background:rgba(220,38,38,.9);' : ''}"><i class="fas fa-ban"></i></button>
         </div>
