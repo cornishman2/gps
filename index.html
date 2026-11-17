@@ -341,7 +341,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.95
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V1.96
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2033,7 +2033,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '1.95.0';         // change whenever you publish
+const APP_VERSION = '1.96.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3695,7 +3695,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V1.95 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V1.96 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16421,7 +16421,7 @@ function renderBgMapNoteHtml() {
 }
 
 /** The None / Satellite / Outdoor buttons, the note and the credit line. */
-function renderBgMapControlsHtml(current, setter, overlay = 0, where = 'dig') {
+function renderBgMapControlsHtml(current, setter, overlay = 0, where = 'dig', creditHere = true) {
     const btn = (v) => {
         const label = v === 'none' ? 'Plain' : MAP_BG_STYLES[v].label;
         const icon = v === 'none' ? 'fa-square' : MAP_BG_STYLES[v].icon;
@@ -16449,8 +16449,15 @@ function renderBgMapControlsHtml(current, setter, overlay = 0, where = 'dig') {
             ${MAP_BG_ORDER.map(btn).join('')}
         </div>
         ${sliderHtml}
-        ${current !== 'none' ? renderBgMapNoteHtml() + `<p id="bg-map-attrib" class="text-xs text-gray-500 mt-1">${credit}</p>` : ''}
+        ${current !== 'none' ? renderBgMapNoteHtml() + (creditHere ? `<p id="bg-map-attrib" class="text-xs text-gray-500 mt-1">${credit}</p>` : '') : ''}
     </div>`;
+}
+/** V1.96: the map credit line on its own, for the bottom of the Map page. */
+function renderBgMapCreditHtml(current, overlay = 0) {
+    if (!current || current === 'none' || !MAP_BG_STYLES[current]) return '';
+    const ov = OVERLAY_BASES.includes(current) ? clampOverlay(overlay) : 0;
+    const credit = (bgMapAttribution || MAP_BG_STYLES[current].credit || MAP_FALLBACK_ATTRIBUTION) + overlayCreditHtml(ov);
+    return `<p id="bg-map-attrib" class="text-xs text-gray-500 mt-1">${credit}</p>`;
 }
 
 function renderMapBackgroundSettingsHtml() {
@@ -18782,8 +18789,7 @@ if (!openSurvey) {
                 ${isMapFullscreen ? '' : mapRotateBtnHtml('top:8px;left:8px;z-index:3;')}
                 ${isMapFullscreen ? '' : gridAdjustBtnHtml('top:268px;right:8px;z-index:3;')}
             </div>
-            ${renderBgMapControlsHtml(getDigMapBg(openSurvey), 'setDigMapBg', getDigOverlay(openSurvey), 'dig')}
-            ${isShowMonuments() && smFeatures.size ? `<p class="text-xs text-gray-500 -mt-1 mb-2">${SM_CREDIT}</p>` : ''}
+            ${renderBgMapControlsHtml(getDigMapBg(openSurvey), 'setDigMapBg', getDigOverlay(openSurvey), 'dig', isMapFullscreen)}
 
 
 
@@ -19025,7 +19031,11 @@ if (!openSurvey) {
             <!-- Tracks list stays where it is -->
             ${renderTracksPanel(openSurvey)}
 
+
             </div>
+            <!-- V1.96: map credits at the very bottom of the page -->
+            ${isMapFullscreen ? '' : `<div class="mt-4 mb-2">${renderBgMapCreditHtml(getDigMapBg(openSurvey), getDigOverlay(openSurvey))}
+            ${isShowMonuments() && smFeatures.size ? `<p class="text-xs text-gray-500 mt-1">${SM_CREDIT}</p>` : ''}</div>`}
             ${mapPinCardId ? '<div style="height:220px"></div>' : ''}
             ${renderPinCardHtml(openSurvey)}
 
