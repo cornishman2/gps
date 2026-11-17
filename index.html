@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.06
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.07
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.06.0';         // change whenever you publish
+const APP_VERSION = '2.07.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.06 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.07 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -3870,7 +3870,7 @@ function renderHelpPage() {
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-globe-europe"></i> Map Backgrounds</h3>
         <p class="text-sm text-gray-700 mb-2">Under the Map choose <strong>Plain</strong>, <strong>Satellite</strong>, <strong>Outdoor</strong>, <strong>Old map</strong> or <strong>LiDAR</strong>. Satellite shows hedges, gates and cropmarks; Outdoor shows footpaths and field edges; Old map is the best old map for the area (in Great Britain the Ordnance Survey six-inch map of 1888–1913), showing lost cottages, wells, paths and field boundaries; LiDAR shows the shape of the ground — ridge and furrow, barrows, banks, ditches and house platforms. Your pins, tracks, grid and dots sit on top and move with it. With Satellite, Outdoor or LiDAR, the <strong>Old map</strong> slider fades the 1888 map over the top, so you can see old buildings, paths and boundaries against today's ground. Each dig remembers its choice, and the Place map has its own.</p>
-        <p class="text-sm text-gray-700 mb-2"><strong>Different countries.</strong> Old map and LiDAR come from different services in different countries, chosen automatically from where the map is (the credit line under the map names the source, e.g. “LiDAR · England”). So far: LiDAR for England and Wales, and the old map for England, Wales and Scotland; more countries are being added. Where there is no source yet, the button is greyed out. You can fix the region in <strong>Settings → Map region</strong>, and <strong>Check map sources</strong> there tests every source for the place Explore was last showing — handy for trying another country from home.</p>
+        <p class="text-sm text-gray-700 mb-2"><strong>Different countries.</strong> Old map and LiDAR come from different services in different countries, chosen automatically from where the map is (the credit line under the map names the source, e.g. “LiDAR · England”). So far: LiDAR for England, Scotland (the surveyed areas, about 40% of the country) and the USA, and the old map for England, Wales and Scotland. Wales has no LiDAR yet: the Welsh Government's LiDAR can't currently be read by apps; more countries are being added. Where there is no source yet, the button is greyed out. You can fix the region in <strong>Settings → Map region</strong>, and <strong>Check map sources</strong> there tests every source for the place Explore was last showing — handy for trying another country from home.</p>
         <p class="text-sm text-gray-700 mb-2">Map pictures need signal the first time; after that, places you have viewed are kept on your phone and show without signal. They are not included in backups.</p>
         <p class="text-sm text-gray-700">Outdoor and LiDAR are free. Satellite and Old map use Detekta's built-in MapTiler key, whose free monthly allowance is shared by all users. If it runs out, those two pause until the next month. To avoid that, get your own free key from MapTiler and paste it in <strong>Settings → Map backgrounds</strong>.</p>
       </div>
@@ -16059,7 +16059,17 @@ const MAP_AREA_SHAPES = {
     'GB':     [[-6.5,49.8],[-7.0,49.7],[2.0,50.8],[2.0,53.0],[0.0,56.0],[-1.0,58.0],[-0.5,61.0],[-3.0,61.0],[-6.5,59.0],[-8.8,58.4],
                [-8.0,56.5],[-6.4,55.7],[-5.9,55.25],[-5.25,54.9],[-5.0,54.5],[-4.2,54.5],[-4.2,53.95],[-4.9,53.4],[-5.5,53.0],[-5.5,51.6],[-7.0,51.0]]
 };
-const MAP_AREA_NAMES = { 'GB-ENG': 'England', 'GB-WLS': 'Wales', 'GB-SCT': 'Scotland' };
+const MAP_AREA_NAMES = { 'GB-ENG': 'England', 'GB-WLS': 'Wales', 'GB-SCT': 'Scotland', 'US': 'USA' };
+// USA: the lower 48 (rough borders with Canada and Mexico; the sea is included freely), Alaska and Hawaii
+MAP_AREA_SHAPES['US-48'] = [[-123.3,49.0],[-95.15,49.0],[-95.15,49.38],[-94.6,48.7],[-93.0,48.6],[-91.5,48.1],[-89.6,48.0],[-87.5,47.6],
+    [-84.6,46.9],[-84.4,46.5],[-84.1,46.2],[-83.6,46.1],[-82.4,45.3],[-82.42,42.97],[-82.52,42.62],[-82.69,42.45],[-82.93,42.35],[-83.02,42.32],[-83.10,42.28],[-83.13,42.05],[-83.0,41.9],[-82.7,41.68],[-81.0,42.2],[-79.1,42.7],[-79.05,43.25],
+    [-78.0,43.4],[-76.6,43.6],[-76.3,44.2],[-75.3,44.85],[-74.7,45.0],[-71.5,45.0],[-71.1,45.3],[-70.6,45.6],[-70.25,46.2],[-70.0,46.7],[-69.2,47.45],
+    [-68.3,47.35],[-67.8,47.07],[-67.78,45.95],[-67.4,45.15],[-66.9,44.8],[-66.0,44.0],[-69.0,40.5],[-75.0,35.0],[-80.0,24.0],[-82.5,24.0],
+    [-84.0,29.0],[-90.0,28.5],[-96.5,25.9],[-97.14,25.96],[-97.35,25.9],[-97.5,25.87],[-97.7,26.0],[-99.1,26.45],[-99.5,27.5],[-100.3,28.3],[-101.4,29.77],[-102.4,29.77],
+    [-103.1,29.0],[-104.5,29.7],[-106.0,31.4],[-106.35,31.7],[-106.45,31.745],[-106.50,31.75],[-106.53,31.785],[-108.2,31.78],[-108.2,31.33],[-111.07,31.33],[-114.82,32.49],[-114.72,32.72],[-117.12,32.53],
+    [-118.5,32.0],[-121.0,33.5],[-125.0,40.0],[-125.2,48.4],[-124.7,48.5],[-123.3,48.25],[-123.0,48.6]];
+MAP_AREA_SHAPES['US-AK'] = [[-180,51],[-180,66],[-170,72],[-141,70.5],[-141,60.3],[-139,60.3],[-137.6,59.2],[-135.5,59.8],[-133.4,58.4],
+    [-131.8,56.6],[-130.0,56.0],[-129.9,54.6],[-133,54],[-160,51]];
 function pointInShape(lon, lat, poly) {
     let inside = false;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -16074,6 +16084,8 @@ function mapAreaAt(lat, lon) {
     if (!isFinite(lat) || !isFinite(lon)) return null;
     if (pointInShape(lon, lat, MAP_AREA_SHAPES['GB-ENG'])) return 'GB-ENG';
     if (pointInShape(lon, lat, MAP_AREA_SHAPES['GB'])) return lat >= 54.6 ? 'GB-SCT' : 'GB-WLS';
+    if (pointInShape(lon, lat, MAP_AREA_SHAPES['US-48']) || pointInShape(lon, lat, MAP_AREA_SHAPES['US-AK'])
+        || (lat > 18.5 && lat < 22.5 && lon > -161 && lon < -154.5)) return 'US';
     return null;
 }
 function getMapRegionSetting() {
@@ -16095,25 +16107,27 @@ const MAP_SOURCES = {
         { id: 'ea', areas: ['GB-ENG'], where: 'England', bounds: [-6.5, 49.8, 2.0, 55.9], minzoom: 10, maxzoom: 20,
           tiles: ['https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms?service=WMS&request=GetMap&version=1.3.0&layers=Lidar_Composite_Hillshade_DTM_1m&styles=hillshade&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'],
           credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' },
-        // V2.03: Wales - Welsh Government LiDAR 2020-23, 1 m. The bare-ground (DTM) picture is tried first;
-        // if the service doesn't give it, the surface (DSM, includes trees and buildings) picture is used.
-        { id: 'wg', areas: ['GB-WLS'], where: 'Wales', bounds: [-5.7, 51.3, -2.6, 53.5], minzoom: 10, maxzoom: 19,
-          testPoint: { lat: 52.42, lon: -3.75 },
-          // V2.04: if the names above don't work, ask the server for its layer list and try its LiDAR hillshades
-          discover: { caps: ['https://datamap.gov.wales/geoserver/geonode/wms?service=WMS&version=1.3.0&request=GetCapabilities',
-                             'https://datamap.gov.wales/geoserver/ows?service=WMS&version=1.3.0&request=GetCapabilities'],
-                      prefix: 'geonode:',
-                      // V2.05: the published LiDAR files (Cloud Optimised GeoTIFFs) - checked by Check map sources
-                      files: [ { label: 'ground hillshade file', url: 'https://dmwproductionblob.blob.core.windows.net/cogs/dtm_1m_wales_hillshade_2020_23_cubic_cog.tif' },
-                               { label: 'surface hillshade file', url: 'https://dmwproductionblob.blob.core.windows.net/cogs/wales_lidar_dsm_1m_hillshade_cog.tif' } ],
-                      tiles: 'https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers={L}&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}' },
+        // V2.07: Wales is not available - the Welsh Government LiDAR can't be read by apps (tested Nov 2026).
+        // Scotland - Scottish Remote Sensing Portal (JNCC). Survey phases cover about 40% of Scotland.
+        { id: 'srsp', areas: ['GB-SCT'], where: 'Scotland', partial: true, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
+          testPoint: { lat: 55.86, lon: -4.25 },
           candidates: [
-              { key: 'dtm', label: 'ground', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:dtm_1m_wales_hillshade_2020_23_cubic_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
-              { key: 'lle1', label: 'Lle ground 1 m', tiles: ['https://lle.gov.wales/services/tiles/lidar/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=1m_dtm&STYLE=default&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png'] },
-              { key: 'lle2', label: 'Lle ground 2 m', tiles: ['https://lle.gov.wales/services/tiles/lidar/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=2m_dtm&STYLE=default&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png'] },
-              { key: 'dsm', label: 'surface', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:wales_lidar_dsm_1m_hillshade_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] }
+              { key: 'p1-6', label: 'phases 1-6', tiles: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers=scotland:scotland-lidar-1-dtm,scotland:scotland-lidar-2-dtm,scotland:scotland-lidar-3-dtm,scotland:scotland-lidar-4-dtm,scotland:scotland-lidar-5-dtm,scotland:scotland-lidar-6-dtm&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
+              { key: 'p1-5', label: 'phases 1-5', tiles: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers=scotland:scotland-lidar-1-dtm,scotland:scotland-lidar-2-dtm,scotland:scotland-lidar-3-dtm,scotland:scotland-lidar-4-dtm,scotland:scotland-lidar-5-dtm&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
+              { key: 'p1-4', label: 'phases 1-4', tiles: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers=scotland:scotland-lidar-1-dtm,scotland:scotland-lidar-2-dtm,scotland:scotland-lidar-3-dtm,scotland:scotland-lidar-4-dtm&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] }
           ],
-          credit: 'LiDAR © Welsh Government (<a href="https://datamap.gov.wales/" target="_blank" rel="noopener">DataMapWales</a>), <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' }
+          discover: { caps: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&version=1.3.0&request=GetCapabilities'],
+                      prefix: 'scotland:', match: /lidar-\d+-dtm/i, combine: true, tiles: 'https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers={L}&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}' },
+          credit: 'LiDAR © Scottish Government, <a href="https://remotesensingdata.gov.scot/" target="_blank" rel="noopener">Scottish Remote Sensing Portal</a> (JNCC), <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' },
+        // USA - USGS 3D Elevation Program (best available: 1 m LiDAR where flown), shaded on the USGS server
+        { id: 'usgs', areas: ['US'], where: 'USA', bounds: [-180, 17, -64, 72], minzoom: 10, maxzoom: 19,
+          testPoint: { lat: 40.0, lon: -83.0 },
+          candidates: [
+              { key: 'gray', label: 'hillshade', tiles: ['https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&renderingRule=%7B%22rasterFunction%22%3A%22Hillshade%20Gray%22%7D'] },
+              { key: 'multi', label: 'multi-direction hillshade', tiles: ['https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&renderingRule=%7B%22rasterFunction%22%3A%22Hillshade%20Multidirectional%22%7D'] },
+              { key: 'basemap', label: 'shaded relief (coarser)', tiles: ['https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}'] }
+          ],
+          credit: 'LiDAR / elevation: <a href="https://www.usgs.gov/3d-elevation-program" target="_blank" rel="noopener">USGS 3D Elevation Program</a> (public domain)' }
     ],
     oldmap: [
         { id: 'nls6', areas: ['GB-ENG', 'GB-WLS', 'GB-SCT'], where: 'Great Britain', maptiler: true, bounds: [-8.8, 49.7, 2.0, 61.0],
@@ -16128,8 +16142,9 @@ const MAP_CACHE_URL_TESTS = [
     /^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//,
     /^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/,
     /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i,
-    /^https:\/\/datamap\.gov\.wales\/geoserver\/.*request=GetMap/i,
-    /^https:\/\/lle\.gov\.wales\/services\/tiles\//i
+    /^https:\/\/srsp-ows\.jncc\.gov\.uk\/ows.*request=GetMap/i,
+    /^https:\/\/elevation\.nationalmap\.gov\/arcgis\/rest\/services\/3DEPElevation\/ImageServer\/exportImage/i,
+    /^https:\/\/basemap\.nationalmap\.gov\/arcgis\/rest\/services\/USGSShadedReliefOnly\//i
 ];
 function isCachedMapUrl(url) { return MAP_CACHE_URL_TESTS.some(r => r.test(url)); }
 /** Sources of one kind for a point. */
@@ -16148,7 +16163,7 @@ function mapSourceCandidates(s) {
     if (!s.candidates) return [];
     let found = [];
     try { found = JSON.parse(localStorage.getItem('detekta_src_found_' + s.id) || '[]'); } catch (e) {}
-    const extra = (Array.isArray(found) ? found : []).map(n => ({ key: 'found:' + n, label: n.replace(/^.*:/, ''),
+    const extra = (Array.isArray(found) ? found : []).map(n => ({ key: 'found:' + n, label: n.includes(',') ? `${n.split(',').length} layers from the list` : n.replace(/^.*:/, ''),
         tiles: [s.discover.tiles.replace('{L}', n)] }));
     return [...extra, ...s.candidates];   // what the server itself lists comes first
 }
@@ -16177,15 +16192,20 @@ async function discoverMapSourceLayers(s) {
             all.forEach(x => {
                 const full = x.name.includes(':') ? x.name : s.discover.prefix + x.name;
                 if (/lidar|hillshade|dtm|dsm|relief|terrain/i.test(x.name + ' ' + x.title)) named.add(full);
-                if (/hillshade|relief|shaded/i.test(x.name + ' ' + x.title) && !/catalogue|index|tile_cat/i.test(x.name)) seen.set(full, x);
+                const want = s.discover.match ? s.discover.match.test(x.name) : (/hillshade|relief|shaded/i.test(x.name + ' ' + x.title) && !/catalogue|index|tile_cat/i.test(x.name));
+                if (want) seen.set(full, x);
             });
         } catch (e) { notes.push(`${where}: blocked or unreachable`); }
     }
     const rank = x => (/dtm|terrain|ground/i.test(x.name + x.title) ? 0 : 2) + (/pseudo|colour|color|multi/i.test(x.name + x.title) ? 1 : 0);
-    const names = Array.from(seen.entries()).sort((a, b) => rank(a[1]) - rank(b[1])).map(e => e[0]);
+    let names = Array.from(seen.entries()).sort((a, b) => rank(a[1]) - rank(b[1])).map(e => e[0]);
+    if (s.discover.combine && names.length) {   // all survey phases in one picture, oldest first (newest drawn on top)
+        const num = n => parseInt((n.match(/(\d+)/) || [0, 0])[1], 10);
+        names = [names.slice().sort((a, b) => num(a) - num(b)).join(',')];
+    }
     s._lidarNamed = Array.from(named).slice(0, 20);
     try { localStorage.setItem('detekta_src_found_' + s.id, JSON.stringify(names.slice(0, 6))); } catch (e) {}
-    return { names, note: 'layer lists — ' + notes.join('; ') + ` — ${names.length} hillshade` };
+    return { names, note: 'layer list — ' + notes.join('; ') };
 }
 function mapSourceTiles(s) { const c = mapSourceCandidate(s); return c ? c.tiles : s.tiles; }
 const mapSourceProbed = {};
@@ -16254,7 +16274,9 @@ function mapKindCreditHtml(kind) {
     if (!srcs.length) return `No ${MAP_KIND_NAMES[kind]} for this area yet`;
     return srcs.map(s => {
         const c = mapSourceCandidate(s);
-        const extra = mapSourceProbed[s.id] === 'failed' ? ' (not answering at the moment)' : (c && c.key === 'dsm' ? ' (surface, includes trees and buildings)' : '');
+        const extra = mapSourceProbed[s.id] === 'failed' ? ' (not answering at the moment)'
+            : (c && c.key === 'basemap') ? ' (coarser shaded relief)'
+            : s.partial ? ' (surveyed areas only)' : '';
         return `${kind === 'lidar' ? 'LiDAR' : 'Old map'} · ${s.where}${extra}: ${s.credit}`;
     }).join(' · ');
 }
@@ -16329,26 +16351,18 @@ async function checkMapSources() {
         for (const s of srcs) {
             const nm = kind === 'lidar' ? 'LiDAR' : 'Old map';
             if (s.candidates) {
-                if (s.discover) {
-                    const d = await discoverMapSourceLayers(s);
-                    rows.push([`${nm} (${s.where}) ${d.note}`, d.names.length ? 'ok' : 'none', d.names.length ? 'found: ' + d.names.join(', ') : 'no LiDAR hillshade layers found']);
-                    if (s._lidarNamed && s._lidarNamed.length) rows.push([`${nm} (${s.where}) other LiDAR layers`, 'none', s._lidarNamed.join(', ')]);
-                    // can the app read the published LiDAR files directly? (a small piece of each)
-                    for (const f of (s.discover.files || [])) {
-                        try {
-                            const r = await fetch(f.url, { mode: 'cors', cache: 'no-store', headers: { Range: 'bytes=0-16383' } });
-                            const b = new Uint8Array(await r.arrayBuffer());
-                            const tiff = b.length > 4 && ((b[0] === 0x49 && b[1] === 0x49) || (b[0] === 0x4D && b[1] === 0x4D));
-                            rows.push([`${nm} (${s.where}, ${f.label})`, (r.status === 206 || r.ok) && tiff ? 'ok' : 'bad',
-                                (r.status === 206 && tiff) ? 'the app can read this file (part by part) — good'
-                                : (r.ok && tiff) ? `readable, but only whole (${r.status}) — too big to use`
-                                : `answered ${r.status}, but not with the file`]);
-                        } catch (e) {
-                            rows.push([`${nm} (${s.where}, ${f.label})`, 'bad', 'blocked — the file store does not let apps read it']);
-                        }
-                    }
+                // try each way of asking; report the first that works, or every failure if none does
+                const before = rows.length;
+                let ok = false;
+                for (const c of mapSourceCandidates(s)) {
+                    await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), !/\/tile\//.test(c.tiles[0]));
+                    if (rows[rows.length - 1][1] === 'ok') { ok = true; rows.splice(before, rows.length - before - 1); break; }
                 }
-                for (const c of mapSourceCandidates(s)) await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), true);
+                if (!ok && s.discover) {
+                    const d = await discoverMapSourceLayers(s);
+                    rows.push([`${nm} (${s.where}) ${d.note}`, d.names.length ? 'ok' : 'none', d.names.length ? 'found: ' + d.names.join(', ') : 'nothing suitable found']);
+                    for (const n of d.names) await tryOne(`${nm} (${s.where}, from the list)`, () => mapSourceTestUrl(s, v.lat, v.lon, [s.discover.tiles.replace('{L}', n)]), true);
+                }
                 mapSourceProbed[s.id] = ''; probeMapSource(s);   // pick again with what we now know
             } else await tryOne(`${nm} (${s.where})`, () => mapSourceTestUrl(s, v.lat, v.lon), !s.tilejson);
         }
