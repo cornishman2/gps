@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.12
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.13
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.12.0';         // change whenever you publish
+const APP_VERSION = '2.13.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.12 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.13 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16168,12 +16168,12 @@ function mapSourceCandidates(s) {
         tiles: [s.discover.tiles.replace('{L}', n)] }));
     const list = [...extra, ...s.candidates];   // what the server itself lists comes first
     if (!s.shadeSld) return list;
-    // each way of asking, first with grey shading, then as the server draws it
-    return list.flatMap(c => [
-        { key: c.key + ':grey', label: c.label + ', shaded', tiles: c.tiles.map(u => withServerShading(u, true)), base: c.tiles, mode: 'grey' },
-        { key: c.key + ':shade', label: c.label + ', shaded (strong)', tiles: c.tiles.map(u => withServerShading(u, false)), base: c.tiles, mode: 'shade' },
-        { key: c.key, label: c.label + ', as the server draws it', tiles: c.tiles, base: c.tiles, mode: '' }
-    ]);
+    // V2.13: every way of asking with grey shading first, then strong shading, and only then as the server draws it (colours)
+    return [
+        ...list.map(c => ({ key: c.key + ':grey', label: c.label + ', shaded', tiles: c.tiles.map(u => withServerShading(u, true)), base: c.tiles, mode: 'grey' })),
+        ...list.map(c => ({ key: c.key + ':shade', label: c.label + ', shaded (strong)', tiles: c.tiles.map(u => withServerShading(u, false)), base: c.tiles, mode: 'shade' })),
+        ...list.map(c => ({ key: c.key, label: c.label + ', as the server draws it', tiles: c.tiles, base: c.tiles, mode: '' }))
+    ];
 }
 /** A GeoServer request asking it to draw the height layers as grey shading (V2.08). */
 // V2.09: a light grey base like England's, gentler relief, and "no data" (very low values) left see-through
