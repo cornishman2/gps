@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.10
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.11
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.10.0';         // change whenever you publish
+const APP_VERSION = '2.11.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.10 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.11 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16110,7 +16110,7 @@ const MAP_SOURCES = {
           credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' },
         // V2.07: Wales is not available - the Welsh Government LiDAR can't be read by apps (tested Nov 2026).
         // Scotland - Scottish Remote Sensing Portal (JNCC). Survey phases cover about 40% of Scotland.
-        { id: 'scot', areas: ['GB-SCT'], where: 'Scotland', partial: true, shadeSld: true, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
+        { id: 'scot', areas: ['GB-SCT'], where: 'Scotland', partial: true, shadeSld: true, splitLayers: true, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
           testPoint: { lat: 55.86, lon: -4.25 },
           candidates: [
               { key: 'p1-6', label: 'phases 1-6', tiles: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers=scotland:scotland-lidar-1-dtm,scotland:scotland-lidar-2-dtm,scotland:scotland-lidar-3-dtm,scotland:scotland-lidar-4-dtm,scotland:scotland-lidar-5-dtm,scotland:scotland-lidar-6-dtm&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
@@ -16170,9 +16170,9 @@ function mapSourceCandidates(s) {
     if (!s.shadeSld) return list;
     // each way of asking, first with grey shading, then as the server draws it
     return list.flatMap(c => [
-        { key: c.key + ':grey', label: c.label + ', shaded', tiles: c.tiles.map(u => withServerShading(u, true)) },
-        { key: c.key + ':shade', label: c.label + ', shaded (strong)', tiles: c.tiles.map(u => withServerShading(u, false)) },
-        { key: c.key, label: c.label + ', as the server draws it', tiles: c.tiles }
+        { key: c.key + ':grey', label: c.label + ', shaded', tiles: c.tiles.map(u => withServerShading(u, true)), base: c.tiles, mode: 'grey' },
+        { key: c.key + ':shade', label: c.label + ', shaded (strong)', tiles: c.tiles.map(u => withServerShading(u, false)), base: c.tiles, mode: 'shade' },
+        { key: c.key, label: c.label + ', as the server draws it', tiles: c.tiles, base: c.tiles, mode: '' }
     ]);
 }
 /** A GeoServer request asking it to draw the height layers as grey shading (V2.08). */
@@ -16266,6 +16266,23 @@ function rebuildMapStyles() {
     bgMapStyleKey = '';
     try { syncBgMap(); } catch (e) {}
     try { if (exploreMap) fetchMapJson(EXPLORE_MAP_STYLE).then(base => exploreMap.setStyle(buildExploreStyle(base), { diff: false })).catch(() => {}); } catch (e) {}
+}
+/** V2.11: the MapLibre sources for a map source - one per survey layer when the layers overlap
+ *  (each layer's empty edges are cleared, so older surveys show through where a newer one has no data). */
+function mapLibreSourcesFor(s) {
+    const c = s.splitLayers ? mapSourceCandidate(s) : null;
+    const m = c && c.base && c.base[0].match(/[?&]layers=([^&]+)/i);
+    if (!m) return [{ sfx: '', src: mapLibreSourceFor(s) }];
+    if (s.candidates) setTimeout(() => probeMapSource(s), 0);
+    const layers = decodeURIComponent(m[1]).split(',');
+    return layers.map((l, i) => {
+        let url = c.base[0].replace(/([?&]layers=)[^&]+/i, '$1' + encodeURIComponent(l));
+        if (c.mode) url = withServerShading(url, c.mode === 'grey');
+        const o = { type: 'raster', tileSize: 256, bounds: s.bounds, tiles: [url] };
+        if (s.minzoom != null) o.minzoom = s.minzoom;
+        if (s.maxzoom != null) o.maxzoom = s.maxzoom;
+        return { sfx: '-' + i, src: o };
+    });
 }
 /** One MapLibre source for a map source. */
 function mapLibreSourceFor(s) {
@@ -16416,7 +16433,7 @@ const MAP_BG_STYLES = {
                  get credit() { return mapKindCreditHtml('lidar'); },
                  build: () => {
                      const st = { version: 8, sources: {}, layers: [ { id: 'ground', type: 'background', paint: { 'background-color': '#ececec' } } ] };
-                     mapSourcesToLoad('lidar').forEach(s => { st.sources['lidar-' + s.id] = mapLibreSourceFor(s); st.layers.push({ id: 'lidar-' + s.id, type: 'raster', source: 'lidar-' + s.id }); });
+                     mapSourcesToLoad('lidar').forEach(s => mapLibreSourcesFor(s).forEach(p => { const id = 'lidar-' + s.id + p.sfx; st.sources[id] = p.src; st.layers.push({ id, type: 'raster', source: id }); }));
                      return st;
                  } }
 };
@@ -17163,7 +17180,8 @@ function buildExploreStyle(base) {
     const st = JSON.parse(JSON.stringify(base));
     st.sources = st.sources || {}; st.layers = st.layers || [];
     const lidarSrcs = mapSourcesToLoad('lidar');
-    lidarSrcs.forEach(s => { st.sources['ex-lidar-' + s.id] = mapLibreSourceFor(s); });
+    const lidarParts = [];
+    lidarSrcs.forEach(s => mapLibreSourcesFor(s).forEach(p => { const id = 'ex-lidar-' + s.id + p.sfx; st.sources[id] = p.src; lidarParts.push(id); }));
     st.sources['ex-stakes'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-finds'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-sm'] = { type: 'geojson', data: smExploreGeoJson() };
@@ -17171,7 +17189,7 @@ function buildExploreStyle(base) {
     st.sources['ex-tracks'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     // LiDAR goes under the labels, so place and road names stay readable on top
     const firstSymbol = st.layers.findIndex(l => l.type === 'symbol');
-    const lidarLayers = lidarSrcs.map(s => ({ id: 'ex-lidar-' + s.id, type: 'raster', source: 'ex-lidar-' + s.id, paint: { 'raster-opacity': getExploreLidar() / 100 } }));
+    const lidarLayers = lidarParts.map(id => ({ id, type: 'raster', source: id, paint: { 'raster-opacity': getExploreLidar() / 100 } }));
     if (firstSymbol >= 0) st.layers.splice(firstSymbol, 0, ...lidarLayers); else st.layers.push(...lidarLayers);
     const font = ((st.layers.find(l => l.type === 'symbol' && l.layout && Array.isArray(l.layout['text-font'])) || {}).layout || {})['text-font'] || ['Noto Sans Regular'];
     const smVis = isShowMonuments() ? 'visible' : 'none';
