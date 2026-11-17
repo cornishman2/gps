@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.04
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.05
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.04.0';         // change whenever you publish
+const APP_VERSION = '2.05.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.04 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.05 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16103,6 +16103,9 @@ const MAP_SOURCES = {
           discover: { caps: ['https://datamap.gov.wales/geoserver/geonode/wms?service=WMS&version=1.3.0&request=GetCapabilities',
                              'https://datamap.gov.wales/geoserver/ows?service=WMS&version=1.3.0&request=GetCapabilities'],
                       prefix: 'geonode:',
+                      // V2.05: the published LiDAR files (Cloud Optimised GeoTIFFs) - checked by Check map sources
+                      files: [ { label: 'ground hillshade file', url: 'https://dmwproductionblob.blob.core.windows.net/cogs/dtm_1m_wales_hillshade_2020_23_cubic_cog.tif' },
+                               { label: 'surface hillshade file', url: 'https://dmwproductionblob.blob.core.windows.net/cogs/wales_lidar_dsm_1m_hillshade_cog.tif' } ],
                       tiles: 'https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers={L}&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}' },
           candidates: [
               { key: 'dtm', label: 'ground', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:dtm_1m_wales_hillshade_2020_23_cubic_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
@@ -16167,6 +16170,7 @@ async function discoverMapSourceLayers(s) {
                 return { name: n ? n.textContent.trim() : '', title: t ? t.textContent.trim() : '' };
             }).filter(x => x.name);
             const lidar = all.filter(x => /hillshade/i.test(x.name + ' ' + x.title) && /lidar|dtm|dsm|1m/i.test(x.name + ' ' + x.title));
+            s._lidarNamed = all.filter(x => /lidar|hillshade|dtm|dsm/i.test(x.name + ' ' + x.title)).map(x => x.name).slice(0, 12);
             const rank = x => (/dtm|terrain|ground/i.test(x.name + x.title) ? 0 : 2) + (/pseudo|colour|color|multi/i.test(x.name + x.title) ? 1 : 0);
             lidar.sort((a, b) => rank(a) - rank(b));
             const names = lidar.map(x => x.name.includes(':') ? x.name : s.discover.prefix + x.name);
@@ -16321,6 +16325,21 @@ async function checkMapSources() {
                 if (s.discover) {
                     const d = await discoverMapSourceLayers(s);
                     rows.push([`${nm} (${s.where}) ${d.note}`, d.names.length ? 'ok' : 'none', d.names.length ? 'found: ' + d.names.join(', ') : 'no LiDAR hillshade layers found']);
+                    if (s._lidarNamed && s._lidarNamed.length) rows.push([`${nm} (${s.where}) other LiDAR layers`, 'none', s._lidarNamed.join(', ')]);
+                    // can the app read the published LiDAR files directly? (a small piece of each)
+                    for (const f of (s.discover.files || [])) {
+                        try {
+                            const r = await fetch(f.url, { mode: 'cors', cache: 'no-store', headers: { Range: 'bytes=0-16383' } });
+                            const b = new Uint8Array(await r.arrayBuffer());
+                            const tiff = b.length > 4 && ((b[0] === 0x49 && b[1] === 0x49) || (b[0] === 0x4D && b[1] === 0x4D));
+                            rows.push([`${nm} (${s.where}, ${f.label})`, (r.status === 206 || r.ok) && tiff ? 'ok' : 'bad',
+                                (r.status === 206 && tiff) ? 'the app can read this file (part by part) — good'
+                                : (r.ok && tiff) ? `readable, but only whole (${r.status}) — too big to use`
+                                : `answered ${r.status}, but not with the file`]);
+                        } catch (e) {
+                            rows.push([`${nm} (${s.where}, ${f.label})`, 'bad', 'blocked — the file store does not let apps read it']);
+                        }
+                    }
                 }
                 for (const c of mapSourceCandidates(s)) await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), true);
                 mapSourceProbed[s.id] = ''; probeMapSource(s);   // pick again with what we now know
