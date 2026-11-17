@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.17
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.18
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2045,7 +2045,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.17.0';         // change whenever you publish
+const APP_VERSION = '2.18.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3707,7 +3707,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.17 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.18 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16120,8 +16120,8 @@ const MAP_SOURCES = {
         // Scotland - Scottish Remote Sensing Portal (JNCC). Survey phases cover about 40% of Scotland.
         { id: 'scot', areas: ['GB-SCT'], where: 'Scotland', partial: true, shadeSld: true, splitLayers: true,
           // V2.16: heights from the server (WCS), shaded here; one layer per survey phase, empty areas see-through
-          wcs: { url: 'https://srsp-ows.jncc.gov.uk/ows?service=WCS&version=1.0.0&request=GetCoverage&coverage={COV}&crs=EPSG:3857&response_crs=EPSG:3857&bbox={BBOX}&width=258&height=258&format=GeoTIFF',
-                 minzoom: 13, maxzoom: 18 }, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
+          // V2.18: this server only answers WCS version 1.1 (1.0 is not understood, 2.0 is switched off)
+          wcs: { base: 'https://srsp-ows.jncc.gov.uk/ows', versions: ['1.1.1', '1.1.0'], minzoom: 13, maxzoom: 18 }, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
           testPoint: { lat: 55.86, lon: -4.25 },
           candidates: [
               { key: 'p1-6', label: 'phases 1-6', tiles: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers=scotland:scotland-lidar-1-dtm,scotland:scotland-lidar-2-dtm,scotland:scotland-lidar-3-dtm,scotland:scotland-lidar-4-dtm,scotland:scotland-lidar-5-dtm,scotland:scotland-lidar-6-dtm&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
@@ -16181,7 +16181,7 @@ function mapSourceCandidates(s) {
     if (!s.shadeSld) return list;
     const firstLayer = c => { const m = c.tiles[0].match(/[?&]layers=([^&]+)/i); return m ? decodeURIComponent(m[1]).split(',')[0] : ''; };
     const wcsFirst = s.wcs ? list.map(c => ({ key: c.key + ':wcs', label: c.label + ', shaded by Detekta', mode: 'wcs', base: c.tiles,
-        tiles: [s.wcs.url.replace('{COV}', encodeURIComponent(firstLayer(c))).replace('{BBOX}', '{bbox-epsg-3857}')] })) : [];
+        tiles: c.tiles })) : [];
     // V2.13: every way of asking with grey shading first, then strong shading, and only then as the server draws it (colours)
     return [
         ...wcsFirst,
@@ -16263,6 +16263,11 @@ function candidateTestTiles(s, c) {
     return [u];
 }
 async function candidateWorks(s, c, p) {
+    if (c.mode === 'wcs') {
+        const m = c.base && c.base[0].match(/[?&]layers=([^&]+)/i);
+        const cov = m ? decodeURIComponent(m[1]).split(',').slice(-1)[0] : '';
+        return cov ? await probeDemVersion(s, cov, p) : false;
+    }
     const tries = (c.mode ? 2 : 1);   // a shaded picture gets a second chance before falling back to colours
     for (let i = 0; i < tries; i++) {
         if (await mapPictureWorks(await mapSourceTestUrl(s, p.lat, p.lon, candidateTestTiles(s, c)))) return true;
@@ -16432,6 +16437,10 @@ async function checkMapSources() {
                 const before = rows.length;
                 let ok = false;
                 for (const c of mapSourceCandidates(s)) {
+                    if (c.mode === 'wcs') {
+                        const okW = await candidateWorks(s, c, { lat: v.lat, lon: v.lon });
+                        rows.push([`${nm} (${s.where}, ${c.label})`, okW ? 'ok' : 'bad', okW ? 'works' : 'the server did not send heights (details below)']);
+                    } else
                     await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, candidateTestTiles(s, c)), !/\/tile\//.test(c.tiles[0]));
                     if (rows[rows.length - 1][1] === 'ok') { ok = true; rows.splice(before, rows.length - before - 1); break; }
                 }
@@ -16442,36 +16451,24 @@ async function checkMapSources() {
                 }
                 if (s.wcs) {
                     // V2.17: ask for heights three ways and report exactly what the server answers
-                    const base = 'https://srsp-ows.jncc.gov.uk/ows?service=WCS';
                     const curW = mapSourceCandidates(s).find(c => c.mode === 'wcs');
                     const mm = curW && curW.base[0].match(/[?&]layers=([^&]+)/i);
                     const covs = mm ? decodeURIComponent(mm[1]).split(',') : [];
                     const cov = covs.find(n => /lidar-5-dtm$/.test(n)) || covs[covs.length - 1] || 'scotland:scotland-lidar-5-dtm';
-                    const [E, N] = OSGB.wgs84ToEN(v.lat, v.lon);
                     const t15 = tileXYAt(v.lat, v.lon, 15);
-                    const ways = [
-                        ['heights, web-map grid (WCS 1.0)', demWcsUrl(s, cov, t15.z, t15.x, t15.y)],
-                        ['heights, British grid (WCS 1.0)', `${base}&version=1.0.0&request=GetCoverage&coverage=${encodeURIComponent(cov)}&crs=EPSG:27700&bbox=${Math.round(E - 125)},${Math.round(N - 125)},${Math.round(E + 125)},${Math.round(N + 125)}&width=250&height=250&format=GeoTIFF`],
-                        ['heights, British grid (WCS 2.0)', `${base}&version=2.0.1&request=GetCoverage&coverageId=${encodeURIComponent(cov.replace(':', '__'))}&subset=E(${Math.round(E - 125)},${Math.round(E + 125)})&subset=N(${Math.round(N - 125)},${Math.round(N + 125)})&format=image/tiff`],
-                        ['height layer list (WCS)', `${base}&version=1.0.0&request=GetCapabilities`]
-                    ];
-                    for (const [label, url] of ways) {
+                    for (const ver of s.wcs.versions) {
                         let msg = '', ok = false;
                         try {
-                            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-                            const ct = r.headers.get('Content-Type') || '';
-                            if (/tiff/i.test(ct)) {
-                                const tf = await GeoTIFF.fromArrayBuffer(await r.arrayBuffer()); const im = await tf.getImage();
+                            const r = await fetchDemTiff(s, cov, t15.z, t15.x, t15.y, undefined, ver);
+                            if (r.tiff) {
+                                const tf = await GeoTIFF.fromArrayBuffer(r.tiff); const im = await tf.getImage();
                                 const ras = await im.readRasters({ interleave: true }); let lo = Infinity, hi = -Infinity;
                                 for (const z of ras) if (isFinite(z) && z > -500 && z < 5000) { if (z < lo) lo = z; if (z > hi) hi = z; }
                                 ok = true; msg = `height file ${im.getWidth()}×${im.getHeight()}, heights ${isFinite(lo) ? lo.toFixed(1) + ' to ' + hi.toFixed(1) + ' m' : 'none here'}`;
-                            } else {
-                                const txt = await r.text();
-                                if (/GetCapabilities/.test(url)) { const n = (txt.match(/lidar[^<]*dtm/gi) || []).length; ok = r.ok && n > 0; msg = `${r.status}, ${n} LiDAR height layers listed` + (ok ? '' : ' — ' + txt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140)); }
-                                else msg = `${r.status} ${ct.split(';')[0]} — “${txt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180)}”`;
-                            }
+                            } else msg = r.note;
                         } catch (e) { msg = 'blocked or unreachable'; }
-                        rows.push([`${nm} (${s.where}) ${label}, ${cov.replace(/^.*lidar-/, 'phase ').replace(/-dtm.*$/, '')}`, ok ? 'ok' : 'bad', msg]);
+                        rows.push([`${nm} (${s.where}) heights (WCS ${ver}), ${cov.replace(/^.*lidar-/, 'phase ').replace(/-dtm.*$/, '')}`, ok ? 'ok' : 'bad', msg]);
+                        if (ok) break;
                     }
                     // V2.16: each survey phase, shaded by Detekta from the heights, at this spot
                     const cur = mapSourceCandidates(s).find(c => c.mode === 'wcs');
@@ -16750,10 +16747,59 @@ function ensureBgMapProtocol() {
     });
 }
 // V2.16: LiDAR heights -> grey shading, drawn here. detektadem://<source id>/<layer>/<z>/<x>/<y>
-function demWcsUrl(s, cov, z, x, y) {
+/** WCS 1.1 request for one map square (plus a 1-pixel border for the slopes), in the web-map grid. */
+function demWcsUrl(s, cov, z, x, y, version) {
     const R = 20037508.342789244, size = 2 * R / Math.pow(2, z), px = size / 256;
-    const minx = -R + x * size - px, maxy = R - y * size + px;
-    return s.wcs.url.replace('{COV}', encodeURIComponent(cov)).replace('{BBOX}', [minx, maxy - size - 2 * px, minx + size + 2 * px, maxy].join(','));
+    const minx = -R + x * size - px, maxy = R - y * size + px, maxx = minx + size + 2 * px, miny = maxy - size - 2 * px;
+    let ver = version; if (!ver) { try { ver = localStorage.getItem('detekta_wcs_ver_' + s.id) || ''; } catch (e) {} }
+    ver = ver || s.wcs.versions[0];
+    const crs = 'urn:ogc:def:crs:EPSG::3857';
+    return `${s.wcs.base}?service=WCS&version=${ver}&request=GetCoverage&identifier=${encodeURIComponent(cov)}`
+        + `&BoundingBox=${minx},${miny},${maxx},${maxy},${crs}&GridBaseCRS=${crs}`
+        + `&GridCS=urn:ogc:def:cs:OGC:0.0:Grid2dSquareCS&GridType=urn:ogc:def:method:WCS:1.1:2dGridIn2dCrs`
+        + `&GridOrigin=${minx + px / 2},${maxy - px / 2}&GridOffsets=${px},${-px}&format=image/tiff&store=false`;
+}
+/** WCS 1.1 sends the height file inside a multi-part reply: find the TIFF inside it. */
+function tiffFromReply(buf, ct) {
+    const b = new Uint8Array(buf);
+    const isTiff = i => (b[i] === 0x49 && b[i + 1] === 0x49 && b[i + 2] === 0x2A && b[i + 3] === 0) || (b[i] === 0x4D && b[i + 1] === 0x4D && b[i + 2] === 0 && b[i + 3] === 0x2A);
+    if (isTiff(0)) return buf;
+    if (!/multipart/i.test(ct || '')) return null;
+    const bm = /boundary="?([^";]+)"?/i.exec(ct); const boundary = bm ? '--' + bm[1] : null;
+    for (let i = 0; i < b.length - 4; i++) {
+        if (!isTiff(i)) continue;
+        // the part ends at the next boundary line
+        let end = b.length;
+        if (boundary) {
+            const pat = new TextEncoder().encode('\r\n' + boundary);
+            outer: for (let j = i + 8; j < b.length - pat.length; j++) {
+                for (let k = 0; k < pat.length; k++) if (b[j + k] !== pat[k]) continue outer;
+                end = j; break;
+            }
+        }
+        return buf.slice(i, end);
+    }
+    return null;
+}
+/** Fetch the heights for a square; returns { tiff, note }. */
+async function fetchDemTiff(s, cov, z, x, y, signal, version) {
+    const url = demWcsUrl(s, cov, z, x, y, version);
+    const res = await fetch(url, { signal, mode: 'cors' });
+    const ct = res.headers.get('Content-Type') || '';
+    const buf = await res.arrayBuffer();
+    const tiff = res.ok ? tiffFromReply(buf, ct) : null;
+    if (tiff) return { tiff, url };
+    let note = '';
+    try { note = new TextDecoder().decode(buf.slice(0, 2000)).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180); } catch (e) {}
+    return { tiff: null, url, note: `${res.status} ${ct.split(';')[0]} — “${note}”` };
+}
+/** Which WCS version the server answers (tried once, remembered). */
+async function probeDemVersion(s, cov, p) {
+    const t = tileXYAt(p.lat, p.lon, 15);
+    for (const ver of s.wcs.versions) {
+        try { const r = await fetchDemTiff(s, cov, t.z, t.x, t.y, undefined, ver); if (r.tiff) { try { localStorage.setItem('detekta_wcs_ver_' + s.id, ver); } catch (e) {} return true; } } catch (e) {}
+    }
+    return false;
 }
 /** Grey hillshade (sun from the north-west, 45 degrees up) from a grid of heights; no-data cells are see-through. */
 function shadeHeights(v, w, hgt, cellM, nodata) {
@@ -16779,16 +16825,15 @@ function shadeHeights(v, w, hgt, cellM, nodata) {
     return out;
 }
 async function renderDemTile(s, cov, z, x, y, signal) {
-    const url = demWcsUrl(s, cov, z, x, y);
-    const key = url + '&detekta_shade=1';
+    const key = demWcsUrl(s, cov, z, x, y) + '&detekta_shade=1';
     let cache = null;
     try { if (window.caches) cache = await caches.open(MAP_TILE_CACHE); } catch (e) {}
     if (cache) { try { const hit = await cache.match(key); if (hit) return await hit.arrayBuffer(); } catch (e) {} }
-    const res = await fetch(url, { signal, mode: 'cors' });
-    if (!res.ok) { const err = new Error('Heights ' + res.status); err.status = res.status; throw err; }
+    const got = await fetchDemTiff(s, cov, z, x, y, signal);
     let png = new ArrayBuffer(0);
-    if (/tiff/i.test(res.headers.get('Content-Type') || '')) {
-        const tiff = await GeoTIFF.fromArrayBuffer(await res.arrayBuffer());
+    if (!got.tiff) return png;   // not cached: try again next time
+    {
+        const tiff = await GeoTIFF.fromArrayBuffer(got.tiff);
         const img = await tiff.getImage();
         const w = img.getWidth(), hgt = img.getHeight();
         const ras = await img.readRasters({ interleave: true });
