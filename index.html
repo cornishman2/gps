@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.02
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.03
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.02.0';         // change whenever you publish
+const APP_VERSION = '2.03.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.02 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.03 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -3870,7 +3870,7 @@ function renderHelpPage() {
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-globe-europe"></i> Map Backgrounds</h3>
         <p class="text-sm text-gray-700 mb-2">Under the Map choose <strong>Plain</strong>, <strong>Satellite</strong>, <strong>Outdoor</strong>, <strong>Old map</strong> or <strong>LiDAR</strong>. Satellite shows hedges, gates and cropmarks; Outdoor shows footpaths and field edges; Old map is the best old map for the area (in Great Britain the Ordnance Survey six-inch map of 1888–1913), showing lost cottages, wells, paths and field boundaries; LiDAR shows the shape of the ground — ridge and furrow, barrows, banks, ditches and house platforms. Your pins, tracks, grid and dots sit on top and move with it. With Satellite, Outdoor or LiDAR, the <strong>Old map</strong> slider fades the 1888 map over the top, so you can see old buildings, paths and boundaries against today's ground. Each dig remembers its choice, and the Place map has its own.</p>
-        <p class="text-sm text-gray-700 mb-2"><strong>Different countries.</strong> Old map and LiDAR come from different services in different countries, chosen automatically from where the map is (the credit line under the map names the source, e.g. “LiDAR · England”). So far: LiDAR for England, and the old map for England, Wales and Scotland; more countries are being added. Where there is no source yet, the button is greyed out. You can fix the region in <strong>Settings → Map region</strong>, and <strong>Check map sources</strong> there tests every source for the place Explore was last showing — handy for trying another country from home.</p>
+        <p class="text-sm text-gray-700 mb-2"><strong>Different countries.</strong> Old map and LiDAR come from different services in different countries, chosen automatically from where the map is (the credit line under the map names the source, e.g. “LiDAR · England”). So far: LiDAR for England and Wales, and the old map for England, Wales and Scotland; more countries are being added. Where there is no source yet, the button is greyed out. You can fix the region in <strong>Settings → Map region</strong>, and <strong>Check map sources</strong> there tests every source for the place Explore was last showing — handy for trying another country from home.</p>
         <p class="text-sm text-gray-700 mb-2">Map pictures need signal the first time; after that, places you have viewed are kept on your phone and show without signal. They are not included in backups.</p>
         <p class="text-sm text-gray-700">Outdoor and LiDAR are free. Satellite and Old map use Detekta's built-in MapTiler key, whose free monthly allowance is shared by all users. If it runs out, those two pause until the next month. To avoid that, get your own free key from MapTiler and paste it in <strong>Settings → Map backgrounds</strong>.</p>
       </div>
@@ -16094,7 +16094,16 @@ const MAP_SOURCES = {
     lidar: [
         { id: 'ea', areas: ['GB-ENG'], where: 'England', bounds: [-6.5, 49.8, 2.0, 55.9], minzoom: 10, maxzoom: 20,
           tiles: ['https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms?service=WMS&request=GetMap&version=1.3.0&layers=Lidar_Composite_Hillshade_DTM_1m&styles=hillshade&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'],
-          credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' }
+          credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' },
+        // V2.03: Wales - Welsh Government LiDAR 2020-23, 1 m. The bare-ground (DTM) picture is tried first;
+        // if the service doesn't give it, the surface (DSM, includes trees and buildings) picture is used.
+        { id: 'wg', areas: ['GB-WLS'], where: 'Wales', bounds: [-5.7, 51.3, -2.6, 53.5], minzoom: 10, maxzoom: 19,
+          testPoint: { lat: 52.42, lon: -3.75 },
+          candidates: [
+              { key: 'dtm', label: 'ground', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:dtm_1m_wales_hillshade_2020_23_cubic_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
+              { key: 'dsm', label: 'surface', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:wales_lidar_dsm_1m_hillshade_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] }
+          ],
+          credit: 'LiDAR © Welsh Government (<a href="https://datamap.gov.wales/" target="_blank" rel="noopener">DataMapWales</a>), <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' }
     ],
     oldmap: [
         { id: 'nls6', areas: ['GB-ENG', 'GB-WLS', 'GB-SCT'], where: 'Great Britain', maptiler: true, bounds: [-8.8, 49.7, 2.0, 61.0],
@@ -16108,7 +16117,8 @@ const MAP_KIND_NAMES = { lidar: 'LiDAR', oldmap: 'old map' };
 const MAP_CACHE_URL_TESTS = [
     /^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//,
     /^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/,
-    /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i
+    /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i,
+    /^https:\/\/datamap\.gov\.wales\/geoserver\/.*request=GetMap/i
 ];
 function isCachedMapUrl(url) { return MAP_CACHE_URL_TESTS.some(r => r.test(url)); }
 /** Sources of one kind for a point. */
@@ -16122,10 +16132,47 @@ function mapSourcesToLoad(kind) {
     const all = MAP_SOURCES[kind] || [];
     return fixed === 'auto' ? all : all.filter(s => s.areas.includes(fixed));
 }
+// Some services may offer the picture under one of several names: try them in order, remember the one that works.
+function mapSourceCandidate(s) {
+    if (!s.candidates) return null;
+    let k = ''; try { k = localStorage.getItem('detekta_src_' + s.id) || ''; } catch (e) {}
+    return s.candidates.find(c => c.key === k) || s.candidates[0];
+}
+function mapSourceTiles(s) { const c = mapSourceCandidate(s); return c ? c.tiles : s.tiles; }
+const mapSourceProbed = {};
+async function mapPictureWorks(url) {
+    try {
+        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+        return r.ok && /^image\//i.test(r.headers.get('Content-Type') || '');   // map servers send errors as text
+    } catch (e) { return false; }
+}
+async function probeMapSource(s) {
+    if (!s.candidates || mapSourceProbed[s.id]) return;
+    mapSourceProbed[s.id] = 'checking';
+    const p = s.testPoint;
+    for (const c of s.candidates) {
+        const url = await mapSourceTestUrl(s, p.lat, p.lon, c.tiles);
+        if (await mapPictureWorks(url)) {
+            mapSourceProbed[s.id] = 'ok';
+            const was = mapSourceCandidate(s).key;
+            try { localStorage.setItem('detekta_src_' + s.id, c.key); } catch (e) {}
+            if (was !== c.key) rebuildMapStyles();
+            return;
+        }
+    }
+    mapSourceProbed[s.id] = 'failed';
+}
+/** Rebuild the Map background and Explore's map (after a source changes). */
+function rebuildMapStyles() {
+    bgMapStyleKey = '';
+    try { syncBgMap(); } catch (e) {}
+    try { if (exploreMap) fetchMapJson(EXPLORE_MAP_STYLE).then(base => exploreMap.setStyle(buildExploreStyle(base), { diff: false })).catch(() => {}); } catch (e) {}
+}
 /** One MapLibre source for a map source. */
 function mapLibreSourceFor(s) {
     const o = { type: 'raster', tileSize: 256, bounds: s.bounds };
-    if (s.tilejson) o.url = s.tilejson(); else o.tiles = s.tiles.slice();
+    if (s.candidates) setTimeout(() => probeMapSource(s), 0);
+    if (s.tilejson) o.url = s.tilejson(); else o.tiles = mapSourceTiles(s).slice();
     if (s.minzoom != null) o.minzoom = s.minzoom;
     if (s.maxzoom != null) o.maxzoom = s.maxzoom;
     return o;
@@ -16148,7 +16195,11 @@ function mapKindCreditHtml(kind) {
     const c = currentMapCentre();
     const srcs = c ? mapSourcesOnScreen(kind) : (MAP_SOURCES[kind] || []).slice(0, 1);
     if (!srcs.length) return `No ${MAP_KIND_NAMES[kind]} for this area yet`;
-    return srcs.map(s => `${kind === 'lidar' ? 'LiDAR' : 'Old map'} · ${s.where}: ${s.credit}`).join(' · ');
+    return srcs.map(s => {
+        const c = mapSourceCandidate(s);
+        const extra = mapSourceProbed[s.id] === 'failed' ? ' (not answering at the moment)' : (c && c.key === 'dsm' ? ' (surface, includes trees and buildings)' : '');
+        return `${kind === 'lidar' ? 'LiDAR' : 'Old map'} · ${s.where}${extra}: ${s.credit}`;
+    }).join(' · ');
 }
 /** Sources of one kind anywhere on screen (Explore: a 5 x 5 spread of points over the view; elsewhere: the middle). */
 function mapSourcesOnScreen(kind) {
@@ -16183,12 +16234,12 @@ function tileBbox3857(t) {
     const minx = -R + t.x * size, maxy = R - t.y * size;
     return [minx, maxy - size, minx + size, maxy].join(',');
 }
-async function mapSourceTestUrl(s, lat, lon) {
+async function mapSourceTestUrl(s, lat, lon, tiles) {
     let tmpl, maxz = s.maxzoom != null ? s.maxzoom : 18;
     if (s.tilejson) {
         const tj = await (await fetch(s.tilejson(), { mode: 'cors', cache: 'no-store' })).json();
         tmpl = tj.tiles[0]; if (tj.maxzoom != null) maxz = tj.maxzoom;
-    } else tmpl = s.tiles[0];
+    } else tmpl = (tiles || mapSourceTiles(s))[0];
     const t = tileXYAt(lat, lon, Math.min(16, maxz));
     return tmpl.replace('{bbox-epsg-3857}', tileBbox3857(t)).replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
 }
@@ -16199,11 +16250,14 @@ async function checkMapSources() {
     const area = mapAreaFor(v.lat, v.lon);
     out.innerHTML = `<p class="text-sm text-gray-600">Checking the map sources for ${escapeHtml(area ? MAP_AREA_NAMES[area] : 'this area')}…</p>`;
     const rows = [];
-    const tryOne = async (label, getUrl) => {
+    const tryOne = async (label, getUrl, wantImage) => {
         try {
             const url = await getUrl();
             const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-            rows.push([label, r.ok || r.status === 204 ? 'ok' : 'bad', r.ok || r.status === 204 ? 'works' : `the service answered with error ${r.status}`]);
+            const notImage = wantImage && r.ok && !/^image\//i.test(r.headers.get('Content-Type') || '');
+            rows.push([label, (r.ok || r.status === 204) && !notImage ? 'ok' : 'bad',
+                       notImage ? 'the service answered, but not with a map picture (wrong layer name?)'
+                       : (r.ok || r.status === 204) ? 'works' : `the service answered with error ${r.status}`]);
         } catch (e) {
             rows.push([label, 'bad', 'blocked or unreachable (no signal, or the service does not let apps use it)']);
         }
@@ -16213,7 +16267,13 @@ async function checkMapSources() {
     for (const kind of ['oldmap', 'lidar']) {
         const srcs = mapSourcesFor(kind, v.lat, v.lon);
         if (!srcs.length) rows.push([kind === 'lidar' ? 'LiDAR' : 'Old map', 'none', 'no source for this area yet']);
-        for (const s of srcs) await tryOne(`${kind === 'lidar' ? 'LiDAR' : 'Old map'} (${s.where})`, () => mapSourceTestUrl(s, v.lat, v.lon));
+        for (const s of srcs) {
+            const nm = kind === 'lidar' ? 'LiDAR' : 'Old map';
+            if (s.candidates) {
+                for (const c of s.candidates) await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), true);
+                mapSourceProbed[s.id] = ''; probeMapSource(s);   // pick again with what we now know
+            } else await tryOne(`${nm} (${s.where})`, () => mapSourceTestUrl(s, v.lat, v.lon), !s.tilejson);
+        }
     }
     const icon = { ok: '<i class="fas fa-check-circle text-green-600"></i>', bad: '<i class="fas fa-times-circle text-red-600"></i>', none: '<i class="fas fa-minus-circle text-gray-400"></i>' };
     out.innerHTML = `<p class="text-xs text-gray-500 mb-1">At ${v.lat.toFixed(4)}, ${v.lon.toFixed(4)} (where Explore was last) · ${escapeHtml(area ? MAP_AREA_NAMES[area] : 'no special maps for this area yet')}</p>`
