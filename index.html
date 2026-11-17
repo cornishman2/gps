@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.08
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.09
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.08.0';         // change whenever you publish
+const APP_VERSION = '2.09.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.08 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.09 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16170,17 +16170,22 @@ function mapSourceCandidates(s) {
     if (!s.shadeSld) return list;
     // each way of asking, first with grey shading, then as the server draws it
     return list.flatMap(c => [
-        { key: c.key + ':shade', label: c.label + ', shaded', tiles: c.tiles.map(withServerShading) },
+        { key: c.key + ':grey', label: c.label + ', shaded', tiles: c.tiles.map(u => withServerShading(u, true)) },
+        { key: c.key + ':shade', label: c.label + ', shaded (strong)', tiles: c.tiles.map(u => withServerShading(u, false)) },
         { key: c.key, label: c.label + ', as the server draws it', tiles: c.tiles }
     ]);
 }
 /** A GeoServer request asking it to draw the height layers as grey shading (V2.08). */
-function withServerShading(url) {
+// V2.09: a light grey base like England's, gentler relief, and "no data" (very low values) left see-through
+function withServerShading(url, soft) {
     const m = url.match(/[?&]layers=([^&]+)/i); if (!m) return url;
     const layers = decodeURIComponent(m[1]).split(',');
+    const cmap = soft ? '<ColorMap type="intervals"><ColorMapEntry color="#000000" quantity="-500" opacity="0"/>'
+                      + '<ColorMapEntry color="#d6d6d6" quantity="10000" opacity="1"/></ColorMap>' : '';
+    const relief = soft ? 18 : 40;
     const sld = '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc">'
-        + layers.map(l => `<NamedLayer><Name>${l}</Name><UserStyle><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>`
-            + '<ShadedRelief><BrightnessOnly>true</BrightnessOnly><ReliefFactor>40</ReliefFactor></ShadedRelief></RasterSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer>').join('')
+        + layers.map(l => `<NamedLayer><Name>${l}</Name><UserStyle><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>${cmap}`
+            + `<ShadedRelief><BrightnessOnly>true</BrightnessOnly><ReliefFactor>${relief}</ReliefFactor></ShadedRelief></RasterSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer>`).join('')
         + '</StyledLayerDescriptor>';
     return url.replace(/&styles=[^&]*/i, '') + '&sld_body=' + encodeURIComponent(sld);
 }
@@ -16293,7 +16298,7 @@ function mapKindCreditHtml(kind) {
         const c = mapSourceCandidate(s);
         const extra = mapSourceProbed[s.id] === 'failed' ? ' (not answering at the moment)'
             : (c && c.key === 'basemap') ? ' (coarser shaded relief)'
-            : (s.shadeSld && c && !c.key.endsWith(':shade')) ? ' (coloured by height; surveyed areas only)'
+            : (s.shadeSld && c && !/:(grey|shade)$/.test(c.key)) ? ' (coloured by height; surveyed areas only)'
             : s.partial ? ' (surveyed areas only)' : '';
         return `${kind === 'lidar' ? 'LiDAR' : 'Old map'} · ${s.where}${extra}: ${s.credit}`;
     }).join(' · ');
