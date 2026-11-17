@@ -297,7 +297,7 @@ return maplibregl$1;
   html.hc #target-map-container polyline.track-edge { stroke-width: calc(7px * var(--iz, 1)) !important; stroke: #000; stroke-opacity: 1; }
   html.hc .place-pin { border: 3px solid #000 !important; box-shadow: 0 0 0 2px #fff !important; }
 
-  /* Old OS fade slider: big enough for a thumb, and horizontal drags don't scroll the page */
+  /* Old map fade slider: big enough for a thumb, and horizontal drags don't scroll the page */
   #bg-overlay-slider { height: 36px; touch-action: none; accent-color: rgb(29 78 216); cursor: pointer; }
   #bg-overlay-slider::-webkit-slider-thumb { width: 28px; height: 28px; }
   html.hc #bg-overlay-slider { accent-color: #000; }
@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.00
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.01
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.00.0';         // change whenever you publish
+const APP_VERSION = '2.01.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.00 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.01 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -3779,7 +3779,7 @@ function renderHelpPage() {
         <p class="text-sm text-gray-700 mb-3">The main field screen. Shows a north-up plot of all finds (dug and not dug), stakes, scouting dots and recorded tracks for the open dig. The dig name and its not dug / dug / stake / track counts are shown above the map. If no dig is open, the page shows a prompt directing you to the Digs page to open or create one.</p>
         <p class="text-sm font-bold text-gray-700 mb-1">Detect and Scout</p>
         <p class="text-sm text-gray-700 mb-2">Two buttons at the top of the Map switch between modes. <strong>Detect</strong> shows the coloured quick buttons, camera buttons and STAKE for logging finds. <strong>Scout</strong> replaces them with two big buttons, <strong>IRON</strong> and <strong>GOOD SIGNAL</strong>, for walking a field fast. Each tap drops a small dot (dark grey for iron, green for a good signal) that is saved with the dig. Clusters of iron show where people have been. <strong>Undo last</strong> removes a mis-tap, and <strong>Grid here</strong> drops a 15 m grid centred on you and switches back to Detect.</p>
-        <p class="text-sm text-gray-700 mb-3">Tap the <i class="fas fa-expand"></i> button in the corner of the map for <strong>full screen</strong>: the map fills the screen and the controls float over it — drag to move the map, pinch to zoom, and tap <i class="fas fa-layer-group"></i> for the background and Old OS slider. Tap <i class="fas fa-compress"></i> (or use Back) to return. To see more map, tap <i class="fas fa-chevron-up"></i> on the top panel to shrink it to a small bar (Detect/Scout, Stop while tracking, and leave full screen), and <i class="fas fa-chevron-down"></i> on the Log a find panel to shrink that to a thin bar. Tap either bar to open it again. Underneath the normal map, the arrow buttons pan the map. In Detect mode the tile grid controls and Tile Grid panel are shown straight away under the logging buttons. <strong>More map tools</strong> opens the map layers (including Scouting dots), current GPS and the list of tracks.</p>
+        <p class="text-sm text-gray-700 mb-3">Tap the <i class="fas fa-expand"></i> button in the corner of the map for <strong>full screen</strong>: the map fills the screen and the controls float over it — drag to move the map, pinch to zoom, and tap <i class="fas fa-layer-group"></i> for the background and Old map slider. Tap <i class="fas fa-compress"></i> (or use Back) to return. To see more map, tap <i class="fas fa-chevron-up"></i> on the top panel to shrink it to a small bar (Detect/Scout, Stop while tracking, and leave full screen), and <i class="fas fa-chevron-down"></i> on the Log a find panel to shrink that to a thin bar. Tap either bar to open it again. Underneath the normal map, the arrow buttons pan the map. In Detect mode the tile grid controls and Tile Grid panel are shown straight away under the logging buttons. <strong>More map tools</strong> opens the map layers (including Scouting dots), current GPS and the list of tracks.</p>
 
         <p class="text-sm font-bold text-gray-700 mb-1">Not-dug pin colours (fill = VDI range, border = blue)</p>
         <div class="flex flex-wrap gap-1 text-xs mb-3">
@@ -3869,15 +3869,16 @@ function renderHelpPage() {
       <!-- MAP BACKGROUNDS -->
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-globe-europe"></i> Map Backgrounds</h3>
-        <p class="text-sm text-gray-700 mb-2">Under the Map choose <strong>Plain</strong>, <strong>Satellite</strong>, <strong>Outdoor</strong>, <strong>Old OS</strong> or <strong>LiDAR</strong>. Satellite shows hedges, gates and cropmarks; Outdoor shows footpaths and field edges; Old OS is the Ordnance Survey six-inch map of 1888–1913, showing lost cottages, wells, paths and field boundaries; LiDAR (England only) shows the shape of the ground — ridge and furrow, barrows, banks, ditches and house platforms. Your pins, tracks, grid and dots sit on top and move with it. With Satellite, Outdoor or LiDAR, the <strong>Old OS</strong> slider fades the 1888 map over the top, so you can see old buildings, paths and boundaries against today's ground. Each dig remembers its choice, and the Place map has its own.</p>
+        <p class="text-sm text-gray-700 mb-2">Under the Map choose <strong>Plain</strong>, <strong>Satellite</strong>, <strong>Outdoor</strong>, <strong>Old map</strong> or <strong>LiDAR</strong>. Satellite shows hedges, gates and cropmarks; Outdoor shows footpaths and field edges; Old map is the best old map for the area (in Great Britain the Ordnance Survey six-inch map of 1888–1913), showing lost cottages, wells, paths and field boundaries; LiDAR shows the shape of the ground — ridge and furrow, barrows, banks, ditches and house platforms. Your pins, tracks, grid and dots sit on top and move with it. With Satellite, Outdoor or LiDAR, the <strong>Old map</strong> slider fades the 1888 map over the top, so you can see old buildings, paths and boundaries against today's ground. Each dig remembers its choice, and the Place map has its own.</p>
+        <p class="text-sm text-gray-700 mb-2"><strong>Different countries.</strong> Old map and LiDAR come from different services in different countries, chosen automatically from where the map is (the credit line under the map names the source, e.g. “LiDAR · England”). So far: LiDAR for England, and the old map for England, Wales and Scotland; more countries are being added. Where there is no source yet, the button is greyed out. You can fix the region in <strong>Settings → Map region</strong>, and <strong>Check map sources</strong> there tests every source for the place Explore was last showing — handy for trying another country from home.</p>
         <p class="text-sm text-gray-700 mb-2">Map pictures need signal the first time; after that, places you have viewed are kept on your phone and show without signal. They are not included in backups.</p>
-        <p class="text-sm text-gray-700">Outdoor and LiDAR are free. Satellite and Old OS use Detekta's built-in MapTiler key, whose free monthly allowance is shared by all users. If it runs out, those two pause until the next month. To avoid that, get your own free key from MapTiler and paste it in <strong>Settings → Map backgrounds</strong>.</p>
+        <p class="text-sm text-gray-700">Outdoor and LiDAR are free. Satellite and Old map use Detekta's built-in MapTiler key, whose free monthly allowance is shared by all users. If it runs out, those two pause until the next month. To avoid that, get your own free key from MapTiler and paste it in <strong>Settings → Map backgrounds</strong>.</p>
       </div>
 
       <!-- EXPLORE -->
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-binoculars"></i> Explore — research at home</h3>
-        <p class="text-sm text-gray-700 mb-2">Open the <strong>Explore</strong> tab (it reopens where you last left it), or tap the <i class="fas fa-binoculars"></i> button on the Map — in full screen too — to explore from exactly the place and zoom you are looking at. If the Map shows LiDAR, Explore opens on LiDAR; otherwise on the Outdoor map (Satellite and Old OS are not in Explore because they have a monthly limit). Type a place name, an Ordnance Survey grid reference (for example <em>SW 7654 4321</em>, 4 to 10 figures) or coordinates (<em>50.338, -5.142</em> or degrees and minutes), and the map flies there. Drag to move and pinch to zoom.</p>
+        <p class="text-sm text-gray-700 mb-2">Open the <strong>Explore</strong> tab (it reopens where you last left it), or tap the <i class="fas fa-binoculars"></i> button on the Map — in full screen too — to explore from exactly the place and zoom you are looking at. If the Map shows LiDAR, Explore opens on LiDAR; otherwise on the Outdoor map (Satellite and Old map are not in Explore because they have a monthly limit). Type a place name, an Ordnance Survey grid reference (for example <em>SW 7654 4321</em>, 4 to 10 figures) or coordinates (<em>50.338, -5.142</em> or degrees and minutes), and the map flies there. Drag to move and pinch to zoom.</p>
         <p class="text-sm text-gray-700 mb-2">The slider fades between the ordinary map and <strong>LiDAR</strong> (England only — zoom in to see it). Place and road names stay on top. The red cross marks the centre, and the grid reference and coordinates of that point are shown underneath.</p>
         <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown from all your digs (not the demo dig). The open dig's look as on the Map; other digs' finds and routes are smaller and faded — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates. Tap <i class="fas fa-chevron-down"></i> on that card to shrink it to one line (tap the line to open it again). The open dig's <strong>grids</strong> are shown too — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab.</p>
         <p class="text-sm text-gray-700 mb-2"><strong>Zooming:</strong> pinch with two fingers — or, with one thumb (handy with a detector in the other hand), <strong>double-tap</strong> to zoom in, or <strong>double-tap and hold, then slide</strong> up or down to zoom smoothly out or in. If the Map tab is <strong>squared to the grid</strong>, Explore is turned the same way, with the same north arrow to put north back at the top (which also turns the Map tab back).</p>
@@ -4001,7 +4002,7 @@ function renderHelpPage() {
         <p class="text-sm text-gray-700 mb-3"><strong>Keep the screen on while tracking</strong> stops the phone locking itself during a dig. <strong>Stop tracking when driving</strong> splits off a <em>Leaving</em> track when you speed up and stops tracking once you are driving.</p>
 
         <p class="text-sm font-bold text-gray-700 mb-1">Map backgrounds</p>
-        <p class="text-sm text-gray-700 mb-3">Paste your own free MapTiler key here if you want Satellite and Old OS to keep working even if the built-in allowance runs out. You can also clear the map pictures saved on the phone.</p>
+        <p class="text-sm text-gray-700 mb-3">Paste your own free MapTiler key here if you want Satellite and Old map to keep working even if the built-in allowance runs out. You can also clear the map pictures saved on the phone.</p>
 
         <p class="text-sm font-bold text-gray-700 mb-1">Photo Settings</p>
         <p class="text-sm text-gray-700 mb-3">Sets the maximum width in pixels that photos are resized to before they are saved. Smaller values reduce storage space and make ZIP exports faster. Set to <strong>0</strong> to disable resizing and keep full-resolution photos.</p>
@@ -4137,7 +4138,7 @@ function renderHelpPage() {
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Local storage &amp; data security</p>
         <p class="text-sm text-gray-700 mb-3">Detekta has no account and no server of its own, and it does not collect your data. All digs, finds, stakes, tracks, and photos are stored only on your device using your browser's local storage and IndexedDB, and never leave it unless you choose to export or share them.</p>
-        <p class="text-sm text-gray-700 mb-3"><strong>Map services.</strong> When you use them, Detekta asks these services for map pictures or information about the area you are looking at: <strong>MapTiler</strong> (Satellite and Old OS backgrounds, with the National Library of Scotland), <strong>OpenFreeMap</strong> (Outdoor and the Explore map), the <strong>Environment Agency</strong> (LiDAR), <strong>Historic England</strong> (Scheduled Monuments) and <strong>OpenStreetMap Nominatim</strong> (place search — the words you type). Like any website, they see your device's internet address and which area is being viewed. Your digs, finds and positions are never sent to them. Choose Plain and switch off Scheduled Monuments to use none of them. You are responsible for making regular backups and for the security of any exported files.</p>
+        <p class="text-sm text-gray-700 mb-3"><strong>Map services.</strong> When you use them, Detekta asks these services for map pictures or information about the area you are looking at: <strong>MapTiler</strong> (Satellite and Old map backgrounds, with the National Library of Scotland), <strong>OpenFreeMap</strong> (Outdoor and the Explore map), the <strong>Environment Agency</strong> (LiDAR), <strong>Historic England</strong> (Scheduled Monuments) and <strong>OpenStreetMap Nominatim</strong> (place search — the words you type). Like any website, they see your device's internet address and which area is being viewed. Your digs, finds and positions are never sent to them. Choose Plain and switch off Scheduled Monuments to use none of them. You are responsible for making regular backups and for the security of any exported files.</p>
 
         <hr class="border-t border-gray-100 my-3">
         <p class="text-sm font-bold text-gray-700 mb-1">Disclaimer</p>
@@ -4171,7 +4172,7 @@ function renderHelpPage() {
 
           <div>
             <p class="text-sm font-bold text-gray-700 mb-1">Map backgrounds — LiDAR with the old map faded over</p>
-            <p class="text-xs text-gray-500 mb-2">LiDAR shows the shape of the ground; the Old OS slider fades the 1888 six-inch map over it. Here the earthwork of Castle Stede lines up with the old map's label, next to a stake marking the parking.</p>
+            <p class="text-xs text-gray-500 mb-2">LiDAR shows the shape of the ground; the Old map slider fades the 1888 six-inch map over it. Here the earthwork of Castle Stede lines up with the old map's label, next to a stake marking the parking.</p>
             <img src="assets/shot-map-lidar.jpg" loading="lazy" alt="LiDAR background with the 1888 Ordnance Survey map faded over it" class="rounded-lg border border-gray-200 w-full">
           </div>
 
@@ -16041,6 +16042,168 @@ function stopMapPan() {
 //   never put in backups or shared (MapTiler's terms).
 // - Uses the app's built-in key unless the user has entered their own.
 // =====================================================================
+
+// =====================================================================
+// MAP SOURCES BY AREA (V2.01)
+// LiDAR and the old map come from different services in different countries.
+// Each source lists the areas it covers. The area is worked out from the
+// centre of the map being looked at (so Explore works anywhere), unless the
+// user has fixed it in Settings -> Map region.
+// =====================================================================
+// Rough outlines (longitude, latitude). The sea can be included freely; only the land borders matter.
+const MAP_AREA_SHAPES = {
+    'GB-ENG': [[-3.05,54.98],[-2.9,55.06],[-2.69,55.19],[-2.48,55.36],[-2.22,55.48],[-2.04,55.81],[-1.6,55.95],[-0.5,55.0],[0.5,54.3],[2.0,53.0],
+               [2.0,51.5],[1.8,51.0],[1.0,50.75],[-1.0,50.5],[-3.0,50.15],[-5.0,49.85],[-7.0,49.7],[-7.0,51.0],[-5.0,51.2],[-4.0,51.3],
+               [-3.2,51.38],[-2.7,51.6],[-2.67,51.64],[-2.72,51.85],[-3.08,52.0],[-3.12,52.07],[-3.0,52.3],[-3.05,52.35],[-3.15,52.55],
+               [-3.03,52.7],[-2.73,52.98],[-2.95,53.05],[-3.08,53.25],[-3.15,53.4],[-3.5,53.5],[-3.9,53.6],[-3.9,54.5],[-3.7,54.8],[-3.4,54.9]],
+    'GB':     [[-6.5,49.8],[-7.0,49.7],[2.0,50.8],[2.0,53.0],[0.0,56.0],[-1.0,58.0],[-0.5,61.0],[-3.0,61.0],[-6.5,59.0],[-8.8,58.4],
+               [-8.0,56.5],[-6.4,55.7],[-5.9,55.25],[-5.25,54.9],[-5.0,54.5],[-4.2,54.5],[-4.2,53.95],[-4.9,53.4],[-5.5,53.0],[-5.5,51.6],[-7.0,51.0]]
+};
+const MAP_AREA_NAMES = { 'GB-ENG': 'England', 'GB-WLS': 'Wales', 'GB-SCT': 'Scotland' };
+function pointInShape(lon, lat, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+        if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+}
+/** Which area a point is in (null = an area Detekta has no special maps for yet). */
+function mapAreaAt(lat, lon) {
+    lat = Number(lat); lon = Number(lon);
+    if (!isFinite(lat) || !isFinite(lon)) return null;
+    if (pointInShape(lon, lat, MAP_AREA_SHAPES['GB-ENG'])) return 'GB-ENG';
+    if (pointInShape(lon, lat, MAP_AREA_SHAPES['GB'])) return lat >= 54.6 ? 'GB-SCT' : 'GB-WLS';
+    return null;
+}
+function getMapRegionSetting() {
+    try { const v = localStorage.getItem('detekta_map_region'); return v && MAP_AREA_NAMES[v] ? v : 'auto'; } catch (e) { return 'auto'; }
+}
+function setMapRegionSetting(v) {
+    try { localStorage.setItem('detekta_map_region', MAP_AREA_NAMES[v] ? v : 'auto'); } catch (e) {}
+    bgMapStyleKey = '';                 // rebuild the Map background
+    try { if (exploreMap) fetchMapJson(EXPLORE_MAP_STYLE).then(base => exploreMap.setStyle(buildExploreStyle(base), { diff: false })).catch(() => {}); } catch (e) {}
+    showMessage(MAP_AREA_NAMES[v] ? `Map region fixed to ${MAP_AREA_NAMES[v]}.` : 'Map region: automatic, from where the map is.', 'success');
+    render();
+}
+/** The area to use for a point: the fixed one from Settings, or worked out from the point. */
+function mapAreaFor(lat, lon) { const s = getMapRegionSetting(); return s !== 'auto' ? s : mapAreaAt(lat, lon); }
+
+// The sources. kind: 'lidar' or 'oldmap'. bounds: [west, south, east, north] (the map only asks inside these).
+const MAP_SOURCES = {
+    lidar: [
+        { id: 'ea', areas: ['GB-ENG'], where: 'England', bounds: [-6.5, 49.8, 2.0, 55.9], minzoom: 10, maxzoom: 20,
+          tiles: ['https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms?service=WMS&request=GetMap&version=1.3.0&layers=Lidar_Composite_Hillshade_DTM_1m&styles=hillshade&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'],
+          credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' }
+    ],
+    oldmap: [
+        { id: 'nls6', areas: ['GB-ENG', 'GB-WLS', 'GB-SCT'], where: 'Great Britain', maptiler: true, bounds: [-8.8, 49.7, 2.0, 61.0],
+          tilejson: () => `https://api.maptiler.com/tiles/uk-osgb10k1888/tiles.json?key=${encodeURIComponent(getMapTilerKey())}`,
+          paper: '#f4efe1',
+          credit: 'OS six-inch 1888–1913 reproduced with the permission of the <a href="https://maps.nls.uk/" target="_blank" rel="noopener">National Library of Scotland</a> · <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a>' }
+    ]
+};
+const MAP_KIND_NAMES = { lidar: 'LiDAR', oldmap: 'old map' };
+/** Map picture addresses that go through the phone's map-picture cache. */
+const MAP_CACHE_URL_TESTS = [
+    /^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//,
+    /^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/,
+    /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i
+];
+function isCachedMapUrl(url) { return MAP_CACHE_URL_TESTS.some(r => r.test(url)); }
+/** Sources of one kind for a point. */
+function mapSourcesFor(kind, lat, lon) {
+    const area = mapAreaFor(lat, lon);
+    return area ? (MAP_SOURCES[kind] || []).filter(s => s.areas.includes(area)) : [];
+}
+/** Sources to put in a map style: all of that kind (each only draws inside its bounds), or only the fixed region's. */
+function mapSourcesToLoad(kind) {
+    const fixed = getMapRegionSetting();
+    const all = MAP_SOURCES[kind] || [];
+    return fixed === 'auto' ? all : all.filter(s => s.areas.includes(fixed));
+}
+/** One MapLibre source for a map source. */
+function mapLibreSourceFor(s) {
+    const o = { type: 'raster', tileSize: 256, bounds: s.bounds };
+    if (s.tilejson) o.url = s.tilejson(); else o.tiles = s.tiles.slice();
+    if (s.minzoom != null) o.minzoom = s.minzoom;
+    if (s.maxzoom != null) o.maxzoom = s.maxzoom;
+    return o;
+}
+/** The centre of the map on screen (Explore's, or the Map tab's), for choosing sources and credits. */
+let bgMapLastCentre = null;
+function currentMapCentre() {
+    try { if (currentPage === 'Explore' && exploreMap) { const c = exploreMap.getCenter(); return { lat: c.lat, lon: c.lng }; } } catch (e) {}
+    if (bgMapLastCentre) return bgMapLastCentre;
+    try { const open = surveys.find(s => s.status === 'Open'); const c = open && digCentreLatLon(open); if (c && isFinite(c.lat)) return c; } catch (e) {}
+    const u = (typeof smoothedUserCoords !== 'undefined' && smoothedUserCoords) || (typeof currentUserCoords !== 'undefined' && currentUserCoords);
+    return u && isFinite(u.lat) ? { lat: u.lat, lon: u.lon } : null;
+}
+function mapKindAvailableHere(kind) {
+    const c = currentMapCentre();
+    return !c || mapSourcesFor(kind, c.lat, c.lon).length > 0;   // unknown position: don't grey anything out
+}
+/** "LiDAR · England: © ..." or "No LiDAR for this area yet". */
+function mapKindCreditHtml(kind) {
+    const c = currentMapCentre();
+    const srcs = c ? mapSourcesFor(kind, c.lat, c.lon) : (MAP_SOURCES[kind] || []).slice(0, 1);
+    if (!srcs.length) return `No ${MAP_KIND_NAMES[kind]} for this area yet`;
+    return srcs.map(s => `${kind === 'lidar' ? 'LiDAR' : 'Old map'} · ${s.where}: ${s.credit}`).join(' · ');
+}
+function mapKindWhereText(kind) {
+    const c = currentMapCentre();
+    const srcs = c ? mapSourcesFor(kind, c.lat, c.lon) : [];
+    return srcs.length ? srcs.map(s => s.where).join(', ') : (c ? 'none here' : '');
+}
+
+// ---- Check map sources (Settings): try one picture from each source for the area last shown in Explore ----
+function tileXYAt(lat, lon, z) {
+    const n = Math.pow(2, z), x = Math.floor((lon + 180) / 360 * n);
+    const r = lat * Math.PI / 180, y = Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n);
+    return { x, y, z };
+}
+function tileBbox3857(t) {
+    const R = 20037508.342789244, size = 2 * R / Math.pow(2, t.z);
+    const minx = -R + t.x * size, maxy = R - t.y * size;
+    return [minx, maxy - size, minx + size, maxy].join(',');
+}
+async function mapSourceTestUrl(s, lat, lon) {
+    let tmpl, maxz = s.maxzoom != null ? s.maxzoom : 18;
+    if (s.tilejson) {
+        const tj = await (await fetch(s.tilejson(), { mode: 'cors', cache: 'no-store' })).json();
+        tmpl = tj.tiles[0]; if (tj.maxzoom != null) maxz = tj.maxzoom;
+    } else tmpl = s.tiles[0];
+    const t = tileXYAt(lat, lon, Math.min(16, maxz));
+    return tmpl.replace('{bbox-epsg-3857}', tileBbox3857(t)).replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
+}
+async function checkMapSources() {
+    const out = document.getElementById('map-source-check');
+    if (!out) return;
+    const v = getExploreView();
+    const area = mapAreaFor(v.lat, v.lon);
+    out.innerHTML = `<p class="text-sm text-gray-600">Checking the map sources for ${escapeHtml(area ? MAP_AREA_NAMES[area] : 'this area')}…</p>`;
+    const rows = [];
+    const tryOne = async (label, getUrl) => {
+        try {
+            const url = await getUrl();
+            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+            rows.push([label, r.ok || r.status === 204 ? 'ok' : 'bad', r.ok || r.status === 204 ? 'works' : `the service answered with error ${r.status}`]);
+        } catch (e) {
+            rows.push([label, 'bad', 'blocked or unreachable (no signal, or the service does not let apps use it)']);
+        }
+    };
+    await tryOne('Outdoor', async () => 'https://tiles.openfreemap.org/styles/liberty');
+    await tryOne('Satellite', async () => `https://api.maptiler.com/maps/satellite/style.json?key=${encodeURIComponent(getMapTilerKey())}`);
+    for (const kind of ['oldmap', 'lidar']) {
+        const srcs = mapSourcesFor(kind, v.lat, v.lon);
+        if (!srcs.length) rows.push([kind === 'lidar' ? 'LiDAR' : 'Old map', 'none', 'no source for this area yet']);
+        for (const s of srcs) await tryOne(`${kind === 'lidar' ? 'LiDAR' : 'Old map'} (${s.where})`, () => mapSourceTestUrl(s, v.lat, v.lon));
+    }
+    const icon = { ok: '<i class="fas fa-check-circle text-green-600"></i>', bad: '<i class="fas fa-times-circle text-red-600"></i>', none: '<i class="fas fa-minus-circle text-gray-400"></i>' };
+    out.innerHTML = `<p class="text-xs text-gray-500 mb-1">At ${v.lat.toFixed(4)}, ${v.lon.toFixed(4)} (where Explore was last) · ${escapeHtml(area ? MAP_AREA_NAMES[area] : 'no special maps for this area yet')}</p>`
+        + rows.map(r => `<div class="flex items-start gap-2 text-sm py-0.5">${icon[r[1]]}<span><strong>${escapeHtml(r[0])}</strong> — ${escapeHtml(r[2])}</span></div>`).join('');
+}
+
 const DETEKTA_DEFAULT_MAPTILER_KEY = 'UX5ikZObTRxSPyClatt2';
 // Backgrounds. 'maptiler' ones use the key (and its quota); the others are free with no key.
 const MAP_BG_STYLES = {
@@ -16050,24 +16213,21 @@ const MAP_BG_STYLES = {
     outdoor:   { label: 'Outdoor', icon: 'fa-mountain', maptiler: false,
                  credit: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
                  style: () => 'https://tiles.openfreemap.org/styles/liberty' },
-    oldos:     { label: 'Old OS', icon: 'fa-scroll', maptiler: true,
-                 credit: 'OS six-inch 1888–1913 reproduced with the permission of the <a href="https://maps.nls.uk/" target="_blank" rel="noopener">National Library of Scotland</a> · <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a>',
-                 build: () => ({
-                     version: 8,
-                     sources: { os: { type: 'raster', tileSize: 256,
-                                      url: `https://api.maptiler.com/tiles/uk-osgb10k1888/tiles.json?key=${encodeURIComponent(getMapTilerKey())}` } },
-                     layers: [ { id: 'paper', type: 'background', paint: { 'background-color': '#f4efe1' } },
-                               { id: 'os', type: 'raster', source: 'os' } ]
-                 }) },
+    oldos:     { label: 'Old map', icon: 'fa-scroll', maptiler: true,
+                 get credit() { return mapKindCreditHtml('oldmap'); },
+                 build: () => {
+                     const srcs = mapSourcesToLoad('oldmap');
+                     const st = { version: 8, sources: {}, layers: [ { id: 'paper', type: 'background', paint: { 'background-color': (srcs[0] && srcs[0].paper) || '#f4efe1' } } ] };
+                     srcs.forEach(s => { st.sources['os-' + s.id] = mapLibreSourceFor(s); st.layers.push({ id: 'os-' + s.id, type: 'raster', source: 'os-' + s.id }); });
+                     return st;
+                 } },
     lidar:     { label: 'LiDAR', icon: 'fa-water', maptiler: false,
-                 credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a> · England only',
-                 build: () => ({
-                     version: 8,
-                     sources: { lidar: { type: 'raster', tileSize: 256, minzoom: 10, maxzoom: 20,
-                                         tiles: ['https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms?service=WMS&request=GetMap&version=1.3.0&layers=Lidar_Composite_Hillshade_DTM_1m&styles=hillshade&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] } },
-                     layers: [ { id: 'ground', type: 'background', paint: { 'background-color': '#ececec' } },
-                               { id: 'lidar', type: 'raster', source: 'lidar' } ]
-                 }) }
+                 get credit() { return mapKindCreditHtml('lidar'); },
+                 build: () => {
+                     const st = { version: 8, sources: {}, layers: [ { id: 'ground', type: 'background', paint: { 'background-color': '#ececec' } } ] };
+                     mapSourcesToLoad('lidar').forEach(s => { st.sources['lidar-' + s.id] = mapLibreSourceFor(s); st.layers.push({ id: 'lidar-' + s.id, type: 'raster', source: 'lidar-' + s.id }); });
+                     return st;
+                 } }
 };
 const MAP_BG_ORDER = ['none', 'satellite', 'outdoor', 'oldos', 'lidar'];
 const OVERLAY_BASES = ['satellite', 'outdoor', 'lidar'];   // backgrounds the old map can be faded over
@@ -16108,7 +16268,7 @@ function setDigMapBg(value) {
     if (v !== 'none') bgMapProblem = (bgMapProblem === 'unsupported') ? bgMapProblem : '';
     render();
 }
-// --- Old OS fade-over slider (0 = off, 100 = only the old map) ---
+// --- Old map fade-over slider (0 = off, 100 = only the old map) ---
 function clampOverlay(v) { v = Math.round(Number(v)); return isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; }
 function getDigOverlay(survey) { return clampOverlay(survey && survey.mapOverlay); }
 function getPlaceOverlay() {
@@ -16119,9 +16279,11 @@ function overlayCreditHtml(v) {
 }
 function applyOverlayToMap(v) {
     try {
-        if (!bgMap || !bgMap.getLayer('oldos-ov')) return;
-        bgMap.setLayoutProperty('oldos-ov', 'visibility', v > 0 ? 'visible' : 'none');
-        bgMap.setPaintProperty('oldos-ov', 'raster-opacity', v / 100);
+        if (!bgMap) return;
+        ((bgMap.getStyle() || {}).layers || []).filter(l => l.id.startsWith('oldos-ov')).forEach(l => {
+            bgMap.setLayoutProperty(l.id, 'visibility', v > 0 ? 'visible' : 'none');
+            bgMap.setPaintProperty(l.id, 'raster-opacity', v / 100);
+        });
     } catch (e) {}
 }
 // While a finger is on the slider the Map page must not redraw itself
@@ -16167,11 +16329,12 @@ function bgOverlayCommit(v, where) {
 function addOverlayToStyle(style, v) {
     const st = JSON.parse(JSON.stringify(style || { version: 8, sources: {}, layers: [] }));
     st.sources = st.sources || {}; st.layers = st.layers || [];
-    st.sources['oldos-ov'] = { type: 'raster', tileSize: 256,
-        url: `https://api.maptiler.com/tiles/uk-osgb10k1888/tiles.json?key=${encodeURIComponent(getMapTilerKey())}` };
-    st.layers.push({ id: 'oldos-ov', type: 'raster', source: 'oldos-ov',
-        layout: { visibility: v > 0 ? 'visible' : 'none' },
-        paint: { 'raster-opacity': v / 100 } });
+    mapSourcesToLoad('oldmap').forEach(s => {
+        st.sources['oldos-ov-' + s.id] = mapLibreSourceFor(s);
+        st.layers.push({ id: 'oldos-ov-' + s.id, type: 'raster', source: 'oldos-ov-' + s.id,
+            layout: { visibility: v > 0 ? 'visible' : 'none' },
+            paint: { 'raster-opacity': v / 100 } });
+    });
     return st;
 }
 
@@ -16328,9 +16491,7 @@ function ensureBgMap() {
             center: [0, 0], zoom: 1,
             transformRequest: (url) => {
                 // tiles and fonts go through the personal cache
-                if (/^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//.test(url) ||
-                    /^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/.test(url) ||
-                    /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i.test(url)) {
+                if (isCachedMapUrl(url)) {
                     return { url: url.replace(/^https:\/\//, 'detektamap://') };
                 }
                 return { url };
@@ -16352,7 +16513,7 @@ function ensureBgMap() {
             const style = bgMap.getStyle();
             const parts = new Set();
             Object.keys((style && style.sources) || {}).forEach(id => {
-                if (id === 'oldos-ov') return;
+                if (id.startsWith('oldos-ov')) return;
                 const src = bgMap.getSource(id);
                 if (src && src.attribution) parts.add(src.attribution);
             });
@@ -16387,7 +16548,7 @@ function syncBgMap() {
 
     // Load the style for this background (and key)
     const withOverlay = OVERLAY_BASES.includes(bg);
-    const styleKey = bg + ':' + ((MAP_BG_STYLES[bg].maptiler || withOverlay) ? getMapTilerKey() : '');
+    const styleKey = bg + ':' + ((MAP_BG_STYLES[bg].maptiler || withOverlay) ? getMapTilerKey() : '') + ':' + getMapRegionSetting();
     if (styleKey !== bgMapStyleKey && Date.now() >= bgMapStyleRetryAfter) {
         if ((bgMapStyleKey || '').split(':')[0] !== bg) {
             bgMapAttribution = '';
@@ -16422,6 +16583,7 @@ function syncBgMap() {
 
     const c = view.getCentreAndScale(w, hgt);   // { lat, lon, metresPerPixel }
     if (!c || !isFinite(c.lat) || !isFinite(c.lon) || !(c.metresPerPixel > 0)) return;
+    bgMapLastCentre = { lat: c.lat, lon: c.lon };
     const z = Math.log2(40075016.686 * Math.cos(c.lat * Math.PI / 180) / (512 * c.metresPerPixel));
     const rot = (view.containerId === 'target-map-container') ? mapScreenRotationDeg() : 0;
     const sq = (110574 / 111319.49).toFixed(5);
@@ -16458,6 +16620,13 @@ function renderBgMapControlsHtml(current, setter, overlay = 0, where = 'dig', cr
     const btn = (v) => {
         const label = v === 'none' ? 'Plain' : MAP_BG_STYLES[v].label;
         const icon = v === 'none' ? 'fa-square' : MAP_BG_STYLES[v].icon;
+        const kind = v === 'lidar' ? 'lidar' : v === 'oldos' ? 'oldmap' : '';
+        if (kind && current !== v && !mapKindAvailableHere(kind)) {
+            return `
+        <button type="button" onclick="showMessage('No ${MAP_KIND_NAMES[kind]} for this area yet. More countries are being added.', 'info')" title="Not available here"
+                class="py-2 rounded-lg text-xs font-bold leading-tight bg-gray-100 text-gray-400">
+            <i class="fas ${icon} mb-1 text-base" style="--fa-display:block;"></i>${label}</button>`;
+        }
         return `
         <button type="button" onclick="${setter}('${v}')"
                 class="py-2 rounded-lg text-xs font-bold leading-tight ${current === v ? 'text-white' : 'bg-gray-200 text-gray-700'}"
@@ -16468,7 +16637,7 @@ function renderBgMapControlsHtml(current, setter, overlay = 0, where = 'dig', cr
     const credit = current !== 'none' ? (bgMapAttribution || MAP_BG_STYLES[current].credit || MAP_FALLBACK_ATTRIBUTION) + overlayCreditHtml(ov) : '';
     const sliderHtml = OVERLAY_BASES.includes(current) ? `
         <div class="flex items-center gap-2 mt-2 px-1">
-            <span class="text-xs font-bold text-gray-700 whitespace-nowrap"><i class="fas fa-scroll mr-1"></i>Old OS</span>
+            <span class="text-xs font-bold text-gray-700 whitespace-nowrap"><i class="fas fa-scroll mr-1"></i>Old map</span>
             <input id="bg-overlay-slider" type="range" min="0" max="100" step="1" value="${ov}" class="flex-1"
                    aria-label="Fade the 1888 Ordnance Survey map over this background"
                    onpointerdown="bgOverlayDragStart()" ontouchstart="bgOverlayDragStart()"
@@ -16493,12 +16662,28 @@ function renderBgMapCreditHtml(current, overlay = 0) {
     return `<p id="bg-map-attrib" class="text-xs text-gray-500 mt-1">${credit}</p>`;
 }
 
-function renderMapBackgroundSettingsHtml() {
-    const own = getUserMapTilerKey();
+function renderMapRegionSettingsHtml() {
+    const cur = getMapRegionSetting();
+    const opt = (v, t) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
     return `
             <div class="mt-6 border-t border-gray-200 pt-5">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Map region</h3>
+                <p class="text-sm text-gray-600 mb-2">LiDAR and the old map come from different services in different countries. <strong>Automatic</strong> picks them from where the map is looking (on the Map tab or in Explore). Fix a region only if the automatic choice is wrong, for example right on a border.</p>
+                <select id="map-region-select" onchange="setMapRegionSetting(this.value)" class="w-full px-3 py-2 rounded-lg border border-gray-300 mb-3 bg-white">
+                    ${opt('auto', 'Automatic (where the map is)')}
+                    ${Object.keys(MAP_AREA_NAMES).map(k => opt(k, MAP_AREA_NAMES[k])).join('')}
+                </select>
+                <p class="text-sm text-gray-600 mb-2"><strong>Check map sources</strong> tries one map picture from each source for the place Explore was last showing, and says which work. To test another country, search for a place there in Explore, then come back here.</p>
+                <button type="button" onclick="checkMapSources()" class="w-full py-2 rounded-lg bg-primary text-white font-bold mb-2"><i class="fas fa-stethoscope mr-1"></i>Check map sources</button>
+                <div id="map-source-check"></div>
+            </div>`;
+}
+function renderMapBackgroundSettingsHtml() {
+    const own = getUserMapTilerKey();
+    return renderMapRegionSettingsHtml() + `
+            <div class="mt-6 border-t border-gray-200 pt-5">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">Map backgrounds</h3>
-                <p class="text-sm text-gray-600 mb-2"><strong>Satellite</strong> and <strong>Old OS</strong> come from MapTiler. Detekta has a built-in key whose free monthly allowance is shared by everyone who uses it. If it runs out, these two pause until the next month. With your own free key they always work for you. <strong>Outdoor</strong> (OpenFreeMap) and <strong>LiDAR</strong> (Environment Agency) are free and need no key. Fading Old OS over another background with the slider uses the key for the old map.</p>
+                <p class="text-sm text-gray-600 mb-2"><strong>Satellite</strong> and <strong>Old map</strong> come from MapTiler. Detekta has a built-in key whose free monthly allowance is shared by everyone who uses it. If it runs out, these two pause until the next month. With your own free key they always work for you. <strong>Outdoor</strong> (OpenFreeMap) and <strong>LiDAR</strong> (Environment Agency) are free and need no key. Fading Old map over another background with the slider uses the key for the old map.</p>
                 <p class="text-sm font-semibold ${own ? 'text-green-700' : 'text-gray-700'} mb-2">
                     <i class="fas ${own ? 'fa-check-circle' : 'fa-key'} mr-1"></i>${own ? 'Using your own key.' : 'Using the built-in key.'}</p>
                 <label class="block text-sm font-semibold text-gray-700 mb-1" for="maptiler-key-input">Your MapTiler key (optional)</label>
@@ -16723,13 +16908,13 @@ function exploreFromMap() {
         try { if (exploreMap) exploreMap.jumpTo({ center: [v.lon, v.lat], zoom: v.zoom, bearing: exploreBearing() }); } catch (e) {}
     }
     // Carry the Map tab's map across where Explore can show it. Explore has only the free maps
-    // (Outdoor, with LiDAR faded over it): Satellite and Old OS have a monthly limit.
+    // (Outdoor, with LiDAR faded over it): Satellite and Old map have a monthly limit.
     try {
         const bg = bgMapView && bgMapView.bg;
         if (bg === 'lidar') setExploreLidar(100);
         else if (bg) setExploreLidar(0);
         if (bg === 'satellite' || bg === 'oldos') {
-            setTimeout(() => showMessage('Satellite and Old OS aren\'t available in Explore — they have a monthly limit. Showing the Outdoor map.', 'info'), 300);
+            setTimeout(() => showMessage('Satellite and Old map aren\'t available in Explore — they have a monthly limit. Showing the Outdoor map.', 'info'), 300);
         }
     } catch (e) {}
     exploreFromPage = currentPage;
@@ -16765,7 +16950,8 @@ function saveExploreView(lat, lon, zoom) {
 function buildExploreStyle(base) {
     const st = JSON.parse(JSON.stringify(base));
     st.sources = st.sources || {}; st.layers = st.layers || [];
-    st.sources['ex-lidar'] = { type: 'raster', tileSize: 256, minzoom: 10, maxzoom: 20, tiles: [EXPLORE_LIDAR_TILES] };
+    const lidarSrcs = mapSourcesToLoad('lidar');
+    lidarSrcs.forEach(s => { st.sources['ex-lidar-' + s.id] = mapLibreSourceFor(s); });
     st.sources['ex-stakes'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-finds'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-sm'] = { type: 'geojson', data: smExploreGeoJson() };
@@ -16773,8 +16959,8 @@ function buildExploreStyle(base) {
     st.sources['ex-tracks'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     // LiDAR goes under the labels, so place and road names stay readable on top
     const firstSymbol = st.layers.findIndex(l => l.type === 'symbol');
-    const lidarLayer = { id: 'ex-lidar', type: 'raster', source: 'ex-lidar', paint: { 'raster-opacity': getExploreLidar() / 100 } };
-    if (firstSymbol >= 0) st.layers.splice(firstSymbol, 0, lidarLayer); else st.layers.push(lidarLayer);
+    const lidarLayers = lidarSrcs.map(s => ({ id: 'ex-lidar-' + s.id, type: 'raster', source: 'ex-lidar-' + s.id, paint: { 'raster-opacity': getExploreLidar() / 100 } }));
+    if (firstSymbol >= 0) st.layers.splice(firstSymbol, 0, ...lidarLayers); else st.layers.push(...lidarLayers);
     const font = ((st.layers.find(l => l.type === 'symbol' && l.layout && Array.isArray(l.layout['text-font'])) || {}).layout || {})['text-font'] || ['Noto Sans Regular'];
     const smVis = isShowMonuments() ? 'visible' : 'none';
     st.layers.push(
@@ -16902,8 +17088,7 @@ function ensureExploreMap(slot) {
         attributionControl: false, fadeDuration: 0,
         dragRotate: false, pitchWithRotate: false, touchPitch: false,
         transformRequest: (url) => {
-            if (/^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/.test(url) ||
-                /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i.test(url)) {
+            if (isCachedMapUrl(url)) {
                 return { url: url.replace(/^https:\/\//, 'detektamap://') };
             }
             return { url };
@@ -16915,6 +17100,7 @@ function ensureExploreMap(slot) {
         saveExploreView(c.lat, c.lng, exploreMap.getZoom());
         updateExploreReadout();
         exploreLoadMonuments();
+        updateExploreLidarWhere();
     });
     exploreMap.on('move', updateExploreReadout);
     const onStyle = () => { exploreStyleLoaded = !!exploreMap.getSource('ex-stakes'); refreshExploreData(); refreshExploreMonuments(); exploreLoadMonuments(); };
@@ -16982,10 +17168,15 @@ function syncExploreMap() {
     refreshExploreData();
     updateExploreReadout();
 }
+/** Explore: which LiDAR source covers the middle of the map (shown by the slider and in the credit). */
+function updateExploreLidarWhere() {
+    const w = document.getElementById('explore-lidar-where'); if (w) w.textContent = mapKindWhereText('lidar');
+    const c = document.getElementById('explore-lidar-credit'); if (c) c.innerHTML = mapKindCreditHtml('lidar') + ' (zoom in to see it)';
+}
 function setExploreLidar(v) {
     v = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
     try { localStorage.setItem('detekta_explore_lidar', String(v)); } catch (e) {}
-    try { if (exploreMap && exploreMap.getLayer('ex-lidar')) exploreMap.setPaintProperty('ex-lidar', 'raster-opacity', v / 100); } catch (e) {}
+    try { if (exploreMap) ((exploreMap.getStyle() || {}).layers || []).filter(l => l.id.startsWith('ex-lidar-')).forEach(l => exploreMap.setPaintProperty(l.id, 'raster-opacity', v / 100)); } catch (e) {}
     const lbl = document.getElementById('explore-lidar-value'); if (lbl) lbl.textContent = v + '%';
 }
 function exploreZoom(d) { if (exploreMap) exploreMap.easeTo({ zoom: exploreMap.getZoom() + d, duration: 250 }); }
@@ -17282,7 +17473,7 @@ function renderExplorePage() {
                         class="fs-ctl w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-chevron-up"></i></button>
             </div>
             <p class="text-right mt-0.5" style="font-size:9px;line-height:1.2;color:#374151;text-shadow:0 0 3px #fff;">
-                © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · OpenFreeMap · EA LiDAR</p>` : `
+                © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · OpenFreeMap · LiDAR</p>` : `
             <div class="fs-panel rounded-xl p-2 relative">
                 <div class="flex items-start gap-2 mb-1">
                     <div id="explore-readout" class="flex-1 min-w-0 text-sm text-gray-900">—</div>
@@ -17294,14 +17485,14 @@ function renderExplorePage() {
                     <input id="explore-lidar-slider" type="range" min="0" max="100" step="1" value="${lidar}" class="flex-1"
                            aria-label="Fade between the map and LiDAR" style="height:36px;touch-action:none;accent-color:rgb(29 78 216);"
                            oninput="setExploreLidar(this.value)" onchange="setExploreLidar(this.value); this.blur();">
-                    <span class="text-xs font-bold text-gray-700 whitespace-nowrap"><i class="fas fa-water mr-1"></i>LiDAR</span>
+                    <span class="text-xs font-bold text-gray-700 whitespace-nowrap leading-tight text-center"><i class="fas fa-water mr-1"></i>LiDAR<span id="explore-lidar-where" class="block font-semibold text-gray-500" style="font-size:9px;">${escapeHtml(mapKindWhereText('lidar'))}</span></span>
                     <span id="explore-lidar-value" class="text-xs font-bold text-gray-700 w-10 text-right">${lidar}%</span>
                 </div>
                 <button type="button" onclick="exploreSelected=null;exploreStakeBoxOpen=true;render();setTimeout(()=>{const i=document.getElementById('explore-stake-name');if(i)i.focus();},60)"
                         class="w-full h-11 rounded-xl font-extrabold shadow bg-purple-600 text-white text-sm">
                     <i class="fas fa-map-marker-alt mr-1"></i> STAKE HERE</button>
                 <p class="text-center mt-1" style="font-size:10px;line-height:1.3;color:#374151;">
-                    LiDAR © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a> (OGL v3, England only, zoom in to see it) ·
+                    <span id="explore-lidar-credit">${mapKindCreditHtml('lidar')} (zoom in to see it)</span> ·
                     <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> ·
                     Data & search © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
                     ${isShowMonuments() ? '<br>' + SM_CREDIT : ''}</p>
