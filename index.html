@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.20
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.21
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.20.0';         // change whenever you publish
+const APP_VERSION = '2.21.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.20 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.21 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16157,11 +16157,12 @@ const MAP_SOURCES = {
         // V2.20: France - IGN Carte de l'état-major (1820-1866), the French equivalent of the OS six-inch
         { id: 'ignem', areas: ['FR'], where: 'France', bounds: [-5.6, 41.3, 9.7, 51.2], minzoom: 6, maxzoom: 18, paper: '#f4efe1',
           testPoint: { lat: 47.9, lon: 1.9 }, showChoice: true,
+          // V2.21: the État-major map is published from zoom 6 to 15 only (beyond that the map enlarges zoom 15)
           candidates: [
-              { key: 'em-jpg', label: 'État-major 1820–1866', tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/jpeg'] },
-              { key: 'em-png', label: 'État-major 1820–1866', tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/png'] },
-              { key: 'cas-png', label: 'Cassini 1700s', tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/png'] },
-              { key: 'cas-jpg', label: 'Cassini 1700s', tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/jpeg'] }
+              { key: 'em15', label: 'État-major 1820–1866', maxzoom: 15, tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40&style=normal&tilematrixset=PM_6_15&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/jpeg'] },
+              { key: 'em-pm', label: 'État-major 1820–1866', maxzoom: 15, tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=GEOGRAPHICALGRIDSYSTEMS.ETATMAJOR40&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/jpeg'] },
+              { key: 'cas', label: 'Cassini 1700s', maxzoom: 14, tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/png'] },
+              { key: 'cas-jpg', label: 'Cassini 1700s', maxzoom: 14, tiles: ['https://data.geopf.fr/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=BNF-IGNF_GEOGRAPHICALGRIDSYSTEMS.CASSINI&style=normal&tilematrixset=PM&tilematrix={z}&tilerow={y}&tilecol={x}&format=image/jpeg'] }
           ],
           credit: '© <a href="https://www.ign.fr/" target="_blank" rel="noopener">IGN</a> (Géoplateforme), <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/" target="_blank" rel="noopener">Licence Ouverte</a>' }
     ]
@@ -16341,6 +16342,8 @@ function mapLibreSourceFor(s) {
     if (s.tilejson) o.url = s.tilejson(); else o.tiles = mapSourceTiles(s).slice();
     if (s.minzoom != null) o.minzoom = s.minzoom;
     if (s.maxzoom != null) o.maxzoom = s.maxzoom;
+    const ch = s.candidates ? mapSourceCandidate(s) : null;
+    if (ch && ch.maxzoom != null) o.maxzoom = ch.maxzoom;   // V2.21: some ways of asking stop at a lower zoom
     return o;
 }
 /** The centre of the map on screen (Explore's, or the Map tab's), for choosing sources and credits. */
@@ -16406,6 +16409,8 @@ function tileBbox3857(t) {
 }
 async function mapSourceTestUrl(s, lat, lon, tiles) {
     let tmpl, maxz = s.maxzoom != null ? s.maxzoom : 18;
+    const ch = tiles && s.candidates ? mapSourceCandidates(s).find(c => c.tiles === tiles || c.tiles[0] === tiles[0]) : null;
+    if (ch && ch.maxzoom != null) maxz = Math.min(maxz, ch.maxzoom);
     if (s.tilejson) {
         const tj = await (await fetch(s.tilejson(), { mode: 'cors', cache: 'no-store' })).json();
         tmpl = tj.tiles[0]; if (tj.maxzoom != null) maxz = tj.maxzoom;
