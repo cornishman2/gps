@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.03
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.04
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.03.0';         // change whenever you publish
+const APP_VERSION = '2.04.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.03 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.04 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16099,6 +16099,11 @@ const MAP_SOURCES = {
         // if the service doesn't give it, the surface (DSM, includes trees and buildings) picture is used.
         { id: 'wg', areas: ['GB-WLS'], where: 'Wales', bounds: [-5.7, 51.3, -2.6, 53.5], minzoom: 10, maxzoom: 19,
           testPoint: { lat: 52.42, lon: -3.75 },
+          // V2.04: if the names above don't work, ask the server for its layer list and try its LiDAR hillshades
+          discover: { caps: ['https://datamap.gov.wales/geoserver/geonode/wms?service=WMS&version=1.3.0&request=GetCapabilities',
+                             'https://datamap.gov.wales/geoserver/ows?service=WMS&version=1.3.0&request=GetCapabilities'],
+                      prefix: 'geonode:',
+                      tiles: 'https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers={L}&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}' },
           candidates: [
               { key: 'dtm', label: 'ground', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:dtm_1m_wales_hillshade_2020_23_cubic_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
               { key: 'dsm', label: 'surface', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:wales_lidar_dsm_1m_hillshade_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] }
@@ -16133,10 +16138,43 @@ function mapSourcesToLoad(kind) {
     return fixed === 'auto' ? all : all.filter(s => s.areas.includes(fixed));
 }
 // Some services may offer the picture under one of several names: try them in order, remember the one that works.
+function mapSourceCandidates(s) {
+    if (!s.candidates) return [];
+    let found = [];
+    try { found = JSON.parse(localStorage.getItem('detekta_src_found_' + s.id) || '[]'); } catch (e) {}
+    const extra = (Array.isArray(found) ? found : []).map(n => ({ key: 'found:' + n, label: n.replace(/^.*:/, ''),
+        tiles: [s.discover.tiles.replace('{L}', n)] }));
+    return [...extra, ...s.candidates];   // what the server itself lists comes first
+}
 function mapSourceCandidate(s) {
-    if (!s.candidates) return null;
+    const all = mapSourceCandidates(s);
+    if (!all.length) return null;
     let k = ''; try { k = localStorage.getItem('detekta_src_' + s.id) || ''; } catch (e) {}
-    return s.candidates.find(c => c.key === k) || s.candidates[0];
+    return all.find(c => c.key === k) || all[0];
+}
+/** Ask a WMS server for its layer list; keep the LiDAR hillshade layers (bare ground first). */
+async function discoverMapSourceLayers(s) {
+    if (!s.discover) return { names: [], note: 'no layer list for this source' };
+    let lastNote = '';
+    for (const url of s.discover.caps) {
+        try {
+            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+            if (!r.ok) { lastNote = 'layer list: error ' + r.status; continue; }
+            const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+            const all = Array.from(xml.getElementsByTagName('Layer')).map(l => {
+                const n = Array.from(l.children).find(c => c.localName === 'Name');
+                const t = Array.from(l.children).find(c => c.localName === 'Title');
+                return { name: n ? n.textContent.trim() : '', title: t ? t.textContent.trim() : '' };
+            }).filter(x => x.name);
+            const lidar = all.filter(x => /hillshade/i.test(x.name + ' ' + x.title) && /lidar|dtm|dsm|1m/i.test(x.name + ' ' + x.title));
+            const rank = x => (/dtm|terrain|ground/i.test(x.name + x.title) ? 0 : 2) + (/pseudo|colour|color|multi/i.test(x.name + x.title) ? 1 : 0);
+            lidar.sort((a, b) => rank(a) - rank(b));
+            const names = lidar.map(x => x.name.includes(':') ? x.name : s.discover.prefix + x.name);
+            try { localStorage.setItem('detekta_src_found_' + s.id, JSON.stringify(names.slice(0, 6))); } catch (e) {}
+            return { names, note: `layer list: ${all.length} layers, ${lidar.length} LiDAR hillshade` };
+        } catch (e) { lastNote = 'layer list: blocked or unreachable'; }
+    }
+    return { names: [], note: lastNote };
 }
 function mapSourceTiles(s) { const c = mapSourceCandidate(s); return c ? c.tiles : s.tiles; }
 const mapSourceProbed = {};
@@ -16150,13 +16188,21 @@ async function probeMapSource(s) {
     if (!s.candidates || mapSourceProbed[s.id]) return;
     mapSourceProbed[s.id] = 'checking';
     const p = s.testPoint;
-    for (const c of s.candidates) {
+    const usedKey = (mapSourceCandidate(s) || {}).key;   // what the maps are using now
+    let cands = mapSourceCandidates(s);
+    if (s.discover && !cands.some(c => c.key.startsWith('found:'))) {
+        // nothing found yet: try the given names first, then ask the server
+        for (const c of cands) {
+            if (await mapPictureWorks(await mapSourceTestUrl(s, p.lat, p.lon, c.tiles))) { cands = [c]; break; }
+        }
+        if (cands.length > 1) { await discoverMapSourceLayers(s); cands = mapSourceCandidates(s); }
+    }
+    for (const c of cands) {
         const url = await mapSourceTestUrl(s, p.lat, p.lon, c.tiles);
         if (await mapPictureWorks(url)) {
             mapSourceProbed[s.id] = 'ok';
-            const was = mapSourceCandidate(s).key;
             try { localStorage.setItem('detekta_src_' + s.id, c.key); } catch (e) {}
-            if (was !== c.key) rebuildMapStyles();
+            if (usedKey !== c.key) rebuildMapStyles();
             return;
         }
     }
@@ -16255,8 +16301,10 @@ async function checkMapSources() {
             const url = await getUrl();
             const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
             const notImage = wantImage && r.ok && !/^image\//i.test(r.headers.get('Content-Type') || '');
+            let said = '';
+            if (notImage || !r.ok) { try { said = (await r.text()).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160); } catch (e) {} }
             rows.push([label, (r.ok || r.status === 204) && !notImage ? 'ok' : 'bad',
-                       notImage ? 'the service answered, but not with a map picture (wrong layer name?)'
+                       notImage ? 'the service answered, but not with a map picture' + (said ? ` — it said: “${said}”` : '')
                        : (r.ok || r.status === 204) ? 'works' : `the service answered with error ${r.status}`]);
         } catch (e) {
             rows.push([label, 'bad', 'blocked or unreachable (no signal, or the service does not let apps use it)']);
@@ -16270,7 +16318,11 @@ async function checkMapSources() {
         for (const s of srcs) {
             const nm = kind === 'lidar' ? 'LiDAR' : 'Old map';
             if (s.candidates) {
-                for (const c of s.candidates) await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), true);
+                if (s.discover) {
+                    const d = await discoverMapSourceLayers(s);
+                    rows.push([`${nm} (${s.where}) ${d.note}`, d.names.length ? 'ok' : 'none', d.names.length ? 'found: ' + d.names.join(', ') : 'no LiDAR hillshade layers found']);
+                }
+                for (const c of mapSourceCandidates(s)) await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), true);
                 mapSourceProbed[s.id] = ''; probeMapSource(s);   // pick again with what we now know
             } else await tryOne(`${nm} (${s.where})`, () => mapSourceTestUrl(s, v.lat, v.lon), !s.tilejson);
         }
