@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.05
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.06
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.05.0';         // change whenever you publish
+const APP_VERSION = '2.06.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.05 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.06 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16109,6 +16109,8 @@ const MAP_SOURCES = {
                       tiles: 'https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers={L}&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}' },
           candidates: [
               { key: 'dtm', label: 'ground', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:dtm_1m_wales_hillshade_2020_23_cubic_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
+              { key: 'lle1', label: 'Lle ground 1 m', tiles: ['https://lle.gov.wales/services/tiles/lidar/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=1m_dtm&STYLE=default&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png'] },
+              { key: 'lle2', label: 'Lle ground 2 m', tiles: ['https://lle.gov.wales/services/tiles/lidar/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=2m_dtm&STYLE=default&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png'] },
               { key: 'dsm', label: 'surface', tiles: ['https://datamap.gov.wales/geoserver/ows?service=WMS&request=GetMap&version=1.3.0&layers=geonode:wales_lidar_dsm_1m_hillshade_cog&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] }
           ],
           credit: 'LiDAR © Welsh Government (<a href="https://datamap.gov.wales/" target="_blank" rel="noopener">DataMapWales</a>), <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' }
@@ -16126,7 +16128,8 @@ const MAP_CACHE_URL_TESTS = [
     /^https:\/\/api\.maptiler\.com\/(tiles|fonts)\//,
     /^https:\/\/tiles\.openfreemap\.org\/(planet|fonts|natural_earth)/,
     /^https:\/\/environment\.data\.gov\.uk\/spatialdata\/.*request=GetMap/i,
-    /^https:\/\/datamap\.gov\.wales\/geoserver\/.*request=GetMap/i
+    /^https:\/\/datamap\.gov\.wales\/geoserver\/.*request=GetMap/i,
+    /^https:\/\/lle\.gov\.wales\/services\/tiles\//i
 ];
 function isCachedMapUrl(url) { return MAP_CACHE_URL_TESTS.some(r => r.test(url)); }
 /** Sources of one kind for a point. */
@@ -16158,27 +16161,31 @@ function mapSourceCandidate(s) {
 /** Ask a WMS server for its layer list; keep the LiDAR hillshade layers (bare ground first). */
 async function discoverMapSourceLayers(s) {
     if (!s.discover) return { names: [], note: 'no layer list for this source' };
-    let lastNote = '';
+    const notes = [], seen = new Map(), named = new Set();
     for (const url of s.discover.caps) {
+        const where = /\/geoserver\/ows/.test(url) ? 'whole server' : 'geonode section';
         try {
             const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-            if (!r.ok) { lastNote = 'layer list: error ' + r.status; continue; }
+            if (!r.ok) { notes.push(`${where}: error ${r.status}`); continue; }
             const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
             const all = Array.from(xml.getElementsByTagName('Layer')).map(l => {
                 const n = Array.from(l.children).find(c => c.localName === 'Name');
                 const t = Array.from(l.children).find(c => c.localName === 'Title');
                 return { name: n ? n.textContent.trim() : '', title: t ? t.textContent.trim() : '' };
             }).filter(x => x.name);
-            const lidar = all.filter(x => /hillshade/i.test(x.name + ' ' + x.title) && /lidar|dtm|dsm|1m/i.test(x.name + ' ' + x.title));
-            s._lidarNamed = all.filter(x => /lidar|hillshade|dtm|dsm/i.test(x.name + ' ' + x.title)).map(x => x.name).slice(0, 12);
-            const rank = x => (/dtm|terrain|ground/i.test(x.name + x.title) ? 0 : 2) + (/pseudo|colour|color|multi/i.test(x.name + x.title) ? 1 : 0);
-            lidar.sort((a, b) => rank(a) - rank(b));
-            const names = lidar.map(x => x.name.includes(':') ? x.name : s.discover.prefix + x.name);
-            try { localStorage.setItem('detekta_src_found_' + s.id, JSON.stringify(names.slice(0, 6))); } catch (e) {}
-            return { names, note: `layer list: ${all.length} layers, ${lidar.length} LiDAR hillshade` };
-        } catch (e) { lastNote = 'layer list: blocked or unreachable'; }
+            notes.push(`${where}: ${all.length} layers`);
+            all.forEach(x => {
+                const full = x.name.includes(':') ? x.name : s.discover.prefix + x.name;
+                if (/lidar|hillshade|dtm|dsm|relief|terrain/i.test(x.name + ' ' + x.title)) named.add(full);
+                if (/hillshade|relief|shaded/i.test(x.name + ' ' + x.title) && !/catalogue|index|tile_cat/i.test(x.name)) seen.set(full, x);
+            });
+        } catch (e) { notes.push(`${where}: blocked or unreachable`); }
     }
-    return { names: [], note: lastNote };
+    const rank = x => (/dtm|terrain|ground/i.test(x.name + x.title) ? 0 : 2) + (/pseudo|colour|color|multi/i.test(x.name + x.title) ? 1 : 0);
+    const names = Array.from(seen.entries()).sort((a, b) => rank(a[1]) - rank(b[1])).map(e => e[0]);
+    s._lidarNamed = Array.from(named).slice(0, 20);
+    try { localStorage.setItem('detekta_src_found_' + s.id, JSON.stringify(names.slice(0, 6))); } catch (e) {}
+    return { names, note: 'layer lists — ' + notes.join('; ') + ` — ${names.length} hillshade` };
 }
 function mapSourceTiles(s) { const c = mapSourceCandidate(s); return c ? c.tiles : s.tiles; }
 const mapSourceProbed = {};
