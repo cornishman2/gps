@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.07
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.08
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.07.0';         // change whenever you publish
+const APP_VERSION = '2.08.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.07 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.08 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -3879,6 +3879,7 @@ function renderHelpPage() {
       <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
         <h3 class="text-lg font-bold text-primary mb-2 flex items-center gap-2"><i class="fas fa-binoculars"></i> Explore — research at home</h3>
         <p class="text-sm text-gray-700 mb-2">Open the <strong>Explore</strong> tab (it reopens where you last left it), or tap the <i class="fas fa-binoculars"></i> button on the Map — in full screen too — to explore from exactly the place and zoom you are looking at. If the Map shows LiDAR, Explore opens on LiDAR; otherwise on the Outdoor map (Satellite and Old map are not in Explore because they have a monthly limit). Type a place name, an Ordnance Survey grid reference (for example <em>SW 7654 4321</em>, 4 to 10 figures) or coordinates (<em>50.338, -5.142</em> or degrees and minutes), and the map flies there. Drag to move and pinch to zoom.</p>
+        <p class="text-sm text-gray-700 mb-2">The search box finds places anywhere in the world (places near where the map is looking come first), as well as OS grid references and coordinates.</p>
         <p class="text-sm text-gray-700 mb-2">The slider fades between the ordinary map and <strong>LiDAR</strong> (England only — zoom in to see it). Place and road names stay on top. The red cross marks the centre, and the grid reference and coordinates of that point are shown underneath.</p>
         <p class="text-sm text-gray-700 mb-2">Your finds, stakes and <strong>routes</strong> are shown from all your digs (not the demo dig). The open dig's look as on the Map; other digs' finds and routes are smaller and faded — <strong>tap a find</strong> to see which dig it belongs to, when it was logged and its coordinates. Tap <i class="fas fa-chevron-down"></i> on that card to shrink it to one line (tap the line to open it again). The open dig's <strong>grids</strong> are shown too — the current grid in red, completed grids in green — so you can see how they sit against field edges and LiDAR features. They are for looking at here; move or turn a grid on the Map tab.</p>
         <p class="text-sm text-gray-700 mb-2"><strong>Zooming:</strong> pinch with two fingers — or, with one thumb (handy with a detector in the other hand), <strong>double-tap</strong> to zoom in, or <strong>double-tap and hold, then slide</strong> up or down to zoom smoothly out or in. If the Map tab is <strong>squared to the grid</strong>, Explore is turned the same way, with the same north arrow to put north back at the top (which also turns the Map tab back).</p>
@@ -16109,7 +16110,7 @@ const MAP_SOURCES = {
           credit: 'LiDAR hillshade © <a href="https://environment.data.gov.uk/" target="_blank" rel="noopener">Environment Agency</a>, <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>' },
         // V2.07: Wales is not available - the Welsh Government LiDAR can't be read by apps (tested Nov 2026).
         // Scotland - Scottish Remote Sensing Portal (JNCC). Survey phases cover about 40% of Scotland.
-        { id: 'srsp', areas: ['GB-SCT'], where: 'Scotland', partial: true, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
+        { id: 'scot', areas: ['GB-SCT'], where: 'Scotland', partial: true, shadeSld: true, bounds: [-8.8, 54.6, -0.7, 61.0], minzoom: 10, maxzoom: 19,
           testPoint: { lat: 55.86, lon: -4.25 },
           candidates: [
               { key: 'p1-6', label: 'phases 1-6', tiles: ['https://srsp-ows.jncc.gov.uk/ows?service=WMS&request=GetMap&version=1.3.0&layers=scotland:scotland-lidar-1-dtm,scotland:scotland-lidar-2-dtm,scotland:scotland-lidar-3-dtm,scotland:scotland-lidar-4-dtm,scotland:scotland-lidar-5-dtm,scotland:scotland-lidar-6-dtm&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'] },
@@ -16165,7 +16166,23 @@ function mapSourceCandidates(s) {
     try { found = JSON.parse(localStorage.getItem('detekta_src_found_' + s.id) || '[]'); } catch (e) {}
     const extra = (Array.isArray(found) ? found : []).map(n => ({ key: 'found:' + n, label: n.includes(',') ? `${n.split(',').length} layers from the list` : n.replace(/^.*:/, ''),
         tiles: [s.discover.tiles.replace('{L}', n)] }));
-    return [...extra, ...s.candidates];   // what the server itself lists comes first
+    const list = [...extra, ...s.candidates];   // what the server itself lists comes first
+    if (!s.shadeSld) return list;
+    // each way of asking, first with grey shading, then as the server draws it
+    return list.flatMap(c => [
+        { key: c.key + ':shade', label: c.label + ', shaded', tiles: c.tiles.map(withServerShading) },
+        { key: c.key, label: c.label + ', as the server draws it', tiles: c.tiles }
+    ]);
+}
+/** A GeoServer request asking it to draw the height layers as grey shading (V2.08). */
+function withServerShading(url) {
+    const m = url.match(/[?&]layers=([^&]+)/i); if (!m) return url;
+    const layers = decodeURIComponent(m[1]).split(',');
+    const sld = '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc">'
+        + layers.map(l => `<NamedLayer><Name>${l}</Name><UserStyle><FeatureTypeStyle><Rule><RasterSymbolizer><Opacity>1</Opacity>`
+            + '<ShadedRelief><BrightnessOnly>true</BrightnessOnly><ReliefFactor>40</ReliefFactor></ShadedRelief></RasterSymbolizer></Rule></FeatureTypeStyle></UserStyle></NamedLayer>').join('')
+        + '</StyledLayerDescriptor>';
+    return url.replace(/&styles=[^&]*/i, '') + '&sld_body=' + encodeURIComponent(sld);
 }
 function mapSourceCandidate(s) {
     const all = mapSourceCandidates(s);
@@ -16276,6 +16293,7 @@ function mapKindCreditHtml(kind) {
         const c = mapSourceCandidate(s);
         const extra = mapSourceProbed[s.id] === 'failed' ? ' (not answering at the moment)'
             : (c && c.key === 'basemap') ? ' (coarser shaded relief)'
+            : (s.shadeSld && c && !c.key.endsWith(':shade')) ? ' (coloured by height; surveyed areas only)'
             : s.partial ? ' (surveyed areas only)' : '';
         return `${kind === 'lidar' ? 'LiDAR' : 'Old map'} · ${s.where}${extra}: ${s.credit}`;
     }).join(' · ');
@@ -16361,7 +16379,7 @@ async function checkMapSources() {
                 if (!ok && s.discover) {
                     const d = await discoverMapSourceLayers(s);
                     rows.push([`${nm} (${s.where}) ${d.note}`, d.names.length ? 'ok' : 'none', d.names.length ? 'found: ' + d.names.join(', ') : 'nothing suitable found']);
-                    for (const n of d.names) await tryOne(`${nm} (${s.where}, from the list)`, () => mapSourceTestUrl(s, v.lat, v.lon, [s.discover.tiles.replace('{L}', n)]), true);
+                    for (const c of mapSourceCandidates(s).filter(c => c.key.startsWith('found:'))) await tryOne(`${nm} (${s.where}, ${c.label})`, () => mapSourceTestUrl(s, v.lat, v.lon, c.tiles), true);
                 }
                 mapSourceProbed[s.id] = ''; probeMapSource(s);   // pick again with what we now know
             } else await tryOne(`${nm} (${s.where})`, () => mapSourceTestUrl(s, v.lat, v.lon), !s.tilejson);
@@ -17410,7 +17428,10 @@ async function exploreSearch(ev) {
     // 3. Place name
     exploreSearching = true; exploreResults = []; render();
     try {
-        const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=gb&q=' + encodeURIComponent(q);
+        // V2.08: worldwide, with places in or near the area on screen preferred
+        let vb = '';
+        try { const b = exploreMap.getBounds(); vb = `&viewbox=${b.getWest().toFixed(3)},${b.getNorth().toFixed(3)},${b.getEast().toFixed(3)},${b.getSouth().toFixed(3)}`; } catch (e) {}
+        const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8' + vb + '&q=' + encodeURIComponent(q);
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const list = res.ok ? await res.json() : [];
         exploreResults = (Array.isArray(list) ? list : []).map(r => ({
