@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.41
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.42
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.41.0';         // change whenever you publish
+const APP_VERSION = '2.42.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.41 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.42 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16352,12 +16352,12 @@ const MAP_SOURCES = {
           candidates: [ { key: 'shade', label: 'DGM hillshade 1 m', tiles: ['https://isk.geobasis-bb.de/mapproxy/dgm/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=dgmshade&STYLES=&FORMAT=image/png&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}'] } ],
           credit: 'DGM hillshade 1 m © <a href="https://geobasis-bb.de/" target="_blank" rel="noopener">GeoBasis-DE/LGB</a>, dl-de/by-2-0; © Geoportal Berlin, dl-de/by-2-0' },
         // V2.40: Germany, Mecklenburg-Vorpommern - 1 m shading (LAiV)
-        { id: 'mvshade', areas: ['DE-MV'], where: 'Mecklenburg-Vorpommern', bounds: [10.55, 53.1, 14.45, 54.7], minzoom: 10, maxzoom: 19,
+        { id: 'mvshade', areas: ['DE-MV'], where: 'Mecklenburg-Vorpommern', bounds: [10.55, 53.1, 14.45, 54.7], minzoom: 10, maxzoom: 19, tileSize: 512,   // V2.42: the server stamps its credit on every picture - bigger pictures, fewer stamps
           testPoint: { lat: 54.09, lon: 12.13 },
           candidates: [
               // V2.41: the real layer names - light from the north-west, like the other countries
-              { key: 'nw13', label: 'DGM1 shading', tiles: ['https://www.geodaten-mv.de/dienste/dgm_wms?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}&LAYERS=schummerung_NW&VERSION=1.3.0&CRS=EPSG:3857'] },
-              { key: 'nw11', label: 'DGM1 shading', tiles: ['https://www.geodaten-mv.de/dienste/dgm_wms?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}&LAYERS=schummerung_NW&VERSION=1.1.1&SRS=EPSG:3857'] }
+              { key: 'nw13', label: 'DGM1 shading', tiles: ['https://www.geodaten-mv.de/dienste/dgm_wms?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=512&HEIGHT=512&BBOX={bbox-epsg-3857}&LAYERS=schummerung_NW&VERSION=1.3.0&CRS=EPSG:3857'] },
+              { key: 'nw11', label: 'DGM1 shading', tiles: ['https://www.geodaten-mv.de/dienste/dgm_wms?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=512&HEIGHT=512&BBOX={bbox-epsg-3857}&LAYERS=schummerung_NW&VERSION=1.1.1&SRS=EPSG:3857'] }
           ],
           credit: 'DGM1 shading © <a href="https://www.laiv-mv.de/" target="_blank" rel="noopener">GeoBasis-DE/M-V</a>' },
         // USA - USGS 3D Elevation Program (best available: 1 m LiDAR where flown), shaded on the USGS server
@@ -16682,7 +16682,7 @@ function mapLibreSourcesFor(s) {
 }
 /** One MapLibre source for a map source. */
 function mapLibreSourceFor(s) {
-    const o = { type: 'raster', tileSize: 256, bounds: s.bounds };
+    const o = { type: 'raster', tileSize: s.tileSize || 256, bounds: s.bounds };   // V2.42: a source can ask for bigger pictures
     if (s.candidates) setTimeout(() => probeMapSource(s), 0);
     if (s.tilejson) o.url = s.tilejson(); else o.tiles = mapSourceTiles(s).slice();
     if (s.minzoom != null) o.minzoom = s.minzoom;
