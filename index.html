@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.31
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.32
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.31.0';         // change whenever you publish
+const APP_VERSION = '2.32.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.31 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.32 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16499,6 +16499,30 @@ async function blackToSeeThrough(buf) {
         return await blob.arrayBuffer();
     } catch (e) { return buf; }
 }
+// V2.32: Austria's terrain shading is drawn very pale (it is meant as a background) - stretch its greys so lumps and bumps stand out
+const PALE_SHADING_URL = /^https:\/\/maps(\d|neu)?\.wien\.gv\.at\/basemap\/bmapgelaende\//i;
+async function stretchGreys(buf, lo, hi) {
+    try {
+        if (!buf || !buf.byteLength) return buf;
+        const bmp = await createImageBitmap(new Blob([buf]));
+        const w = bmp.width, hgt = bmp.height;
+        const cv = (typeof OffscreenCanvas !== 'undefined') ? new OffscreenCanvas(w, hgt) : Object.assign(document.createElement('canvas'), { width: w, height: hgt });
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(bmp, 0, 0);
+        const img = ctx.getImageData(0, 0, w, hgt), d = img.data, k = 255 / (hi - lo);
+        for (let i = 0; i < d.length; i += 4) {
+            for (let c = 0; c < 3; c++) { const v = (d[i + c] - lo) * k; d[i + c] = v < 0 ? 0 : v > 255 ? 255 : v; }
+        }
+        ctx.putImageData(img, 0, 0);
+        const blob = cv.convertToBlob ? await cv.convertToBlob({ type: 'image/png' }) : await new Promise(r => cv.toBlob(r, 'image/png'));
+        return await blob.arrayBuffer();
+    } catch (e) { return buf; }
+}
+async function fixMapPicture(url, buf) {
+    if (BLACK_IS_EMPTY_URL.test(url)) return blackToSeeThrough(buf);
+    if (PALE_SHADING_URL.test(url)) return stretchGreys(buf, 150, 245);
+    return buf;
+}
 /** Rebuild the Map background and Explore's map (after a source changes). */
 function rebuildMapStyles() {
     bgMapStyleKey = '';
@@ -16909,7 +16933,7 @@ function ensureBgMapProtocol() {
         const signal = abortController && abortController.signal;
         if (params.type === 'json') return { data: await fetchMapJson(url, signal) };
         const buf = await fetchMapPicture(url, signal);
-        return { data: BLACK_IS_EMPTY_URL.test(url) ? await blackToSeeThrough(buf) : buf };
+        return { data: await fixMapPicture(url, buf) };
     });
 }
 
