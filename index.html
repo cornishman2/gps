@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.37
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.38
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.37.0';         // change whenever you publish
+const APP_VERSION = '2.38.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.37 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.38 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16307,9 +16307,11 @@ const MAP_SOURCES = {
         { id: 'rpshade', areas: ['DE-RP'], where: 'Rhineland-Palatinate', bounds: [6.0, 48.9, 8.6, 51.0], minzoom: 10, maxzoom: 19,
           testPoint: { lat: 50.0, lon: 7.6 },
           candidates: [
-              { key: 'geo4', label: 'Schummerung 1 m', tiles: ['https://geo4.service24.rlp.de/wms/rp_shade1m.fcgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=rp_shade1m&STYLES=&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png'] },
-              { key: 'portal', label: 'Schummerung 1 m', tiles: ['https://www.geoportal.rlp.de/mapbender/php/wms.php?layer_id=49357&withChilds=1&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=rp_shade1m&STYLES=&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png'] },
-              { key: 'portal1', label: 'Schummerung 1 m', tiles: ['https://www.geoportal.rlp.de/mapbender/php/wms.php?layer_id=49358&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=rp_shade1m&STYLES=&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png'] }
+              // V2.38: the real server behind the state's map portal (the geoportal address only relays the service description)
+              { key: 'shade', label: 'Schummerung 1 m', tiles: ['https://geo4.service24.rlp.de/wms/shade.fcgi?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}&VERSION=1.1.1&SRS=EPSG:3857&LAYERS=rp_shade1m'] },
+              { key: 'shade13', label: 'Schummerung 1 m', tiles: ['https://geo4.service24.rlp.de/wms/shade.fcgi?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}&VERSION=1.3.0&CRS=EPSG:3857&LAYERS=rp_shade1m'] },
+              { key: 'shadeL', label: 'Schummerung 1 m', tiles: ['https://geo4.service24.rlp.de/wms/shade.fcgi?SERVICE=WMS&REQUEST=GetMap&STYLES=&FORMAT=image/png&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}&VERSION=1.1.1&SRS=EPSG:3857&LAYERS=shade'] },
+              { key: 'geo4', label: 'Schummerung 1 m', tiles: ['https://geo4.service24.rlp.de/wms/rp_shade1m.fcgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=rp_shade1m&STYLES=&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png'] }
           ],
           credit: 'Schummerung 1 m © <a href="https://lvermgeo.rlp.de/" target="_blank" rel="noopener">GeoBasis-DE / LVermGeoRP</a> (2026), <a href="https://www.govdata.de/dl-de/by-2-0" target="_blank" rel="noopener">dl-de/by-2-0</a>' },
         // USA - USGS 3D Elevation Program (best available: 1 m LiDAR where flown), shaded on the USGS server
@@ -16406,7 +16408,7 @@ const MAP_CACHE_URL_TESTS = [
     /^https:\/\/www\.wms\.nrw\.de\/geobasis\/wms_nw_(dgm-schummerung|uraufnahme|neuaufnahme)\?/i,
     /^https:\/\/owsproxy\.lgl-bw\.de\/owsproxy\/ows\/WMS_LGL-BW_(ATKIS_DGM_025_Schummerung|HIST_FKWue_25_K)\?/i,
     /^https:\/\/(umweltdaten|bodenviewer)\.hessen\.de\/arcgis\/rest\/services\/geobasis\/dgm1_schummerung/i,
-    /^https:\/\/(geo4\.service24\.rlp\.de\/wms\/rp_shade1m|www\.geoportal\.rlp\.de\/mapbender\/php\/wms\.php\?layer_id=4935[78])/i,
+    /^https:\/\/geo4\.service24\.rlp\.de\/wms\/(rp_)?shade(1m)?\.fcgi\?/i,
     /^https:\/\/geoservices\.bayern\.de\/od\/wms\/dgm\//i,
     /^https:\/\/wmts\.geo\.admin\.ch\/1\.0\.0\/ch\.swisstopo\.(swissalti3d|hiks|zeitreihen)/i,
     /^https:\/\/geoservices\.wallonie\.be\/arcgis\/(rest\/)?services\/(RELIEF|CARTES_ANCIENNES)\//i,
