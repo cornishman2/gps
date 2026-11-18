@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.24
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.25
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.24.0';         // change whenever you publish
+const APP_VERSION = '2.25.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.24 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.25 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16149,6 +16149,7 @@ const MAP_SOURCES = {
           credit: 'LiDAR HD © <a href="https://www.ign.fr/" target="_blank" rel="noopener">IGN</a> (Géoplateforme), <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/" target="_blank" rel="noopener">Licence Ouverte</a>' },
         // V2.24: Netherlands - AHN4 bare ground (DTM) 50 cm, shaded on Esri Nederland's AHN server (AHN is Dutch open data)
         { id: 'ahn', areas: ['NL'], where: 'Netherlands', bounds: [3.2, 50.7, 7.3, 53.7], minzoom: 10, maxzoom: 19,
+          paint: { 'raster-contrast': 0.5 },   // V2.25: the Netherlands is very flat - lift the contrast
           testPoint: { lat: 52.1, lon: 5.1 },
           candidates: [
               { key: 'multi', label: 'hillshade', tiles: ['https://ahn.arcgisonline.nl/arcgis/rest/services/AHNviewer/AHN4_DTM_50cm/ImageServer/exportImage?f=image&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&renderingRule=%7B%22rasterFunction%22%3A%22Hillshade%20-%20Multidirectionaal%22%7D'] },
@@ -16428,7 +16429,14 @@ function mapSourcesOnScreen(kind) {
 function mapKindWhereText(kind) {
     const c = currentMapCentre();
     const srcs = mapSourcesOnScreen(kind);
-    return srcs.length ? Array.from(new Set(srcs.map(s => s.where))).join(', ') : (c ? 'none here' : '');
+    if (!srcs.length) return c ? 'none here' : '';
+    let t = Array.from(new Set(srcs.map(s => s.where))).join(', ');
+    // V2.25: say when the map is zoomed out too far for it to show
+    try {
+        const minZ = Math.min(...srcs.map(s => s.minzoom != null ? s.minzoom : 0));
+        if (currentPage === 'Explore' && exploreMap && exploreMap.getZoom() < minZ - 0.01) t += ' · zoom in';
+    } catch (e) {}
+    return t;
 }
 
 // ---- Check map sources (Settings): try one picture from each source for the area last shown in Explore ----
@@ -16525,7 +16533,7 @@ const MAP_BG_STYLES = {
                  get credit() { return mapKindCreditHtml('lidar'); },
                  build: () => {
                      const st = { version: 8, sources: {}, layers: [ { id: 'ground', type: 'background', paint: { 'background-color': '#ececec' } } ] };
-                     mapSourcesToLoad('lidar').forEach(s => mapLibreSourcesFor(s).forEach(p => { const id = 'lidar-' + s.id + p.sfx; st.sources[id] = p.src; st.layers.push({ id, type: 'raster', source: id }); }));
+                     mapSourcesToLoad('lidar').forEach(s => mapLibreSourcesFor(s).forEach(p => { const id = 'lidar-' + s.id + p.sfx; st.sources[id] = p.src; st.layers.push({ id, type: 'raster', source: id, paint: Object.assign({}, s.paint || {}) }); }));
                      return st;
                  } }
 };
@@ -17278,7 +17286,8 @@ function buildExploreStyle(base, sat) {
     st.sources = st.sources || {}; st.layers = st.layers || [];
     const lidarSrcs = mapSourcesToLoad('lidar');
     const lidarParts = [];
-    lidarSrcs.forEach(s => mapLibreSourcesFor(s).forEach(p => { const id = 'ex-lidar-' + s.id + p.sfx; st.sources[id] = p.src; lidarParts.push(id); }));
+    const lidarPaint = {};
+    lidarSrcs.forEach(s => mapLibreSourcesFor(s).forEach(p => { const id = 'ex-lidar-' + s.id + p.sfx; st.sources[id] = p.src; lidarParts.push(id); lidarPaint[id] = s.paint || {}; }));
     st.sources['ex-stakes'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-finds'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     st.sources['ex-sm'] = { type: 'geojson', data: smExploreGeoJson() };
@@ -17286,7 +17295,7 @@ function buildExploreStyle(base, sat) {
     st.sources['ex-tracks'] = { type: 'geojson', data: { type: 'FeatureCollection', features: [] } };
     // LiDAR goes under the labels, so place and road names stay readable on top
     const firstSymbol = st.layers.findIndex(l => l.type === 'symbol');
-    const lidarLayers = lidarParts.map(id => ({ id, type: 'raster', source: id, paint: { 'raster-opacity': getExploreLidar() / 100 } }));
+    const lidarLayers = lidarParts.map(id => ({ id, type: 'raster', source: id, paint: Object.assign({}, lidarPaint[id], { 'raster-opacity': getExploreLidar() / 100 }) }));
     // V2.22: the chosen background goes above the Outdoor map's fields and roads, under LiDAR and the names
     const baseLayers = [];
     const bChoice = getExploreBase();
