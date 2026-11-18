@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.36
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.37
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.36.0';         // change whenever you publish
+const APP_VERSION = '2.37.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.36 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.37 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16299,7 +16299,8 @@ const MAP_SOURCES = {
           candidates: [
               { key: 'z1', label: 'DGM1 shading', tiles: ['https://umweltdaten.hessen.de/arcgis/rest/services/geobasis/dgm1_schummerung/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=false&f=image'] },
               { key: 'z1b', label: 'DGM1 shading', tiles: ['https://bodenviewer.hessen.de/arcgis/rest/services/geobasis/dgm1_schummerung/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=false&f=image'] },
-              { key: 'z10', label: 'DGM1 shading ×10', tiles: ['https://umweltdaten.hessen.de/arcgis/rest/services/geobasis/dgm1_schummerung_10/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=false&f=image'] }
+              // V2.37: the x10 version makes hillsides nearly black - lift the shadows and soften it
+              { key: 'z10', label: 'DGM1 shading ×10', paint: { 'raster-brightness-min': 0.25, 'raster-contrast': -0.2 }, tiles: ['https://umweltdaten.hessen.de/arcgis/rest/services/geobasis/dgm1_schummerung_10/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=false&f=image'] }
           ],
           credit: 'DGM1 shading © <a href="https://hvbg.hessen.de/" target="_blank" rel="noopener">HVBG Hessen</a> (open data), via HLNUG' },
         // V2.36: Germany, Rhineland-Palatinate - 1 m shading (open data)
