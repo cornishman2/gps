@@ -345,7 +345,7 @@ return maplibregl$1;
     <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-40" style="display:none" aria-hidden="true"><!-- V1.94: hidden - Sunlight sits beside each page title -->
         <div class="container mx-auto max-w-lg">
             <div class="flex items-center justify-between p-4">
-              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.49
+              <h1 class="text-xl font-extrabold text-primary leading-tight">Detekta V2.50
                   <span class="block text-xs font-semibold text-gray-500">A Metal Detecting App</span></h1>
 
                 <button id="hc-toggle-btn-old" type="button" onclick="toggleHighContrast()"
@@ -2037,7 +2037,7 @@ document.addEventListener('visibilitychange', function() {
 //  APP META
 // =====================
 const APP_NAME = 'Detekta – A Metal Detecting App';
-const APP_VERSION = '2.49.0';         // change whenever you publish
+const APP_VERSION = '2.50.0';         // change whenever you publish
 const APP_BUILD = '2026-11-04';      // optional, you can keep as a date string
 
         
@@ -3699,7 +3699,7 @@ function renderMorePage() {
     return `
     <div class="p-4 space-y-3">
         <h2 class="text-3xl font-bold text-primary mb-2">More</h2>
-        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.49 · A Metal Detecting App</p>
+        <p class="text-xs text-gray-500 -mt-1 mb-3">Detekta V2.50 · A Metal Detecting App</p>
         ${item('Settings', 'fa-cog', 'Settings', 'Profile, detector, quick buttons, photos, about', 'bg-slate-600')}
         ${item('Export', 'fa-file-export', 'Export &amp; Import', 'Backups, galleries, GPX, PDF report', 'bg-emerald-600')}
         ${item('Help', 'fa-question-circle', 'Help', 'How to use Detekta', 'bg-sky-600')}
@@ -16745,7 +16745,36 @@ async function stretchGreys(buf, lo, hi) {
         return await blob.arrayBuffer();
     } catch (e) { return buf; }
 }
+// V2.50: Ireland's server brightens or darkens each picture on its own, so neighbouring squares don't match.
+// Clear the empty (near-black) edges, then shift the greys so the typical ground is the same shade in every picture.
+async function evenOutShading(buf, lim, target) {
+    try {
+        if (!buf || !buf.byteLength) return buf;
+        const bmp = await createImageBitmap(new Blob([buf]));
+        const w = bmp.width, hgt = bmp.height;
+        const cv = (typeof OffscreenCanvas !== 'undefined') ? new OffscreenCanvas(w, hgt) : Object.assign(document.createElement('canvas'), { width: w, height: hgt });
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(bmp, 0, 0);
+        const img = ctx.getImageData(0, 0, w, hgt), d = img.data, hist = new Uint32Array(256);
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] < 128 || (d[i] < lim && d[i + 1] < lim && d[i + 2] < lim)) { d[i + 3] = 0; continue; }
+            hist[d[i]]++; n++;
+        }
+        if (n > (w * hgt) / 20) {   // enough ground to judge by
+            let half = n / 2, med = 0;
+            for (let v = 0; v < 256; v++) { half -= hist[v]; if (half <= 0) { med = v; break; } }
+            const shift = Math.max(-70, Math.min(70, target - med));
+            if (shift) for (let i = 0; i < d.length; i += 4) if (d[i + 3]) for (let c = 0; c < 3; c++) { const v = d[i + c] + shift; d[i + c] = v < lim ? lim : v > 255 ? 255 : v; }
+        }
+        ctx.putImageData(img, 0, 0);
+        const blob = cv.convertToBlob ? await cv.convertToBlob({ type: 'image/png' }) : await new Promise(r => cv.toBlob(r, 'image/png'));
+        return await blob.arrayBuffer();
+    } catch (e) { return buf; }
+}
+const IRISH_SHADING_URL = /^https:\/\/gsi\.geodata\.gov\.ie\/imagehost\//i;
 async function fixMapPicture(url, buf) {
+    if (IRISH_SHADING_URL.test(url)) return evenOutShading(buf, 24, 180);
     if (BLACK_IS_EMPTY_URL.test(url)) return blackToSeeThrough(buf, /gsi\.geodata\.gov\.ie/i.test(url) ? 14 : 6);   // V2.48: Ireland's empty edges are not quite black
     if (PALE_SHADING_URL.test(url)) return stretchGreys(buf, 135, 250);
     return buf;
